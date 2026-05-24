@@ -37,7 +37,7 @@ curl http://127.0.0.1:8766/healthz
 ## Layout
 
 ```
-src/stello_context/
+stello_context/
   daemon.py          entrypoint — FastAPI app, signal-safe boot
   config.py          ~/.config/stello/desktop-context.json loader (step 2)
   store.py           SQLite schema + data layer (step 2)

@@ -90,12 +90,17 @@ def open_db(path: Path | None = None) -> sqlite3.Connection:
 
     Path resolution: explicit `path` arg → $STELLO_CTX_DB → DEFAULT_DB_PATH.
     Returns a connection in autocommit mode with sqlite3.Row factory.
+
+    `check_same_thread=False` because FastAPI dispatches sync handlers on
+    its threadpool. WAL mode + the single-writer enrich queue (added in
+    step 4) keep concurrent reads safe; writes are always queued through
+    one worker, so we never get write-vs-write contention either.
     """
     p = path if path is not None else Path(
         os.environ.get("STELLO_CTX_DB", str(DEFAULT_DB_PATH))
     )
     p.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(p), isolation_level=None)
+    conn = sqlite3.connect(str(p), isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     conn.execute(

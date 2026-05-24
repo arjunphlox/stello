@@ -1,10 +1,11 @@
 """Stello desktop-context daemon — entrypoint.
 
-Stage 2: loads config + opens SQLite on lifespan-startup and exposes their
-state via /healthz. Signal-safe shutdown closes the DB.
+Stage 3: lifespan startup also instantiates the MLX HTTP client and
+surfaces its health under /healthz. The MLX server is allowed to be
+unreachable at startup (logged as a warning); /related will report it
+in step 12.
 
 Later steps wire in:
-  - MLX client (step 3)
   - FSEvents watcher + enrich queue (steps 4–7)
   - NSWorkspace + AX poll (step 8)
   - Safari + Sketch introspection (steps 9–11)
@@ -23,6 +24,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from . import config as config_mod
+from . import mlx_client as mlx_mod
 from . import store as store_mod
 
 logging.basicConfig(
@@ -39,6 +41,8 @@ class State:
     db: sqlite3.Connection | None = None
     db_path: Path | None = None
     config_path: Path | None = None
+    mlx: mlx_mod.Client | None = None
+    mlx_url: str | None = None
 
 
 @asynccontextmanager
@@ -52,6 +56,8 @@ async def _lifespan(_app: FastAPI):
         os.environ.get("STELLO_CTX_DB", str(store_mod.DEFAULT_DB_PATH))
     )
     State.db = store_mod.open_db()
+    State.mlx_url = mlx_mod.DEFAULT_URL
+    State.mlx = mlx_mod.Client(base_url=State.mlx_url)
     logger.info(
         "config: %s (%d watched folder(s), %d blocklist entries)",
         State.config_path,
@@ -63,8 +69,16 @@ async def _lifespan(_app: FastAPI):
         State.db_path,
         store_mod.schema_version(State.db),
     )
+    try:
+        h = State.mlx.healthz()
+        logger.info("mlx:    %s (loaded=%s)", State.mlx_url, h.get("loaded"))
+    except Exception as e:
+        logger.warning("mlx:    %s — unreachable at startup (%s)", State.mlx_url, e)
     yield
     # --- shutdown ---
+    if State.mlx is not None:
+        State.mlx.close()
+        State.mlx = None
     if State.db is not None:
         State.db.close()
         State.db = None
@@ -79,12 +93,18 @@ app = FastAPI(
 
 @app.get("/healthz")
 def healthz() -> dict:
-    """Liveness check. Step 3 nests MLX server status under `mlx`."""
+    """Liveness check with nested config / db / mlx state."""
     cfg = State.config
     db = State.db
+    mlx_status: dict | None = None
+    if State.mlx is not None:
+        try:
+            mlx_status = State.mlx.healthz()
+        except Exception as e:
+            mlx_status = {"ok": False, "error": str(e)}
     return {
         "ok": True,
-        "stage": "config+store",
+        "stage": "mlx-client",
         "config": {
             "path": str(State.config_path) if State.config_path else None,
             "watched_folders": cfg.watched_folders if cfg else [],
@@ -97,6 +117,7 @@ def healthz() -> dict:
             "schema_version": store_mod.schema_version(db) if db else None,
             "items_by_status": store_mod.counts_by_status(db) if db else {},
         },
+        "mlx": {"url": State.mlx_url, "status": mlx_status},
     }
 
 
