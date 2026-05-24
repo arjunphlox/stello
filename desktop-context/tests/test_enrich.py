@@ -40,7 +40,9 @@ def test_classify_path() -> None:
     assert enrich.classify_path(Path("a.webp")) == "image"
     assert enrich.classify_path(Path("a.pdf")) == "pdf"
     assert enrich.classify_path(Path("a.PDF")) == "pdf"
-    assert enrich.classify_path(Path("a.sketch")) == "other"
+    assert enrich.classify_path(Path("a.sketch")) == "sketch"
+    assert enrich.classify_path(Path("a.SKETCH")) == "sketch"
+    assert enrich.classify_path(Path("a.xyz")) == "other"
 
 
 def test_project_hint_for(tmp_path: Path) -> None:
@@ -245,5 +247,107 @@ def test_enrich_pdf_idempotent_on_mtime(tmp_path: Path) -> None:
     job = enrich.EnrichJob(source_path=str(src), reason="initial_walk")
     asyncio.run(enrich.enrich_pdf(db, fake, job, [str(tmp_path)], thumbs))
     asyncio.run(enrich.enrich_pdf(db, fake, job, [str(tmp_path)], thumbs))
+    assert fake.embed_calls == 1
+    db.close()
+
+
+def _build_minimal_sketch(path: Path, with_preview: bool = True) -> None:
+    """Tiny .sketch bundle for enrich-path testing (mirrors test_sketch.py)."""
+    import io
+    import json
+    import zipfile
+    page_uuid = "11111111-1111-1111-1111-111111111111"
+    ab_uuid = "22222222-2222-2222-2222-222222222222"
+    meta = {
+        "pagesAndArtboards": {
+            page_uuid: {
+                "name": "Designs",
+                "artboards": {ab_uuid: {"name": "Hero"}},
+            }
+        },
+    }
+    page = {
+        "_class": "page",
+        "do_objectID": page_uuid,
+        "name": "Designs",
+        "layers": [
+            {
+                "_class": "artboard",
+                "do_objectID": ab_uuid,
+                "name": "Hero",
+                "layers": [
+                    {
+                        "_class": "text",
+                        "do_objectID": "t1",
+                        "name": "h",
+                        "attributedString": {"string": "Welcome"},
+                    },
+                ],
+            }
+        ],
+    }
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("meta.json", json.dumps(meta))
+        z.writestr(f"pages/{page_uuid}.json", json.dumps(page))
+        if with_preview:
+            buf = io.BytesIO()
+            Image.new("RGB", (60, 40), "purple").save(buf, "PNG")
+            z.writestr("previews/preview.png", buf.getvalue())
+
+
+def test_enrich_sketch_ready_with_preview_thumb(tmp_path: Path) -> None:
+    src = tmp_path / "huegrid.sketch"
+    _build_minimal_sketch(src, with_preview=True)
+    thumbs = tmp_path / "thumbs"
+    db = store.open_db(tmp_path / "ctx.db")
+    fake = FakeMLX()
+    job = enrich.EnrichJob(source_path=str(src), reason="initial_walk")
+    asyncio.run(enrich.enrich(db, fake, job, [str(tmp_path)], thumbs))
+    row = db.execute(
+        "SELECT type, status, title, thumb_path, extracted_text, length(embedding) AS emb "
+        "FROM items WHERE uniq_key = ?",
+        (str(src),),
+    ).fetchone()
+    assert row is not None
+    assert row["type"] == "sketch"
+    assert row["status"] == "ready"
+    assert row["title"] == "huegrid.sketch"
+    assert row["emb"] == 4 * 1024
+    assert row["thumb_path"].endswith(".webp")
+    # extracted_text holds the embed input (filename + pages + artboards + text)
+    assert "huegrid.sketch" in row["extracted_text"]
+    assert "Designs" in row["extracted_text"]
+    assert "Hero" in row["extracted_text"]
+    assert "Welcome" in row["extracted_text"]
+    assert (thumbs / row["thumb_path"]).exists()
+    db.close()
+
+
+def test_enrich_sketch_without_preview(tmp_path: Path) -> None:
+    src = tmp_path / "no-preview.sketch"
+    _build_minimal_sketch(src, with_preview=False)
+    thumbs = tmp_path / "thumbs"
+    db = store.open_db(tmp_path / "ctx.db")
+    fake = FakeMLX()
+    job = enrich.EnrichJob(source_path=str(src), reason="initial_walk")
+    asyncio.run(enrich.enrich(db, fake, job, [str(tmp_path)], thumbs))
+    row = db.execute(
+        "SELECT type, status, thumb_path FROM items WHERE uniq_key = ?", (str(src),)
+    ).fetchone()
+    assert row["type"] == "sketch"
+    assert row["status"] == "ready"
+    assert row["thumb_path"] is None
+    db.close()
+
+
+def test_enrich_sketch_idempotent_on_mtime(tmp_path: Path) -> None:
+    src = tmp_path / "x.sketch"
+    _build_minimal_sketch(src)
+    thumbs = tmp_path / "thumbs"
+    db = store.open_db(tmp_path / "ctx.db")
+    fake = FakeMLX()
+    job = enrich.EnrichJob(source_path=str(src), reason="initial_walk")
+    asyncio.run(enrich.enrich_sketch(db, fake, job, [str(tmp_path)], thumbs))
+    asyncio.run(enrich.enrich_sketch(db, fake, job, [str(tmp_path)], thumbs))
     assert fake.embed_calls == 1
     db.close()

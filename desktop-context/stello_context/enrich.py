@@ -9,18 +9,22 @@ MLX HTTP calls run via asyncio.to_thread() so the event loop stays
 responsive (the underlying httpx.Client is sync).
 
 Currently handles:
-  - text  (.md, .txt)          step 4
-  - image (.png/.jpg/.jpeg/.webp)  step 5 — embeds filename + writes
-                                  thumbnail; status='pending_vlm'
-                                  until step 11's dwell-gated VLM call
-  - pdf   (.pdf)               step 6 — renders + thumbnails page 1,
-                                  extracts page-1 text (if any), embeds
-                                  filename + text; status='ready'.
-                                  (V1 doesn't VLM-caption PDFs — page-1
-                                  text + thumbnail are enough signal.)
+  - text   (.md, .txt)         step 4
+  - image  (.png/.jpg/.jpeg/.webp)  step 5 — embeds filename + writes
+                                   thumbnail; status='pending_vlm'
+                                   until step 11's dwell-gated VLM call
+  - pdf    (.pdf)              step 6 — renders + thumbnails page 1,
+                                   extracts page-1 text (if any), embeds
+                                   filename + text; status='ready'.
+                                   (V1 doesn't VLM-caption PDFs.)
+  - sketch (.sketch)           step 7 — unzips the bundle, embeds
+                                   filename + page names + artboard
+                                   names + text-layer strings; uses the
+                                   whole-file preview as the thumbnail;
+                                   status='ready'. Artboard-level rows
+                                   land later via step 11.
 
-Step 7 adds sketch (cheap path), step 11 adds sketch_artboard
-(dwell-gated VLM).
+Step 11 adds sketch_artboard (dwell-gated VLM).
 """
 from __future__ import annotations
 
@@ -34,6 +38,7 @@ from pathlib import Path
 
 from . import mlx_client as mlx_mod
 from . import pdf as pdf_mod
+from . import sketch as sketch_mod
 from . import thumbnails as thumbnails_mod
 
 logger = logging.getLogger("stello-context.enrich")
@@ -45,6 +50,7 @@ TEXT_PEEK_BYTES = 16_000
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 TEXT_EXTS = (".md", ".txt")
 PDF_EXTS = (".pdf",)
+SKETCH_EXTS = (".sketch",)
 
 
 @dataclass(frozen=True)
@@ -61,8 +67,7 @@ class EnrichJob:
 def classify_path(p: Path) -> str:
     """Map a path's extension to one of the enrich types we support.
 
-    Returns "other" for anything outside the current step's coverage —
-    the worker will silently skip those (step 7 adds sketch).
+    Returns "other" only for genuinely unsupported extensions.
     """
     ext = p.suffix.lower()
     if ext in TEXT_EXTS:
@@ -71,6 +76,8 @@ def classify_path(p: Path) -> str:
         return "image"
     if ext in PDF_EXTS:
         return "pdf"
+    if ext in SKETCH_EXTS:
+        return "sketch"
     return "other"
 
 
@@ -362,6 +369,104 @@ async def enrich_pdf(
     )
 
 
+async def enrich_sketch(
+    db: sqlite3.Connection,
+    mlx: mlx_mod.Client,
+    job: EnrichJob,
+    watched_folders: list[str],
+    thumb_dir_path: Path,
+) -> None:
+    """Enrich one .sketch bundle (cheap path — no AppleScript, no VLM).
+
+    Idempotent on mtime. Embed input = filename + page names + artboard
+    names + text-layer strings (composed by sketch.compose_embed_input).
+    The bundle's own previews/preview.png becomes the row's thumbnail
+    if present; otherwise thumb_path stays NULL.
+    """
+    import io
+
+    from PIL import Image as PILImage
+
+    p = Path(job.source_path)
+    if not p.exists():
+        logger.info("sketch skipped (file gone): %s", job.source_path)
+        return
+    stat = p.stat()
+
+    existing = db.execute(
+        "SELECT mtime, status FROM items WHERE uniq_key = ?",
+        (str(p),),
+    ).fetchone()
+    if (
+        existing is not None
+        and existing["mtime"] == stat.st_mtime
+        and existing["status"] == "ready"
+    ):
+        logger.debug("sketch skip (mtime match): %s", p.name)
+        return
+
+    parsed = await asyncio.to_thread(sketch_mod.parse_sketch_strings, p)
+    embed_input = sketch_mod.compose_embed_input(parsed)
+
+    # Whole-file preview (if shipped inside the bundle) → thumbnail.
+    png_bytes = await asyncio.to_thread(sketch_mod.extract_preview_png, p)
+    thumb_basename: str | None = None
+    if png_bytes:
+        def _save_thumb() -> Path:
+            with PILImage.open(io.BytesIO(png_bytes)) as im:
+                im.load()
+                return thumbnails_mod.make_thumbnail_from_pillow(
+                    im, p, thumb_dir_path
+                )
+        thumb_path = await asyncio.to_thread(_save_thumb)
+        thumb_basename = thumb_path.name
+
+    result = await asyncio.to_thread(mlx.embed, [embed_input])
+    blob = embedding_to_blob(result.embeddings[0])
+
+    hint = project_hint_for(p, watched_folders)
+    now = time.time()
+
+    db.execute(
+        """
+        INSERT INTO items
+            (kind, source_path, uniq_key, type, title, size, mtime, ctime,
+             project_hint, extracted_text, embedding, embed_input,
+             thumb_path, enriched_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(uniq_key) DO UPDATE SET
+            title = excluded.title,
+            size = excluded.size,
+            mtime = excluded.mtime,
+            ctime = excluded.ctime,
+            project_hint = excluded.project_hint,
+            extracted_text = excluded.extracted_text,
+            embedding = excluded.embedding,
+            embed_input = excluded.embed_input,
+            thumb_path = excluded.thumb_path,
+            enriched_at = excluded.enriched_at,
+            status = excluded.status,
+            error = NULL
+        """,
+        (
+            "file", str(p), str(p), "sketch", p.name,
+            stat.st_size, stat.st_mtime, stat.st_ctime,
+            hint, embed_input, blob, embed_input,
+            thumb_basename,
+            now, "ready",
+        ),
+    )
+    logger.info(
+        "sketch enriched: %s (pages=%d, artboards=%d, texts=%d, thumb=%s, embed_latency=%.2fs)",
+        p.name,
+        len(parsed["page_names"]),
+        len(parsed["artboard_names"]),
+        len(parsed["text_strings"]),
+        thumb_basename or "(none)",
+        result.latency_s,
+    )
+
+
 # -- dispatch + worker -------------------------------------------------------
 
 
@@ -382,7 +487,9 @@ async def enrich(
             await enrich_image(db, mlx, job, watched_folders, thumb_dir_path)
         elif kind == "pdf":
             await enrich_pdf(db, mlx, job, watched_folders, thumb_dir_path)
-        # else: unknown extensions silently skipped — step 7 adds sketch.
+        elif kind == "sketch":
+            await enrich_sketch(db, mlx, job, watched_folders, thumb_dir_path)
+        # else: unknown extensions silently skipped.
     except Exception as e:  # noqa: BLE001
         logger.exception("%s enrich failed: %s", kind, job.source_path)
         _record_failure(db, str(p), kind, str(e))
