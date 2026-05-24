@@ -1,30 +1,33 @@
 """Stello desktop-context daemon — entrypoint.
 
-Stage 3: lifespan startup also instantiates the MLX HTTP client and
-surfaces its health under /healthz. The MLX server is allowed to be
-unreachable at startup (logged as a warning); /related will report it
-in step 12.
+Stage 4: lifespan startup also kicks off the FSEvents observer + single-
+FIFO enrich worker, after doing an initial walk of every watched folder.
+/healthz now exposes queue depth + initial-walk count + observer state.
 
 Later steps wire in:
-  - FSEvents watcher + enrich queue (steps 4–7)
+  - Image / PDF / Sketch enrichment paths (steps 5–7, 11)
   - NSWorkspace + AX poll (step 8)
   - Safari + Sketch introspection (steps 9–11)
   - /related endpoint (step 12)
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import signal
 import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
 
 from . import config as config_mod
+from . import enrich as enrich_mod
 from . import mlx_client as mlx_mod
+from . import scanner as scanner_mod
 from . import store as store_mod
 
 logging.basicConfig(
@@ -43,6 +46,10 @@ class State:
     config_path: Path | None = None
     mlx: mlx_mod.Client | None = None
     mlx_url: str | None = None
+    queue: asyncio.Queue | None = None
+    worker_task: asyncio.Task | None = None
+    observer: Any = None
+    initial_walk_count: int = 0
 
 
 @asynccontextmanager
@@ -58,6 +65,7 @@ async def _lifespan(_app: FastAPI):
     State.db = store_mod.open_db()
     State.mlx_url = mlx_mod.DEFAULT_URL
     State.mlx = mlx_mod.Client(base_url=State.mlx_url)
+
     logger.info(
         "config: %s (%d watched folder(s), %d blocklist entries)",
         State.config_path,
@@ -72,10 +80,52 @@ async def _lifespan(_app: FastAPI):
     try:
         h = State.mlx.healthz()
         logger.info("mlx:    %s (loaded=%s)", State.mlx_url, h.get("loaded"))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning("mlx:    %s — unreachable at startup (%s)", State.mlx_url, e)
+
+    # Queue + initial walk + worker + watcher.
+    State.queue = asyncio.Queue()
+    max_bytes = State.config.max_file_size_mb * 1024 * 1024
+    State.initial_walk_count = scanner_mod.initial_walk(
+        State.config.watched_folders,
+        State.config.include_extensions,
+        State.config.ignore_globs,
+        max_bytes,
+        State.queue,
+    )
+    logger.info("initial walk: enqueued %d file(s)", State.initial_walk_count)
+
+    State.worker_task = asyncio.create_task(
+        enrich_mod.worker_loop(
+            State.queue,
+            State.db,
+            State.mlx,
+            State.config.watched_folders,
+        )
+    )
+    State.observer = scanner_mod.start_observer(
+        asyncio.get_running_loop(),
+        State.queue,
+        State.config.watched_folders,
+        State.config.include_extensions,
+        State.config.ignore_globs,
+        max_bytes,
+    )
+
     yield
+
     # --- shutdown ---
+    if State.observer is not None:
+        State.observer.stop()
+        State.observer.join(timeout=2.0)
+        State.observer = None
+    if State.worker_task is not None:
+        State.worker_task.cancel()
+        try:
+            await State.worker_task
+        except asyncio.CancelledError:
+            pass
+        State.worker_task = None
     if State.mlx is not None:
         State.mlx.close()
         State.mlx = None
@@ -93,18 +143,20 @@ app = FastAPI(
 
 @app.get("/healthz")
 def healthz() -> dict:
-    """Liveness check with nested config / db / mlx state."""
+    """Liveness check with nested config / db / mlx / queue state."""
     cfg = State.config
     db = State.db
     mlx_status: dict | None = None
     if State.mlx is not None:
         try:
             mlx_status = State.mlx.healthz()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             mlx_status = {"ok": False, "error": str(e)}
+    queue_depth = State.queue.qsize() if State.queue is not None else None
+    observer_alive = bool(State.observer is not None and State.observer.is_alive())
     return {
         "ok": True,
-        "stage": "mlx-client",
+        "stage": "watcher+text",
         "config": {
             "path": str(State.config_path) if State.config_path else None,
             "watched_folders": cfg.watched_folders if cfg else [],
@@ -118,6 +170,11 @@ def healthz() -> dict:
             "items_by_status": store_mod.counts_by_status(db) if db else {},
         },
         "mlx": {"url": State.mlx_url, "status": mlx_status},
+        "indexer": {
+            "queue_depth": queue_depth,
+            "initial_walk_count": State.initial_walk_count,
+            "observer_alive": observer_alive,
+        },
     }
 
 
