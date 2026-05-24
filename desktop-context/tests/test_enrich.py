@@ -38,6 +38,8 @@ def test_classify_path() -> None:
     assert enrich.classify_path(Path("a.png")) == "image"
     assert enrich.classify_path(Path("a.JPG")) == "image"
     assert enrich.classify_path(Path("a.webp")) == "image"
+    assert enrich.classify_path(Path("a.pdf")) == "pdf"
+    assert enrich.classify_path(Path("a.PDF")) == "pdf"
     assert enrich.classify_path(Path("a.sketch")) == "other"
 
 
@@ -203,4 +205,45 @@ def test_enrich_dispatch_routes_image(tmp_path: Path) -> None:
     assert row is not None
     assert row["type"] == "image"
     assert row["status"] == "pending_vlm"
+    db.close()
+
+
+def test_enrich_pdf_ready_with_thumb_and_embedding(tmp_path: Path) -> None:
+    """A dropped PDF is fully enriched (status=ready) with thumbnail
+    + filename embedding. Image-only PDFs (no text layer) still get a row."""
+    src = tmp_path / "report.pdf"
+    Image.new("RGB", (400, 300), color="white").save(src, "PDF")
+    thumbs = tmp_path / "thumbs"
+
+    db = store.open_db(tmp_path / "ctx.db")
+    fake = FakeMLX()
+    job = enrich.EnrichJob(source_path=str(src), reason="initial_walk")
+    asyncio.run(enrich.enrich(db, fake, job, [str(tmp_path)], thumbs))
+
+    row = db.execute(
+        "SELECT type, status, title, thumb_path, length(embedding) AS emb "
+        "FROM items WHERE uniq_key = ?",
+        (str(src),),
+    ).fetchone()
+    assert row is not None
+    assert row["type"] == "pdf"
+    assert row["status"] == "ready"
+    assert row["title"] == "report.pdf"
+    assert row["thumb_path"].endswith(".webp")
+    assert row["emb"] == 4 * 1024
+    assert fake.embed_calls == 1
+    assert (thumbs / row["thumb_path"]).exists()
+    db.close()
+
+
+def test_enrich_pdf_idempotent_on_mtime(tmp_path: Path) -> None:
+    src = tmp_path / "doc.pdf"
+    Image.new("RGB", (200, 200), color="white").save(src, "PDF")
+    thumbs = tmp_path / "thumbs"
+    db = store.open_db(tmp_path / "ctx.db")
+    fake = FakeMLX()
+    job = enrich.EnrichJob(source_path=str(src), reason="initial_walk")
+    asyncio.run(enrich.enrich_pdf(db, fake, job, [str(tmp_path)], thumbs))
+    asyncio.run(enrich.enrich_pdf(db, fake, job, [str(tmp_path)], thumbs))
+    assert fake.embed_calls == 1
     db.close()

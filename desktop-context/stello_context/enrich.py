@@ -13,9 +13,14 @@ Currently handles:
   - image (.png/.jpg/.jpeg/.webp)  step 5 — embeds filename + writes
                                   thumbnail; status='pending_vlm'
                                   until step 11's dwell-gated VLM call
+  - pdf   (.pdf)               step 6 — renders + thumbnails page 1,
+                                  extracts page-1 text (if any), embeds
+                                  filename + text; status='ready'.
+                                  (V1 doesn't VLM-caption PDFs — page-1
+                                  text + thumbnail are enough signal.)
 
-Step 6 adds pdf, step 7 adds sketch (cheap path), step 11 adds
-sketch_artboard (dwell-gated VLM).
+Step 7 adds sketch (cheap path), step 11 adds sketch_artboard
+(dwell-gated VLM).
 """
 from __future__ import annotations
 
@@ -28,6 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import mlx_client as mlx_mod
+from . import pdf as pdf_mod
 from . import thumbnails as thumbnails_mod
 
 logger = logging.getLogger("stello-context.enrich")
@@ -38,6 +44,7 @@ TEXT_PEEK_BYTES = 16_000
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 TEXT_EXTS = (".md", ".txt")
+PDF_EXTS = (".pdf",)
 
 
 @dataclass(frozen=True)
@@ -55,13 +62,15 @@ def classify_path(p: Path) -> str:
     """Map a path's extension to one of the enrich types we support.
 
     Returns "other" for anything outside the current step's coverage —
-    the worker will silently skip those (steps 6–7 add pdf/sketch).
+    the worker will silently skip those (step 7 adds sketch).
     """
     ext = p.suffix.lower()
     if ext in TEXT_EXTS:
         return "text"
     if ext in IMAGE_EXTS:
         return "image"
+    if ext in PDF_EXTS:
+        return "pdf"
     return "other"
 
 
@@ -273,6 +282,86 @@ async def enrich_image(
     )
 
 
+async def enrich_pdf(
+    db: sqlite3.Connection,
+    mlx: mlx_mod.Client,
+    job: EnrichJob,
+    watched_folders: list[str],
+    thumb_dir_path: Path,
+) -> None:
+    """Enrich one PDF. Idempotent on mtime.
+
+    Page-1 rendered → 256px webp thumbnail. Page-1 text (if any) extracted
+    and concatenated with the filename for the embed input. Status = 'ready'
+    immediately — V1 doesn't push PDFs through the VLM path.
+    """
+    p = Path(job.source_path)
+    if not p.exists():
+        logger.info("pdf skipped (file gone): %s", job.source_path)
+        return
+    stat = p.stat()
+
+    existing = db.execute(
+        "SELECT mtime, status FROM items WHERE uniq_key = ?",
+        (str(p),),
+    ).fetchone()
+    if (
+        existing is not None
+        and existing["mtime"] == stat.st_mtime
+        and existing["status"] == "ready"
+    ):
+        logger.debug("pdf skip (mtime match): %s", p.name)
+        return
+
+    # Page-1 text + render (both touch native pypdfium2 — keep on a thread).
+    text = await asyncio.to_thread(pdf_mod.extract_first_page_text, p)
+    image = await asyncio.to_thread(pdf_mod.render_first_page, p)
+    thumb_path = await asyncio.to_thread(
+        thumbnails_mod.make_thumbnail_from_pillow, image, p, thumb_dir_path
+    )
+
+    embed_input = f"{p.name}\n\n{text}".strip() if text else p.name
+    result = await asyncio.to_thread(mlx.embed, [embed_input])
+    blob = embedding_to_blob(result.embeddings[0])
+
+    hint = project_hint_for(p, watched_folders)
+    now = time.time()
+
+    db.execute(
+        """
+        INSERT INTO items
+            (kind, source_path, uniq_key, type, title, size, mtime, ctime,
+             project_hint, extracted_text, embedding, embed_input,
+             thumb_path, enriched_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(uniq_key) DO UPDATE SET
+            title = excluded.title,
+            size = excluded.size,
+            mtime = excluded.mtime,
+            ctime = excluded.ctime,
+            project_hint = excluded.project_hint,
+            extracted_text = excluded.extracted_text,
+            embedding = excluded.embedding,
+            embed_input = excluded.embed_input,
+            thumb_path = excluded.thumb_path,
+            enriched_at = excluded.enriched_at,
+            status = excluded.status,
+            error = NULL
+        """,
+        (
+            "file", str(p), str(p), "pdf", p.name,
+            stat.st_size, stat.st_mtime, stat.st_ctime,
+            hint, text or None, blob, embed_input,
+            thumb_path.name,
+            now, "ready",
+        ),
+    )
+    logger.info(
+        "pdf enriched: %s (text=%d chars, thumb=%s, embed_latency=%.2fs)",
+        p.name, len(text), thumb_path.name, result.latency_s,
+    )
+
+
 # -- dispatch + worker -------------------------------------------------------
 
 
@@ -291,7 +380,9 @@ async def enrich(
             await enrich_text(db, mlx, job, watched_folders)
         elif kind == "image":
             await enrich_image(db, mlx, job, watched_folders, thumb_dir_path)
-        # else: unknown extensions silently skipped — steps 6–7 add pdf/sketch.
+        elif kind == "pdf":
+            await enrich_pdf(db, mlx, job, watched_folders, thumb_dir_path)
+        # else: unknown extensions silently skipped — step 7 adds sketch.
     except Exception as e:  # noqa: BLE001
         logger.exception("%s enrich failed: %s", kind, job.source_path)
         _record_failure(db, str(p), kind, str(e))
