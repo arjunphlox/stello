@@ -1,8 +1,10 @@
 """Stello desktop-context daemon — entrypoint.
 
-Stage 4: lifespan startup also kicks off the FSEvents observer + single-
-FIFO enrich worker, after doing an initial walk of every watched folder.
-/healthz now exposes queue depth + initial-walk count + observer state.
+Stage 5: image-aware indexer. The worker now writes 256px webp
+thumbnails for PNG/JPG/WEBP under
+~/Library/Application Support/Stello/desktop-context/thumbs/ and marks
+images status='pending_vlm' (the dwell-gated VLM call in step 11 lifts
+them to 'ready' with caption + tags).
 
 Later steps wire in:
   - Image / PDF / Sketch enrichment paths (steps 5–7, 11)
@@ -29,6 +31,7 @@ from . import enrich as enrich_mod
 from . import mlx_client as mlx_mod
 from . import scanner as scanner_mod
 from . import store as store_mod
+from . import thumbnails as thumbnails_mod
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +53,7 @@ class State:
     worker_task: asyncio.Task | None = None
     observer: Any = None
     initial_walk_count: int = 0
+    thumb_dir: Path | None = None
 
 
 @asynccontextmanager
@@ -84,6 +88,7 @@ async def _lifespan(_app: FastAPI):
         logger.warning("mlx:    %s — unreachable at startup (%s)", State.mlx_url, e)
 
     # Queue + initial walk + worker + watcher.
+    State.thumb_dir = thumbnails_mod.thumb_dir()
     State.queue = asyncio.Queue()
     max_bytes = State.config.max_file_size_mb * 1024 * 1024
     State.initial_walk_count = scanner_mod.initial_walk(
@@ -94,6 +99,7 @@ async def _lifespan(_app: FastAPI):
         State.queue,
     )
     logger.info("initial walk: enqueued %d file(s)", State.initial_walk_count)
+    logger.info("thumbs:   %s", State.thumb_dir)
 
     State.worker_task = asyncio.create_task(
         enrich_mod.worker_loop(
@@ -101,6 +107,7 @@ async def _lifespan(_app: FastAPI):
             State.db,
             State.mlx,
             State.config.watched_folders,
+            State.thumb_dir,
         )
     )
     State.observer = scanner_mod.start_observer(
@@ -174,6 +181,7 @@ def healthz() -> dict:
             "queue_depth": queue_depth,
             "initial_walk_count": State.initial_walk_count,
             "observer_alive": observer_alive,
+            "thumb_dir": str(State.thumb_dir) if State.thumb_dir else None,
         },
     }
 

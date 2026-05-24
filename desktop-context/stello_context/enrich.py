@@ -9,10 +9,13 @@ MLX HTTP calls run via asyncio.to_thread() so the event loop stays
 responsive (the underlying httpx.Client is sync).
 
 Currently handles:
-  - text (.md, .txt)          step 4
+  - text  (.md, .txt)          step 4
+  - image (.png/.jpg/.jpeg/.webp)  step 5 — embeds filename + writes
+                                  thumbnail; status='pending_vlm'
+                                  until step 11's dwell-gated VLM call
 
-Step 5 adds image, step 6 adds pdf, step 7 adds sketch (cheap path),
-step 11 adds sketch_artboard (dwell-gated VLM).
+Step 6 adds pdf, step 7 adds sketch (cheap path), step 11 adds
+sketch_artboard (dwell-gated VLM).
 """
 from __future__ import annotations
 
@@ -25,12 +28,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import mlx_client as mlx_mod
+from . import thumbnails as thumbnails_mod
 
 logger = logging.getLogger("stello-context.enrich")
 
 # How many raw bytes we peek at for the embed call. ~4000 utf-8 chars
 # worst-case (4-byte chars) → comfortably within BGE-M3's context.
 TEXT_PEEK_BYTES = 16_000
+
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+TEXT_EXTS = (".md", ".txt")
 
 
 @dataclass(frozen=True)
@@ -48,11 +55,13 @@ def classify_path(p: Path) -> str:
     """Map a path's extension to one of the enrich types we support.
 
     Returns "other" for anything outside the current step's coverage —
-    the worker will silently skip those (steps 5–7 add image/pdf/sketch).
+    the worker will silently skip those (steps 6–7 add pdf/sketch).
     """
     ext = p.suffix.lower()
-    if ext in (".md", ".txt"):
+    if ext in TEXT_EXTS:
         return "text"
+    if ext in IMAGE_EXTS:
+        return "image"
     return "other"
 
 
@@ -87,6 +96,25 @@ def embedding_to_blob(vec: list[float]) -> bytes:
 def blob_to_embedding(blob: bytes) -> list[float]:
     """Inverse of embedding_to_blob. Used by /related in step 12."""
     return list(struct.unpack(f"<{len(blob) // 4}f", blob))
+
+
+def _record_failure(
+    db: sqlite3.Connection, source_path: str, type_: str, error: str
+) -> None:
+    """Write status='failed' + error message into the items row."""
+    now = time.time()
+    db.execute(
+        """
+        INSERT INTO items
+            (kind, source_path, uniq_key, type, status, error, enriched_at)
+        VALUES (?, ?, ?, ?, 'failed', ?, ?)
+        ON CONFLICT(uniq_key) DO UPDATE SET
+            status = 'failed',
+            error = excluded.error,
+            enriched_at = excluded.enriched_at
+        """,
+        ("file", source_path, source_path, type_, error, now),
+    )
 
 
 # -- per-type enrich functions -----------------------------------------------
@@ -137,8 +165,8 @@ async def enrich_text(
         INSERT INTO items
             (kind, source_path, uniq_key, type, title, size, mtime, ctime,
              project_hint, extracted_text, embedding, embed_input,
-             enriched_at, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             thumb_path, enriched_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(uniq_key) DO UPDATE SET
             title = excluded.title,
             size = excluded.size,
@@ -148,33 +176,100 @@ async def enrich_text(
             extracted_text = excluded.extracted_text,
             embedding = excluded.embedding,
             embed_input = excluded.embed_input,
+            thumb_path = excluded.thumb_path,
             enriched_at = excluded.enriched_at,
             status = excluded.status,
             error = NULL
         """,
         (
-            "file",
-            str(p),
-            str(p),
-            "text",
-            p.name,
-            stat.st_size,
-            stat.st_mtime,
-            stat.st_ctime,
-            hint,
-            body,
-            blob,
-            embed_input,
-            now,
-            "ready",
+            "file", str(p), str(p), "text", p.name,
+            stat.st_size, stat.st_mtime, stat.st_ctime,
+            hint, body, blob, embed_input,
+            None,  # text rows have no thumbnail
+            now, "ready",
         ),
     )
     logger.info(
         "text enriched: %s (%d bytes, hint=%s, embed_latency=%.2fs)",
-        p.name,
-        len(body),
-        hint,
-        result.latency_s,
+        p.name, len(body), hint, result.latency_s,
+    )
+
+
+async def enrich_image(
+    db: sqlite3.Connection,
+    mlx: mlx_mod.Client,
+    job: EnrichJob,
+    watched_folders: list[str],
+    thumb_dir_path: Path,
+) -> None:
+    """Enrich one PNG/JPG/WEBP. Idempotent on mtime.
+
+    Cheap path only: writes a 256px webp thumbnail + embeds the filename.
+    The row is marked status='pending_vlm' so step 11's dwell-gated VLM
+    can find it and add the caption + tags + re-embed.
+    """
+    p = Path(job.source_path)
+    if not p.exists():
+        logger.info("image skipped (file gone): %s", job.source_path)
+        return
+    stat = p.stat()
+
+    existing = db.execute(
+        "SELECT mtime, status FROM items WHERE uniq_key = ?",
+        (str(p),),
+    ).fetchone()
+    if (
+        existing is not None
+        and existing["mtime"] == stat.st_mtime
+        and existing["status"] in ("pending_vlm", "ready")
+    ):
+        logger.debug("image skip (mtime match, status=%s): %s", existing["status"], p.name)
+        return
+
+    # Thumbnail (sync — Pillow decode/encode happens in a thread).
+    thumb_path, orig_size = await asyncio.to_thread(
+        thumbnails_mod.make_thumbnail_from_image, p, thumb_dir_path
+    )
+
+    # Embed by filename only — VLM caption comes in step 11.
+    embed_input = p.name
+    result = await asyncio.to_thread(mlx.embed, [embed_input])
+    blob = embedding_to_blob(result.embeddings[0])
+
+    hint = project_hint_for(p, watched_folders)
+    now = time.time()
+
+    db.execute(
+        """
+        INSERT INTO items
+            (kind, source_path, uniq_key, type, title, size, mtime, ctime,
+             project_hint, extracted_text, embedding, embed_input,
+             thumb_path, enriched_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(uniq_key) DO UPDATE SET
+            title = excluded.title,
+            size = excluded.size,
+            mtime = excluded.mtime,
+            ctime = excluded.ctime,
+            project_hint = excluded.project_hint,
+            embedding = excluded.embedding,
+            embed_input = excluded.embed_input,
+            thumb_path = excluded.thumb_path,
+            enriched_at = excluded.enriched_at,
+            status = excluded.status,
+            error = NULL
+        """,
+        (
+            "file", str(p), str(p), "image", p.name,
+            stat.st_size, stat.st_mtime, stat.st_ctime,
+            hint, None, blob, embed_input,
+            thumb_path.name,  # basename only — thumb_dir is resolved at read
+            now, "pending_vlm",
+        ),
+    )
+    logger.info(
+        "image queued (pending_vlm): %s (orig=%dx%d, thumb=%s, embed_latency=%.2fs)",
+        p.name, orig_size[0], orig_size[1], thumb_path.name, result.latency_s,
     )
 
 
@@ -186,29 +281,20 @@ async def enrich(
     mlx: mlx_mod.Client,
     job: EnrichJob,
     watched_folders: list[str],
+    thumb_dir_path: Path,
 ) -> None:
     """Route a job by file type. Records failures into the items row."""
     p = Path(job.source_path)
     kind = classify_path(p)
-    if kind == "text":
-        try:
+    try:
+        if kind == "text":
             await enrich_text(db, mlx, job, watched_folders)
-        except Exception as e:  # noqa: BLE001
-            logger.exception("text enrich failed: %s", job.source_path)
-            now = time.time()
-            db.execute(
-                """
-                INSERT INTO items
-                    (kind, source_path, uniq_key, type, status, error, enriched_at)
-                VALUES (?, ?, ?, ?, 'failed', ?, ?)
-                ON CONFLICT(uniq_key) DO UPDATE SET
-                    status = 'failed',
-                    error = excluded.error,
-                    enriched_at = excluded.enriched_at
-                """,
-                ("file", str(p), str(p), "text", str(e), now),
-            )
-    # else: unknown extensions silently skipped — steps 5–7 add image/pdf/sketch.
+        elif kind == "image":
+            await enrich_image(db, mlx, job, watched_folders, thumb_dir_path)
+        # else: unknown extensions silently skipped — steps 6–7 add pdf/sketch.
+    except Exception as e:  # noqa: BLE001
+        logger.exception("%s enrich failed: %s", kind, job.source_path)
+        _record_failure(db, str(p), kind, str(e))
 
 
 async def worker_loop(
@@ -216,13 +302,14 @@ async def worker_loop(
     db: sqlite3.Connection,
     mlx: mlx_mod.Client,
     watched_folders: list[str],
+    thumb_dir_path: Path,
 ) -> None:
     """Single-consumer queue worker. Survives per-job exceptions."""
     logger.info("enrich worker started")
     while True:
         job = await queue.get()
         try:
-            await enrich(db, mlx, job, watched_folders)
+            await enrich(db, mlx, job, watched_folders, thumb_dir_path)
         except Exception:  # noqa: BLE001
             logger.exception("enrich worker: unhandled exception (job=%s)", job)
         finally:
