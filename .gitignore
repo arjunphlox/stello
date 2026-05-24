@@ -21,3 +21,11 @@ index.json
 # Cloudflare Workers build output
 dist/
 .wrangler/
+
+# desktop-context daemon (Python sidecar) — venv + caches stay local
+desktop-context/.venv/
+desktop-context/**/__pycache__/
+desktop-context/.pytest_cache/
+desktop-context/**/*.pyc
+desktop-context/*.egg-info/
+desktop-context/src/*.egg-info/

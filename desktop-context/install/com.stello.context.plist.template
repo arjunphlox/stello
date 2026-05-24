@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent template for com.stello.context.
+
+  install.sh substitutes:
+    __PYTHON__   absolute path to .venv/bin/python
+    __WORK_DIR__ absolute path to desktop-context/
+    __LOG_DIR__  absolute path to ~/Library/Application Support/Stello/logs
+
+  Final file is written to ~/Library/LaunchAgents/com.stello.context.plist
+  and loaded via `launchctl bootstrap gui/<uid>`.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.stello.context</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>-m</string>
+        <string>stello_context.daemon</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>STELLO_CTX_HOST</key>
+        <string>127.0.0.1</string>
+        <key>STELLO_CTX_PORT</key>
+        <string>8766</string>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>__WORK_DIR__</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/stello-context.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/stello-context.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

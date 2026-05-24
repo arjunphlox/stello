@@ -1,0 +1,53 @@
+[project]
+name = "stello-context"
+version = "0.0.1"
+description = "Stello desktop-context daemon — local-only Mac context indexer that surfaces related items based on what the user is doing right now."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "Arjun" }]
+
+# Runtime deps. Kept tight on purpose — every line is intentional.
+#   fastapi/uvicorn    HTTP API on 127.0.0.1:8766
+#   watchdog           FSEvents folder watcher
+#   pyobjc-*           NSWorkspace + Accessibility API (Mac-only)
+#   Pillow             image resize + webp encode
+#   pypdfium2          PDF render + text extraction
+#   numpy              cosine over the embedding index
+#   httpx + pydantic   MLX server client (HTTP + typed structured-output retry)
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.30",
+  "watchdog>=4.0",
+  "pyobjc-framework-Cocoa>=10.3",
+  "pyobjc-framework-ApplicationServices>=10.3",
+  "Pillow>=10.0",
+  "pypdfium2>=4.30",
+  "numpy>=1.26",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[project.scripts]
+stello-context = "stello_context.daemon:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/stello_context"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]  # rely on formatter; long lines OK in docstrings + URLs
