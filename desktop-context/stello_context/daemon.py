@@ -1,14 +1,13 @@
 """Stello desktop-context daemon — entrypoint.
 
-Stage 5: image-aware indexer. The worker now writes 256px webp
-thumbnails for PNG/JPG/WEBP under
-~/Library/Application Support/Stello/desktop-context/thumbs/ and marks
-images status='pending_vlm' (the dwell-gated VLM call in step 11 lifts
-them to 'ready' with caption + tags).
+Stage 8: the daemon now polls NSWorkspace + Accessibility every
+poll_interval_s and keeps the latest ContextSnapshot in memory.
+/context/now exposes it; activity_log records distinct snapshots only.
+Accessibility permission for the host Python is required for the
+focused-window title — without it the daemon still runs and logs a
+warning, but title comes back None.
 
 Later steps wire in:
-  - Image / PDF / Sketch enrichment paths (steps 5–7, 11)
-  - NSWorkspace + AX poll (step 8)
   - Safari + Sketch introspection (steps 9–11)
   - /related endpoint (step 12)
 """
@@ -27,6 +26,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from . import config as config_mod
+from . import context as context_mod
 from . import enrich as enrich_mod
 from . import mlx_client as mlx_mod
 from . import scanner as scanner_mod
@@ -54,6 +54,8 @@ class State:
     observer: Any = None
     initial_walk_count: int = 0
     thumb_dir: Path | None = None
+    context_poll_task: asyncio.Task | None = None
+    context_snapshot: context_mod.ContextSnapshot | None = None
 
 
 @asynccontextmanager
@@ -119,9 +121,28 @@ async def _lifespan(_app: FastAPI):
         max_bytes,
     )
 
+    # Context poll (NSWorkspace + AX). Logs a warning at startup if AX
+    # isn't trusted; the loop keeps running regardless.
+    if not context_mod.ax_is_trusted():
+        logger.warning(
+            "AX not trusted — focused-window titles will be None. Grant the "
+            "venv Python binary in System Settings → Privacy & Security → "
+            "Accessibility. realpath(sys.executable) is what TCC checks."
+        )
+    State.context_poll_task = asyncio.create_task(
+        context_mod.poll_loop(State, State.db, State.config.poll_interval_s)
+    )
+
     yield
 
     # --- shutdown ---
+    if State.context_poll_task is not None:
+        State.context_poll_task.cancel()
+        try:
+            await State.context_poll_task
+        except asyncio.CancelledError:
+            pass
+        State.context_poll_task = None
     if State.observer is not None:
         State.observer.stop()
         State.observer.join(timeout=2.0)
@@ -161,9 +182,10 @@ def healthz() -> dict:
             mlx_status = {"ok": False, "error": str(e)}
     queue_depth = State.queue.qsize() if State.queue is not None else None
     observer_alive = bool(State.observer is not None and State.observer.is_alive())
+    snap = State.context_snapshot
     return {
         "ok": True,
-        "stage": "watcher+text",
+        "stage": "context-poll",
         "config": {
             "path": str(State.config_path) if State.config_path else None,
             "watched_folders": cfg.watched_folders if cfg else [],
@@ -183,7 +205,23 @@ def healthz() -> dict:
             "observer_alive": observer_alive,
             "thumb_dir": str(State.thumb_dir) if State.thumb_dir else None,
         },
+        "context": {
+            "ax_trusted": snap.ax_trusted if snap else None,
+            "frontmost_app": snap.frontmost_app if snap else None,
+            "frontmost_window_title": snap.frontmost_window_title if snap else None,
+            "open_apps_count": len(snap.open_apps) if snap else None,
+        },
     }
+
+
+@app.get("/context/now")
+def context_now() -> dict:
+    """Return the most recent ContextSnapshot. Useful for debugging and as
+    the data source for /related (step 12)."""
+    snap = State.context_snapshot
+    if snap is None:
+        return {"available": False, "reason": "no snapshot yet"}
+    return {"available": True, **context_mod.snapshot_to_dict(snap)}
 
 
 def _install_signal_handlers(server: uvicorn.Server) -> None:
