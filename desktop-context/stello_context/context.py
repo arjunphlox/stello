@@ -36,7 +36,11 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from . import safari as safari_mod
+
 logger = logging.getLogger("stello-context.context")
+
+SAFARI_BUNDLE_ID = "com.apple.Safari"
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,7 @@ class ContextSnapshot:
     frontmost_app_name: str | None = None
     frontmost_window_title: str | None = None
     ax_trusted: bool = False
+    safari_tabs: list[dict] = field(default_factory=list)
 
 
 # -- raw OS adapters ---------------------------------------------------------
@@ -180,15 +185,26 @@ def focused_window_title(pid: int) -> str | None:
 # -- snapshot composition ----------------------------------------------------
 
 
-async def take_snapshot() -> ContextSnapshot:
+async def take_snapshot(safari_blocklist: list[str] | None = None) -> ContextSnapshot:
     """Compose a ContextSnapshot. All OS calls bounced to a worker thread
-    so they don't block the asyncio loop."""
+    so they don't block the asyncio loop.
+
+    Safari tabs are fetched only when Safari is actually running (no point
+    triggering an osascript-to-Safari prompt when Safari isn't open).
+    `safari_blocklist=None` skips Safari introspection entirely; pass the
+    config list to enable.
+    """
     apps = await asyncio.to_thread(running_apps)
     front = await asyncio.to_thread(frontmost_app)
     trusted = await asyncio.to_thread(ax_is_trusted)
     title: str | None = None
     if trusted and front is not None:
         title = await asyncio.to_thread(focused_window_title, front["pid"])
+    tabs: list[dict] = []
+    if safari_blocklist is not None and any(
+        a.get("bundle_id") == SAFARI_BUNDLE_ID for a in apps
+    ):
+        tabs = await asyncio.to_thread(safari_mod.get_tabs, safari_blocklist)
     return ContextSnapshot(
         ts=time.time(),
         open_apps=apps,
@@ -196,17 +212,21 @@ async def take_snapshot() -> ContextSnapshot:
         frontmost_app_name=front["name"] if front else None,
         frontmost_window_title=title,
         ax_trusted=trusted,
+        safari_tabs=tabs,
     )
 
 
 def snapshot_dedupe_key(snap: ContextSnapshot) -> str:
     """JSON string used to detect "the world changed since last tick" —
-    feeds into the activity_log dedup."""
+    feeds into the activity_log dedup. Includes the set of non-blocked
+    Safari tab URLs so tab changes also create new rows (the activity
+    classifier in step 12 needs that signal)."""
     return json.dumps(
         {
             "apps": sorted(a["bundle_id"] for a in snap.open_apps),
             "front": snap.frontmost_app,
             "title": snap.frontmost_window_title,
+            "tabs": sorted(t["url"] for t in snap.safari_tabs if t.get("url")),
         },
         sort_keys=True,
     )
@@ -225,6 +245,13 @@ def serialize_for_log(snap: ContextSnapshot) -> str:
     )
 
 
+def serialize_safari_tabs(snap: ContextSnapshot) -> str:
+    """JSON for the activity_log.safari_tabs TEXT column.
+    Blocked tabs are persisted as {hostname, blocked:true} only —
+    URL/title are stripped at filter_tabs() and never reach this row."""
+    return json.dumps(snap.safari_tabs)
+
+
 def snapshot_to_dict(snap: ContextSnapshot) -> dict[str, Any]:
     """For /context/now JSON response."""
     return asdict(snap)
@@ -237,15 +264,20 @@ async def poll_loop(
     state: Any,  # daemon.State — typed loosely to avoid circular import
     db: sqlite3.Connection,
     interval_s: float,
+    safari_blocklist: list[str] | None = None,
 ) -> None:
     """Long-running task. Updates state.context_snapshot every tick,
     logs to activity_log only when the dedupe key changes."""
-    logger.info("context poll started (interval=%.1fs)", interval_s)
+    logger.info(
+        "context poll started (interval=%.1fs, safari=%s)",
+        interval_s,
+        "on" if safari_blocklist is not None else "off",
+    )
     last_key: str | None = None
     warned_untrusted = False
     while True:
         try:
-            snap = await take_snapshot()
+            snap = await take_snapshot(safari_blocklist=safari_blocklist)
             state.context_snapshot = snap
             if not snap.ax_trusted and not warned_untrusted:
                 logger.warning(
@@ -257,8 +289,13 @@ async def poll_loop(
             key = snapshot_dedupe_key(snap)
             if key != last_key:
                 db.execute(
-                    "INSERT INTO activity_log(ts, open_apps) VALUES(?, ?)",
-                    (snap.ts, serialize_for_log(snap)),
+                    "INSERT INTO activity_log(ts, open_apps, safari_tabs) "
+                    "VALUES(?, ?, ?)",
+                    (
+                        snap.ts,
+                        serialize_for_log(snap),
+                        serialize_safari_tabs(snap),
+                    ),
                 )
                 last_key = key
         except asyncio.CancelledError:

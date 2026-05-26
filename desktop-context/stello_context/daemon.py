@@ -130,7 +130,12 @@ async def _lifespan(_app: FastAPI):
             "Accessibility. realpath(sys.executable) is what TCC checks."
         )
     State.context_poll_task = asyncio.create_task(
-        context_mod.poll_loop(State, State.db, State.config.poll_interval_s)
+        context_mod.poll_loop(
+            State,
+            State.db,
+            State.config.poll_interval_s,
+            safari_blocklist=State.config.safari_blocklist,
+        )
     )
 
     yield
@@ -210,6 +215,12 @@ def healthz() -> dict:
             "frontmost_app": snap.frontmost_app if snap else None,
             "frontmost_window_title": snap.frontmost_window_title if snap else None,
             "open_apps_count": len(snap.open_apps) if snap else None,
+            "safari_tabs_total": len(snap.safari_tabs) if snap else None,
+            "safari_tabs_blocked": (
+                sum(1 for t in snap.safari_tabs if t.get("blocked"))
+                if snap
+                else None
+            ),
         },
     }
 
