@@ -19,6 +19,13 @@ This repo follows Arjun's hybrid AI coding workflow (Claude Code + Cursor + Code
 
 **BACKLOG schema:** `| Task | Tool | Platform | Model | Status |` — every task gets tool / platform / reasoning-tier classified at capture time. Use `/to-do` to add tasks; it auto-classifies.
 
+## Memory
+
+Two layers:
+
+- **Project-scoped, committed:** [`docs/memory/MEMORY.md`](docs/memory/MEMORY.md) — the portable, version-controlled contract any agent (Claude Code or Cursor) reads at session start and appends to. Project-scoped lessons only (`type: project`). `AGENTS.md` points here.
+- **Account-level, not committed:** `~/.claude/projects/-Users-arjunphlox-Documents-Personal-Projects-Stello/memory/` — cross-project / personal / workflow prefs (`type: feedback | user | reference`). Auto-loaded by Claude Code; stays out of the repo. Backfill project-scoped entries with `arjun-ai-gems/scripts/sync-project-memory.sh`.
+
 ## Dev Commands
 
 - `npm run dev` (or `node scripts/local-dev.js`) — zero-dep router that serves static files and routes `/api/:path` to `api/:path.js` handlers. Loads env from `.env.local` (copy `.env.example`). Preferred for everyday dev — no Vercel login needed.
