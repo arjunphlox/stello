@@ -4,16 +4,21 @@
   "private": true,
   "description": "Personal knowledge base — rich item analysis and discovery",
   "scripts": {
-    "dev": "node scripts/local-dev.js",
+    "build": "node scripts/build-assets.js",
+    "dev": "node scripts/build-assets.js && wrangler dev",
+    "dev:remote": "node scripts/build-assets.js && wrangler dev --remote",
+    "deploy": "node scripts/build-assets.js && wrangler deploy",
     "backup": "node scripts/sync-local.js",
     "backup:full": "node scripts/sync-local.js --full",
-    "verify": "node scripts/verify-supabase.js"
+    "verify": "node scripts/verify-supabase.js",
+    "migrate:r2": "node scripts/migrate-storage-to-r2.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@sparticuz/chromium": "^147.0.1",
     "@supabase/supabase-js": "^2.49.4",
-    "puppeteer-core": "^24.41.0",
-    "sharp": "^0.34.5"
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "wrangler": "^4.99.0"
   }
 }

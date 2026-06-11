@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stello",
+  "main": "src/index.js",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Static frontend. dist/ is an allowlisted copy of the frontend files
+  // (scripts/build-assets.js) — the repo root holds the knowledge-base .md
+  // content + tooling that must NOT be served. run_worker_first routes the
+  // API + image-serving paths to the Worker; everything else is a static asset.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/img/*"],
+    "html_handling": "auto-trailing-slash"
+  },
+
+  // Image bytes live in R2 (zero egress), served back via GET /img/*.
+  "r2_buckets": [
+    { "binding": "BUCKET", "bucket_name": "stello-item-images" }
+  ],
+
+  // sharp replacement — WebP encode + resize at ingest via the Images binding.
+  "images": { "binding": "IMAGES" },
+
+  // Daily batch drain (was vercel.json crons → /api/cron/process-batches).
+  "triggers": { "crons": ["0 0 * * *"] },
+
+  "observability": { "enabled": true },
+
+  // Public values (safe to expose — already shipped in supabase-client.js).
+  // Secrets (SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY) via `wrangler secret put`.
+  "vars": {
+    "SUPABASE_URL": "https://ngncjtzsqrrfrhgammne.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nbmNqdHpzcXJyZnJoZ2FtbW5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyOTIyNDAsImV4cCI6MjA5MTg2ODI0MH0.Q_hRdbk6u56_pPtxyhY1D-1gmLYA5OqIvxQgE1M3GY8"
+  }
+}
