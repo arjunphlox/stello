@@ -10,8 +10,7 @@
     "deploy": "node scripts/build-assets.js && wrangler deploy",
     "backup": "node scripts/sync-local.js",
     "backup:full": "node scripts/sync-local.js --full",
-    "verify": "node scripts/verify-supabase.js",
-    "migrate:r2": "node scripts/migrate-storage-to-r2.js"
+    "verify": "node scripts/verify-supabase.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
