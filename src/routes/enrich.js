@@ -184,14 +184,37 @@ async function enrichCore(env, accessToken, { slug, itemId }) {
           }
         }
 
-        const candidates = { images: imageCandidates, snippets, reasons };
-        result.enrichment_candidates = candidates;
+        let imgs = imageCandidates;
+        const update = { needs_review: shouldReview(currentTags) };
 
-        await client.from('items').update({
-          enrichment_candidates: JSON.stringify(candidates),
-          enrichment_status: 'candidates_done',
-          needs_review: shouldReview(currentTags),
-        }).eq('id', item.id);
+        // Cover fallback: the page exposed no og:image, but we harvested
+        // usable page images — promote the first to the cover so the card
+        // isn't a blank tile. Keep status retryable (text_done) so the next
+        // pass runs vision on the freshly-promoted cover.
+        const existingImages = Array.isArray(item.images)
+          ? item.images
+          : (() => { try { return JSON.parse(item.images || '[]'); } catch { return []; } })();
+        if (!item.og_image_path && existingImages.length === 0 && imgs.length) {
+          const [cover, ...rest] = imgs;
+          update.og_image_path = cover.path;
+          update.images = JSON.stringify([{
+            path: cover.path, source: 'extracted', is_primary: true,
+            width: cover.width || null, height: cover.height || null,
+            label: cover.label || null,
+          }]);
+          update.enrichment_status = 'text_done';   // vision pending on the new cover
+          update.enrichment_error = null;
+          imgs = rest;                               // don't also list the cover as a candidate
+          result.og_image_path = cover.path;
+        } else {
+          update.enrichment_status = 'candidates_done';
+        }
+
+        const candidates = { images: imgs, snippets, reasons };
+        result.enrichment_candidates = candidates;
+        update.enrichment_candidates = JSON.stringify(candidates);
+
+        await client.from('items').update(update).eq('id', item.id);
       } else if (item.enrichment_status === 'pending') {
         await client.from('items').update({ enrichment_status: 'vision_done' }).eq('id', item.id);
       }
