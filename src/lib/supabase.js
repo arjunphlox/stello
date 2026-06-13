@@ -203,6 +203,7 @@ async function downloadImage(env, imageUrl) {
       return null;
     }
 
+    const sourceContentType = resp.headers.get('content-type') || null;
     const raw = Buffer.from(await resp.arrayBuffer());
     if (raw.length < 500) {
       console.warn('downloadImage: buffer too small', imageUrl, raw.length);
@@ -211,7 +212,10 @@ async function downloadImage(env, imageUrl) {
 
     try {
       // Cap at a sane max width — thumbs are 56px, panel a few hundred.
-      return await ensureWebp(env, raw, { maxWidth: 2400 });
+      // ensureWebp no longer throws on a failed transform; it falls back to
+      // the original bytes (carrying transformError) so we never drop a
+      // successfully-fetched image.
+      return await ensureWebp(env, raw, { maxWidth: 2400, sourceContentType });
     } catch (err) {
       console.warn('downloadImage: webp conversion failed', imageUrl, err.message);
       return null;
