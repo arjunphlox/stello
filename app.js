@@ -377,8 +377,10 @@
           itemsBySlug[item.slug] = refreshed;
 
           const cardEl = $grid.querySelector(`.card[data-slug="${item.slug}"]:not(.card-question)`);
-          if (cardEl) cardEl.outerHTML = renderCard(refreshed, 0);
-          PanelManager.refreshItem(item.slug);
+          if (cardEl && cardEl.dataset.renderSig !== cardRenderSig(refreshed)) {
+            cardEl.outerHTML = renderCard(refreshed, 0);
+          }
+          PanelManager.refreshItem(item.slug);   // diff-aware; safe to call every pass
 
           // If reprocess downloaded an image, kick off vision enrichment
           // too. Fire-and-forget; pollForEnrichment handles the UI update.
@@ -1003,6 +1005,26 @@
     return slug.replace(/[^a-zA-Z0-9-]/g, '-');
   }
 
+  // Signature of everything that affects a card's rendered appearance. Used to
+  // skip DOM replacement during enrichment polling when nothing visible
+  // changed — re-rendering an unchanged card re-creates its <img> (a flash)
+  // and, because re-renders pass idx=0, flips placeholder hues. Excludes idx
+  // deliberately so a no-op re-render is a true no-op.
+  function hashStr(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return h.toString(36);
+  }
+  function cardRenderSig(item) {
+    return hashStr([
+      (item.has_image && item.image_path) || '',
+      item.image_width || '', item.image_height || '',
+      item.title || '', item.domain || '',
+      item.has_image ? '' : (item.summary || '').slice(0, 200),
+      dominantColor(item),
+    ].join('|'));
+  }
+
   function renderCard(item, idx) {
     let thumbHtml;
     const hasImage = item.has_image && item.image_path;
@@ -1046,7 +1068,7 @@
 
     const cardClass = hasImage ? ' card-visual' : (hasTextContent ? ' card-text' : '');
 
-    return `<div class="card${cardClass}" data-slug="${item.slug}" tabindex="-1">
+    return `<div class="card${cardClass}" data-slug="${item.slug}" data-render-sig="${cardRenderSig(item)}" tabindex="-1">
       <div class="card-visual-area">
         ${thumbHtml}
         <div class="card-title-badge">${escHtml(item.title || '')}</div>
@@ -2203,6 +2225,10 @@
     let attempts = 0;
     let timer = null;
     let cancelled = false;
+    // Track the appearance we last rendered so ticks that don't change the
+    // card skip the DOM replacement — the unconditional per-tick re-render was
+    // re-creating each <img> every few seconds, i.e. the grid "blinking".
+    let lastRenderedSig = $grid.querySelector(`.card[data-slug="${slug}"]`)?.dataset.renderSig ?? null;
 
     const stop = () => {
       cancelled = true;
@@ -2228,16 +2254,22 @@
         if (idx >= 0) allItems[idx] = item;
         itemsBySlug[slug] = item;
 
-        // Rebuild the related-items index so tag-based recommendations
-        // reflect the new vision tags immediately.
-        buildRelatedIndex();
+        // Only mutate the DOM when the card's visible state actually changed.
+        const sig = cardRenderSig(item);
+        if (sig !== lastRenderedSig) {
+          lastRenderedSig = sig;
 
-        // Re-render the in-grid card (image + text content may have changed)
-        const cardEl = $grid.querySelector(`.card[data-slug="${slug}"]`);
-        if (cardEl) cardEl.outerHTML = renderCard(item, 0);
+          // Rebuild the related-items index so tag-based recommendations
+          // reflect the new vision tags immediately.
+          buildRelatedIndex();
 
-        // Push live updates into any open panel for this slug.
-        PanelManager.refreshItem(slug);
+          // Re-render the in-grid card (image + text content may have changed)
+          const cardEl = $grid.querySelector(`.card[data-slug="${slug}"]`);
+          if (cardEl) cardEl.outerHTML = renderCard(item, 0);
+
+          // Push live updates into any open panel for this slug.
+          PanelManager.refreshItem(slug);
+        }
 
         const status = item.enrichment_status;
         if (status === 'candidates_done' || status === 'error' || attempts >= maxAttempts) {
