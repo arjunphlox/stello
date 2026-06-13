@@ -152,22 +152,33 @@ async function fetchOGMetadata(url) {
     const html = Buffer.concat(chunks).toString('utf-8');
     const meta = {};
 
-    const ogPattern1 = /<meta\s+(?:property|name)=["']og:(\w+)["']\s+content=["']([^"']*)["']/gi;
-    const ogPattern2 = /<meta\s+content=["']([^"']*)["'].*?(?:property|name)=["']og:(\w+)["']/gi;
-
-    let match;
-    while ((match = ogPattern1.exec(html)) !== null) {
-      meta[`og:${match[1]}`] = decodeHtmlEntities(match[2]);
+    // Parse each <meta> tag independently and pull its property/name + content
+    // regardless of attribute order. The old fixed-position regex required
+    // property and content to sit in adjacent, specific slots, so it silently
+    // missed any tag with an extra attribute before property
+    // (e.g. `<meta slot="seo_meta" property="og:image" content=…>`) or a
+    // reordered content attribute — a real, log-confirmed source of items
+    // that have an og:image yet stored no image.
+    const metaRe = /<meta\b[^>]*>/gi;
+    let m;
+    while ((m = metaRe.exec(html)) !== null) {
+      const tag = m[0];
+      const keyMatch = tag.match(/\b(?:property|name)\s*=\s*["']\s*((?:og|twitter):[\w:]+|description)\s*["']/i);
+      if (!keyMatch) continue;
+      const contentMatch = tag.match(/\bcontent\s*=\s*["']([^"']*)["']/i);
+      if (contentMatch == null) continue;
+      meta[keyMatch[1].toLowerCase()] = decodeHtmlEntities(contentMatch[1]);
     }
-    while ((match = ogPattern2.exec(html)) !== null) {
-      meta[`og:${match[2]}`] = decodeHtmlEntities(match[1]);
+
+    // Fall back to the Twitter Card image when Open Graph omits one — covers a
+    // meaningful slice of sites that only ship twitter:image.
+    if (!meta['og:image']) {
+      const tw = meta['twitter:image'] || meta['twitter:image:src'];
+      if (tw) meta['og:image'] = tw;
     }
 
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
     if (titleMatch) meta.title = decodeHtmlEntities(titleMatch[1].trim());
-
-    const descMatch = html.match(/<meta\s+name=["']description["']\s+content=["']([^"']*)["']/i);
-    if (descMatch) meta.description = decodeHtmlEntities(descMatch[1]);
 
     meta._status = 'fetched';
     return meta;
