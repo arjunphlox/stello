@@ -1107,6 +1107,16 @@
   // cover happens via (a) clicking an already-previewed thumb again OR
   // (b) the "Set as cover" pill on the main image (only shown when
   // preview != cover).
+  // Map a machine enrichment_error reason → a short human caption for the
+  // empty-image panel state, so a missing image is explainable, not mysterious.
+  function imageErrorLabel(err) {
+    if (!err) return '';
+    if (err.startsWith('image-download-failed')) return 'No image — couldn’t fetch the source image';
+    if (err.startsWith('image-store-failed')) return 'No image — storage error, will retry';
+    if (err.startsWith('vision:')) return 'Image analysis failed';
+    return 'No image available';
+  }
+
   function renderPanelSliderHTML(item) {
     const images = Array.isArray(item.images) ? item.images : [];
     const candidates = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.images))
@@ -1124,8 +1134,14 @@
     const previewPath = coverPath;
 
     if (!coverPath && !candidates.length) {
+      const errNote = item.enrichment_error
+        ? `<div class="panel-image-note" title="${escAttr(item.enrichment_error)}">${escHtml(imageErrorLabel(item.enrichment_error))}</div>`
+        : '';
       return `<div class="panel-image-slider" data-slug="${item.slug}" data-cover-path="">
-        <div class="panel-image-main panel-image-empty"></div>
+        <div class="panel-image-main">
+          <div class="panel-image-empty"></div>
+          ${errNote}
+        </div>
         <div class="panel-image-thumbs">${renderUploadTileHTML()}</div>
       </div>`;
     }

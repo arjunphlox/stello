@@ -126,12 +126,18 @@ async function enrichCore(env, accessToken, { slug, itemId }) {
         tags: JSON.stringify(currentTags),
         analyzed_at: new Date().toISOString(),
         enrichment_status: 'vision_done',
+        enrichment_error: null,            // clear any prior failure on success
       };
       if (result.title) updates.title = result.title;
       await client.from('items').update(updates).eq('id', item.id);
     } catch (err) {
       result.vision_error = (err.message || '').slice(0, 100);
-      await client.from('items').update({ enrichment_status: 'error' }).eq('id', item.id);
+      // Persist the reason — until now the 'error' status was opaque, leaving
+      // no way to tell a missing key from a bad image from an API failure.
+      await client.from('items').update({
+        enrichment_status: 'error',
+        enrichment_error: `vision: ${result.vision_error || 'unknown'}`.slice(0, 200),
+      }).eq('id', item.id);
       return result;
     }
   } else if (!item.og_image_path && item.enrichment_status !== 'text_done') {

@@ -61,6 +61,9 @@ CREATE TABLE items (
   -- Transient bag of enrichment-suggested candidates the user hasn't
   -- resolved yet: { images:[{url,label?}], snippets:[text], reasons:[text] }
   enrichment_candidates JSONB DEFAULT '{}'::jsonb,
+  -- Last enrichment/image failure reason (null = none). Set when a swallowed
+  -- failure would otherwise leave an item silently incomplete; cleared on success.
+  enrichment_error TEXT,
   UNIQUE(user_id, slug)
 );
 
@@ -198,7 +201,8 @@ CREATE POLICY "stello item-images user delete"
 ALTER TABLE items
   ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS snippets JSONB DEFAULT '[]'::jsonb,
-  ADD COLUMN IF NOT EXISTS enrichment_candidates JSONB DEFAULT '{}'::jsonb;
+  ADD COLUMN IF NOT EXISTS enrichment_candidates JSONB DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS enrichment_error TEXT;
 
 ALTER TABLE items DROP CONSTRAINT IF EXISTS items_enrichment_status_check;
 ALTER TABLE items ADD CONSTRAINT items_enrichment_status_check

@@ -90,9 +90,14 @@ module.exports = async function handler(req, res) {
       if (!path) {
         // Transient R2 issue — worth another shot on the next backfill.
         imageUploadRetryable = true;
+        updates.enrichment_error = 'image-store-failed';
       } else {
         ogImagePath = path;
         updates.og_image_path = ogImagePath;
+        // Recovered the image — clear any prior failure (or note a skipped
+        // WebP normalization, which is non-fatal).
+        updates.enrichment_error = img.transformError
+          ? `image-webp: ${img.transformError}`.slice(0, 200) : null;
         const existingImages = (() => {
           try { return typeof item.images === 'string' ? JSON.parse(item.images) : (item.images || []); }
           catch { return []; }
@@ -105,6 +110,7 @@ module.exports = async function handler(req, res) {
         }
       }
     } else {
+      updates.enrichment_error = 'image-download-failed';
       console.warn('reprocess: image download returned null', item.source_url, fullImageUrl);
     }
   }
