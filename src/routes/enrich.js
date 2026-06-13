@@ -149,10 +149,14 @@ async function enrichCore(env, accessToken, { slug, itemId }) {
     try {
       const html = await fetchPageHtml(item.source_url);
       if (html) {
+        // The cover is stored as an R2 "/img/<key>" path, so it can't be
+        // compared against external candidate URLs. Re-derive the original
+        // og:image source URL from the page and exclude *that* instead.
+        const excludeUrl = extractOgImageUrl(html, item.source_url);
         const imageCandidates = await harvestImageCandidates({
           env, html, sourceUrl: item.source_url,
           userId: user.id, slug: item.slug,
-          excludePath: item.og_image_path,
+          excludeUrl,
         });
 
         const pageText = extractPageText(html).slice(0, 6000);
@@ -383,17 +387,32 @@ function extractImageUrls(html, baseUrl) {
   return out;
 }
 
+/** Pull the og:image URL out of already-fetched HTML, resolved to absolute. */
+function extractOgImageUrl(html, baseUrl) {
+  const m = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i)
+    || html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+  if (!m) return null;
+  try { return new URL(m[1], baseUrl).href; } catch { return null; }
+}
+
+/** Loose URL equality — ignores protocol, query/hash, and a trailing slash. */
+function sameImageUrl(a, b) {
+  if (!a || !b) return false;
+  const strip = (u) => u.replace(/^https?:\/\//i, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  return strip(a) === strip(b);
+}
+
 /**
  * Download up to 5 candidate images and store them in R2.
  * Returns [{ path, label, source: 'extracted', width, height }].
  */
-async function harvestImageCandidates({ env, html, sourceUrl, userId, slug, excludePath }) {
+async function harvestImageCandidates({ env, html, sourceUrl, userId, slug, excludeUrl }) {
   const candidates = extractImageUrls(html, sourceUrl);
   const out = [];
   let n = 0;
   for (const cand of candidates) {
     if (out.length >= 5) break;
-    if (excludePath && cand.url === excludePath) continue;
+    if (sameImageUrl(cand.url, excludeUrl)) continue;   // don't re-offer the cover as a candidate
 
     const img = await downloadImage(env, cand.url);
     if (!img) continue;
