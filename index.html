@@ -5,6 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stello</title>
   <script>
+    /* Password-recovery safety-net. Supabase recovery emails land on the
+       Site URL (/) when the reset redirect isn't allow-listed; without this,
+       supabase-js (detectSessionInUrl) would consume the recovery token here
+       and silently sign the user in, so they never reach the "set new
+       password" form. Detect the recovery hash and bounce to the reset page
+       (token preserved) before any Supabase script loads. */
+    (function(){try{
+      var h = location.hash || '';
+      if (h.indexOf('type=recovery') !== -1 && location.pathname.indexOf('/reset-password') === -1) {
+        location.replace('/reset-password.html' + h);
+      }
+    }catch(e){}})();
+  </script>
+  <script>
     (function(){try{var t=JSON.parse(localStorage.getItem('stello.theme'));if(t){if(t.mode)document.documentElement.setAttribute('data-theme',t.mode);if(t.accent)document.documentElement.setAttribute('data-accent',t.accent);}}catch(e){}})();
   </script>
   <script>
