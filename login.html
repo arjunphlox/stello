@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stello — Sign in</title>
   <script>
+    /* Password-recovery safety-net (mirrors index.html): if a recovery link
+       lands here, bounce to the reset page before supabase-js consumes the
+       token and signs the user in. */
+    (function(){try{
+      var h = location.hash || '';
+      if (h.indexOf('type=recovery') !== -1 && location.pathname.indexOf('/reset-password') === -1) {
+        location.replace('/reset-password.html' + h);
+      }
+    }catch(e){}})();
+  </script>
+  <script>
     // Apply random accent on each visit
     (function(){
       var accents = ['lime', 'amber', 'iris'];
