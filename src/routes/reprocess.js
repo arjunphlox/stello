@@ -125,12 +125,21 @@ module.exports = async function handler(req, res) {
 
   const hasVisionTags = preserved.some(t => t.category === 'color'
     || t.category === 'style' || t.category === 'mood');
-  if (ogImagePath && !hasVisionTags) {
-    updates.enrichment_status = 'text_done';
-  } else if (imageUploadRetryable) {
+  // Status must reflect what's actually left to do — never mark an item
+  // "done" just to stop the backfill drip. Crucially, an item whose page
+  // advertises an og:image we *failed to store* stays retryable (text_done)
+  // so a later pass (or the download-hardening fix) can recover the image,
+  // rather than being masked as vision_done forever.
+  if (ogImagePath && hasVisionTags) {
+    updates.enrichment_status = 'vision_done';        // image + vision both present
+  } else if (ogImagePath) {
+    updates.enrichment_status = 'text_done';          // have image, vision still pending
+  } else if (ogImageUrl || imageUploadRetryable || ogFailed) {
+    // page HAS an og:image we couldn't store, OR the OG fetch errored
+    // transiently — keep retrying rather than masking as done.
     updates.enrichment_status = 'text_done';
   } else {
-    updates.enrichment_status = 'vision_done';
+    updates.enrichment_status = 'candidates_done';    // OG fetched OK, page has no image → terminal, not "vision_done"
   }
 
   await client.from('items').update(updates).eq('id', item.id);

@@ -331,7 +331,9 @@
   function itemNeedsBackfill(item) {
     const status = item.enrichment_status;
     if (status === 'error') return false;            // give up
-    if (status && status !== 'vision_done') return true;
+    // vision_done = image+vision finished; candidates_done = terminal for
+    // imageless pages (nothing left to fetch). Anything earlier still has work.
+    if (status && status !== 'vision_done' && status !== 'candidates_done') return true;
     const text = (item.title || '') + ' ' + (item.summary || '');
     if (/&#\d|&#x|&amp;|&quot;|&lt;|&gt;/i.test(text)) return true;
     // Vision-done items with no image → nothing to do
