@@ -76,6 +76,7 @@ module.exports = async function handler(req, res) {
 
   let ogImagePath = item.og_image_path;
   let imageUploadRetryable = false;
+  let imageDownloadFailed = false;
   if (!ogImagePath && ogImageUrl) {
     let fullImageUrl = ogImageUrl;
     if (ogImageUrl.startsWith('//')) fullImageUrl = 'https:' + ogImageUrl;
@@ -110,6 +111,7 @@ module.exports = async function handler(req, res) {
         }
       }
     } else {
+      imageDownloadFailed = true;
       updates.enrichment_error = 'image-download-failed';
       console.warn('reprocess: image download returned null', item.source_url, fullImageUrl);
     }
@@ -140,6 +142,11 @@ module.exports = async function handler(req, res) {
     updates.enrichment_status = 'vision_done';        // image + vision both present
   } else if (ogImagePath) {
     updates.enrichment_status = 'text_done';          // have image, vision still pending
+  } else if (imageDownloadFailed && item.enrichment_error === 'image-download-failed') {
+    // The og:image failed to download on the previous pass too — it's a dead
+    // URL (e.g. a `todo.png` placeholder). Mark terminal so the backfill drip
+    // stops re-fetching it every load (a churn / "blinking" source).
+    updates.enrichment_status = 'candidates_done';
   } else if (ogImageUrl || imageUploadRetryable || ogFailed) {
     // page HAS an og:image we couldn't store, OR the OG fetch errored
     // transiently — keep retrying rather than masking as done.
