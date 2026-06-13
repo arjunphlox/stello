@@ -97,6 +97,7 @@ async function captureUrl(env, client, user, url) {
   let ogImagePath = null;
   let ogImageWidth = null;
   let ogImageHeight = null;
+  let imageError = null;
   if (ogImageUrl) {
     let fullImageUrl = ogImageUrl;
     if (ogImageUrl.startsWith('//')) fullImageUrl = 'https:' + ogImageUrl;
@@ -112,8 +113,12 @@ async function captureUrl(env, client, user, url) {
         ogImagePath = path;
         ogImageWidth = img.width || null;
         ogImageHeight = img.height || null;
+        if (img.transformError) imageError = `image-webp: ${img.transformError}`.slice(0, 200);
+      } else {
+        imageError = 'image-store-failed';
       }
     } else {
+      imageError = 'image-download-failed';
       console.warn('capture-bulk: image download returned null', url, fullImageUrl);
     }
   }
@@ -137,6 +142,7 @@ async function captureUrl(env, client, user, url) {
       status: 'active',
       location: null, needs_review: true,
       added_at: now, enrichment_status: 'text_done',
+      enrichment_error: imageError,
       tags: JSON.stringify(tags),
     })
     .select()

@@ -126,12 +126,18 @@ async function enrichCore(env, accessToken, { slug, itemId }) {
         tags: JSON.stringify(currentTags),
         analyzed_at: new Date().toISOString(),
         enrichment_status: 'vision_done',
+        enrichment_error: null,            // clear any prior failure on success
       };
       if (result.title) updates.title = result.title;
       await client.from('items').update(updates).eq('id', item.id);
     } catch (err) {
       result.vision_error = (err.message || '').slice(0, 100);
-      await client.from('items').update({ enrichment_status: 'error' }).eq('id', item.id);
+      // Persist the reason — until now the 'error' status was opaque, leaving
+      // no way to tell a missing key from a bad image from an API failure.
+      await client.from('items').update({
+        enrichment_status: 'error',
+        enrichment_error: `vision: ${result.vision_error || 'unknown'}`.slice(0, 200),
+      }).eq('id', item.id);
       return result;
     }
   } else if (!item.og_image_path && item.enrichment_status !== 'text_done') {
@@ -143,10 +149,14 @@ async function enrichCore(env, accessToken, { slug, itemId }) {
     try {
       const html = await fetchPageHtml(item.source_url);
       if (html) {
+        // The cover is stored as an R2 "/img/<key>" path, so it can't be
+        // compared against external candidate URLs. Re-derive the original
+        // og:image source URL from the page and exclude *that* instead.
+        const excludeUrl = extractOgImageUrl(html, item.source_url);
         const imageCandidates = await harvestImageCandidates({
           env, html, sourceUrl: item.source_url,
           userId: user.id, slug: item.slug,
-          excludePath: item.og_image_path,
+          excludeUrl,
         });
 
         const pageText = extractPageText(html).slice(0, 6000);
@@ -174,14 +184,37 @@ async function enrichCore(env, accessToken, { slug, itemId }) {
           }
         }
 
-        const candidates = { images: imageCandidates, snippets, reasons };
-        result.enrichment_candidates = candidates;
+        let imgs = imageCandidates;
+        const update = { needs_review: shouldReview(currentTags) };
 
-        await client.from('items').update({
-          enrichment_candidates: JSON.stringify(candidates),
-          enrichment_status: 'candidates_done',
-          needs_review: shouldReview(currentTags),
-        }).eq('id', item.id);
+        // Cover fallback: the page exposed no og:image, but we harvested
+        // usable page images — promote the first to the cover so the card
+        // isn't a blank tile. Keep status retryable (text_done) so the next
+        // pass runs vision on the freshly-promoted cover.
+        const existingImages = Array.isArray(item.images)
+          ? item.images
+          : (() => { try { return JSON.parse(item.images || '[]'); } catch { return []; } })();
+        if (!item.og_image_path && existingImages.length === 0 && imgs.length) {
+          const [cover, ...rest] = imgs;
+          update.og_image_path = cover.path;
+          update.images = JSON.stringify([{
+            path: cover.path, source: 'extracted', is_primary: true,
+            width: cover.width || null, height: cover.height || null,
+            label: cover.label || null,
+          }]);
+          update.enrichment_status = 'text_done';   // vision pending on the new cover
+          update.enrichment_error = null;
+          imgs = rest;                               // don't also list the cover as a candidate
+          result.og_image_path = cover.path;
+        } else {
+          update.enrichment_status = 'candidates_done';
+        }
+
+        const candidates = { images: imgs, snippets, reasons };
+        result.enrichment_candidates = candidates;
+        update.enrichment_candidates = JSON.stringify(candidates);
+
+        await client.from('items').update(update).eq('id', item.id);
       } else if (item.enrichment_status === 'pending') {
         await client.from('items').update({ enrichment_status: 'vision_done' }).eq('id', item.id);
       }
@@ -377,17 +410,32 @@ function extractImageUrls(html, baseUrl) {
   return out;
 }
 
+/** Pull the og:image URL out of already-fetched HTML, resolved to absolute. */
+function extractOgImageUrl(html, baseUrl) {
+  const m = html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i)
+    || html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
+  if (!m) return null;
+  try { return new URL(m[1], baseUrl).href; } catch { return null; }
+}
+
+/** Loose URL equality — ignores protocol, query/hash, and a trailing slash. */
+function sameImageUrl(a, b) {
+  if (!a || !b) return false;
+  const strip = (u) => u.replace(/^https?:\/\//i, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  return strip(a) === strip(b);
+}
+
 /**
  * Download up to 5 candidate images and store them in R2.
  * Returns [{ path, label, source: 'extracted', width, height }].
  */
-async function harvestImageCandidates({ env, html, sourceUrl, userId, slug, excludePath }) {
+async function harvestImageCandidates({ env, html, sourceUrl, userId, slug, excludeUrl }) {
   const candidates = extractImageUrls(html, sourceUrl);
   const out = [];
   let n = 0;
   for (const cand of candidates) {
     if (out.length >= 5) break;
-    if (excludePath && cand.url === excludePath) continue;
+    if (sameImageUrl(cand.url, excludeUrl)) continue;   // don't re-offer the cover as a candidate
 
     const img = await downloadImage(env, cand.url);
     if (!img) continue;

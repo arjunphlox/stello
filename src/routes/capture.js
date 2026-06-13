@@ -60,6 +60,7 @@ async function handleUrlCapture(req, client, user, url, res) {
   let ogImageWidth = null;
   let ogImageHeight = null;
   let hasImage = false;
+  let imageError = null;   // why no/degraded image — surfaced via enrichment_error
 
   if (ogImageUrl) {
     let fullImageUrl = ogImageUrl;
@@ -81,8 +82,13 @@ async function handleUrlCapture(req, client, user, url, res) {
         ogImageWidth = img.width || null;
         ogImageHeight = img.height || null;
         hasImage = true;
+        // Stored, but WebP normalization was skipped — note it (non-fatal).
+        if (img.transformError) imageError = `image-webp: ${img.transformError}`.slice(0, 200);
+      } else {
+        imageError = 'image-store-failed';   // R2 put failed
       }
     } else {
+      imageError = 'image-download-failed';  // fetch/decode failed
       console.warn('capture: image download returned null', url, fullImageUrl);
     }
   }
@@ -115,6 +121,7 @@ async function handleUrlCapture(req, client, user, url, res) {
     needs_review: true,
     added_at: now,
     enrichment_status: 'text_done',
+    enrichment_error: imageError,
     tags: JSON.stringify(tags),
   };
 

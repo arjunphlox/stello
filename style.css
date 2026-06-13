@@ -1269,8 +1269,22 @@ html.arriving-from-login .header {
   display: block;
 }
 .panel-image-empty {
+  position: absolute;
+  inset: 0;
   opacity: 0.3;
   background-image: repeating-linear-gradient(45deg, var(--border), var(--border) 2px, transparent 2px, transparent 8px);
+}
+/* Sibling of the faded hatch (not a child — opacity would cascade) so the
+   reason reads at full strength over the empty slot. */
+.panel-image-note {
+  position: relative;
+  z-index: 1;
+  max-width: 85%;
+  text-align: center;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--text);
+  opacity: 0.65;
 }
 .panel-image-thumbs {
   display: flex;
