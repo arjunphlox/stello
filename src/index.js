@@ -43,6 +43,20 @@ app.all('/api/auth-callback', route(authCallback));
 // NOTE: /api/cron/process-batches is intentionally NOT an HTTP route — it
 // drains batches with the admin client and runs only via scheduled() below.
 
+// Guarded manual enrichment drain — clears a deep 'text_done' backlog on
+// demand instead of waiting days for the daily cron. Gated by the service-role
+// key as a bearer (no new secret); only an operator holding that key can call
+// it. `?limit=N` (1–75) bounds how many items one invocation processes.
+app.post('/api/cron/drain-enrichment', async (c) => {
+  const auth = c.req.header('authorization') || '';
+  if (!c.env.SUPABASE_SERVICE_ROLE_KEY || auth !== `Bearer ${c.env.SUPABASE_SERVICE_ROLE_KEY}`) {
+    return c.json({ error: 'unauthorized' }, 401);
+  }
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '25', 10) || 25, 1), 75);
+  const result = await processBatchesMod.drainEnrichment(c.env, { limit });
+  return c.json(result);
+});
+
 // --- Image serving from R2 (zero egress; replaces Supabase public URLs) ---
 app.get('/img/*', async (c) => {
   const key = decodeURIComponent(new URL(c.req.url).pathname.slice('/img/'.length));
@@ -64,5 +78,8 @@ export default {
   fetch: (request, env, ctx) => app.fetch(request, env, ctx),
   async scheduled(event, env, ctx) {
     ctx.waitUntil(processBatchesMod.processBatches(env));
+    // Steady backstop: heal a small batch of stuck-'text_done' items each run
+    // so the queue drains server-side even if nobody opens the app.
+    ctx.waitUntil(processBatchesMod.drainEnrichment(env, { limit: 20 }));
   },
 };

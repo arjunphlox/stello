@@ -68,6 +68,17 @@ async function enrichCore(env, accessToken, { slug, itemId }) {
   if (fetchErr || !item) return { error: 'Item not found' };
 
   const apiKey = await getApiKey(client, user.id, env);
+  return enrichItem(env, client, item, apiKey, user.id);
+}
+
+/**
+ * Vision + candidates enrichment for one already-fetched item. Free of any
+ * auth/token concerns: the caller supplies the client (user-scoped for the
+ * HTTP path, admin for the cron drain), the item row, the resolved Anthropic
+ * key, and the owning user id (for R2 candidate paths). Phase A writes vision
+ * tags + `vision_done`; Phase B harvests image/snippet/reason candidates.
+ */
+async function enrichItem(env, client, item, apiKey, userId) {
   const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
   const result = { slug: item.slug };
   const existingTags = typeof item.tags === 'string' ? JSON.parse(item.tags) : (item.tags || []);
@@ -155,7 +166,7 @@ async function enrichCore(env, accessToken, { slug, itemId }) {
         const excludeUrl = extractOgImageUrl(html, item.source_url);
         const imageCandidates = await harvestImageCandidates({
           env, html, sourceUrl: item.source_url,
-          userId: user.id, slug: item.slug,
+          userId, slug: item.slug,
           excludeUrl,
         });
 
@@ -454,3 +465,5 @@ async function harvestImageCandidates({ env, html, sourceUrl, userId, slug, excl
 }
 
 module.exports.enrichCore = enrichCore;
+module.exports.enrichItem = enrichItem;
+module.exports.getApiKey = getApiKey;
