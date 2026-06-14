@@ -3,9 +3,9 @@
 (function () {
   'use strict';
 
-  // Supabase configuration — anon key is safe to expose (RLS protects data)
+  // Supabase configuration — publishable key is safe to expose (RLS protects data)
   const SUPABASE_URL = window.STELLO_SUPABASE_URL || 'https://ngncjtzsqrrfrhgammne.supabase.co';
-  const SUPABASE_ANON_KEY = window.STELLO_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nbmNqdHpzcXJyZnJoZ2FtbW5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyOTIyNDAsImV4cCI6MjA5MTg2ODI0MH0.Q_hRdbk6u56_pPtxyhY1D-1gmLYA5OqIvxQgE1M3GY8';
+  const SUPABASE_ANON_KEY = window.STELLO_SUPABASE_ANON_KEY || 'sb_publishable_r7udhKoy2jEtBrcbKY1wGg_LFn-wMjR';
 
   // Upstream version check URL (Arjun's repo)
   const UPSTREAM_VERSION_URL = 'https://raw.githubusercontent.com/arjunphlox/stello/main/version.json';
