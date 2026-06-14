@@ -17,7 +17,6 @@ module.exports = async function handler(req, res) {
   const { user, error, status, client } = await authenticateRequest(req);
   if (error) return jsonResponse(res, status, { error });
 
-  const env = req.env;
   const { slug, itemId } = req.body || {};
   if (!slug && !itemId) return jsonResponse(res, 400, { error: 'Missing slug or itemId' });
 
@@ -27,6 +26,19 @@ module.exports = async function handler(req, res) {
   ).single();
   if (fetchErr || !item) return jsonResponse(res, 404, { error: 'Item not found' });
 
+  return jsonResponse(res, 200, await reprocessItem(req.env, client, item, user.id));
+};
+
+/**
+ * Re-run capture-time processing for one already-fetched item: re-decode
+ * title/summary, regenerate tags, download a missing OG image, and set
+ * enrichment_status to reflect what's left to do. Auth-free — the caller
+ * passes the client (user-scoped for the HTTP path, admin for the cron
+ * drain), the item row, and the owning user id (for the R2 image key).
+ * Returns the response payload plus the updated item, so a caller can chain
+ * straight into vision enrichment without a re-fetch.
+ */
+async function reprocessItem(env, client, item, userId) {
   const existingTags = typeof item.tags === 'string'
     ? JSON.parse(item.tags) : (item.tags || []);
 
@@ -47,10 +59,11 @@ module.exports = async function handler(req, res) {
     if (Object.keys(updates).length > 0) {
       await client.from('items').update(updates).eq('id', item.id);
     }
-    return jsonResponse(res, 200, {
+    return {
       status: 'text_only_cleaned',
       enrichment_status: updates.enrichment_status || item.enrichment_status,
-    });
+      item: { ...item, ...updates },
+    };
   }
 
   const meta = await fetchOGMetadata(item.source_url);
@@ -86,7 +99,7 @@ module.exports = async function handler(req, res) {
 
     const img = await downloadImage(env, fullImageUrl);
     if (img) {
-      const key = `${user.id}/${item.slug}/og-image${img.ext}`;
+      const key = `${userId}/${item.slug}/og-image${img.ext}`;
       const path = await storage.putSafe(env, key, img.buffer, img.mime);
       if (!path) {
         // Transient R2 issue — worth another shot on the next backfill.
@@ -157,11 +170,14 @@ module.exports = async function handler(req, res) {
 
   await client.from('items').update(updates).eq('id', item.id);
 
-  return jsonResponse(res, 200, {
+  return {
     status: 'reprocessed',
     has_image: !!ogImagePath,
     tags_count: merged.length,
     enrichment_status: updates.enrichment_status,
     og_failed: ogFailed,
-  });
-};
+    item: { ...item, ...updates },
+  };
+}
+
+module.exports.reprocessItem = reprocessItem;

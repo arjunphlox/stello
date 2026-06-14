@@ -3,6 +3,8 @@ const {
   generateSlug, generateTagsFromMetadata, extractDomain,
 } = require('../lib/supabase');
 const storage = require('../lib/storage');
+const { reprocessItem } = require('./reprocess');
+const { enrichItem, getApiKey } = require('./enrich');
 
 /**
  * Daily batch drain — pick up incomplete batch jobs and process pending URLs.
@@ -137,4 +139,54 @@ async function captureUrlAdmin(env, admin, userId, url) {
   return inserted;
 }
 
-module.exports = { processBatches, captureUrlAdmin };
+/**
+ * Server-side enrichment drain — heal items stranded at 'text_done' without a
+ * babysat browser tab. Mirrors the frontend backfill (reprocess → vision) but
+ * runs with the admin client across all users, resolving each owner's API key
+ * (user_settings → env.ANTHROPIC_API_KEY). Bounded per invocation: the daily
+ * cron passes a small limit (a steady backstop); the guarded manual trigger
+ * passes a larger one to clear a backlog in controlled chunks.
+ *
+ * Sequential on purpose — keeps subrequest count and Anthropic request rate
+ * predictable per Worker invocation.
+ */
+async function drainEnrichment(env, { limit = 25 } = {}) {
+  const admin = getAdminClient(env);
+
+  const { data: items, error } = await admin
+    .from('items')
+    .select('*')
+    .eq('enrichment_status', 'text_done')
+    .order('added_at', { ascending: true })
+    .limit(limit);
+  if (error) return { status: 'error', error: error.message };
+  if (!items || items.length === 0) return { status: 'nothing to drain', scanned: 0, healed: 0 };
+
+  let healed = 0, errored = 0, stillPending = 0;
+  for (const item of items) {
+    try {
+      const apiKey = await getApiKey(admin, item.user_id, env);
+      // Phase 1: reprocess (OG / image / tags / status) — returns the updated item.
+      const rp = await reprocessItem(env, admin, item, item.user_id);
+      // Phase 2: vision, when the (possibly freshly-downloaded) cover is present
+      // and a key is available. enrichItem advances text_done → vision_done.
+      if (apiKey && rp.item && rp.item.og_image_path && rp.enrichment_status === 'text_done') {
+        await enrichItem(env, admin, rp.item, apiKey, item.user_id);
+      }
+      // Read the settled status so the count reflects reality, not assumptions.
+      const { data: after } = await admin
+        .from('items').select('enrichment_status').eq('id', item.id).single();
+      const s = after?.enrichment_status;
+      if (s === 'vision_done' || s === 'candidates_done') healed++;
+      else if (s === 'error') errored++;
+      else stillPending++;
+    } catch (err) {
+      errored++;
+      console.warn('drain: item failed', item.slug, err.message);
+    }
+  }
+
+  return { status: 'drained', scanned: items.length, healed, errored, stillPending };
+}
+
+module.exports = { processBatches, captureUrlAdmin, drainEnrichment };
