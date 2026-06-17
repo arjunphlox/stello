@@ -1,14 +1,12 @@
 """Stello desktop-context daemon — entrypoint.
 
-Stage 8: the daemon now polls NSWorkspace + Accessibility every
-poll_interval_s and keeps the latest ContextSnapshot in memory.
-/context/now exposes it; activity_log records distinct snapshots only.
-Accessibility permission for the host Python is required for the
-focused-window title — without it the daemon still runs and logs a
-warning, but title comes back None.
+Stage 10: the daemon polls Sketch open documents every poll_interval_s
+when Sketch is running, computing visible artboard sets from user.json
+scroll/zoom + window size. /context/now exposes sketch_state alongside
+Safari tabs and open-apps.
 
 Later steps wire in:
-  - Safari + Sketch introspection (steps 9–11)
+  - Dwell-gated Sketch VLM enrichment (step 11)
   - /related endpoint (step 12)
 """
 from __future__ import annotations
@@ -190,7 +188,7 @@ def healthz() -> dict:
     snap = State.context_snapshot
     return {
         "ok": True,
-        "stage": "context-poll",
+        "stage": "sketch-visible-rect",
         "config": {
             "path": str(State.config_path) if State.config_path else None,
             "watched_folders": cfg.watched_folders if cfg else [],
@@ -218,6 +216,12 @@ def healthz() -> dict:
             "safari_tabs_total": len(snap.safari_tabs) if snap else None,
             "safari_tabs_blocked": (
                 sum(1 for t in snap.safari_tabs if t.get("blocked"))
+                if snap
+                else None
+            ),
+            "sketch_documents": len(snap.sketch_state) if snap else None,
+            "sketch_visible_artboards": (
+                sum(len(d.get("visible_artboards", [])) for d in snap.sketch_state)
                 if snap
                 else None
             ),
