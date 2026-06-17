@@ -43,6 +43,7 @@ Vanilla HTML/CSS/JS frontend, Supabase for auth + data (Postgres + RLS), a singl
 - **Worker**: one Hono Worker (`src/index.js`) serves the static frontend (`dist/`) + all `/api/*` routes (`src/routes/*`) + `/img/*` R2 image serving + a daily Cron Trigger. Endpoints ported from the old Vercel fns via `src/lib/adapter.js`. Image bytes live in R2 (`src/lib/storage.js`), served back at `/img/<key>` (zero egress); WebP conversion via the CF Images binding (`src/lib/images.js`). All auth-gated via `src/lib/supabase.js`.
 - **Data**: Items in Supabase `items` table, per-user, RLS-scoped. Schema in `scripts/schema.sql`. Local `_items/` + `index.json` are backup mirrors written by `scripts/sync-local.js`.
 - **Config**: Per-user Anthropic keys in `user_settings`. `config.json` is legacy and gitignored.
+- **Desktop context (local Mac only)**: `desktop-context/` is a Python LaunchAgent (`com.stello.context`) on `127.0.0.1:8766` — watches `~/Downloads/Stello Watcher`, introspects Sketch + Safari, indexes into local SQLite, and serves `/related`. The frontend stub `desktop-context.js` calls it only when the page is loaded from `localhost` or `127.0.0.1` (`window.stelloDesktop.fetchRelated(k)`); production deploys never contact the daemon.
 
 ## Key Files
 
@@ -51,6 +52,7 @@ Vanilla HTML/CSS/JS frontend, Supabase for auth + data (Postgres + RLS), a singl
 | `index.html` | Main grid view with search, tag filtering, import modal |
 | `detail.html` | Item detail page |
 | `app.js` | All frontend logic — filtering, masonry layout, tag system, related items index |
+| `desktop-context.js` | Localhost-only bridge to the desktop-context daemon (`window.stelloDesktop.fetchRelated`) |
 | `style.css` | All styles |
 | `supabase-client.js` | Client-side auth + session helpers |
 | `src/index.js` | Hono Worker entry — `/api/*` routes, `/img/*` R2 serving, daily cron |

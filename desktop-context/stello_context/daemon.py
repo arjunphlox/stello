@@ -9,7 +9,7 @@ Stage 12: `/related` cosine retrieval + activity classification lives in
 related.py. Also serves `/index/status` and `/config`.
 
 Later steps wire in:
-  - Frontend stub (step 13)
+  - `install.sh` polish (step 14)
 """
 from __future__ import annotations
 
@@ -201,7 +201,7 @@ def healthz() -> dict:
     snap = State.context_snapshot
     return {
         "ok": True,
-        "stage": "related",
+        "stage": "frontend-stub",
         "config": {
             "path": str(State.config_path) if State.config_path else None,
             "watched_folders": cfg.watched_folders if cfg else [],
