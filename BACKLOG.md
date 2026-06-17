@@ -4,6 +4,7 @@
 
 | Task | Tool | Platform | Model | Status |
 |---|---|---|---|---|
+| **Desktop-context e2e smoke** — run the plan's end-to-end checklist: drop 3 PNGs + `.md` into `~/Downloads/Stello Watcher`, Sketch dwell 60s, Safari tabs (incl. blocklisted), then `await stelloDesktop.fetchRelated(10)` from localhost DevTools; verify ranking + blocklist. See `desktop-context/README.md` | Cursor | Desktop | Sonnet | Open |
 | **Visual card variants** — visually distinguish cards by content type (typefaces, products, articles, tools) using `domain` tag; subtle border/accent/icon differences per type | Claude Code | Desktop | Opus | Open |
 | **Add new item from app** — URL input in UI, local Python server to fetch metadata + analyze + save to `_items/`; needs `scripts/serve.py` with Flask | Claude Code | Desktop | Opus | Open |
 | **Tag-based "more like this"** — dedicated panel showing related items for a selected item; relatedness index already exists, just needs UI | Claude Code | Desktop | Opus | Open |
@@ -13,6 +14,7 @@
 
 | Task | Tool | Platform | Model | Status |
 |---|---|---|---|---|
+| **Desktop-context cards UI** — render `/related` results in Stello (placement: panel vs strip TBD), wire `stelloDesktop.fetchRelated(k)`, refresh cadence, empty/offline when daemon down; localhost-only gate already in `desktop-context.js`. Pipeline shipped 2026-06-17; needs UX scoping before build | Claude Code | Desktop | Opus | Open |
 | **Personal authentication/login** — auth system for Stello; needs architecture decision: local-only vs cloud, session management, credential storage | Claude Code | Either | Opus | Open |
 | **New user account and onboarding** — first-run experience, account creation flow, initial content setup; depends on auth system | Claude Code | Either | Opus | Open |
 | **Integrating Tessor configuration panel** — bring Tessor design tokens/config UI into Stello; depends on Tessor project state | Claude Code | Desktop | Opus | Open |
@@ -39,6 +41,7 @@
 | **Update CLAUDE.md to the Cloudflare Workers architecture** — Architecture / Key Files / Dev Commands sections still describe the retired Vercel `api/*` + `npm run dev`→`local-dev.js` + puppeteer setup. Repo is now `src/routes/*` + `src/lib/*`, `wrangler dev`, CF Images/R2 bindings. Stale docs misled this session's first pass | Claude Code | Desktop | Sonnet | Open |
 | **Verify single-URL capture hits the Worker** — 7d of Worker logs show only `/api/capture-bulk`, never `/api/capture`. Likely just no single saves in the window, but confirm the import-modal / bookmarklet single-capture path actually reaches `stello.phloxpage.workers.dev` (the shared Supabase DB hides a wrong origin) | Claude Code | Web | Sonnet | Open |
 | **Pre-resize oversized images before vision** — some items hit Anthropic `400 invalid_request` in `enrich.js` Phase A (image too large / bad dimensions) → terminal `error`, never healed (backfill + drain both skip `error`). Resize/re-encode via the CF Images binding before the vision call so these recover. Surfaced 2026-06-15 during the drain pilot (~6 items already stuck this way) | Claude Code | Desktop | Sonnet | Open |
+| **Fix desktop-context hanging pytest** — `test_poll_loop_logs_only_on_change` blocks full `pytest tests/` run; skip, timeout, or rewrite | Cursor | Desktop | Sonnet | Open |
 
 ## Maintenance (run periodically via Claude Code)
 
@@ -58,6 +61,8 @@ Use a worktree session when the work is **experimental, risky, or parallel-safe*
 | Task | Worktree? | Why |
 |---|---|---|
 | Visual card variants | No | Sequential UI feature, builds on main |
+| Desktop-context e2e smoke | No | Manual checklist on main machine; daemon already installable |
+| Desktop-context cards UI | **Yes** | New UI surface + placement decisions; prototype in isolation |
 | Tag-based "more like this" | No | Builds on existing relatedIndex in app.js |
 | User notes on items | No | Small, contained server + UI change |
 | Reviewing cards without images | No | Audit + fixes, low risk |
