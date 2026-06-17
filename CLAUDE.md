@@ -43,6 +43,7 @@ Vanilla HTML/CSS/JS frontend, Supabase for auth + data (Postgres + RLS), a singl
 - **Worker**: one Hono Worker (`src/index.js`) serves the static frontend (`dist/`) + all `/api/*` routes (`src/routes/*`) + `/img/*` R2 image serving + a daily Cron Trigger. Endpoints ported from the old Vercel fns via `src/lib/adapter.js`. Image bytes live in R2 (`src/lib/storage.js`), served back at `/img/<key>` (zero egress); WebP conversion via the CF Images binding (`src/lib/images.js`). All auth-gated via `src/lib/supabase.js`.
 - **Data**: Items in Supabase `items` table, per-user, RLS-scoped. Schema in `scripts/schema.sql`. Local `_items/` + `index.json` are backup mirrors written by `scripts/sync-local.js`.
 - **Config**: Per-user Anthropic keys in `user_settings`. `config.json` is legacy and gitignored.
+- **Desktop context (local Mac only)**: `desktop-context/` is a Python LaunchAgent (`com.stello.context`) on `127.0.0.1:8766` — watches `~/Downloads/Stello Watcher`, introspects Sketch + Safari, indexes into local SQLite, and serves `/related`. The frontend stub `desktop-context.js` calls it only when the page is loaded from `localhost` or `127.0.0.1` (`window.stelloDesktop.fetchRelated(k)`); production deploys never contact the daemon.
 
 ## Key Files
 
@@ -51,6 +52,7 @@ Vanilla HTML/CSS/JS frontend, Supabase for auth + data (Postgres + RLS), a singl
 | `index.html` | Main grid view with search, tag filtering, import modal |
 | `detail.html` | Item detail page |
 | `app.js` | All frontend logic — filtering, masonry layout, tag system, related items index |
+| `desktop-context.js` | Localhost-only bridge to the desktop-context daemon (`window.stelloDesktop.fetchRelated`) |
 | `style.css` | All styles |
 | `supabase-client.js` | Client-side auth + session helpers |
 | `src/index.js` | Hono Worker entry — `/api/*` routes, `/img/*` R2 serving, daily cron |
@@ -76,9 +78,10 @@ Items stored as markdown files in `_items/` directory with YAML frontmatter meta
 - Archived: `scripts/archive/analyze.py`, `scripts/archive/enrich.py`, `scripts/archive/vision_enrich.py` — superseded by `src/routes/capture.js` + `src/routes/enrich.js`; enrichment now happens at capture time in the Worker flow
 
 ## Active Work
-- [ ] (no active tasks — check BACKLOG.md for priorities)
+- [ ] **Desktop-context follow-ups** — e2e smoke (BACKLOG), cards UI scoping (BACKLOG). V1 pipeline shipped 2026-06-17.
 
 ## Decisions Log
+- 2026-06-17 · Desktop-context V1 pipeline shipped · Python LaunchAgent `com.stello.context` on `127.0.0.1:8766` watches `~/Downloads/Stello Watcher`, introspects Sketch + Safari, indexes to local SQLite, serves `/related` via MLX on `8765`; frontend stub `desktop-context.js` is localhost-only. Cards UI deferred. Sketch export via sketchtool; VLM uses compact vision prompt (not structured — Qwen3-VL-4B schema-echo); CGWindowList for frontmost app
 - 2026-06-15 · Server-side enrichment drain · enrichment healing was frontend-only (`backfillEnrichment`, concurrency 2), so a deep `text_done` queue re-fetched OG every app load. Extracted pure cores `enrichItem(env,client,item,apiKey,userId)` from `enrich.js` + `reprocessItem(env,client,item,userId)` from `reprocess.js` (handlers now just auth+fetch+delegate; signatures unchanged), and added `drainEnrichment(env,{limit})` run from the daily cron (`limit:20` backstop) + a guarded `POST /api/cron/drain-enrichment` (Bearer = `SUPABASE_SERVICE_ROLE_KEY`, no new secret). Pilot finding: the old tail is mostly link-rotted images (→`candidates_done`/`error`, ~5% reach `vision_done`) and slow (OG-fetch timeouts); the synchronous manual trigger must stay ≤~25/call (cron uses `waitUntil`, not time-bound) (PR #22)
 - 2026-06-14 · Production vision enrichment had been silently dead since the CF migration · the `ANTHROPIC_API_KEY` Worker secret was never set (and `user_settings` is empty), so `getApiKey()` returned null → `enrich.js` skipped the `if (og_image_path && anthropic)` vision block, stranding items at `text_done`/`error`. Set the secret via `wrangler secret put`; vision resumed (vision_done climbing). This — not the recovery script — was the true root cause behind the 379 errored + 676 stuck-`text_done` items (PR #21)
 - 2026-06-14 · Ran `recover-errored-items.js --apply` to reset all 379 errored-with-image items `error`→`text_done` so the frontend backfill drip re-arms them (backfill explicitly gives up on `error`) · error count → 0. Healing is frontend-driven at concurrency 2, so the ~970 `text_done` drain to `vision_done`/`candidates_done` over subsequent app loads, not instantly. Follow-up candidate: a cron/server-side drain to avoid the per-load OG re-fetch churn while the queue is deep (PR #21)

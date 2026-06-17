@@ -22,6 +22,7 @@ const FILES = [
   'login.html',
   'reset-password.html',
   'app.js',
+  'desktop-context.js',
   'supabase-client.js',
   'style.css',
   'theme.css',

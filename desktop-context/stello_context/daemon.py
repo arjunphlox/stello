@@ -1,15 +1,15 @@
 """Stello desktop-context daemon — entrypoint.
 
-Stage 8: the daemon now polls NSWorkspace + Accessibility every
-poll_interval_s and keeps the latest ContextSnapshot in memory.
-/context/now exposes it; activity_log records distinct snapshots only.
-Accessibility permission for the host Python is required for the
-focused-window title — without it the daemon still runs and logs a
-warning, but title comes back None.
+Stage 11: dwell-gated Sketch artboard VLM enrichment runs off the context
+poll — when visible artboards stay stable for dwell_window_s, up to
+vlm_images_per_window un-captioned artboards are exported via sketchtool
+and enriched through the single FIFO MLX queue.
+
+Stage 12: `/related` cosine retrieval + activity classification lives in
+related.py. Also serves `/index/status` and `/config`.
 
 Later steps wire in:
-  - Safari + Sketch introspection (steps 9–11)
-  - /related endpoint (step 12)
+  - `install.sh` polish (step 14)
 """
 from __future__ import annotations
 
@@ -23,13 +23,15 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from . import config as config_mod
 from . import context as context_mod
 from . import enrich as enrich_mod
 from . import mlx_client as mlx_mod
+from . import related as related_mod
 from . import scanner as scanner_mod
+from . import sketch_dwell as sketch_dwell_mod
 from . import store as store_mod
 from . import thumbnails as thumbnails_mod
 
@@ -56,6 +58,8 @@ class State:
     thumb_dir: Path | None = None
     context_poll_task: asyncio.Task | None = None
     context_snapshot: context_mod.ContextSnapshot | None = None
+    sketch_dwell: sketch_dwell_mod.DwellTracker | None = None
+    activity_cache: related_mod.ActivityCache | None = None
 
 
 @asynccontextmanager
@@ -129,12 +133,19 @@ async def _lifespan(_app: FastAPI):
             "venv Python binary in System Settings → Privacy & Security → "
             "Accessibility. realpath(sys.executable) is what TCC checks."
         )
+    State.sketch_dwell = sketch_dwell_mod.DwellTracker(
+        dwell_window_s=State.config.dwell_window_s,
+        vlm_cap=State.config.vlm_images_per_window,
+    )
+    State.activity_cache = related_mod.ActivityCache()
     State.context_poll_task = asyncio.create_task(
         context_mod.poll_loop(
             State,
             State.db,
             State.config.poll_interval_s,
             safari_blocklist=State.config.safari_blocklist,
+            dwell_tracker=State.sketch_dwell,
+            enrich_queue=State.queue,
         )
     )
 
@@ -190,7 +201,7 @@ def healthz() -> dict:
     snap = State.context_snapshot
     return {
         "ok": True,
-        "stage": "context-poll",
+        "stage": "frontend-stub",
         "config": {
             "path": str(State.config_path) if State.config_path else None,
             "watched_folders": cfg.watched_folders if cfg else [],
@@ -221,6 +232,12 @@ def healthz() -> dict:
                 if snap
                 else None
             ),
+            "sketch_documents": len(snap.sketch_state) if snap else None,
+            "sketch_visible_artboards": (
+                sum(len(d.get("visible_artboards", [])) for d in snap.sketch_state)
+                if snap
+                else None
+            ),
         },
     }
 
@@ -233,6 +250,60 @@ def context_now() -> dict:
     if snap is None:
         return {"available": False, "reason": "no snapshot yet"}
     return {"available": True, **context_mod.snapshot_to_dict(snap)}
+
+
+@app.get("/index/status")
+def index_status() -> dict:
+    """Row counts by enrichment status."""
+    db = State.db
+    if db is None:
+        raise HTTPException(status_code=503, detail="database not ready")
+    counts = store_mod.counts_by_status(db)
+    return {
+        "items_by_status": counts,
+        "total": sum(counts.values()),
+        "db_path": str(State.db_path) if State.db_path else None,
+    }
+
+
+@app.get("/config")
+def get_config() -> dict:
+    """Read-only view of the active daemon config."""
+    cfg = State.config
+    if cfg is None:
+        raise HTTPException(status_code=503, detail="config not loaded")
+    return {
+        "path": str(State.config_path) if State.config_path else None,
+        **cfg.model_dump(),
+    }
+
+
+@app.get("/related")
+def related(k: int = 10, debug: bool = False) -> dict:
+    """Return top-k related items for the current Mac context."""
+    snap = State.context_snapshot
+    if snap is None:
+        return {
+            "k": k,
+            "count": 0,
+            "items": [],
+            "activity": None,
+            "reason": "no snapshot yet",
+        }
+    if State.db is None or State.mlx is None or State.config is None:
+        raise HTTPException(status_code=503, detail="daemon not ready")
+    if State.activity_cache is None:
+        State.activity_cache = related_mod.ActivityCache()
+    return related_mod.search_related(
+        State.db,
+        State.mlx,
+        snap,
+        k=k,
+        activity_cache=State.activity_cache,
+        activity_ttl_s=float(State.config.activity_cache_ttl_s),
+        thumb_dir=State.thumb_dir,
+        debug=debug,
+    )
 
 
 def _install_signal_handlers(server: uvicorn.Server) -> None:

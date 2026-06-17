@@ -25,6 +25,8 @@
 
     <key>EnvironmentVariables</key>
     <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
         <key>STELLO_CTX_HOST</key>
         <string>127.0.0.1</string>
         <key>STELLO_CTX_PORT</key>

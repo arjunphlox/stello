@@ -37,10 +37,12 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from . import safari as safari_mod
+from . import sketch as sketch_mod
 
 logger = logging.getLogger("stello-context.context")
 
 SAFARI_BUNDLE_ID = "com.apple.Safari"
+SKETCH_BUNDLE_ID = sketch_mod.SKETCH_BUNDLE_ID
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class ContextSnapshot:
     frontmost_window_title: str | None = None
     ax_trusted: bool = False
     safari_tabs: list[dict] = field(default_factory=list)
+    sketch_state: list[dict] = field(default_factory=list)
 
 
 # -- raw OS adapters ---------------------------------------------------------
@@ -205,6 +208,9 @@ async def take_snapshot(safari_blocklist: list[str] | None = None) -> ContextSna
         a.get("bundle_id") == SAFARI_BUNDLE_ID for a in apps
     ):
         tabs = await asyncio.to_thread(safari_mod.get_tabs, safari_blocklist)
+    sketch: list[dict] = []
+    if any(a.get("bundle_id") == SKETCH_BUNDLE_ID for a in apps):
+        sketch = await asyncio.to_thread(sketch_mod.discover_sketch_state)
     return ContextSnapshot(
         ts=time.time(),
         open_apps=apps,
@@ -213,6 +219,7 @@ async def take_snapshot(safari_blocklist: list[str] | None = None) -> ContextSna
         frontmost_window_title=title,
         ax_trusted=trusted,
         safari_tabs=tabs,
+        sketch_state=sketch,
     )
 
 
@@ -226,7 +233,14 @@ def snapshot_dedupe_key(snap: ContextSnapshot) -> str:
             "apps": sorted(a["bundle_id"] for a in snap.open_apps),
             "front": snap.frontmost_app,
             "title": snap.frontmost_window_title,
-            "tabs": sorted(t["url"] for t in snap.safari_tabs if t.get("url")),
+            "tabs": sorted(t.get("url") for t in snap.safari_tabs if t.get("url")),
+            "sketch": sorted(
+                (
+                    d.get("path"),
+                    tuple(a.get("id") for a in d.get("visible_artboards", [])),
+                )
+                for d in snap.sketch_state
+            ),
         },
         sort_keys=True,
     )
@@ -252,6 +266,11 @@ def serialize_safari_tabs(snap: ContextSnapshot) -> str:
     return json.dumps(snap.safari_tabs)
 
 
+def serialize_sketch_state(snap: ContextSnapshot) -> str:
+    """JSON for the activity_log.sketch_state TEXT column."""
+    return json.dumps(snap.sketch_state)
+
+
 def snapshot_to_dict(snap: ContextSnapshot) -> dict[str, Any]:
     """For /context/now JSON response."""
     return asdict(snap)
@@ -265,6 +284,8 @@ async def poll_loop(
     db: sqlite3.Connection,
     interval_s: float,
     safari_blocklist: list[str] | None = None,
+    dwell_tracker: Any | None = None,
+    enrich_queue: Any | None = None,
 ) -> None:
     """Long-running task. Updates state.context_snapshot every tick,
     logs to activity_log only when the dedupe key changes."""
@@ -279,6 +300,8 @@ async def poll_loop(
         try:
             snap = await take_snapshot(safari_blocklist=safari_blocklist)
             state.context_snapshot = snap
+            if dwell_tracker is not None and enrich_queue is not None and snap.sketch_state:
+                dwell_tracker.tick(snap.sketch_state, db, enrich_queue, now=snap.ts)
             if not snap.ax_trusted and not warned_untrusted:
                 logger.warning(
                     "Accessibility permission NOT granted — focused-window titles "
@@ -289,12 +312,13 @@ async def poll_loop(
             key = snapshot_dedupe_key(snap)
             if key != last_key:
                 db.execute(
-                    "INSERT INTO activity_log(ts, open_apps, safari_tabs) "
-                    "VALUES(?, ?, ?)",
+                    "INSERT INTO activity_log(ts, open_apps, safari_tabs, sketch_state) "
+                    "VALUES(?, ?, ?, ?)",
                     (
                         snap.ts,
                         serialize_for_log(snap),
                         serialize_safari_tabs(snap),
+                        serialize_sketch_state(snap),
                     ),
                 )
                 last_key = key
