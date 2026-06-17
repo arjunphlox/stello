@@ -39,7 +39,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from . import mlx_client as mlx_mod
 from . import pdf as pdf_mod
@@ -499,6 +499,40 @@ def _lookup_caption_cache(db: sqlite3.Connection, content_hash: str) -> Artboard
     return ArtboardTags(caption=row["caption"], tags=tags)
 
 
+def _vision_artboard_tags(
+    mlx: mlx_mod.Client, ab_name: str, sketch_name: str, vlm_png: bytes
+) -> ArtboardTags:
+    """Call /v1/vision with a compact JSON instruction (no full schema dump).
+
+    vision_structured appends model_json_schema() to the prompt, which the
+    4B VLM often echoes back verbatim instead of filling in values.
+    """
+    prompt = (
+        f"Describe this design artboard in one concise sentence and suggest "
+        f"5-10 lowercase tags (style, subject, format). "
+        f"Artboard: {ab_name}. File: {sketch_name}.\n\n"
+        'Respond with ONLY valid JSON: {"caption": "...", "tags": ["..."]}'
+    )
+    last_err: Exception | None = None
+    for attempt in range(mlx.max_retries + 1):
+        result = mlx.vision(prompt, vlm_png, max_tokens=256)
+        try:
+            payload = mlx_mod._extract_json(result.text)
+            return ArtboardTags.model_validate_json(payload)
+        except (mlx_mod.MLXError, json.JSONDecodeError, ValidationError) as e:
+            last_err = e
+            logger.warning(
+                "artboard VLM parse attempt %d/%d failed (%s): %s",
+                attempt + 1,
+                mlx.max_retries + 1,
+                type(e).__name__,
+                e,
+            )
+    raise mlx_mod.MLXError(
+        f"artboard VLM failed after {mlx.max_retries + 1} attempts: {last_err}"
+    )
+
+
 def _store_caption_cache(
     db: sqlite3.Connection, content_hash: str, tags: ArtboardTags
 ) -> None:
@@ -603,13 +637,8 @@ async def enrich_sketch_artboard(
         vlm_png = await asyncio.to_thread(
             thumbnails_mod.resize_png_long_edge, export_path
         )
-        prompt = (
-            f"Describe this design artboard in one concise sentence and suggest "
-            f"5-10 lowercase tags (style, subject, format). "
-            f"Artboard: {ab_name}. File: {p.name}."
-        )
         tags = await asyncio.to_thread(
-            mlx.vision_structured, ArtboardTags, prompt, vlm_png
+            _vision_artboard_tags, mlx, ab_name, p.name, vlm_png
         )
         _store_caption_cache(db, content_hash, tags)
 

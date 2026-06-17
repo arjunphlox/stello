@@ -42,11 +42,13 @@ def is_artboard_enriched(
     ).fetchone()
     if row is None:
         return False
-    if row["status"] != "ready":
-        return False
     if row["mtime"] != sketch_mtime:
         return False
-    return bool(row["vlm_caption"])
+    # Terminal for this mtime: captioned ready row, or a failed attempt (don't
+    # spin the dwell queue forever when VLM/export keeps erroring).
+    if row["status"] == "failed":
+        return True
+    return row["status"] == "ready" and bool(row["vlm_caption"])
 
 
 def unenriched_visible(
