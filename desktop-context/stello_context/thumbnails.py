@@ -26,6 +26,7 @@ DEFAULT_THUMB_DIR = Path(
 ).expanduser()
 
 MAX_EDGE = 256
+VLM_MAX_EDGE = 1280
 WEBP_QUALITY = 80
 
 
@@ -97,3 +98,16 @@ def make_thumbnail_from_pillow(
     out_path = out_dir / thumb_basename(str(source_path))
     im.save(out_path, "WEBP", quality=WEBP_QUALITY)
     return out_path
+
+
+def resize_png_long_edge(png_path: Path, max_edge: int = VLM_MAX_EDGE) -> bytes:
+    """Resize a PNG on disk so its long edge is <= max_edge; return PNG bytes."""
+    from io import BytesIO
+
+    with Image.open(png_path) as im:
+        im.load()
+        im.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        im = _prepare_for_webp(im)
+        buf = BytesIO()
+        im.save(buf, format="PNG")
+        return buf.getvalue()

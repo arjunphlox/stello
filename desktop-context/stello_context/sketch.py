@@ -16,7 +16,9 @@ Stage 10 (current):
   - Pure helpers (parse_scroll_origin, compute_visible_canvas_rect, …) are
     unit-tested against a real .sketch sample when present.
 
-Stage 11 will add AppleScript-driven artboard export + dwell-gated VLM.
+Stage 11 (current):
+  - export_artboard_png(): sketchtool CLI export by artboard UUID.
+  - Dwell-gated VLM enrichment lives in sketch_dwell.py + enrich.py.
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ import json
 import logging
 import re
 import subprocess
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +35,10 @@ from typing import Any
 logger = logging.getLogger("stello-context.sketch")
 
 SKETCH_BUNDLE_ID = "com.bohemiancoding.sketch3"
+
+SKETCHTOOL_PATH = Path(
+    "/Applications/Sketch.app/Contents/Resources/sketchtool/bin/sketchtool"
+)
 
 # JXA: enumerate open Sketch documents + window pixel sizes (System Events).
 JXA_OPEN_DOCS = """
@@ -447,3 +454,62 @@ def discover_sketch_state() -> list[dict]:
         for doc in get_open_documents()
         if (s := build_document_state(doc)) is not None
     ]
+
+
+def export_artboard_png(
+    sketch_path: Path,
+    artboard_id: str,
+    *,
+    timeout_s: float = 60.0,
+) -> Path | None:
+    """Export one artboard to a temp PNG via sketchtool.
+
+    sketchtool is the supported export path (Sketch's AppleScript export
+    dictionary is unreliable across versions). Returns the PNG path or
+    None on failure.
+    """
+    if not SKETCHTOOL_PATH.is_file():
+        logger.warning("sketch: sketchtool not found at %s", SKETCHTOOL_PATH)
+        return None
+    if not sketch_path.is_file():
+        logger.warning("sketch: export source missing: %s", sketch_path)
+        return None
+
+    out_dir = Path(tempfile.mkdtemp(prefix="stello-ctx-ab-"))
+    try:
+        proc = subprocess.run(
+            [
+                str(SKETCHTOOL_PATH),
+                "export",
+                "artboards",
+                str(sketch_path),
+                f"--items={artboard_id}",
+                "--formats=png",
+                "--scales=1",
+                f"--output={out_dir}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            "sketch: sketchtool export timed out after %.1fs (%s)",
+            timeout_s,
+            artboard_id,
+        )
+        return None
+
+    if proc.returncode != 0:
+        logger.warning(
+            "sketch: sketchtool export failed (%s): %s",
+            artboard_id,
+            proc.stderr.strip() or proc.stdout.strip(),
+        )
+        return None
+
+    pngs = sorted(out_dir.glob("*.png"))
+    if not pngs:
+        logger.warning("sketch: sketchtool produced no PNG for %s", artboard_id)
+        return None
+    return pngs[0]

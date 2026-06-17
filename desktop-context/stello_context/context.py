@@ -284,6 +284,8 @@ async def poll_loop(
     db: sqlite3.Connection,
     interval_s: float,
     safari_blocklist: list[str] | None = None,
+    dwell_tracker: Any | None = None,
+    enrich_queue: Any | None = None,
 ) -> None:
     """Long-running task. Updates state.context_snapshot every tick,
     logs to activity_log only when the dedupe key changes."""
@@ -298,6 +300,8 @@ async def poll_loop(
         try:
             snap = await take_snapshot(safari_blocklist=safari_blocklist)
             state.context_snapshot = snap
+            if dwell_tracker is not None and enrich_queue is not None and snap.sketch_state:
+                dwell_tracker.tick(snap.sketch_state, db, enrich_queue, now=snap.ts)
             if not snap.ax_trusted and not warned_untrusted:
                 logger.warning(
                     "Accessibility permission NOT granted — focused-window titles "

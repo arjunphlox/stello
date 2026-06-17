@@ -1,13 +1,13 @@
 """Stello desktop-context daemon — entrypoint.
 
-Stage 10: the daemon polls Sketch open documents every poll_interval_s
-when Sketch is running, computing visible artboard sets from user.json
-scroll/zoom + window size. /context/now exposes sketch_state alongside
-Safari tabs and open-apps.
+Stage 11: dwell-gated Sketch artboard VLM enrichment runs off the context
+poll — when visible artboards stay stable for dwell_window_s, up to
+vlm_images_per_window un-captioned artboards are exported via sketchtool
+and enriched through the single FIFO MLX queue.
 
 Later steps wire in:
-  - Dwell-gated Sketch VLM enrichment (step 11)
   - /related endpoint (step 12)
+  - Frontend stub (step 13)
 """
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from . import context as context_mod
 from . import enrich as enrich_mod
 from . import mlx_client as mlx_mod
 from . import scanner as scanner_mod
+from . import sketch_dwell as sketch_dwell_mod
 from . import store as store_mod
 from . import thumbnails as thumbnails_mod
 
@@ -54,6 +55,7 @@ class State:
     thumb_dir: Path | None = None
     context_poll_task: asyncio.Task | None = None
     context_snapshot: context_mod.ContextSnapshot | None = None
+    sketch_dwell: sketch_dwell_mod.DwellTracker | None = None
 
 
 @asynccontextmanager
@@ -127,12 +129,18 @@ async def _lifespan(_app: FastAPI):
             "venv Python binary in System Settings → Privacy & Security → "
             "Accessibility. realpath(sys.executable) is what TCC checks."
         )
+    State.sketch_dwell = sketch_dwell_mod.DwellTracker(
+        dwell_window_s=State.config.dwell_window_s,
+        vlm_cap=State.config.vlm_images_per_window,
+    )
     State.context_poll_task = asyncio.create_task(
         context_mod.poll_loop(
             State,
             State.db,
             State.config.poll_interval_s,
             safari_blocklist=State.config.safari_blocklist,
+            dwell_tracker=State.sketch_dwell,
+            enrich_queue=State.queue,
         )
     )
 
@@ -188,7 +196,7 @@ def healthz() -> dict:
     snap = State.context_snapshot
     return {
         "ok": True,
-        "stage": "sketch-visible-rect",
+        "stage": "sketch-dwell-vlm",
         "config": {
             "path": str(State.config_path) if State.config_path else None,
             "watched_folders": cfg.watched_folders if cfg else [],

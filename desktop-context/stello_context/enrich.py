@@ -29,6 +29,9 @@ Step 11 adds sketch_artboard (dwell-gated VLM).
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import io
+import json
 import logging
 import sqlite3
 import struct
@@ -36,12 +39,21 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic import BaseModel, Field
+
 from . import mlx_client as mlx_mod
 from . import pdf as pdf_mod
 from . import sketch as sketch_mod
 from . import thumbnails as thumbnails_mod
 
 logger = logging.getLogger("stello-context.enrich")
+
+
+class ArtboardTags(BaseModel):
+    """VLM structured output for a Sketch artboard screenshot."""
+
+    caption: str
+    tags: list[str] = Field(default_factory=list)
 
 # How many raw bytes we peek at for the embed call. ~4000 utf-8 chars
 # worst-case (4-byte chars) → comfortably within BGE-M3's context.
@@ -58,7 +70,9 @@ class EnrichJob:
     """A request to (re-)enrich a single source path."""
 
     source_path: str
-    reason: str  # "initial_walk" | "fs_event:created" | "fs_event:modified" | etc.
+    reason: str  # "initial_walk" | "fs_event:created" | "sketch_dwell" | etc.
+    artboard_id: str | None = None
+    artboard_name: str | None = None
 
 
 # -- helpers ------------------------------------------------------------------
@@ -467,6 +481,185 @@ async def enrich_sketch(
     )
 
 
+def _artboard_uniq_key(sketch_path: Path, artboard_id: str) -> str:
+    return f"{sketch_path.resolve()}#{artboard_id}"
+
+
+def _lookup_caption_cache(db: sqlite3.Connection, content_hash: str) -> ArtboardTags | None:
+    row = db.execute(
+        "SELECT caption, tags FROM caption_cache WHERE content_hash = ?",
+        (content_hash,),
+    ).fetchone()
+    if row is None or not row["caption"]:
+        return None
+    try:
+        tags = json.loads(row["tags"] or "[]")
+    except json.JSONDecodeError:
+        tags = []
+    return ArtboardTags(caption=row["caption"], tags=tags)
+
+
+def _store_caption_cache(
+    db: sqlite3.Connection, content_hash: str, tags: ArtboardTags
+) -> None:
+    db.execute(
+        """
+        INSERT INTO caption_cache(content_hash, caption, tags, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(content_hash) DO UPDATE SET
+            caption = excluded.caption,
+            tags = excluded.tags,
+            created_at = excluded.created_at
+        """,
+        (content_hash, tags.caption, json.dumps(tags.tags), time.time()),
+    )
+
+
+async def enrich_sketch_artboard(
+    db: sqlite3.Connection,
+    mlx: mlx_mod.Client,
+    job: EnrichJob,
+    thumb_dir_path: Path,
+) -> None:
+    """VLM + embed one Sketch artboard (dwell-gated path).
+
+    Falls back to name-only embed when sketchtool export fails.
+    """
+    from PIL import Image as PILImage
+
+    if not job.artboard_id:
+        raise ValueError("enrich_sketch_artboard requires artboard_id")
+
+    p = Path(job.source_path).resolve()
+    ab_id = job.artboard_id
+    ab_name = job.artboard_name or ab_id
+    uniq = _artboard_uniq_key(p, ab_id)
+
+    if not p.exists():
+        logger.info("sketch artboard skipped (file gone): %s", uniq)
+        return
+
+    stat = p.stat()
+    existing = db.execute(
+        "SELECT mtime, status, vlm_caption FROM items WHERE uniq_key = ?",
+        (uniq,),
+    ).fetchone()
+    if (
+        existing is not None
+        and existing["mtime"] == stat.st_mtime
+        and existing["status"] == "ready"
+        and existing["vlm_caption"]
+    ):
+        logger.debug("sketch artboard skip (caption cached): %s", ab_name)
+        return
+
+    export_path = await asyncio.to_thread(
+        sketch_mod.export_artboard_png, p, ab_id
+    )
+    if export_path is None:
+        parsed = await asyncio.to_thread(sketch_mod.parse_sketch_strings, p)
+        embed_input = f"{p.name}\n{ab_name}\n{sketch_mod.compose_embed_input(parsed)}"
+        embed_input = embed_input.strip()[:4000]
+        result = await asyncio.to_thread(mlx.embed, [embed_input])
+        blob = embedding_to_blob(result.embeddings[0])
+        now = time.time()
+        db.execute(
+            """
+            INSERT INTO items
+                (kind, source_path, artboard_id, uniq_key, type, title,
+                 size, mtime, ctime, project_hint, extracted_text,
+                 embedding, embed_input, enriched_at, status, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(uniq_key) DO UPDATE SET
+                title = excluded.title,
+                size = excluded.size,
+                mtime = excluded.mtime,
+                ctime = excluded.ctime,
+                project_hint = excluded.project_hint,
+                extracted_text = excluded.extracted_text,
+                embedding = excluded.embedding,
+                embed_input = excluded.embed_input,
+                enriched_at = excluded.enriched_at,
+                status = excluded.status,
+                error = excluded.error
+            """,
+            (
+                "sketch_artboard", str(p), ab_id, uniq, "sketch_artboard", ab_name,
+                stat.st_size, stat.st_mtime, stat.st_ctime,
+                p.name, embed_input, blob, embed_input, now, "ready",
+                "export-failed: name-only fallback",
+            ),
+        )
+        logger.warning(
+            "sketch artboard fallback (no export): %s / %s", p.name, ab_name
+        )
+        return
+
+    png_bytes = export_path.read_bytes()
+    content_hash = hashlib.sha1(png_bytes).hexdigest()
+    tags = _lookup_caption_cache(db, content_hash)
+
+    if tags is None:
+        vlm_png = await asyncio.to_thread(
+            thumbnails_mod.resize_png_long_edge, export_path
+        )
+        prompt = (
+            f"Describe this design artboard in one concise sentence and suggest "
+            f"5-10 lowercase tags (style, subject, format). "
+            f"Artboard: {ab_name}. File: {p.name}."
+        )
+        tags = await asyncio.to_thread(
+            mlx.vision_structured, ArtboardTags, prompt, vlm_png
+        )
+        _store_caption_cache(db, content_hash, tags)
+
+    with PILImage.open(io.BytesIO(png_bytes)) as im:
+        im.load()
+        thumb_path = await asyncio.to_thread(
+            thumbnails_mod.make_thumbnail_from_pillow, im, Path(uniq), thumb_dir_path
+        )
+
+    tag_str = ", ".join(tags.tags)
+    embed_input = f"{tags.caption}\nTags: {tag_str}\n{p.name}\n{ab_name}".strip()
+    result = await asyncio.to_thread(mlx.embed, [embed_input])
+    blob = embedding_to_blob(result.embeddings[0])
+    now = time.time()
+
+    db.execute(
+        """
+        INSERT INTO items
+            (kind, source_path, artboard_id, uniq_key, type, title,
+             size, mtime, ctime, project_hint, vlm_caption, tags,
+             embedding, embed_input, thumb_path, enriched_at, status, error)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        ON CONFLICT(uniq_key) DO UPDATE SET
+            title = excluded.title,
+            size = excluded.size,
+            mtime = excluded.mtime,
+            ctime = excluded.ctime,
+            project_hint = excluded.project_hint,
+            vlm_caption = excluded.vlm_caption,
+            tags = excluded.tags,
+            embedding = excluded.embedding,
+            embed_input = excluded.embed_input,
+            thumb_path = excluded.thumb_path,
+            enriched_at = excluded.enriched_at,
+            status = excluded.status,
+            error = NULL
+        """,
+        (
+            "sketch_artboard", str(p), ab_id, uniq, "sketch_artboard", ab_name,
+            stat.st_size, stat.st_mtime, stat.st_ctime,
+            p.name, tags.caption, json.dumps(tags.tags),
+            blob, embed_input, thumb_path.name, now, "ready",
+        ),
+    )
+    logger.info(
+        "sketch artboard enriched: %s / %s (tags=%d, embed_latency=%.2fs)",
+        p.name, ab_name, len(tags.tags), result.latency_s,
+    )
+
+
 # -- dispatch + worker -------------------------------------------------------
 
 
@@ -478,6 +671,36 @@ async def enrich(
     thumb_dir_path: Path,
 ) -> None:
     """Route a job by file type. Records failures into the items row."""
+    if job.artboard_id:
+        try:
+            await enrich_sketch_artboard(db, mlx, job, thumb_dir_path)
+        except Exception as e:  # noqa: BLE001
+            logger.exception("sketch_artboard enrich failed: %s", job)
+            uniq = _artboard_uniq_key(Path(job.source_path), job.artboard_id)
+            now = time.time()
+            db.execute(
+                """
+                INSERT INTO items
+                    (kind, source_path, artboard_id, uniq_key, type, title,
+                     status, error, enriched_at)
+                VALUES (?, ?, ?, ?, 'sketch_artboard', ?, 'failed', ?, ?)
+                ON CONFLICT(uniq_key) DO UPDATE SET
+                    status = 'failed',
+                    error = excluded.error,
+                    enriched_at = excluded.enriched_at
+                """,
+                (
+                    "sketch_artboard",
+                    job.source_path,
+                    job.artboard_id,
+                    uniq,
+                    job.artboard_name or job.artboard_id,
+                    str(e),
+                    now,
+                ),
+            )
+        return
+
     p = Path(job.source_path)
     kind = classify_path(p)
     try:
