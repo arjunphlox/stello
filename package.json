@@ -6,6 +6,8 @@
   "scripts": {
     "build": "node scripts/build-assets.js",
     "dev": "node scripts/build-assets.js && wrangler dev",
+    "dev:up": "dev-up",
+    "dev:down": "dev-down",
     "dev:remote": "node scripts/build-assets.js && wrangler dev --remote",
     "deploy": "node scripts/build-assets.js && wrangler deploy",
     "backup": "node scripts/sync-local.js",
