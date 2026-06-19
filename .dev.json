@@ -1,0 +1,14 @@
+{
+  "preview": "http://localhost:8787/",
+  "install": "npm install",
+  "stateDir": ".dev",
+  "services": [
+    {
+      "name": "worker",
+      "port": 8787,
+      "healthUrl": "http://localhost:8787/",
+      "start": "npm run dev",
+      "log": "wrangler.log"
+    }
+  ]
+}
