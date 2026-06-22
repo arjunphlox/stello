@@ -1,0 +1,29 @@
+---
+alwaysApply: true
+---
+
+Read at session start — the durable contract for this repo:
+
+@AGENTS.md
+@CLAUDE.md
+@docs/memory/MEMORY.md
+
+## Session discipline
+
+- Cursor is the primary harness. Opus 4.8 plans/orchestrates; Composer 2.5 executes.
+- Branch prefixes: `cursor/*`, `claude/*`, `feature/*`, `fix/*`. One session = one task; atomic commits.
+- When you learn something durable and project-scoped, append it to `docs/memory/MEMORY.md` and update its index.
+
+## Before you change UI code (failure-mode rules)
+
+- **Trace structural invariants first.** Before changing shared rendering, write out what every variant/state will look like after the change. If you cannot predict it, ask — do not edit.
+- **One request = one change.** Name the files you will touch; surface unrelated issues, never fold them in.
+- **Verify visually before "done."** Render the change and confirm it; "it should work" is not done.
+
+## Delivery modules (this is a website repo)
+
+Per `arjun-ai-gems/frameworks/product-delivery/APPLICABILITY.md`, load these when the work calls for them: shaping, ship-pipeline, discovery, analytics, accessibility, performance. Specs live at `arjun-ai-gems/frameworks/product-delivery/modules/<name>.md`.
+
+## Design system
+
+Document this site's UI per `arjun-ai-gems/frameworks/system-design` when it grows past tokens + components.
