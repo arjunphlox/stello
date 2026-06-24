@@ -15,7 +15,7 @@ Source of truth for scope and decisions: the PRD at `.cursor/plans/stello_native
 ## Workstream board
 Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 
-- ⬜ **Sprint 0** — Walking skeleton (Xcode agent). Project + SwiftData/CloudKit models + 20 seed items + masonry renders on all 3 platforms.
+- 🔬 **Sprint 0** — Walking skeleton (Xcode agent). Project + SwiftData models + 20 seed items + masonry render. Code reviewed + committed (e4f9cbf); awaiting visual confirm on simulator.
 - ⬜ **Sprint 1** — Core read UX (Xcode agent). Masonry, week grouping, search, filters (+intent), detail, theming.
 - ⬜ **Sprint 2** — Capture + on-device enrichment (Xcode agent + Claude Code bake-off).
 - ⬜ **Sprint 3** — Migration (Cursor runs export once; in-app Import).
@@ -28,8 +28,9 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 ## Handoff log
 Each handoff: surface, prompt given, what came back, review notes. Append newest at top.
 
-### Sprint 0 → Xcode 27 agent (issued)
-Prompt issued from the orchestration session: multiplatform app, SwiftData/CloudKit models, 20 seed items, custom masonry Layout (breakpoints from BUILD_SPEC), minimal theme scaffold, Swift Testing masonry test. Awaiting first build for review.
+### Sprint 0 → Xcode 27 agent (reviewed, committed e4f9cbf)
+Delivered: 4 SwiftData models (CloudKit-ready), local-only container with documented CloudKit-deferral, 20 seed items across domains + 3 ISO weeks (incl. `intent` tags), custom `MasonryLayout` with exact breakpoints + shortest-column packing using real measured heights, `ItemCardView` (SF Symbol covers), multiplatform previews, Swift Testing suite.
+Review verdict: PASS for scope. Carry into Sprint 1: (1) theme default should be `{dark, amber}` not `{light, lime}`; (2) accent colors are RGB approximations — replace with exact Radix hex from BUILD_SPEC; (3) Theme defined but not yet injected/applied; (4) seed `enrichmentStatus` uses "done" which isn't in the enum (`pending|text_done|vision_done|candidates_done|error`) — normalize.
 
 ## Review / integration protocol
 1. Build happens in Xcode (agent) or Claude Code, on this `feature/native-rewrite` branch (or a `cursor/native-*` sub-branch).
