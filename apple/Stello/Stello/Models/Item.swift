@@ -62,3 +62,9 @@ final class Item {
         self.enrichmentError = enrichmentError
     }
 }
+
+// Hashable conformance required for NavigationLink(value:).
+extension Item: Hashable {
+    static func == (lhs: Item, rhs: Item) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}

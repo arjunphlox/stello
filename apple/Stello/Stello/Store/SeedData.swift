@@ -208,7 +208,7 @@ enum SeedData {
             needsReview: false,
             addedAt: Self.daysAgo(daysAgo),
             updatedAt: Self.daysAgo(daysAgo),
-            enrichmentStatus: "done"
+            enrichmentStatus: "candidates_done"
         )
         item.tags = tags.map { Tag(name: $0.0, category: $0.1, weight: $0.2) }
         return item
