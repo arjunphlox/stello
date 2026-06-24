@@ -15,8 +15,8 @@ Source of truth for scope and decisions: the PRD at `.cursor/plans/stello_native
 ## Workstream board
 Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 
-- 🔬 **Sprint 0** — Walking skeleton (Xcode agent). Project + SwiftData models + 20 seed items + masonry render. Code reviewed + committed (e4f9cbf); awaiting visual confirm on simulator.
-- ⬜ **Sprint 1** — Core read UX (Xcode agent). Masonry, week grouping, search, filters (+intent), detail, theming.
+- ✅ **Sprint 0** — Walking skeleton. Models + masonry + 20 seed items render (2-col iPhone confirmed); CloudKit private sync enabled (container `iCloud.com.phloxpage.Stello`); test target green (9 tests/12 runs). Commits e4f9cbf, 789ab6f.
+- 🟡 **Sprint 1** — Core read UX (Xcode agent, issued). Real theme system (DESIGN_TOKENS), week grouping, search, filters (+intent), detail view.
 - ⬜ **Sprint 2** — Capture + on-device enrichment (Xcode agent + Claude Code bake-off).
 - ⬜ **Sprint 3** — Migration (Cursor runs export once; in-app Import).
 - ⬜ **Sprint 4** — System integration + delight (mixed).
@@ -27,6 +27,9 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 
 ## Handoff log
 Each handoff: surface, prompt given, what came back, review notes. Append newest at top.
+
+### Sprint 1 → Xcode 27 agent (issued)
+Core read UX: real theme system from `DESIGN_TOKENS.md` (default {dark, amber}, exact Radix hex, accent semantics, settings picker, @AppStorage persistence), ISO-week sections (header `Week N — Month`, newest first, recent expanded / older collapsed), instant search (title/summary/tags), AND-combined tag filters incl. `intent` with active pills, detail view (NavigationSplitView on iPad/Mac), and Swift Testing for week-key/search/filter/theme-persistence. Carry-forwards from Sprint 0 folded in. Open item to resolve before real-device sync: signing profile must include the iCloud container (App ID provisioning).
 
 ### Sprint 0 → Xcode 27 agent (reviewed, committed e4f9cbf)
 Delivered: 4 SwiftData models (CloudKit-ready), local-only container with documented CloudKit-deferral, 20 seed items across domains + 3 ISO weeks (incl. `intent` tags), custom `MasonryLayout` with exact breakpoints + shortest-column packing using real measured heights, `ItemCardView` (SF Symbol covers), multiplatform previews, Swift Testing suite.
