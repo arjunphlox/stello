@@ -22,11 +22,14 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 - ⬜ **Sprint 4** — System integration + delight (mixed).
 - ⬜ **Sprint 5** — Polish + ship.
 
+## Source of truth for constants
+`BUILD_SPEC.md` holds the exact web-app constants (tag rules, related-items thresholds, masonry breakpoints, theme hex, capture heuristics, enrichment caps). Building agents must cite it so the Swift port matches behavior.
+
 ## Handoff log
 Each handoff: surface, prompt given, what came back, review notes. Append newest at top.
 
-### (pending) Sprint 0 → Xcode 27 agent
-Prompt issued from the orchestration session. Build Spec Sheet (exact constants) attached separately. Awaiting first build for review.
+### Sprint 0 → Xcode 27 agent (issued)
+Prompt issued from the orchestration session: multiplatform app, SwiftData/CloudKit models, 20 seed items, custom masonry Layout (breakpoints from BUILD_SPEC), minimal theme scaffold, Swift Testing masonry test. Awaiting first build for review.
 
 ## Review / integration protocol
 1. Build happens in Xcode (agent) or Claude Code, on this `feature/native-rewrite` branch (or a `cursor/native-*` sub-branch).
