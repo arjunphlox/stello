@@ -17,7 +17,8 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 
 - ✅ **Sprint 0** — Walking skeleton. Models + masonry + 20 seed items render (2-col iPhone confirmed); CloudKit private sync enabled (container `iCloud.com.phloxpage.Stello`); test target green (9 tests/12 runs). Commits e4f9cbf, 789ab6f.
 - ✅ **Sprint 1** — Core read UX. Real theme (exact Radix, {dark,amber} default, @AppStorage + Settings picker), ISO-week sections, search, AND tag filters (+intent, counts, pills), DetailView (split on iPad/Mac), 25/25 tests. Commit f0ec677. Minor non-blocking notes below.
-- 🟡 **Sprint 2** — Capture + on-device enrichment (planning; will split 2a capture / 2b Foundation Models).
+- 🟡 **Sprint 2a** — In-app capture (Xcode agent, issued): paste/add URL+text+image, on-device OG/HTML parse, RuleTagger (ENRICH_RULES), tests. Share Extension deferred to 2a-share (needs new target + App Group).
+- ⬜ **Sprint 2b** — Foundation Models @Generable enrichment (vision tags + snippets + why-saved) + curation panel + Claude Code prompt bake-off.
 - ⬜ **Sprint 3** — Migration (Cursor runs export once; in-app Import).
 - ⬜ **Sprint 4** — System integration + delight (mixed).
 - ⬜ **Sprint 5** — Polish + ship.
