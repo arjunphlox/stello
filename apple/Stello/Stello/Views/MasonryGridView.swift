@@ -12,6 +12,7 @@ struct MasonryGridView: View {
     @State private var hasInitialized = false
     @State private var showFilterSheet = false
     @State private var showSettings = false
+    @State private var showCapture = false
 
     private var isFiltering: Bool { !searchText.isEmpty || !selectedTagNames.isEmpty }
 
@@ -45,6 +46,12 @@ struct MasonryGridView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { showCapture = true } label: {
+                    Image(systemName: "plus")
+                }
+                .foregroundStyle(theme.accentColor)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 16) {
                     Button { showFilterSheet = true } label: {
@@ -71,6 +78,12 @@ struct MasonryGridView: View {
         }
         #else
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showCapture = true } label: {
+                    Image(systemName: "plus")
+                }
+                .foregroundStyle(theme.accentColor)
+            }
             ToolbarItem {
                 Button { showFilterSheet = true } label: {
                     Image(systemName: selectedTagNames.isEmpty
@@ -89,6 +102,11 @@ struct MasonryGridView: View {
         .task { await SeedData.seedIfNeeded(in: context) }
         .onAppear { initExpansion() }
         .onChange(of: allItems.count) { _, _ in initExpansion() }
+        .sheet(isPresented: $showCapture) {
+            CaptureSheet()
+                .environment(\.appTheme, theme)
+                .preferredColorScheme(theme.colorScheme)
+        }
     }
 
     private func initExpansion() {
