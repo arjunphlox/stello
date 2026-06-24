@@ -6,24 +6,58 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		B7C13C072FEBBCE8002911CF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000100000000;
+			remoteInfo = Stello;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* Stello.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Stello.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7C13C032FEBBCE8002911CF /* StelloTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StelloTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7D23CE12FEB9E300008A69D /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
 		B7D23CE22FEB9E310008A69D /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
 		B7D23CE32FEB9E340008A69D /* ItemImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemImage.swift; sourceTree = "<group>"; };
 		B7D23CE42FEB9E350008A69D /* Snippet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snippet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B7C13C102FEBBFAB002911CF /* Exceptions for "Stello" folder in "Stello" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 000000000000000100000000 /* Stello */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		000000000000000000000010 /* Stello */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B7C13C102FEBBFAB002911CF /* Exceptions for "Stello" folder in "Stello" target */,
+			);
 			path = Stello;
+			sourceTree = "<group>";
+		};
+		B7C13C042FEBBCE8002911CF /* StelloTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StelloTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		000000000000000130000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		B7C13C002FEBBCE8002911CF /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -35,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000010 /* Stello */,
+				B7C13C042FEBBCE8002911CF /* StelloTests */,
 				000000000000000000000020 /* Products */,
 				B7D23CE02FEB9E300008A69D /* Models */,
 			);
@@ -44,6 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000120 /* Stello.app */,
+				B7C13C032FEBBCE8002911CF /* StelloTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -80,6 +116,27 @@
 			productReference = 000000000000000000000120 /* Stello.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B7C13C022FEBBCE8002911CF /* StelloTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B7C13C0B2FEBBCE8002911CF /* Build configuration list for PBXNativeTarget "StelloTests" */;
+			buildPhases = (
+				B7C13BFF2FEBBCE8002911CF /* Sources */,
+				B7C13C002FEBBCE8002911CF /* Frameworks */,
+				B7C13C012FEBBCE8002911CF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B7C13C082FEBBCE8002911CF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B7C13C042FEBBCE8002911CF /* StelloTests */,
+			);
+			name = StelloTests;
+			productName = StelloTests;
+			productReference = B7C13C032FEBBCE8002911CF /* StelloTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -87,11 +144,15 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
+				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					B7C13C022FEBBCE8002911CF = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 000000000000000100000000;
 					};
 				};
 			};
@@ -110,12 +171,18 @@
 			projectRoot = "";
 			targets = (
 				000000000000000100000000 /* Stello */,
+				B7C13C022FEBBCE8002911CF /* StelloTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		000000000000000140000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		B7C13C012FEBBCE8002911CF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -128,7 +195,20 @@
 			files = (
 			);
 		};
+		B7C13BFF2FEBBCE8002911CF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B7C13C082FEBBCE8002911CF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000100000000 /* Stello */;
+			targetProxy = B7C13C072FEBBCE8002911CF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		000000000000000011000000 /* Debug configuration for PBXProject "Stello" */ = {
@@ -266,6 +346,7 @@
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "Stello" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Stello/Stello.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 69E4GPJ74B;
@@ -273,6 +354,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Stello/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -287,8 +369,8 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:identifier)";
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.phloxpage.Stello;
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = com.phloxpage.Stello;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = iCloud.com.phloxpage.Stello;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = iCloud.com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=xros*]" = com.phloxpage.Stello;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -307,6 +389,7 @@
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "Stello" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Stello/Stello.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 69E4GPJ74B;
@@ -314,6 +397,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Stello/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -328,8 +412,8 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:identifier)";
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.phloxpage.Stello;
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = com.phloxpage.Stello;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = iCloud.com.phloxpage.Stello;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = iCloud.com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=xros*]" = com.phloxpage.Stello;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -342,6 +426,58 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
+			};
+			name = Release;
+		};
+		B7C13C092FEBBCE8002911CF /* Debug configuration for PBXNativeTarget "StelloTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 69E4GPJ74B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.StelloTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stello.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Stello";
+				XROS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Debug;
+		};
+		B7C13C0A2FEBBCE8002911CF /* Release configuration for PBXNativeTarget "StelloTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 69E4GPJ74B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.StelloTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stello.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Stello";
+				XROS_DEPLOYMENT_TARGET = 27.0;
 			};
 			name = Release;
 		};
@@ -361,6 +497,14 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "Stello" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "Stello" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		B7C13C0B2FEBBCE8002911CF /* Build configuration list for PBXNativeTarget "StelloTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7C13C092FEBBCE8002911CF /* Debug configuration for PBXNativeTarget "StelloTests" */,
+				B7C13C0A2FEBBCE8002911CF /* Release configuration for PBXNativeTarget "StelloTests" */,
 			);
 			defaultConfigurationName = Release;
 		};
