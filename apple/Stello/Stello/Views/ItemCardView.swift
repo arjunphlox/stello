@@ -102,14 +102,30 @@ struct ItemCardView: View {
 
     private var placeholderCard: some View {
         ZStack {
-            Color(hue: coverHue,
-                  saturation: theme.mode == .dark ? 0.20 : 0.10,
-                  brightness: theme.mode == .dark ? 0.16 : 0.93)
+            placeholderGradient
             Text(String(item.title.first ?? "?").uppercased())
                 .font(.system(size: 46, weight: .light, design: .serif))
                 .foregroundStyle(theme.textSecondary)
         }
         .frame(height: 140)
+    }
+
+    /// Diagonal gradient fallback when OG fetch fails — mirrors `SampleCoverGenerator` palette rhythm.
+    private var placeholderGradient: some View {
+        let hash = abs(stableHash(item.slug))
+        let hueShift = Double(hash % 360) / 360.0
+        return LinearGradient(
+            colors: [
+                Color(hue: (coverHue + hueShift).truncatingRemainder(dividingBy: 1),
+                      saturation: theme.mode == .dark ? 0.28 : 0.18,
+                      brightness: theme.mode == .dark ? 0.32 : 0.88),
+                Color(hue: (coverHue + hueShift + 0.08).truncatingRemainder(dividingBy: 1),
+                      saturation: theme.mode == .dark ? 0.22 : 0.14,
+                      brightness: theme.mode == .dark ? 0.14 : 0.78),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     // MARK: - Overlays

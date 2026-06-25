@@ -229,6 +229,32 @@ struct StelloTests {
         #expect(await SeedData.backfillSeedCovers(in: ctx) == 0)
     }
 
+    @Test("macTopContentPadding neutralizes title-bar safe area")
+    func macTopPadding() {
+        #expect(StelloLayout.macTopContentPadding(safeAreaTop: 28) == -16)
+        #expect(StelloLayout.macTopContentPadding(safeAreaTop: 0) == -16)
+        #expect(StelloLayout.macTopContentPadding(safeAreaTop: 12) == 0)
+    }
+
+    @Test("refreshSeedCatalogIfNeeded bumps catalog version")
+    func seedCatalogRefresh() async throws {
+        UserDefaults.standard.removeObject(forKey: "stello.seedCatalogVersion")
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let item = Item(
+            slug: "figma-auto-layout-guide",
+            title: "Auto Layout",
+            sourceURL: "https://figma.com/blog/auto-layout",
+            domain: "figma.com"
+        )
+        ctx.insert(item)
+        try ctx.save()
+
+        await SeedData.refreshSeedCatalogIfNeeded(in: ctx)
+        #expect(UserDefaults.standard.integer(forKey: "stello.seedCatalogVersion") == 2)
+        #expect(item.sourceURL?.contains("design-systems-101") == true)
+    }
+
     // MARK: - Helpers
 
     private func makeContainer() throws -> ModelContainer {

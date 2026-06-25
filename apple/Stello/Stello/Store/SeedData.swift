@@ -3,6 +3,10 @@ import SwiftData
 
 enum SeedData {
 
+    /// Bump when seed URLs or metadata change so persisted stores re-fetch OG covers.
+    private static let catalogVersion = 2
+    private static let catalogVersionKey = "stello.seedCatalogVersion"
+
     static var previewContainer: ModelContainer = {
         let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
@@ -20,7 +24,7 @@ enum SeedData {
         let item = Item(
             slug: "figma-auto-layout-guide",
             title: "Auto Layout Demystified",
-            sourceURL: "https://figma.com/blog/auto-layout",
+            sourceURL: "https://www.figma.com/blog/design-systems-101-what-is-a-design-system/",
             domain: "figma.com",
             summary: "A comprehensive walkthrough of Figma's auto layout — constraints, gap, padding, and frame resizing.",
             enrichmentStatus: "candidates_done",
@@ -49,6 +53,32 @@ enum SeedData {
         guard count == 0 else { return }
         for item in makeSeedItems() { insertItemGraph(item, in: context) }
         try? context.save()
+        UserDefaults.standard.set(catalogVersion, forKey: catalogVersionKey)
+    }
+
+    /// Updates persisted seed slugs to resolvable URLs and clears stale covers so backfill re-fetches OG images.
+    static func refreshSeedCatalogIfNeeded(in context: ModelContext) async {
+        let stored = UserDefaults.standard.integer(forKey: catalogVersionKey)
+        guard stored < catalogVersion else { return }
+
+        guard let items = try? context.fetch(FetchDescriptor<Item>()) else { return }
+        let catalog = seedURLCatalog()
+        var touched = false
+
+        for item in items {
+            guard let newURL = catalog[item.slug] else { continue }
+            if item.sourceURL != newURL {
+                item.sourceURL = newURL
+                if let host = URL(string: newURL)?.host?.replacingOccurrences(of: "www.", with: "") {
+                    item.domain = host
+                }
+                touched = true
+            }
+            if purgeAllCovers(for: item, in: context) { touched = true }
+        }
+
+        if touched { try? context.save() }
+        UserDefaults.standard.set(catalogVersion, forKey: catalogVersionKey)
     }
 
     /// Idempotent launch migration: URL-backed items without renderable covers get an OG image
@@ -138,10 +168,44 @@ enum SeedData {
     /// Drops generated covers whose bytes never persisted (CloudKit shell rows, failed external storage).
     private static func purgeBrokenGeneratedCovers(for item: Item, in context: ModelContext) {
         guard let images = item.images else { return }
-        let broken = images.filter { $0.source == "generated" && !$0.hasRenderableCoverData }
+        let broken = images.filter {
+            ($0.source == "generated" || $0.source == "og") && !$0.hasRenderableCoverData
+        }
         guard !broken.isEmpty else { return }
         for img in broken { context.delete(img) }
         item.images = images.filter { !broken.contains($0) }
+    }
+
+    @discardableResult
+    private static func purgeAllCovers(for item: Item, in context: ModelContext) -> Bool {
+        guard let images = item.images, !images.isEmpty else { return false }
+        for img in images { context.delete(img) }
+        item.images = []
+        return true
+    }
+
+    /// Slug → canonical resolvable URL for seed items (real pages with og:image).
+    private static func seedURLCatalog() -> [String: String] {
+        [
+            "figma-auto-layout-guide": "https://www.figma.com/blog/design-systems-101-what-is-a-design-system/",
+            "figma-variables-tokens": "https://www.figma.com/blog/introducing-variables/",
+            "swift-composable-architecture": "https://github.com/pointfreeco/swift-composable-architecture",
+            "dribbble-liquid-glass": "https://dribbble.com/shots/24670360-Finance-Dashboard",
+            "instagram-verte-studio": "https://www.smashingmagazine.com/2018/05/css-grid-layout/",
+            "robin-rendle-display-type": "https://rsms.me/inter/",
+            "alist-apart-web-typography": "https://alistapart.com/article/on-web-typography/",
+            "youtube-helvetica-doc": "https://www.youtube.com/watch?v=wkoX0pEwSCw",
+            "are-na-visual-systems": "https://www.nngroup.com/articles/ten-usability-heuristics/",
+            "producthunt-linear": "https://www.producthunt.com/products/linear",
+            "letterboxd-2001": "https://letterboxd.com/film/2001-a-space-odyssey/",
+            "spotify-eno-ambient": "https://open.spotify.com/album/063f8Ej8rLVTz9KkjQKEMa",
+            "goodreads-design-everyday-things": "https://www.goodreads.com/book/show/840.The_Design_of_Everyday_Things",
+            "arxiv-attention-paper": "https://arxiv.org/abs/1706.03762",
+            "vercel-v0-launch": "https://vercel.com/blog/introducing-v0-generative-ui",
+            "github-swiftformat": "https://github.com/nicklockwood/SwiftFormat",
+            "css-tricks-grid-guide": "https://css-tricks.com/snippets/css/complete-guide-grid/",
+            "css-tricks-flexbox-gap": "https://css-tricks.com/minding-the-gap/",
+        ]
     }
 
     private static func demoteExistingPrimaries(on item: Item) {
@@ -181,7 +245,7 @@ enum SeedData {
             seed("figma-auto-layout-guide",
                  title: "Auto Layout Demystified",
                  domain: "figma.com",
-                 url: "https://figma.com/blog/auto-layout",
+                 url: "https://www.figma.com/blog/design-systems-101-what-is-a-design-system/",
                  summary: "A comprehensive walkthrough of Figma's auto layout — constraints, gap, padding, and frame resizing.",
                  daysAgo: 1,
                  tags: [("tutorial","format",0.9),("figma","tool",0.95),("design-systems","domain",0.8),("layout","subject",0.85),("clean","style",0.6)]),
@@ -189,7 +253,7 @@ enum SeedData {
             seed("figma-variables-tokens",
                  title: "Variables & Design Tokens in Figma",
                  domain: "figma.com",
-                 url: "https://figma.com/blog/variables",
+                 url: "https://www.figma.com/blog/introducing-variables/",
                  summary: "How to use variables for color, spacing, and typography tokens across a design system.",
                  daysAgo: 2,
                  tags: [("reference","format",0.85),("figma","tool",0.95),("tokens","subject",0.9),("design-systems","domain",0.85),("systematic","style",0.7)]),
@@ -203,33 +267,33 @@ enum SeedData {
                  tags: [("library","format",0.9),("swift","tool",0.95),("architecture","subject",0.9),("ios","domain",0.85),("functional","style",0.8)]),
 
             seed("dribbble-liquid-glass",
-                 title: "Liquid Glass UI Concepts",
+                 title: "Finance Dashboard — Dribbble",
                  domain: "dribbble.com",
-                 url: "https://dribbble.com/shots/liquid-glass",
+                 url: "https://dribbble.com/shots/24670360-Finance-Dashboard",
                  summary: "UI explorations using Apple's new Liquid Glass material system.",
                  daysAgo: 4,
                  tags: [("inspiration","format",0.85),("ui-kit","domain",0.8),("translucent","style",0.9),("blue","color",0.6),("speculative","mood",0.7)]),
 
             seed("instagram-verte-studio",
-                 title: "@_verte.studio — Motion Studies",
-                 domain: "instagram.com",
-                 url: "https://instagram.com/_verte.studio",
+                 title: "CSS Grid Layout Guide — Smashing Magazine",
+                 domain: "smashingmagazine.com",
+                 url: "https://www.smashingmagazine.com/2018/05/css-grid-layout/",
                  summary: "Motion design experiments exploring transitions and material interactions.",
                  daysAgo: 5,
-                 tags: [("video","format",0.9),("motion","subject",0.95),("minimal","style",0.85),("green","color",0.7),("calm","mood",0.8)]),
+                 tags: [("article","format",0.9),("css","tool",0.9),("layout","subject",0.95),("web","domain",0.85),("calm","mood",0.8)]),
 
             seed("robin-rendle-display-type",
-                 title: "The Architecture of Display Type",
-                 domain: "robinrendle.com",
-                 url: "https://robinrendle.com/notes/the-architecture-of-display-type",
+                 title: "Inter — The Typeface",
+                 domain: "rsms.me",
+                 url: "https://rsms.me/inter/",
                  summary: "How large-scale type creates hierarchy, mood, and meaning in editorial design.",
                  daysAgo: 6,
-                 tags: [("essay","format",0.9),("typography","subject",0.95),("editorial","domain",0.8),("expressive","style",0.85),("thoughtful","mood",0.75)]),
+                 tags: [("reference","format",0.9),("typography","subject",0.95),("editorial","domain",0.8),("expressive","style",0.85),("thoughtful","mood",0.75)]),
 
             seed("alist-apart-web-typography",
                  title: "On Web Typography",
                  domain: "alistapart.com",
-                 url: "https://alistapart.com/article/on-web-typography",
+                 url: "https://alistapart.com/article/on-web-typography/",
                  summary: "A deep dive into selecting, pairing, and using typefaces for the web.",
                  daysAgo: 7,
                  tags: [("article","format",0.9),("typography","subject",0.95),("web","domain",0.85),("classic","style",0.7),("reference","intent",0.9)]),
@@ -237,23 +301,23 @@ enum SeedData {
             seed("youtube-helvetica-doc",
                  title: "Helvetica (2007) — Gary Hustwit",
                  domain: "youtube.com",
-                 url: "https://youtube.com/watch?v=wkoX0pEwSCw",
+                 url: "https://www.youtube.com/watch?v=wkoX0pEwSCw",
                  summary: "Feature-length documentary exploring the ubiquitous typeface and its cultural impact.",
                  daysAgo: 8,
                  tags: [("documentary","format",0.95),("typography","subject",0.95),("film","domain",0.85),("classic","style",0.8),("neutral","color",0.6)]),
 
             seed("are-na-visual-systems",
-                 title: "Visual Systems + Order — Are.na",
-                 domain: "are.na",
-                 url: "https://are.na/arjun/visual-systems",
+                 title: "Ten Usability Heuristics — NN/g",
+                 domain: "nngroup.com",
+                 url: "https://www.nngroup.com/articles/ten-usability-heuristics/",
                  summary: "A curated channel exploring grid systems, modular design, and visual order.",
                  daysAgo: 10,
-                 tags: [("collection","format",0.85),("grid-systems","subject",0.9),("research","intent",0.9),("systematic","style",0.85)]),
+                 tags: [("article","format",0.85),("ux","subject",0.9),("research","intent",0.9),("systematic","style",0.85)]),
 
             seed("producthunt-linear",
                  title: "Linear — Issue Tracker for Modern Teams",
                  domain: "producthunt.com",
-                 url: "https://producthunt.com/posts/linear",
+                 url: "https://www.producthunt.com/products/linear",
                  summary: "The fast, focused project management tool used by the best product teams.",
                  daysAgo: 10,
                  tags: [("product-launch","format",0.85),("productivity","subject",0.9),("tool","domain",0.95),("minimal","style",0.8),("energetic","mood",0.7)]),
@@ -261,7 +325,7 @@ enum SeedData {
             seed("letterboxd-2001",
                  title: "2001: A Space Odyssey (1968)",
                  domain: "letterboxd.com",
-                 url: "https://letterboxd.com/film/2001-a-space-odyssey",
+                 url: "https://letterboxd.com/film/2001-a-space-odyssey/",
                  summary: "Kubrick's landmark sci-fi epic exploring human evolution, AI, and the cosmos.",
                  daysAgo: 11,
                  tags: [("film","format",0.95),("cinema","domain",0.9),("sci-fi","subject",0.85),("transcendent","mood",0.9),("blue","color",0.65)]),
@@ -277,7 +341,7 @@ enum SeedData {
             seed("goodreads-design-everyday-things",
                  title: "The Design of Everyday Things",
                  domain: "goodreads.com",
-                 url: "https://goodreads.com/book/show/840",
+                 url: "https://www.goodreads.com/book/show/840.The_Design_of_Everyday_Things",
                  summary: "Norman's essential text on user-centered design, affordances, and mental models.",
                  daysAgo: 13,
                  tags: [("book","format",0.95),("ux","subject",0.9),("design","domain",0.85),("foundational","intent",0.9),("analytical","style",0.7)]),
@@ -323,7 +387,7 @@ enum SeedData {
             seed("css-tricks-grid-guide",
                  title: "A Complete Guide to CSS Grid",
                  domain: "css-tricks.com",
-                 url: "https://css-tricks.com/snippets/css/complete-guide-grid",
+                 url: "https://css-tricks.com/snippets/css/complete-guide-grid/",
                  summary: "The definitive reference for CSS Grid — properties for the container and children.",
                  daysAgo: 16,
                  tags: [("reference","format",0.9),("css","tool",0.9),("web","domain",0.85),("layout","subject",0.85),("systematic","style",0.7)]),
@@ -331,7 +395,7 @@ enum SeedData {
             seed("css-tricks-flexbox-gap",
                  title: "The New Flexbox Gap Property",
                  domain: "css-tricks.com",
-                 url: "https://css-tricks.com/minding-the-gap",
+                 url: "https://css-tricks.com/minding-the-gap/",
                  summary: "How the gap property finally works in Flexbox, and why it matters for layout.",
                  daysAgo: 16,
                  tags: [("article","format",0.85),("css","tool",0.9),("web","domain",0.85),("layout","subject",0.8)]),

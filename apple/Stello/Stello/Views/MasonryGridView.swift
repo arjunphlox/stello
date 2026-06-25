@@ -4,6 +4,8 @@ import SwiftData
 struct MasonryGridView: View {
     /// When true, header lives in `ContentView` and card taps call `onCardTap`.
     var embedInPanelLayout: Bool = false
+    /// Top scroll inset when header floats over the grid (regular Mac/iPad layout).
+    var scrollTopInset: CGFloat = 0
     @Binding var selectedTagNames: Set<String>
     var selectedItem: Item? = nil
     var panelContent: SidePanelContent = .none
@@ -16,6 +18,7 @@ struct MasonryGridView: View {
 
     init(
         embedInPanelLayout: Bool = false,
+        scrollTopInset: CGFloat = 0,
         selectedTagNames: Binding<Set<String>> = .constant([]),
         selectedItem: Item? = nil,
         panelContent: SidePanelContent = .none,
@@ -25,6 +28,7 @@ struct MasonryGridView: View {
         onSettings: (() -> Void)? = nil
     ) {
         self.embedInPanelLayout = embedInPanelLayout
+        self.scrollTopInset = scrollTopInset
         _selectedTagNames = selectedTagNames
         self.selectedItem = selectedItem
         self.panelContent = panelContent
@@ -58,36 +62,42 @@ struct MasonryGridView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ScrollView {
-                VStack(spacing: 12) {
-                    if !embedInPanelLayout {
-                        StelloHeaderView(
-                            itemCount: allItems.count,
-                            hasActiveFilters: !selectedTagNames.isEmpty,
-                            onFilters: { onFilters?() ?? (showFilterSheet = true) },
-                            onImport: { onImport?() ?? (showCapture = true) },
-                            onSettings: { onSettings?() ?? (showSettings = true) }
-                        )
-                    }
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(spacing: 12) {
+                        if !embedInPanelLayout {
+                            StelloHeaderView(
+                                itemCount: allItems.count,
+                                hasActiveFilters: !selectedTagNames.isEmpty,
+                                onFilters: { onFilters?() ?? (showFilterSheet = true) },
+                                onImport: { onImport?() ?? (showCapture = true) },
+                                onSettings: { onSettings?() ?? (showSettings = true) }
+                            )
+                        }
 
-                    if !selectedTagNames.isEmpty {
-                        filterPillsRow
-                    }
+                        if !selectedTagNames.isEmpty {
+                            filterPillsRow
+                        }
 
-                    ForEach(weekGroups) { group in
-                        WeekSectionView(
-                            group: group,
-                            isExpanded: isFiltering || expandedWeeks.contains(group.key),
-                            onToggle: { toggleWeek(group.key) },
-                            selectedItem: embedInPanelLayout ? selectedItem : nil,
-                            panelContent: embedInPanelLayout ? panelContent : .none,
-                            onCardTap: embedInPanelLayout ? onCardTap : nil
-                        )
+                        ForEach(weekGroups) { group in
+                            WeekSectionView(
+                                group: group,
+                                isExpanded: isFiltering || expandedWeeks.contains(group.key),
+                                onToggle: { toggleWeek(group.key) },
+                                selectedItem: embedInPanelLayout ? selectedItem : nil,
+                                panelContent: embedInPanelLayout ? panelContent : .none,
+                                onCardTap: embedInPanelLayout ? onCardTap : nil
+                            )
+                            .id(group.key)
+                        }
                     }
+                    .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
+                    .padding(.top, embedInPanelLayout ? scrollTopInset : StelloLayout.windowInset)
+                    .padding(.bottom, StelloLayout.floatingSearchScrollInset)
                 }
-                .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
-                .padding(.top, embedInPanelLayout ? 0 : StelloLayout.windowInset)
-                .padding(.bottom, StelloLayout.floatingSearchScrollInset)
+                .onAppear {
+                    scrollForScreenshotIfNeeded(using: scrollProxy)
+                }
             }
 
             FloatingSearchBar(text: $searchText)
@@ -147,6 +157,17 @@ struct MasonryGridView: View {
               !embedInPanelLayout,
               let first = allItems.first else { return }
         screenshotDetailItem = first
+    }
+
+    private func scrollForScreenshotIfNeeded(using proxy: ScrollViewProxy) {
+        guard embedInPanelLayout,
+              ProcessInfo.processInfo.arguments.contains("-screenshotScrolledHeader"),
+              let target = weekGroups.dropFirst(2).first?.key ?? weekGroups.last?.key else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation(.none) {
+                proxy.scrollTo(target, anchor: .top)
+            }
+        }
     }
 
     private var filterPillsRow: some View {

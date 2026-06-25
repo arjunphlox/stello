@@ -43,6 +43,9 @@ Xcode GUI proved too painful (targets/capabilities/signing). Now **Cursor-driven
 ## Handoff log
 Each handoff: surface, prompt given, what came back, review notes. Append newest at top.
 
+### 2026-06-25 — Five UI fixes: equal top inset, OG covers, panel wiring, glass buttons, floating header (Cursor/Composer)
+Fixed macOS top gap (neutralize ~28pt title-bar safe area via negative padding), replaced fake seed URLs + catalog migration v2 for real OG covers, restored filters/import/settings panel toggles (traffic-light overlay was stealing hits), 36×36 capsule hit targets with hover/press on `StelloGlassIconButton`, floating accent-tinted glass header with grid scrolling underneath. 94 tests green; screenshots at `apple/Stello/.artifacts/macos-*.png` + `iphone-17-pro-og-grid.png`.
+
 ### 2026-06-25 — Session end: 12pt inset, floating glass search, uniform SF icons (Cursor/Composer)
 Halved window inset (24→12pt) on top/leading/trailing with bottom content bleed (no outer bottom gap; scroll inset clears floating search). Uniform 36×36 Liquid Glass icon buttons via `StelloGlassIconButton` (filters `line.3.horizontal.decrease`, import `plus`, settings `gearshape`). Centered floating `.glassEffect` search bar on iOS/iPadOS/macOS. 92 tests green; screenshots at `apple/Stello/.artifacts/macos-12pt-floating-search.png` + `iphone-17-pro-floating-search.png`.
 

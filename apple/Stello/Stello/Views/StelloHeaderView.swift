@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Accent-colored header mirroring the web app's `.header` — Stello wordmark, item tally,
-/// and pill-shaped Liquid Glass icon buttons (Filters → Import → Settings).
+/// Accent-tinted floating Liquid Glass header — Stello wordmark, item tally,
+/// and pill-shaped icon buttons (Filters → Import → Settings).
 struct StelloHeaderView: View {
     let itemCount: Int
     var hasActiveFilters: Bool = false
@@ -22,22 +22,22 @@ struct StelloHeaderView: View {
         ZStack(alignment: .bottom) {
             if integratesMacTitleBar {
                 #if os(macOS)
-                VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        MacTrafficLightCluster()
-                        Spacer(minLength: 0)
-                    }
+                HStack(spacing: 0) {
+                    MacTrafficLightCluster()
                     Spacer(minLength: 0)
+                        .allowsHitTesting(false)
                 }
                 .padding(StelloLayout.headerPadding)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 #endif
             }
 
             HStack(alignment: .bottom, spacing: isCompact ? 8 : 12) {
                 wordmark
+                    .allowsHitTesting(false)
 
                 Spacer(minLength: isCompact ? 4 : 8)
+                    .allowsHitTesting(false)
 
                 GlassEffectContainer(spacing: buttonClusterSpacing) {
                     HStack(spacing: buttonClusterSpacing) {
@@ -69,7 +69,11 @@ struct StelloHeaderView: View {
         }
         .frame(height: StelloLayout.headerHeight)
         .frame(maxWidth: .infinity)
-        .background(theme.accentColor)
+        .background {
+            RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous)
+                .fill(theme.accentColor.opacity(0.55))
+        }
+        .glassEffect(.regular.tint(theme.accentColor.opacity(0.45)), in: .rect(cornerRadius: StelloLayout.headerCornerRadius))
         .clipShape(RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous))
     }
 

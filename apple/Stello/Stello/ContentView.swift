@@ -25,6 +25,7 @@ struct ContentView: View {
         }
         .task {
             await SeedData.seedIfNeeded(in: context)
+            await SeedData.refreshSeedCatalogIfNeeded(in: context)
             await SeedData.backfillSeedCovers(in: context)
             if ProcessInfo.processInfo.arguments.contains("-screenshotEnrichmentDemo") {
                 selectedItem = SeedData.ensureEnrichmentDemo(in: context)
@@ -44,8 +45,22 @@ struct ContentView: View {
 
     private var regularLayout: some View {
         GeometryReader { geo in
+            let topPad = isMac
+                ? StelloLayout.macTopContentPadding(safeAreaTop: geo.safeAreaInsets.top)
+                : StelloLayout.windowInset
+            let scrollTopInset = topPad + StelloLayout.headerHeight + StelloLayout.sectionGap
+
             HStack(spacing: StelloLayout.columnGap) {
-                VStack(spacing: StelloLayout.sectionGap) {
+                ZStack(alignment: .top) {
+                    MasonryGridView(
+                        embedInPanelLayout: true,
+                        scrollTopInset: scrollTopInset,
+                        selectedTagNames: $selectedTagNames,
+                        selectedItem: selectedItem,
+                        panelContent: panelContent,
+                        onCardTap: handleCardTap
+                    )
+
                     StelloHeaderView(
                         itemCount: allItems.count,
                         hasActiveFilters: !selectedTagNames.isEmpty,
@@ -55,15 +70,7 @@ struct ContentView: View {
                         onImport: { togglePanel(.import) },
                         onSettings: { togglePanel(.settings) }
                     )
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    MasonryGridView(
-                        embedInPanelLayout: true,
-                        selectedTagNames: $selectedTagNames,
-                        selectedItem: selectedItem,
-                        panelContent: panelContent,
-                        onCardTap: handleCardTap
-                    )
+                    .padding(.top, topPad)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -86,7 +93,6 @@ struct ContentView: View {
         .padding(.trailing, panelContent != .none
             ? StelloLayout.windowInsetPanelOpenTrailing
             : StelloLayout.windowInset)
-        .padding(.top, StelloLayout.windowInset)
         .animation(.spring(duration: 0.28), value: panelContent)
         .background(theme.background)
         #if os(macOS)

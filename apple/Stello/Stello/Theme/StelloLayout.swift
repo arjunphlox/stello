@@ -39,6 +39,17 @@ enum StelloLayout {
     static var floatingSearchScrollInset: CGFloat {
         floatingSearchBarHeight + floatingSearchBarBottomMargin
     }
+    /// Top scroll inset when the header floats over the grid (header + gap + window inset).
+    static var headerOverlayScrollInset: CGFloat {
+        headerHeight + sectionGap + windowInset
+    }
+    /// macOS `fullSizeContentView` adds a title-bar safe-area inset (~28pt) on top of layout
+    /// padding; subtract it (allow negative padding) so visual top gap equals `windowInset`.
+    static let macTitleBarSafeAreaFallback: CGFloat = 28
+    static func macTopContentPadding(safeAreaTop: CGFloat) -> CGFloat {
+        let barInset = safeAreaTop > 0 ? safeAreaTop : macTitleBarSafeAreaFallback
+        return windowInset - barInset
+    }
     /// Header / toolbar icon buttons — fixed capsule footprint + symbol metrics.
     static let iconButtonFootprint: CGFloat = 36
     static let iconButtonSymbolSize: CGFloat = 16
