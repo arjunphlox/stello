@@ -47,7 +47,8 @@ final class WindowChromeController {
             button.alphaValue = 1
         }
 
-        let inset = StelloLayout.windowInset
+        // Window inset reaches the header card edge; header padding is the 12pt gap inside the card.
+        let inset = StelloLayout.windowInset + StelloLayout.headerPadding
         let buttonSize = close.frame.size
         let spacing = max(0, mini.frame.origin.x - close.frame.origin.x - buttonSize.width)
         let y = titlebarContainer.frame.height - inset - buttonSize.height

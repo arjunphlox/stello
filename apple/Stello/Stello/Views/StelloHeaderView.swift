@@ -7,7 +7,8 @@ struct StelloHeaderView: View {
     let itemCount: Int
     var hasActiveFilters: Bool = false
     var activePanel: SidePanelContent = .none
-    /// When true (macOS), reserve leading inset for native traffic lights.
+    /// True on macOS; traffic lights sit top-left (via `MacWindowConfigurator`) so the
+    /// bottom-left title needs no extra gutter and keeps the uniform 12pt header padding.
     var integratesMacTitleBar: Bool = false
     /// 0 = at scroll top; 1 = scrolled (more translucent glass).
     var scrollProgress: CGFloat = 0
@@ -20,7 +21,6 @@ struct StelloHeaderView: View {
 
     private var isCompact: Bool { hSizeClass == .compact }
     private var buttonClusterSpacing: CGFloat { isCompact ? 6 : 8 }
-    private var macLeadingInset: CGFloat { integratesMacTitleBar ? StelloLayout.macTitleBarLeadingInset : 0 }
     private var clampedScroll: CGFloat { min(max(scrollProgress, 0), 1) }
 
     private var screenshotHoverFilters: Bool {
@@ -41,7 +41,7 @@ struct StelloHeaderView: View {
                     .layoutPriority(0)
             }
         }
-        .padding(.leading, StelloLayout.headerPadding + macLeadingInset)
+        .padding(.leading, StelloLayout.headerPadding)
         .padding(.trailing, StelloLayout.headerPadding)
         .padding(.bottom, StelloLayout.headerPadding)
         .frame(height: StelloLayout.headerHeight)
