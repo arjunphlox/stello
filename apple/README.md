@@ -26,7 +26,13 @@ Xcode GUI proved too painful (targets/capabilities/signing). Now **Cursor-driven
   - Pending: (1) LIVE on-device AI unverified — simulator lacks Apple Intelligence; verify on a real Apple-Intelligence device (needs signing). (2) Swap in the bake-off-winning prompt into EnrichmentPrompts.swift when ready.
 
 ## Sprint 2 complete (capture + intelligence)
-2a in-app capture · 2a-share Share Extension · 2b on-device enrichment. Next candidates: full curation panel, App Intents/Spotlight (Sprint 4), or real-device AI verification + data migration (Sprint 3).
+2a in-app capture · 2a-share Share Extension · 2b on-device enrichment + bake-off prompts (e454a096, 88 tests).
+
+## Branch + scope (2026-06-25)
+- Native + web now COEXIST on `main` (feature/native-rewrite fast-forwarded in). No more branch-switching (it was gutting the working tree). Recovery note: switching the folder to `main` before the merge removed untracked native source; FF restore fixed it.
+- Web stack stays until explicit user confirmation (no sunset).
+- Next = REFINEMENT (sample data + UI/interactions per user's tweak list), not new features. Sprint 3 (migration) / full curation panel / Sprint 4 deferred.
+- Bake-off enrichment prompts (3-job VisionTags/SnippetSet/WhySavedSet design) integrated; live AI still pending real-device verification (simulator lacks Apple Intelligence).
 - ⬜ **Sprint 3** — Migration (Cursor runs export once; in-app Import).
 - ⬜ **Sprint 4** — System integration + delight (mixed).
 - ⬜ **Sprint 5** — Polish + ship.
