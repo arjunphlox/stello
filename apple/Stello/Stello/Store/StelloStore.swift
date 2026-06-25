@@ -37,7 +37,7 @@ enum StelloStore {
     /// In-memory container for unit tests — no App Group, no CloudKit.
     static func makeInMemoryContainer() throws -> ModelContainer {
         let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try ModelContainer(for: schema, configurations: [config])
     }
 }

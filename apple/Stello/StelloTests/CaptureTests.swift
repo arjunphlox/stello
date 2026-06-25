@@ -103,6 +103,21 @@ struct SubjectMiningTests {
         #expect(names.contains("design"))
     }
 
+    @Test("platformNoise words are filtered from title mining")
+    func platformNoiseFilteredFromTitle() {
+        let tags = RuleTagger.mineSubjectKeywords(
+            from: "youtube typography design tutorial",
+            limit: 5, minLen: 3,
+            weightStart: 0.8, weightStep: 0.1, weightFloor: 0.5,
+            extraStops: []
+        )
+        let names = tags.map(\.name)
+        #expect(!names.contains("youtube"))
+        #expect(names.contains("typography"))
+        #expect(names.contains("design"))
+        #expect(names.contains("tutorial"))
+    }
+
     @Test("extraStops are filtered")
     func extraStopsFiltered() {
         let tags = RuleTagger.mineSubjectKeywords(

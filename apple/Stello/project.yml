@@ -37,7 +37,7 @@ targets:
         SWIFT_EMIT_LOC_STRINGS: YES
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
         TARGETED_DEVICE_FAMILY: "1,2,7"
-        PRODUCT_BUNDLE_IDENTIFIER: com.phloxpage.Stello.StelloShare
+        PRODUCT_BUNDLE_IDENTIFIER: com.phloxpage.Stello
         PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]: com.phloxpage.Stello
         PRODUCT_BUNDLE_IDENTIFIER[sdk=iphonesimulator*]: com.phloxpage.Stello
         PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]: com.phloxpage.Stello

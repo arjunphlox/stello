@@ -285,6 +285,7 @@ struct RuleTagger {
             let word = String(lowered[range])
             guard !seen.contains(word),
                   !stopWords.contains(word),
+                  !platformNoise.contains(word),
                   !extraStops.contains(word) else { continue }
             seen.insert(word)
             let w = max(weightFloor, round2(weightStart - Double(results.count) * weightStep))
