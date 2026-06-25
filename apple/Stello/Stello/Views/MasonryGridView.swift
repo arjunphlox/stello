@@ -57,38 +57,43 @@ struct MasonryGridView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                if !embedInPanelLayout {
-                    StelloHeaderView(
-                        itemCount: allItems.count,
-                        hasActiveFilters: !selectedTagNames.isEmpty,
-                        onFilters: { onFilters?() ?? (showFilterSheet = true) },
-                        onImport: { onImport?() ?? (showCapture = true) },
-                        onSettings: { onSettings?() ?? (showSettings = true) }
-                    )
-                }
+        ZStack(alignment: .bottom) {
+            ScrollView {
+                VStack(spacing: 12) {
+                    if !embedInPanelLayout {
+                        StelloHeaderView(
+                            itemCount: allItems.count,
+                            hasActiveFilters: !selectedTagNames.isEmpty,
+                            onFilters: { onFilters?() ?? (showFilterSheet = true) },
+                            onImport: { onImport?() ?? (showCapture = true) },
+                            onSettings: { onSettings?() ?? (showSettings = true) }
+                        )
+                    }
 
-                searchField
+                    if !selectedTagNames.isEmpty {
+                        filterPillsRow
+                    }
 
-                if !selectedTagNames.isEmpty {
-                    filterPillsRow
+                    ForEach(weekGroups) { group in
+                        WeekSectionView(
+                            group: group,
+                            isExpanded: isFiltering || expandedWeeks.contains(group.key),
+                            onToggle: { toggleWeek(group.key) },
+                            selectedItem: embedInPanelLayout ? selectedItem : nil,
+                            panelContent: embedInPanelLayout ? panelContent : .none,
+                            onCardTap: embedInPanelLayout ? onCardTap : nil
+                        )
+                    }
                 }
-
-                ForEach(weekGroups) { group in
-                    WeekSectionView(
-                        group: group,
-                        isExpanded: isFiltering || expandedWeeks.contains(group.key),
-                        onToggle: { toggleWeek(group.key) },
-                        selectedItem: embedInPanelLayout ? selectedItem : nil,
-                        panelContent: embedInPanelLayout ? panelContent : .none,
-                        onCardTap: embedInPanelLayout ? onCardTap : nil
-                    )
-                }
+                .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
+                .padding(.top, embedInPanelLayout ? 0 : StelloLayout.windowInset)
+                .padding(.bottom, StelloLayout.floatingSearchScrollInset)
             }
-            .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
-            .padding(.top, embedInPanelLayout ? 0 : StelloLayout.windowInset)
-            .padding(.bottom, StelloLayout.windowInset)
+
+            FloatingSearchBar(text: $searchText)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
+                .padding(.bottom, StelloLayout.floatingSearchBarBottomMargin)
         }
         .background(theme.background)
         #if os(iOS)
@@ -123,26 +128,6 @@ struct MasonryGridView: View {
                 .preferredColorScheme(theme.colorScheme)
         }
         .navigationDestination(item: $screenshotDetailItem) { DetailView(item: $0) }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(theme.textSecondary)
-            TextField("Search items…", text: $searchText)
-                .textFieldStyle(.plain)
-                .foregroundStyle(theme.textPrimary)
-        }
-        .font(.body)
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity)
-        .frame(height: 48)
-        .background(theme.backgroundSubtle)
-        .overlay {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(theme.border, lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private func initExpansion() {

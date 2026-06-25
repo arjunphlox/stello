@@ -2,8 +2,8 @@ import CoreGraphics
 
 /// Shared layout constants — mirrors web `.content-inner` / `.header` from `style.css`.
 enum StelloLayout {
-    /// Web `.content-inner { padding: 24px 24px 0 }` — uniform window edge inset.
-    static let windowInset: CGFloat = 24
+    /// Uniform window edge inset — top, leading, trailing (no bottom; content bleeds to window edge).
+    static let windowInset: CGFloat = 12
     /// Web `.content-inner { gap: 16px }` between header, search, and grid.
     static let sectionGap: CGFloat = 16
     /// Web `.header { border-radius: 12px }`.
@@ -29,6 +29,17 @@ enum StelloLayout {
     static let macTrafficLightReservedWidth: CGFloat = 68
     /// macOS: horizontal spacing between standard window buttons.
     static let macTrafficLightSpacing: CGFloat = 20
-    /// When a side panel is open, web halves the grid-column right inset (24 → 12).
-    static let windowInsetPanelOpenTrailing: CGFloat = 12
+    /// When a side panel is open, web halves the outer trailing inset (12 → 6).
+    static let windowInsetPanelOpenTrailing: CGFloat = 6
+    /// Floating Liquid Glass search bar — height, bottom margin, and scroll content inset.
+    static let floatingSearchBarHeight: CGFloat = 48
+    static let floatingSearchBarBottomMargin: CGFloat = 12
+    static let floatingSearchBarMaxWidth: CGFloat = 420
+    /// Scroll padding so last grid cards clear the floating search overlay.
+    static var floatingSearchScrollInset: CGFloat {
+        floatingSearchBarHeight + floatingSearchBarBottomMargin
+    }
+    /// Header / toolbar icon buttons — fixed capsule footprint + symbol metrics.
+    static let iconButtonFootprint: CGFloat = 36
+    static let iconButtonSymbolSize: CGFloat = 16
 }

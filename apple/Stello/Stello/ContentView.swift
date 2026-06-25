@@ -76,6 +76,7 @@ struct ContentView: View {
                         onClose: closePanel
                     )
                     .frame(width: SidePanelContent.width(for: geo.size.width))
+                    .frame(maxHeight: .infinity)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
@@ -86,7 +87,6 @@ struct ContentView: View {
             ? StelloLayout.windowInsetPanelOpenTrailing
             : StelloLayout.windowInset)
         .padding(.top, StelloLayout.windowInset)
-        .padding(.bottom, StelloLayout.windowInset)
         .animation(.spring(duration: 0.28), value: panelContent)
         .background(theme.background)
         #if os(macOS)

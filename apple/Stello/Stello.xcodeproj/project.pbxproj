@@ -22,6 +22,7 @@
 		39AAB8A6045F0CDC63AD1E7E /* Enricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079399A5195A6EF8A1ADC6D8 /* Enricher.swift */; };
 		3BB52E9A2344B9B9C4767590 /* MasonryLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA5B7E567FF7C8F12551D404 /* MasonryLayout.swift */; };
 		413B21D6931EAA848DB4885D /* WeekSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02F453DB00E270E29BB0AF99 /* WeekSectionView.swift */; };
+		483A97EDB5D05F0D52B78078 /* StelloGlassIconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF9F20BFB190A73AC6FF77B /* StelloGlassIconButton.swift */; };
 		4F7D4306DB34920A4F292188 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07B6271F9E2D3C9D455B813 /* Theme.swift */; };
 		51973386299AAFAC7ABEEB9E /* StelloShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 73F3E5B16B30645B3B36E3DE /* StelloShare.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		57820614E4D3B3A466EC1B90 /* WeekGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EE220C3FE5F648024764D5 /* WeekGroup.swift */; };
@@ -53,6 +54,7 @@
 		E381D64784AD5D643DB27251 /* StelloHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37680488FAFA888F74C995C /* StelloHeaderView.swift */; };
 		E745441DDF2FAF4095B9DF12 /* CaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FDE089AFD4A8D168D8E7002 /* CaptureTests.swift */; };
 		E760354AD35CA98506C62A17 /* MacWindowConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B530A558F70C13DB03B0D3 /* MacWindowConfigurator.swift */; };
+		EA2356203C37F250AF3BFDC2 /* FloatingSearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA6462332FF79D84ADE0B84 /* FloatingSearchBar.swift */; };
 		EF4080454C7313AD6493D38E /* RuleTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937DE9FDF9111BED793134C5 /* RuleTagger.swift */; };
 		F0A7F3298A7230C0197F4691 /* ItemFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30254CBEFA41454C4622D144 /* ItemFilter.swift */; };
 		F4EDCB9DB68C204BB9CC1A1D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4598C5A4C515E410BAE3ADBA /* ContentView.swift */; };
@@ -96,6 +98,7 @@
 		132393C0AAACA6E4F794BBBC /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
 		1BA340D3CF1CBA31162EB51C /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
 		1BC6FF63A611768E9EE2954A /* EnrichmentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentService.swift; sourceTree = "<group>"; };
+		1EA6462332FF79D84ADE0B84 /* FloatingSearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingSearchBar.swift; sourceTree = "<group>"; };
 		23876ECEF543E378B833D11F /* FoundationModelsEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsEnricher.swift; sourceTree = "<group>"; };
 		28073A97E7A248FEF415DD89 /* MockEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockEnricher.swift; sourceTree = "<group>"; };
 		29BD97A5FB5A9BFF62E2F76A /* StelloTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StelloTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -120,6 +123,7 @@
 		918DFF8962898B3139189A24 /* CaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureService.swift; sourceTree = "<group>"; };
 		937DE9FDF9111BED793134C5 /* RuleTagger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleTagger.swift; sourceTree = "<group>"; };
 		9881FC7E6289F5ACC97430E1 /* SampleCoverGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleCoverGenerator.swift; sourceTree = "<group>"; };
+		9AF9F20BFB190A73AC6FF77B /* StelloGlassIconButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloGlassIconButton.swift; sourceTree = "<group>"; };
 		A00AB84A8DD5556B8493537D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloTests.swift; sourceTree = "<group>"; };
 		AB3E7101C4245F1166E1C7B4 /* MacTrafficLightCluster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacTrafficLightCluster.swift; sourceTree = "<group>"; };
@@ -201,6 +205,7 @@
 			children = (
 				CF3875676CC21E3F317FD776 /* CaptureSheet.swift */,
 				882A3667CA6FD8B029F41810 /* DetailView.swift */,
+				1EA6462332FF79D84ADE0B84 /* FloatingSearchBar.swift */,
 				45FB580D0C83D4D934FF7013 /* ItemCardView.swift */,
 				AB3E7101C4245F1166E1C7B4 /* MacTrafficLightCluster.swift */,
 				89B530A558F70C13DB03B0D3 /* MacWindowConfigurator.swift */,
@@ -209,6 +214,7 @@
 				A00AB84A8DD5556B8493537D /* SettingsView.swift */,
 				34CAB7A42BFA377A40527746 /* SidePanelContent.swift */,
 				44C8183A688751612461786D /* SidePanelView.swift */,
+				9AF9F20BFB190A73AC6FF77B /* StelloGlassIconButton.swift */,
 				F37680488FAFA888F74C995C /* StelloHeaderView.swift */,
 				C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */,
 				02F453DB00E270E29BB0AF99 /* WeekSectionView.swift */,
@@ -374,6 +380,7 @@
 				37683EFDD2B7112B5D216AB4 /* EnrichmentCoordinator.swift in Sources */,
 				772C34B424FA316A5CE898A2 /* EnrichmentPrompts.swift in Sources */,
 				D3C6F2BB515C95C8EC0D9320 /* EnrichmentService.swift in Sources */,
+				EA2356203C37F250AF3BFDC2 /* FloatingSearchBar.swift in Sources */,
 				7EE56848C1DBC960DFA35A62 /* FoundationModelsEnricher.swift in Sources */,
 				DA0EA172B9E7AE41D30A18E4 /* Item.swift in Sources */,
 				0D18DEAA38D5D391143F61CC /* ItemCardView.swift in Sources */,
@@ -393,6 +400,7 @@
 				B08AE07BA6BBDFD3FEBA8D16 /* SidePanelView.swift in Sources */,
 				59611335583FB4DF8B08A0AD /* Snippet.swift in Sources */,
 				74388EA1808807BBA64EA64A /* StelloApp.swift in Sources */,
+				483A97EDB5D05F0D52B78078 /* StelloGlassIconButton.swift in Sources */,
 				E381D64784AD5D643DB27251 /* StelloHeaderView.swift in Sources */,
 				CDA790F7E7DD8B1138EAF40D /* StelloLayout.swift in Sources */,
 				D21100D7EB2CC957D5C122CE /* StelloStore.swift in Sources */,

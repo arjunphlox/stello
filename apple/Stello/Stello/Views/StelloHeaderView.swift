@@ -16,7 +16,6 @@ struct StelloHeaderView: View {
     @Environment(\.horizontalSizeClass) private var hSizeClass
 
     private var isCompact: Bool { hSizeClass == .compact }
-    private var buttonHorizontalPadding: CGFloat { isCompact ? 12 : 18 }
     private var buttonClusterSpacing: CGFloat { isCompact ? 6 : 8 }
 
     var body: some View {
@@ -42,7 +41,7 @@ struct StelloHeaderView: View {
 
                 GlassEffectContainer(spacing: buttonClusterSpacing) {
                     HStack(spacing: buttonClusterSpacing) {
-                        glassHeaderButton(
+                        StelloGlassIconButton(
                             systemName: hasActiveFilters || activePanel == .filters
                                 ? "line.3.horizontal.decrease.circle.fill"
                                 : "line.3.horizontal.decrease",
@@ -50,14 +49,14 @@ struct StelloHeaderView: View {
                             label: "Filters",
                             action: onFilters
                         )
-                        glassHeaderButton(
+                        StelloGlassIconButton(
                             systemName: "plus",
                             isActive: activePanel == .import,
                             label: "Import",
                             action: onImport
                         )
-                        glassHeaderButton(
-                            systemName: "gear",
+                        StelloGlassIconButton(
+                            systemName: "gearshape",
                             isActive: activePanel == .settings,
                             label: "Settings",
                             action: onSettings
@@ -91,28 +90,6 @@ struct StelloHeaderView: View {
         }
         .foregroundStyle(theme.accentContrast)
         .layoutPriority(1)
-    }
-}
-
-extension StelloHeaderView {
-    private func glassHeaderButton(
-        systemName: String,
-        isActive: Bool,
-        label: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(theme.accentContrast.opacity(isActive ? 1 : 0.82))
-                .padding(.horizontal, buttonHorizontalPadding)
-                .padding(.vertical, isCompact ? 8 : 10)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .capsule)
-        .fixedSize(horizontal: true, vertical: false)
-        .accessibilityLabel(label)
-        .help(label)
     }
 }
 

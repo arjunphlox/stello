@@ -45,14 +45,12 @@ struct SidePanelView: View {
                 }
             }
             Spacer(minLength: 8)
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(theme.textSecondary)
-            .help("Close panel")
+            StelloGlassIconButton(
+                systemName: "xmark",
+                contrastForeground: false,
+                label: "Close panel",
+                action: onClose
+            )
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
