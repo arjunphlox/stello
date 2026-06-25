@@ -8,6 +8,7 @@ struct ContentView: View {
     @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
 
     @State private var selectedItem: Item?
+    @State private var isInspectorPresented = false
 
     private var isRegular: Bool { hSizeClass == .regular }
 
@@ -17,11 +18,18 @@ struct ContentView: View {
                 // iPad / Mac: masonry grid is the MAIN content; selected item's
                 // details live in a right-hand inspector (mirrors the web side panel).
                 NavigationStack {
-                    MasonryGridView(selection: $selectedItem)
-                        .inspector(isPresented: inspectorPresented) {
-                            inspectorContent
-                                .inspectorColumnWidth(min: 320, ideal: 380, max: 480)
-                        }
+                    MasonryGridView(
+                        selection: $selectedItem,
+                        isInspectorPresented: $isInspectorPresented,
+                        showsInspectorToggle: true
+                    )
+                    .inspector(isPresented: $isInspectorPresented) {
+                        inspectorContent
+                            .inspectorColumnWidth(min: 320, ideal: 380, max: 480)
+                    }
+                }
+                .onChange(of: selectedItem?.persistentModelID) { _, _ in
+                    if selectedItem != nil { isInspectorPresented = true }
                 }
             } else {
                 // iPhone: push navigation into the detail view.
@@ -35,16 +43,10 @@ struct ContentView: View {
         .task {
             if ProcessInfo.processInfo.arguments.contains("-screenshotEnrichmentDemo") {
                 selectedItem = SeedData.ensureEnrichmentDemo(in: context)
+                isInspectorPresented = true
             }
             await enrichmentCoordinator.enrichPendingItems(context: context)
         }
-    }
-
-    private var inspectorPresented: Binding<Bool> {
-        Binding(
-            get: { selectedItem != nil },
-            set: { if !$0 { selectedItem = nil } }
-        )
     }
 
     @ViewBuilder

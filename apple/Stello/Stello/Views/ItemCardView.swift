@@ -12,6 +12,7 @@ struct ItemCardView: View {
 
     // Placeholder hue palette (from BUILD_SPEC) for text / letter cards.
     private static let hues: [Double] = [18, 80, 38, 140, 25, 45, 12, 100]
+    private static let textWordCap = 40
 
     private func stableHash(_ s: String) -> Int {
         s.utf8.reduce(5381) { ($0 &* 33) &+ Int($1) }
@@ -34,7 +35,10 @@ struct ItemCardView: View {
         return 1200.0 / 630.0 // OG default
     }
 
+    /// Mirrors web `hasTextContent`: text card only when image-less, summary is substantive,
+    /// and not the generic capture stub.
     private var hasText: Bool {
+        guard !hasImage else { return false }
         guard let s = item.summary else { return false }
         return s.count > 30 && !s.hasPrefix("Saved from")
     }
@@ -74,26 +78,21 @@ struct ItemCardView: View {
         }
     }
 
+    /// Web `.card-text-content`: summary only in the tinted box — no title, no multi-line dump.
     private var textCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(item.title.isEmpty ? "Untitled" : item.title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
-                .lineLimit(2)
-            Text(item.summary ?? "")
-                .font(.system(size: 12))
-                .foregroundStyle(theme.textSecondary)
-                .lineLimit(6)
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
-        .padding(14)
-        .padding(.bottom, item.domain?.isEmpty == false ? 26 : 0)
-        .background(
-            Color(hue: coverHue,
-                  saturation: theme.mode == .dark ? 0.15 : 0.10,
-                  brightness: theme.mode == .dark ? 0.14 : 0.93)
-        )
+        Text(Self.truncatedWords(item.summary ?? "", limit: Self.textWordCap))
+            .font(.system(size: 13))
+            .foregroundStyle(theme.textPrimary)
+            .lineLimit(8)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
+            .padding(14)
+            .padding(.bottom, item.domain?.isEmpty == false ? 26 : 0)
+            .background(
+                Color(hue: coverHue,
+                      saturation: theme.mode == .dark ? 0.15 : 0.12,
+                      brightness: theme.mode == .dark ? 0.14 : 0.92)
+            )
     }
 
     private var placeholderCard: some View {
@@ -108,16 +107,16 @@ struct ItemCardView: View {
         .frame(height: 140)
     }
 
-    // MARK: - Bottom overlay (title scrim + domain pill)
+    // MARK: - Overlays
 
     @ViewBuilder private var bottomOverlay: some View {
         if hasImage {
             ZStack(alignment: .bottom) {
                 LinearGradient(
-                    colors: [.black.opacity(0), .black.opacity(0.6)],
+                    colors: [.black.opacity(0), .black.opacity(0.62)],
                     startPoint: .center, endPoint: .bottom
                 )
-                .frame(height: 96)
+                .frame(height: 88)
                 .frame(maxWidth: .infinity)
                 .allowsHitTesting(false)
 
@@ -157,6 +156,12 @@ struct ItemCardView: View {
     }
 
     // MARK: - Helpers
+
+    static func truncatedWords(_ text: String, limit: Int) -> String {
+        let words = text.split(whereSeparator: \.isWhitespace)
+        guard words.count > limit else { return text }
+        return words.prefix(limit).joined(separator: " ") + "…"
+    }
 
     static func platformImage(_ data: Data) -> Image? {
         #if os(macOS)

@@ -157,6 +157,47 @@ struct StelloTests {
         #expect(restored == original)
     }
 
+    // MARK: - Seed cover backfill
+
+    @Test("backfillSeedCovers attaches generated covers to URL items missing images")
+    func backfillSeedCovers() throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+
+        let withDomain = Item(
+            slug: "figma-auto-layout-guide",
+            title: "Auto Layout",
+            sourceURL: "https://figma.com/blog/auto-layout",
+            domain: "figma.com",
+            summary: "A walkthrough of auto layout."
+        )
+        let note = Item(
+            slug: "note-stello-sprint-1",
+            title: "Sprint notes",
+            summary: "Detail view redesign, tag editor, search with embeddings."
+        )
+        ctx.insert(withDomain)
+        ctx.insert(note)
+        try ctx.save()
+
+        let patched = SeedData.backfillSeedCovers(in: ctx)
+        #expect(patched == 1)
+        #expect(withDomain.images?.first?.data != nil)
+        #expect(note.images?.isEmpty != false || note.images == nil)
+    }
+
+    @Test("backfillSeedCovers is idempotent")
+    func backfillSeedCoversIdempotent() throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let item = Item(slug: "css-tricks-grid", title: "CSS Grid", domain: "css-tricks.com")
+        ctx.insert(item)
+        try ctx.save()
+
+        #expect(SeedData.backfillSeedCovers(in: ctx) == 1)
+        #expect(SeedData.backfillSeedCovers(in: ctx) == 0)
+    }
+
     // MARK: - Helpers
 
     private func makeContainer() throws -> ModelContainer {

@@ -46,6 +46,7 @@
 		D42C96BA4F1424193B6248F6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00AB84A8DD5556B8493537D /* SettingsView.swift */; };
 		DA0EA172B9E7AE41D30A18E4 /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132393C0AAACA6E4F794BBBC /* Item.swift */; };
 		E1FE78336EED97EC3B2B5614 /* ItemImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBD865033AC3DE033F9D814 /* ItemImage.swift */; };
+		E381D64784AD5D643DB27251 /* StelloHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37680488FAFA888F74C995C /* StelloHeaderView.swift */; };
 		E745441DDF2FAF4095B9DF12 /* CaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FDE089AFD4A8D168D8E7002 /* CaptureTests.swift */; };
 		EF4080454C7313AD6493D38E /* RuleTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937DE9FDF9111BED793134C5 /* RuleTagger.swift */; };
 		F0A7F3298A7230C0197F4691 /* ItemFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30254CBEFA41454C4622D144 /* ItemFilter.swift */; };
@@ -123,6 +124,7 @@
 		E07B6271F9E2D3C9D455B813 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		EBE3208FABDC9FE868334622 /* MasonryGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryGridView.swift; sourceTree = "<group>"; };
 		EC4FE0C184835F8E3B9A25F7 /* Stello.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stello.entitlements; sourceTree = "<group>"; };
+		F37680488FAFA888F74C995C /* StelloHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloHeaderView.swift; sourceTree = "<group>"; };
 		FBCA04FFD515FAA636671FEE /* MasonryLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryLayoutTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -192,6 +194,7 @@
 				EBE3208FABDC9FE868334622 /* MasonryGridView.swift */,
 				BA5B7E567FF7C8F12551D404 /* MasonryLayout.swift */,
 				A00AB84A8DD5556B8493537D /* SettingsView.swift */,
+				F37680488FAFA888F74C995C /* StelloHeaderView.swift */,
 				C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */,
 				02F453DB00E270E29BB0AF99 /* WeekSectionView.swift */,
 			);
@@ -371,6 +374,7 @@
 				D42C96BA4F1424193B6248F6 /* SettingsView.swift in Sources */,
 				59611335583FB4DF8B08A0AD /* Snippet.swift in Sources */,
 				74388EA1808807BBA64EA64A /* StelloApp.swift in Sources */,
+				E381D64784AD5D643DB27251 /* StelloHeaderView.swift in Sources */,
 				D21100D7EB2CC957D5C122CE /* StelloStore.swift in Sources */,
 				0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */,
 				6EDC47A1A3E5FE6A1A51D727 /* TagFilterSheet.swift in Sources */,

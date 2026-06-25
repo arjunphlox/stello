@@ -4,6 +4,9 @@ import SwiftData
 struct MasonryGridView: View {
     /// When provided (iPad/Mac), card taps set this inspector selection instead of pushing.
     var selection: Binding<Item?>? = nil
+    /// Inspector visibility (regular width only). Separate from selection so the panel can dismiss.
+    var isInspectorPresented: Binding<Bool>? = nil
+    var showsInspectorToggle: Bool = false
 
     @Query(sort: \Item.addedAt, order: .reverse) private var allItems: [Item]
     @Environment(\.modelContext) private var context
@@ -16,6 +19,7 @@ struct MasonryGridView: View {
     @State private var showFilterSheet = false
     @State private var showSettings = false
     @State private var showCapture = false
+    @State private var screenshotDetailItem: Item?
 
     private var isFiltering: Bool { !searchText.isEmpty || !selectedTagNames.isEmpty }
 
@@ -29,10 +33,21 @@ struct MasonryGridView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                StelloHeaderView(
+                    itemCount: allItems.count,
+                    hasActiveFilters: !selectedTagNames.isEmpty,
+                    onFilters: { showFilterSheet = true },
+                    onImport: { showCapture = true },
+                    onSettings: { showSettings = true }
+                )
+
+                searchField
+
                 if !selectedTagNames.isEmpty {
                     filterPillsRow
                 }
+
                 ForEach(weekGroups) { group in
                     WeekSectionView(
                         group: group,
@@ -43,31 +58,28 @@ struct MasonryGridView: View {
                 }
             }
             .padding(.horizontal, 12)
+            .padding(.top, 12)
             .padding(.bottom, 24)
         }
         .background(theme.background)
-        .navigationTitle("Stello")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarHidden(true)
+        #else
+        .navigationTitle("")
+        #endif
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button { showCapture = true } label: {
-                    Image(systemName: "plus")
-                }
-                .foregroundStyle(theme.accentColor)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 16) {
-                    Button { showFilterSheet = true } label: {
-                        Image(systemName: selectedTagNames.isEmpty
-                              ? "line.3.horizontal.decrease"
-                              : "line.3.horizontal.decrease.circle.fill")
+            if showsInspectorToggle, let isInspectorPresented {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        isInspectorPresented.wrappedValue.toggle()
+                    } label: {
+                        Image(systemName: "sidebar.right")
                     }
-                    Button { showSettings = true } label: {
-                        Image(systemName: "gear")
-                    }
+                    .help("Toggle inspector")
+                    .foregroundStyle(
+                        isInspectorPresented.wrappedValue ? theme.accentColor : theme.textSecondary
+                    )
                 }
-                .foregroundStyle(theme.accentColor)
             }
         }
         .sheet(isPresented: $showFilterSheet) {
@@ -80,37 +92,41 @@ struct MasonryGridView: View {
                 .environment(\.appTheme, theme)
                 .preferredColorScheme(theme.colorScheme)
         }
-        #else
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { showCapture = true } label: {
-                    Image(systemName: "plus")
-                }
-                .foregroundStyle(theme.accentColor)
-            }
-            ToolbarItem {
-                Button { showFilterSheet = true } label: {
-                    Image(systemName: selectedTagNames.isEmpty
-                          ? "line.3.horizontal.decrease"
-                          : "line.3.horizontal.decrease.circle.fill")
-                }
-                .foregroundStyle(theme.accentColor)
-            }
+        .task {
+            await SeedData.seedIfNeeded(in: context)
+            SeedData.backfillSeedCovers(in: context)
+            openScreenshotDetailIfNeeded()
         }
-        .sheet(isPresented: $showFilterSheet) {
-            TagFilterSheet(allItems: allItems, selectedTagNames: $selectedTagNames)
-                .environment(\.appTheme, theme)
-        }
-        #endif
-        .searchable(text: $searchText, prompt: "Search items…")
-        .task { await SeedData.seedIfNeeded(in: context) }
         .onAppear { initExpansion() }
-        .onChange(of: allItems.count) { _, _ in initExpansion() }
+        .onChange(of: allItems.count) { _, _ in
+            initExpansion()
+            openScreenshotDetailIfNeeded()
+        }
         .sheet(isPresented: $showCapture) {
             CaptureSheet()
                 .environment(\.appTheme, theme)
                 .preferredColorScheme(theme.colorScheme)
         }
+        .navigationDestination(item: $screenshotDetailItem) { DetailView(item: $0) }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(theme.textSecondary)
+            TextField("Search items…", text: $searchText)
+                .textFieldStyle(.plain)
+                .foregroundStyle(theme.textPrimary)
+        }
+        .font(.body)
+        .padding(.horizontal, 14)
+        .frame(height: 48)
+        .background(theme.backgroundSubtle)
+        .overlay {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(theme.border, lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private func initExpansion() {
@@ -122,6 +138,14 @@ struct MasonryGridView: View {
     private func toggleWeek(_ key: String) {
         if expandedWeeks.contains(key) { expandedWeeks.remove(key) }
         else { expandedWeeks.insert(key) }
+    }
+
+    private func openScreenshotDetailIfNeeded() {
+        guard ProcessInfo.processInfo.arguments.contains("-screenshotDetailDemo"),
+              screenshotDetailItem == nil,
+              selection == nil,
+              let first = allItems.first else { return }
+        screenshotDetailItem = first
     }
 
     private var filterPillsRow: some View {
@@ -147,7 +171,6 @@ struct MasonryGridView: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 8)
         }
-        .padding(.bottom, 4)
     }
 }
 
@@ -165,11 +188,8 @@ struct MasonryGridView: View {
 }
 
 #Preview("iPad Pro 13\"") {
-    NavigationSplitView {
-        MasonryGridView()
-            .navigationDestination(for: Item.self) { DetailView(item: $0) }
-    } detail: {
-        ContentUnavailableView("Select an item", systemImage: "doc.text")
+    NavigationStack {
+        MasonryGridView(selection: .constant(nil), isInspectorPresented: .constant(false), showsInspectorToggle: true)
     }
     .modelContainer(SeedData.previewContainer)
     .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
@@ -178,11 +198,8 @@ struct MasonryGridView: View {
 }
 
 #Preview("Mac 1280") {
-    NavigationSplitView {
-        MasonryGridView()
-            .navigationDestination(for: Item.self) { DetailView(item: $0) }
-    } detail: {
-        ContentUnavailableView("Select an item", systemImage: "doc.text")
+    NavigationStack {
+        MasonryGridView(selection: .constant(nil), isInspectorPresented: .constant(true), showsInspectorToggle: true)
     }
     .modelContainer(SeedData.previewContainer)
     .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))

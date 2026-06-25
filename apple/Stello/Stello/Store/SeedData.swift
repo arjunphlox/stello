@@ -51,6 +51,33 @@ enum SeedData {
         try? context.save()
     }
 
+    /// Idempotent launch migration: URL-backed items seeded before procedural covers
+    /// existed persist without images because `seedIfNeeded` only runs on an empty store.
+    /// Attaches a deterministic generated cover to any domain-backed item still missing one.
+    @discardableResult
+    static func backfillSeedCovers(in context: ModelContext) -> Int {
+        guard let items = try? context.fetch(FetchDescriptor<Item>()) else { return 0 }
+        var patched = 0
+        for item in items where item.domain != nil {
+            let hasCover = item.images?.contains { $0.data != nil } == true
+            guard !hasCover else { continue }
+            guard let cover = SampleCoverGenerator.cover(seed: SampleCoverGenerator.stableSeed(item.slug)) else {
+                continue
+            }
+            let img = ItemImage(
+                data: cover.data, source: "generated", isPrimary: true,
+                width: cover.width, height: cover.height
+            )
+            context.insert(img)
+            img.item = item
+            if item.images == nil { item.images = [] }
+            item.images?.append(img)
+            patched += 1
+        }
+        if patched > 0 { try? context.save() }
+        return patched
+    }
+
     /// Inserts a fixed AI-enrichment demo item for simulator screenshots (`-screenshotEnrichmentDemo`).
     static func ensureEnrichmentDemo(in context: ModelContext) -> Item {
         let slug = "enrichment-demo"
