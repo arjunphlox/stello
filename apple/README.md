@@ -43,6 +43,9 @@ Xcode GUI proved too painful (targets/capabilities/signing). Now **Cursor-driven
 ## Handoff log
 Each handoff: surface, prompt given, what came back, review notes. Append newest at top.
 
+### 2026-06-25 — Inset header card all-gaps + no button rings + uniform panel inset (Cursor/Composer)
+macOS header restructured: **transparent full-width overlay** flush to window top (`.ignoresSafeArea(.top)`), inner padding insets the accent card — **top 8pt**, **sides 12pt** (8pt top keeps native traffic lights ~14pt from window top on the card body without straddling the top edge; sides match content column). Removed `windowInsetPanelOpenTrailing` (6pt); panel now **12pt top/right/bottom** + column gap. Header icon buttons: **fill-only** states (removed capsule stroke + `.focusEffectDisabled()`), active = 16–20% accent-contrast fill, no ring. iOS + macOS build; **99 tests green**. Screenshots: `apple/Stello/.artifacts/macos-header-allgaps.png`, `macos-no-ring-active.png`, `macos-panel-equal-gaps.png`.
+
 ### 2026-06-25 — Native traffic lights float on inset header card (Sketch-style, no repositioning)
 Removed all custom traffic-light repositioning (`TrafficLightLayout`, `TrafficLightPositioner`, `TrafficLightAnchorView`, `setFrameOrigin` hacks). `MacWindowConfigurator` now only sets transparent title bar chrome (`titlebarAppearsTransparent`, `.fullSizeContentView`, hidden title); dropped `.windowStyle(.hiddenTitleBar)` from `StelloApp` so native buttons render. Content positioned via insets: **top 0pt**, **sides 12pt**, **header corner radius 12pt**, **wordmark gutter 78pt** + `.ignoresSafeArea(.top)` so system traffic lights (~14pt) land on the amber card body. iOS + macOS build; **99 tests green**. Screenshots: `apple/Stello/.artifacts/macos-controls-on-card.png`, `macos-panel-inset.png`.
 

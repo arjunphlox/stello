@@ -63,12 +63,14 @@ struct StelloHeaderView: View {
                 StelloGlassIconButton(
                     systemName: "plus",
                     isActive: activePanel == .import,
+                    contrastForeground: true,
                     label: "Import",
                     action: onImport
                 )
                 StelloGlassIconButton(
                     systemName: "gearshape",
                     isActive: activePanel == .settings,
+                    contrastForeground: true,
                     label: "Settings",
                     action: onSettings
                 )

@@ -233,20 +233,21 @@ struct StelloTests {
     func headerLayoutConstants() {
         // Native traffic lights need a leading gutter so the wordmark clears them.
         #expect(StelloLayout.macTitleBarLeadingInset == 78)
-        // Top inset smaller than sides so system traffic lights land on the card body.
-        #expect(StelloLayout.macWindowTopInset < StelloLayout.windowInset)
-        #expect(StelloLayout.macWindowTopInset == 0)
+        // Top card inset smaller than sides so system traffic lights land on the card body.
+        #expect(StelloLayout.macHeaderCardTopInset < StelloLayout.windowInset)
+        #expect(StelloLayout.macHeaderCardTopInset == 8)
+        #expect(StelloLayout.macHeaderCardSideInset == StelloLayout.windowInset)
         #expect(StelloLayout.windowInset == 12)
         #expect(StelloLayout.headerCornerRadius == 12)
         // Scroll-reactive fade distance must be a positive ramp.
         #expect(StelloLayout.headerScrollFadeDistance > 0)
     }
 
-    @Test("headerOverlayScrollInset clears header + gap + mac top inset")
+    @Test("headerOverlayScrollInset clears header + gap + mac card top inset")
     func headerOverlayScrollInset() {
         let expected = StelloLayout.headerHeight
             + StelloLayout.sectionGap
-            + StelloLayout.macWindowTopInset
+            + StelloLayout.macHeaderCardTopInset
         #expect(StelloLayout.headerOverlayScrollInset == expected)
     }
 

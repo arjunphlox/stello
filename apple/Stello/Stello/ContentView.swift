@@ -55,13 +55,14 @@ struct ContentView: View {
     private var regularLayout: some View {
         GeometryReader { geo in
             let scrollTopInset = StelloLayout.headerHeight + StelloLayout.sectionGap
+                + (isMac ? StelloLayout.macHeaderCardTopInset : 0)
             let headerScrollProgress = min(
                 max(scrollOffset, 0) / StelloLayout.headerScrollFadeDistance,
                 1
             )
 
-            HStack(spacing: StelloLayout.columnGap) {
-                ZStack(alignment: .top) {
+            ZStack(alignment: .top) {
+                HStack(spacing: StelloLayout.columnGap) {
                     MasonryGridView(
                         embedInPanelLayout: true,
                         scrollTopInset: scrollTopInset,
@@ -71,42 +72,47 @@ struct ContentView: View {
                         panelContent: panelContent,
                         onCardTap: handleCardTap
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    StelloHeaderView(
-                        itemCount: allItems.count,
-                        hasActiveFilters: !selectedTagNames.isEmpty,
-                        activePanel: panelContent,
-                        integratesMacTitleBar: isMac,
-                        scrollProgress: headerScrollProgress,
-                        onFilters: { togglePanel(.filters) },
-                        onImport: { togglePanel(.import) },
-                        onSettings: { togglePanel(.settings) }
-                    )
+                    if panelContent != .none {
+                        SidePanelView(
+                            content: panelContent,
+                            selectedItem: selectedItem,
+                            allItems: allItems,
+                            selectedTagNames: $selectedTagNames,
+                            onClose: closePanel
+                        )
+                        .frame(width: SidePanelContent.width(for: geo.size.width))
+                        .frame(maxHeight: .infinity)
+                        .padding(.vertical, StelloLayout.windowInset)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.leading, StelloLayout.windowInset)
+                .padding(.trailing, StelloLayout.windowInset)
 
-                if panelContent != .none {
-                    SidePanelView(
-                        content: panelContent,
-                        selectedItem: selectedItem,
-                        allItems: allItems,
-                        selectedTagNames: $selectedTagNames,
-                        onClose: closePanel
-                    )
-                    .frame(width: SidePanelContent.width(for: geo.size.width))
-                    .frame(maxHeight: .infinity)
-                    .padding(.vertical, StelloLayout.windowInset)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
+                #if os(macOS)
+                macHeaderOverlay(
+                    itemCount: allItems.count,
+                    headerScrollProgress: headerScrollProgress
+                )
+                #else
+                StelloHeaderView(
+                    itemCount: allItems.count,
+                    hasActiveFilters: !selectedTagNames.isEmpty,
+                    activePanel: panelContent,
+                    scrollProgress: headerScrollProgress,
+                    onFilters: { togglePanel(.filters) },
+                    onImport: { togglePanel(.import) },
+                    onSettings: { togglePanel(.settings) }
+                )
+                .padding(.horizontal, StelloLayout.windowInset)
+                .frame(maxWidth: .infinity, alignment: .top)
+                #endif
             }
         }
-        .padding(.leading, StelloLayout.windowInset)
-        .padding(.trailing, panelContent != .none
-            ? StelloLayout.windowInsetPanelOpenTrailing
-            : StelloLayout.windowInset)
         #if os(macOS)
         .ignoresSafeArea(edges: .top)
-        .padding(.top, StelloLayout.macWindowTopInset)
         #endif
         .animation(.spring(duration: 0.28), value: panelContent)
         .background(theme.background)
@@ -157,6 +163,25 @@ struct ContentView: View {
         false
         #endif
     }
+
+    #if os(macOS)
+    /// Transparent full-width container flush to the window top; inner padding insets the accent card.
+    private func macHeaderOverlay(itemCount: Int, headerScrollProgress: CGFloat) -> some View {
+        StelloHeaderView(
+            itemCount: itemCount,
+            hasActiveFilters: !selectedTagNames.isEmpty,
+            activePanel: panelContent,
+            integratesMacTitleBar: true,
+            scrollProgress: headerScrollProgress,
+            onFilters: { togglePanel(.filters) },
+            onImport: { togglePanel(.import) },
+            onSettings: { togglePanel(.settings) }
+        )
+        .padding(.top, StelloLayout.macHeaderCardTopInset)
+        .padding(.horizontal, StelloLayout.macHeaderCardSideInset)
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+    #endif
 }
 
 #Preview("iPhone", traits: .sizeThatFitsLayout) {

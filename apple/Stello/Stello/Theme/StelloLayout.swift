@@ -4,9 +4,12 @@ import CoreGraphics
 enum StelloLayout {
     /// Uniform side inset — leading, trailing, panel vertical (no bottom; content bleeds to window edge).
     static let windowInset: CGFloat = 12
-    /// macOS top inset only — 0pt so native traffic lights (~14pt from window top)
-    /// land on the inset header card body; sides use `windowInset` (12pt).
-    static let macWindowTopInset: CGFloat = 0
+    /// macOS: gap above the inset header card inside the transparent title-bar container.
+    /// 8pt (not 12pt) keeps native traffic lights (~14pt from window top) on the card body
+    /// without straddling the top edge; sides stay 12pt.
+    static let macHeaderCardTopInset: CGFloat = 8
+    /// macOS: horizontal inset for the floating header card (matches content column).
+    static let macHeaderCardSideInset: CGFloat = windowInset
     /// Web `.content-inner { gap: 16px }` between header, search, and grid.
     static let sectionGap: CGFloat = 16
     /// Web `.header { border-radius: 12px }`.
@@ -30,8 +33,6 @@ enum StelloLayout {
     static let macTitleBarLeadingInset: CGFloat = 78
     /// Scroll distance (pt) over which the header transitions opaque → glass.
     static let headerScrollFadeDistance: CGFloat = 48
-    /// When a side panel is open, web halves the outer trailing inset (12 → 6).
-    static let windowInsetPanelOpenTrailing: CGFloat = 6
     /// Floating Liquid Glass search bar — height, bottom margin, and scroll content inset.
     static let floatingSearchBarHeight: CGFloat = 48
     static let floatingSearchBarBottomMargin: CGFloat = 12
@@ -40,9 +41,9 @@ enum StelloLayout {
     static var floatingSearchScrollInset: CGFloat {
         floatingSearchBarHeight + floatingSearchBarBottomMargin
     }
-    /// Top scroll inset when the header floats over the grid (header + gap + mac top inset).
+    /// Top scroll inset when the header floats over the grid (header + gap + mac card top inset).
     static var headerOverlayScrollInset: CGFloat {
-        headerHeight + sectionGap + macWindowTopInset
+        headerHeight + sectionGap + macHeaderCardTopInset
     }
     /// Header / toolbar icon buttons — fixed capsule footprint + symbol metrics.
     static let iconButtonFootprint: CGFloat = 36

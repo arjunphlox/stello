@@ -23,13 +23,13 @@ struct StelloGlassIconButton: View {
                 .foregroundStyle(foregroundStyle)
                 .frame(width: StelloLayout.iconButtonFootprint, height: StelloLayout.iconButtonFootprint)
                 .background { capsuleBackground }
-                .overlay { capsuleBorder }
                 .contentShape(Capsule())
         }
         .buttonStyle(GlassIconPressStyle(showsPressedOverlay: contrastForeground))
         .accessibilityLabel(label)
         .help(label)
         #if os(macOS)
+        .focusEffectDisabled()
         .onHover { isHovered = $0 }
         #endif
     }
@@ -42,32 +42,16 @@ struct StelloGlassIconButton: View {
             .animation(.easeOut(duration: 0.08), value: isActive)
     }
 
-    @ViewBuilder
-    private var capsuleBorder: some View {
-        if contrastForeground {
-            Capsule()
-                .strokeBorder(borderColor, lineWidth: 1)
-        }
-    }
-
     private var fillColor: Color {
         let base = contrastForeground ? theme.accentContrast : theme.textPrimary
         if isActive {
-            return base.opacity(showsHover ? 0.22 : 0.18)
+            return base.opacity(showsHover ? 0.20 : 0.16)
         }
         #if os(macOS)
-        return base.opacity(showsHover ? 0.16 : 0.06)
+        return base.opacity(showsHover ? 0.14 : (contrastForeground ? 0.06 : 0))
         #else
         return base.opacity(showsHover ? 0.12 : 0)
         #endif
-    }
-
-    private var borderColor: Color {
-        let base = theme.accentContrast
-        if isActive {
-            return base.opacity(0.38)
-        }
-        return base.opacity(showsHover ? 0.22 : 0.14)
     }
 
     private var foregroundStyle: Color {
