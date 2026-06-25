@@ -18,6 +18,8 @@ final class Item {
     var updatedAt: Date = Date.now
     var enrichmentStatus: String = "pending"
     var enrichmentError: String?
+  /// JSON-encoded `[String]` of suggested why-saved reasons from AI enrichment.
+    var whySavedSuggestionsJSON: String?
 
     @Relationship(deleteRule: .cascade, inverse: \Tag.item)
     var tags: [Tag]?
@@ -43,7 +45,8 @@ final class Item {
         analyzedAt: Date? = nil,
         updatedAt: Date = .now,
         enrichmentStatus: String = "pending",
-        enrichmentError: String? = nil
+        enrichmentError: String? = nil,
+        whySavedSuggestionsJSON: String? = nil
     ) {
         self.id = id
         self.slug = slug
@@ -60,6 +63,7 @@ final class Item {
         self.updatedAt = updatedAt
         self.enrichmentStatus = enrichmentStatus
         self.enrichmentError = enrichmentError
+        self.whySavedSuggestionsJSON = whySavedSuggestionsJSON
     }
 }
 

@@ -24,6 +24,9 @@ Package.resolved
 Pods/
 Carthage/Build/
 
+## Build/screenshot artifacts
+.artifacts/
+
 ## Misc
 .DS_Store
 *.hmap

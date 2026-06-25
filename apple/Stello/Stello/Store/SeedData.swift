@@ -15,11 +15,62 @@ enum SeedData {
 
     static var sampleItem: Item { makeSeedItems()[0] }
 
+    /// Item with AI enrichment output for previews and screenshot fixtures.
+    static var enrichedSampleItem: Item {
+        let item = Item(
+            slug: "figma-auto-layout-guide",
+            title: "Auto Layout Demystified",
+            sourceURL: "https://figma.com/blog/auto-layout",
+            domain: "figma.com",
+            summary: "A comprehensive walkthrough of Figma's auto layout — constraints, gap, padding, and frame resizing.",
+            enrichmentStatus: "candidates_done",
+            whySavedSuggestionsJSON: EnrichmentService.encodeWhySavedSuggestions([
+                "layout-reference",
+                "auto-layout-patterns",
+                "design-system-tips",
+            ])
+        )
+        item.tags = [
+            Tag(name: "tutorial", category: "format", weight: 0.9, source: "rule"),
+            Tag(name: "figma", category: "tool", weight: 0.95, source: "rule"),
+            Tag(name: "teal", category: "color", weight: 0.85, source: "ai"),
+            Tag(name: "minimalist", category: "style", weight: 0.7, source: "ai"),
+            Tag(name: "calm", category: "mood", weight: 0.6, source: "ai"),
+        ]
+        item.snippets = [
+            Snippet(text: "Auto layout handles the hardest part of responsive design.", source: "ai"),
+            Snippet(text: "Constraints and padding work together in Figma frames.", source: "ai"),
+        ]
+        return item
+    }
+
     static func seedIfNeeded(in context: ModelContext) async {
         let count = (try? context.fetchCount(FetchDescriptor<Item>())) ?? 0
         guard count == 0 else { return }
         for item in makeSeedItems() { context.insert(item) }
         try? context.save()
+    }
+
+    /// Inserts a fixed AI-enrichment demo item for simulator screenshots (`-screenshotEnrichmentDemo`).
+    static func ensureEnrichmentDemo(in context: ModelContext) -> Item {
+        let slug = "enrichment-demo"
+        let descriptor = FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.slug == slug })
+        if let existing = try? context.fetch(descriptor), let first = existing.first {
+            return first
+        }
+        let item = enrichedSampleItem
+        item.slug = slug
+        context.insert(item)
+        for tag in item.tags ?? [] {
+            context.insert(tag)
+            tag.item = item
+        }
+        for snippet in item.snippets ?? [] {
+            context.insert(snippet)
+            snippet.item = item
+        }
+        try? context.save()
+        return item
     }
 
     // MARK: - Private

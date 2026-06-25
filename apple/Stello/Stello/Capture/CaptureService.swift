@@ -46,13 +46,15 @@ enum CaptureService {
 
     // MARK: - URL Capture
 
-    static func captureURL(_ url: URL, context: ModelContext) async throws {
+    static func captureURL(_ url: URL, context: ModelContext) async throws -> Item {
         // Dedup by normalized URL
         let normalized = normalizeURL(url)
         let descriptor = FetchDescriptor<Item>(
             predicate: #Predicate<Item> { $0.sourceURL == normalized }
         )
-        if let existing = try? context.fetch(descriptor), !existing.isEmpty { return }
+        if let existing = try? context.fetch(descriptor), let first = existing.first {
+            return first
+        }
 
         let og = await fetchOG(url: url)
         let title = og.title ?? url.host ?? url.absoluteString
@@ -85,11 +87,12 @@ enum CaptureService {
         }
 
         try context.save()
+        return item
     }
 
     // MARK: - Text Capture
 
-    static func captureText(_ text: String, context: ModelContext) throws {
+    static func captureText(_ text: String, context: ModelContext) throws -> Item {
         let words = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         let title = words.prefix(5).joined(separator: " ")
         let summary = String(text.prefix(200))
@@ -107,11 +110,12 @@ enum CaptureService {
         }
 
         try context.save()
+        return item
     }
 
     // MARK: - Image Capture
 
-    static func captureImage(_ data: Data, context: ModelContext) throws {
+    static func captureImage(_ data: Data, context: ModelContext) throws -> Item {
         let (w, h) = imageDimensions(data: data)
 
         let formatter = DateFormatter()
@@ -133,6 +137,7 @@ enum CaptureService {
         tag.item = item
 
         try context.save()
+        return item
     }
 
     // MARK: - OG Fetching

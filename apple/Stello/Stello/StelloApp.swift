@@ -49,6 +49,7 @@ struct StelloApp: App {
         ContentView()
             .modelContainer(container)
             .environment(\.appTheme, theme)
+            .environment(\.enrichmentCoordinator, EnrichmentCoordinator())
             .preferredColorScheme(theme.colorScheme)
     }
 }

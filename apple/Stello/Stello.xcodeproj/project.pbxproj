@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0B06BB149A3084F452AE49D9 /* SeedData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1947247242FD3D01B11106A /* SeedData.swift */; };
 		0BED40EA90D2D56657E3AAD1 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 882A3667CA6FD8B029F41810 /* DetailView.swift */; };
+		0BFD342E6D18B4F386806AE0 /* RuleBasedFallbackEnricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EE305B0353EE75E12D3652 /* RuleBasedFallbackEnricher.swift */; };
 		0D18DEAA38D5D391143F61CC /* ItemCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45FB580D0C83D4D934FF7013 /* ItemCardView.swift */; };
 		0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA340D3CF1CBA31162EB51C /* Tag.swift */; };
 		145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
@@ -16,7 +17,9 @@
 		1F5A6195A4BC26A62D3308F9 /* ItemImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBD865033AC3DE033F9D814 /* ItemImage.swift */; };
 		369DB62EAD24041FBD1F5E28 /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46CA82DF31A4106A0516059A /* ShareView.swift */; };
 		36C99740D4D554DE3105834C /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00738803FA808043711E5764 /* ShareViewController.swift */; };
+		37683EFDD2B7112B5D216AB4 /* EnrichmentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFD9FC851DB71708B74829C /* EnrichmentCoordinator.swift */; };
 		394817DF2A59D53E4857BDBC /* MasonryLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBCA04FFD515FAA636671FEE /* MasonryLayoutTests.swift */; };
+		39AAB8A6045F0CDC63AD1E7E /* Enricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079399A5195A6EF8A1ADC6D8 /* Enricher.swift */; };
 		3BB52E9A2344B9B9C4767590 /* MasonryLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA5B7E567FF7C8F12551D404 /* MasonryLayout.swift */; };
 		413B21D6931EAA848DB4885D /* WeekSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02F453DB00E270E29BB0AF99 /* WeekSectionView.swift */; };
 		4F7D4306DB34920A4F292188 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07B6271F9E2D3C9D455B813 /* Theme.swift */; };
@@ -28,12 +31,17 @@
 		6BBAFD4311A5F8D30F0DC008 /* RuleTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937DE9FDF9111BED793134C5 /* RuleTagger.swift */; };
 		6EDC47A1A3E5FE6A1A51D727 /* TagFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */; };
 		74388EA1808807BBA64EA64A /* StelloApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 622010C33FAF12A91AAEED16 /* StelloApp.swift */; };
+		772C34B424FA316A5CE898A2 /* EnrichmentPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD800789C18740B64B46ACD /* EnrichmentPrompts.swift */; };
+		7EE56848C1DBC960DFA35A62 /* FoundationModelsEnricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23876ECEF543E378B833D11F /* FoundationModelsEnricher.swift */; };
 		9498342EF3E4CBB327460667 /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132393C0AAACA6E4F794BBBC /* Item.swift */; };
+		9554CC3CBEB01A3F738AA507 /* MockEnricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28073A97E7A248FEF415DD89 /* MockEnricher.swift */; };
 		9879AD01CDECDA8225C1722B /* CaptureSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3875676CC21E3F317FD776 /* CaptureSheet.swift */; };
 		B588DA16ECA48EE61C9DE7F8 /* Snippet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0AA919414688D50C5841EC /* Snippet.swift */; };
 		B8B3C73F56F130F8CF483B7A /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
 		C0C4346F567466B61A568DDA /* MasonryGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBE3208FABDC9FE868334622 /* MasonryGridView.swift */; };
+		CFAE2BC8E67D5C9D97ADD849 /* EnrichmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE8D7C0BB274D97989FBD8F /* EnrichmentTests.swift */; };
 		D21100D7EB2CC957D5C122CE /* StelloStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAFAF6D495AAD1B33F2619C /* StelloStore.swift */; };
+		D3C6F2BB515C95C8EC0D9320 /* EnrichmentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BC6FF63A611768E9EE2954A /* EnrichmentService.swift */; };
 		D42C96BA4F1424193B6248F6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00AB84A8DD5556B8493537D /* SettingsView.swift */; };
 		DA0EA172B9E7AE41D30A18E4 /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132393C0AAACA6E4F794BBBC /* Item.swift */; };
 		E1FE78336EED97EC3B2B5614 /* ItemImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBD865033AC3DE033F9D814 /* ItemImage.swift */; };
@@ -77,9 +85,14 @@
 /* Begin PBXFileReference section */
 		00738803FA808043711E5764 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		02F453DB00E270E29BB0AF99 /* WeekSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekSectionView.swift; sourceTree = "<group>"; };
+		079399A5195A6EF8A1ADC6D8 /* Enricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enricher.swift; sourceTree = "<group>"; };
 		132393C0AAACA6E4F794BBBC /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
 		1BA340D3CF1CBA31162EB51C /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
+		1BC6FF63A611768E9EE2954A /* EnrichmentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentService.swift; sourceTree = "<group>"; };
+		23876ECEF543E378B833D11F /* FoundationModelsEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsEnricher.swift; sourceTree = "<group>"; };
+		28073A97E7A248FEF415DD89 /* MockEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockEnricher.swift; sourceTree = "<group>"; };
 		29BD97A5FB5A9BFF62E2F76A /* StelloTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StelloTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2DD800789C18740B64B46ACD /* EnrichmentPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentPrompts.swift; sourceTree = "<group>"; };
 		2F0AA919414688D50C5841EC /* Snippet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snippet.swift; sourceTree = "<group>"; };
 		2FAFAF6D495AAD1B33F2619C /* StelloStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloStore.swift; sourceTree = "<group>"; };
 		2FDE089AFD4A8D168D8E7002 /* CaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureTests.swift; sourceTree = "<group>"; };
@@ -87,10 +100,12 @@
 		4598C5A4C515E410BAE3ADBA /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		45FB580D0C83D4D934FF7013 /* ItemCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCardView.swift; sourceTree = "<group>"; };
 		46CA82DF31A4106A0516059A /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
+		4CE8D7C0BB274D97989FBD8F /* EnrichmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentTests.swift; sourceTree = "<group>"; };
 		622010C33FAF12A91AAEED16 /* StelloApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloApp.swift; sourceTree = "<group>"; };
 		67EE220C3FE5F648024764D5 /* WeekGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekGroup.swift; sourceTree = "<group>"; };
 		6A03DCB58661EF2272162E31 /* Stello.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Stello.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		73F3E5B16B30645B3B36E3DE /* StelloShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StelloShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		74EE305B0353EE75E12D3652 /* RuleBasedFallbackEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleBasedFallbackEnricher.swift; sourceTree = "<group>"; };
 		882A3667CA6FD8B029F41810 /* DetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailView.swift; sourceTree = "<group>"; };
 		918DFF8962898B3139189A24 /* CaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureService.swift; sourceTree = "<group>"; };
 		937DE9FDF9111BED793134C5 /* RuleTagger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleTagger.swift; sourceTree = "<group>"; };
@@ -102,6 +117,7 @@
 		C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagFilterSheet.swift; sourceTree = "<group>"; };
 		CD1D80B79B9253C13F11D53C /* StelloShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StelloShare.entitlements; sourceTree = "<group>"; };
 		CF3875676CC21E3F317FD776 /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
+		DAFD9FC851DB71708B74829C /* EnrichmentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentCoordinator.swift; sourceTree = "<group>"; };
 		E07B6271F9E2D3C9D455B813 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		EBE3208FABDC9FE868334622 /* MasonryGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryGridView.swift; sourceTree = "<group>"; };
 		EC4FE0C184835F8E3B9A25F7 /* Stello.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stello.entitlements; sourceTree = "<group>"; };
@@ -183,6 +199,7 @@
 			isa = PBXGroup;
 			children = (
 				2FDE089AFD4A8D168D8E7002 /* CaptureTests.swift */,
+				4CE8D7C0BB274D97989FBD8F /* EnrichmentTests.swift */,
 				FBCA04FFD515FAA636671FEE /* MasonryLayoutTests.swift */,
 				A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */,
 			);
@@ -213,6 +230,13 @@
 			isa = PBXGroup;
 			children = (
 				918DFF8962898B3139189A24 /* CaptureService.swift */,
+				079399A5195A6EF8A1ADC6D8 /* Enricher.swift */,
+				DAFD9FC851DB71708B74829C /* EnrichmentCoordinator.swift */,
+				2DD800789C18740B64B46ACD /* EnrichmentPrompts.swift */,
+				1BC6FF63A611768E9EE2954A /* EnrichmentService.swift */,
+				23876ECEF543E378B833D11F /* FoundationModelsEnricher.swift */,
+				28073A97E7A248FEF415DD89 /* MockEnricher.swift */,
+				74EE305B0353EE75E12D3652 /* RuleBasedFallbackEnricher.swift */,
 				937DE9FDF9111BED793134C5 /* RuleTagger.swift */,
 			);
 			path = Capture;
@@ -325,12 +349,19 @@
 				9879AD01CDECDA8225C1722B /* CaptureSheet.swift in Sources */,
 				F4EDCB9DB68C204BB9CC1A1D /* ContentView.swift in Sources */,
 				0BED40EA90D2D56657E3AAD1 /* DetailView.swift in Sources */,
+				39AAB8A6045F0CDC63AD1E7E /* Enricher.swift in Sources */,
+				37683EFDD2B7112B5D216AB4 /* EnrichmentCoordinator.swift in Sources */,
+				772C34B424FA316A5CE898A2 /* EnrichmentPrompts.swift in Sources */,
+				D3C6F2BB515C95C8EC0D9320 /* EnrichmentService.swift in Sources */,
+				7EE56848C1DBC960DFA35A62 /* FoundationModelsEnricher.swift in Sources */,
 				DA0EA172B9E7AE41D30A18E4 /* Item.swift in Sources */,
 				0D18DEAA38D5D391143F61CC /* ItemCardView.swift in Sources */,
 				F0A7F3298A7230C0197F4691 /* ItemFilter.swift in Sources */,
 				1F5A6195A4BC26A62D3308F9 /* ItemImage.swift in Sources */,
 				C0C4346F567466B61A568DDA /* MasonryGridView.swift in Sources */,
 				3BB52E9A2344B9B9C4767590 /* MasonryLayout.swift in Sources */,
+				9554CC3CBEB01A3F738AA507 /* MockEnricher.swift in Sources */,
+				0BFD342E6D18B4F386806AE0 /* RuleBasedFallbackEnricher.swift in Sources */,
 				6BBAFD4311A5F8D30F0DC008 /* RuleTagger.swift in Sources */,
 				0B06BB149A3084F452AE49D9 /* SeedData.swift in Sources */,
 				D42C96BA4F1424193B6248F6 /* SettingsView.swift in Sources */,
@@ -350,6 +381,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E745441DDF2FAF4095B9DF12 /* CaptureTests.swift in Sources */,
+				CFAE2BC8E67D5C9D97ADD849 /* EnrichmentTests.swift in Sources */,
 				394817DF2A59D53E4857BDBC /* MasonryLayoutTests.swift in Sources */,
 				1BA6DD6CFC0DEB0DAF398922 /* StelloTests.swift in Sources */,
 			);
@@ -413,6 +445,10 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../../Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework FoundationModels",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphonesimulator*]" = com.phloxpage.Stello;
@@ -692,6 +728,10 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework FoundationModels",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphonesimulator*]" = com.phloxpage.Stello;

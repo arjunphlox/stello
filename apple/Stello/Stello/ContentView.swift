@@ -4,6 +4,10 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.horizontalSizeClass) private var hSizeClass
+    @Environment(\.modelContext) private var context
+    @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
+
+    @State private var screenshotDemoItem: Item? = nil
 
     var body: some View {
         Group {
@@ -15,8 +19,12 @@ struct ContentView: View {
                             DetailView(item: item)
                         }
                 } detail: {
-                    ContentUnavailableView("Select an item", systemImage: "doc.text")
-                        .foregroundStyle(theme.textSecondary)
+                    if let demo = screenshotDemoItem {
+                        DetailView(item: demo)
+                    } else {
+                        ContentUnavailableView("Select an item", systemImage: "doc.text")
+                            .foregroundStyle(theme.textSecondary)
+                    }
                 }
             } else {
                 // iPhone: push navigation
@@ -25,8 +33,17 @@ struct ContentView: View {
                         .navigationDestination(for: Item.self) { item in
                             DetailView(item: item)
                         }
+                        .navigationDestination(item: $screenshotDemoItem) { item in
+                            DetailView(item: item)
+                        }
                 }
             }
+        }
+        .task {
+            if ProcessInfo.processInfo.arguments.contains("-screenshotEnrichmentDemo") {
+                screenshotDemoItem = SeedData.ensureEnrichmentDemo(in: context)
+            }
+            await enrichmentCoordinator.enrichPendingItems(context: context)
         }
     }
 }

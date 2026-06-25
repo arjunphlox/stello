@@ -11,6 +11,7 @@ struct CaptureSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appTheme) private var theme
+    @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
 
     @State private var inputText = ""
     @State private var pickedPhoto: PhotosPickerItem? = nil
@@ -102,7 +103,8 @@ struct CaptureSheet: View {
         errorMessage = nil
         Task {
             do {
-                try CaptureService.captureImage(data, context: context)
+                let item = try CaptureService.captureImage(data, context: context)
+                enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription
@@ -121,7 +123,8 @@ struct CaptureSheet: View {
                 isBusy = false
                 return
             }
-            try CaptureService.captureImage(data, context: context)
+            let item = try CaptureService.captureImage(data, context: context)
+            enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -138,9 +141,15 @@ struct CaptureSheet: View {
         do {
             for input in inputs {
                 switch input {
-                case .url(let url): try await CaptureService.captureURL(url, context: context)
-                case .text(let t):  try CaptureService.captureText(t, context: context)
-                case .image(let d): try CaptureService.captureImage(d, context: context)
+                case .url(let url):
+                    let item = try await CaptureService.captureURL(url, context: context)
+                    enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
+                case .text(let t):
+                    let item = try CaptureService.captureText(t, context: context)
+                    enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
+                case .image(let d):
+                    let item = try CaptureService.captureImage(d, context: context)
+                    enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
                 }
             }
             dismiss()
