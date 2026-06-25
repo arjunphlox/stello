@@ -6,7 +6,18 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B7A7E7492FEC0A3300936DDC /* StelloShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B7A7E73F2FEC0A3300936DDC /* StelloShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		B7A7E7472FEC0A3300936DDC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B7A7E73E2FEC0A3300936DDC;
+			remoteInfo = StelloShare;
+		};
 		B7C13C072FEBBCE8002911CF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 000000000000000000000000 /* Project object */;
@@ -16,8 +27,21 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		B7A7E74E2FEC0A3300936DDC /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				B7A7E7492FEC0A3300936DDC /* StelloShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* Stello.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Stello.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7A7E73F2FEC0A3300936DDC /* StelloShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StelloShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7C13C032FEBBCE8002911CF /* StelloTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StelloTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7D23CE12FEB9E300008A69D /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
 		B7D23CE22FEB9E310008A69D /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
@@ -26,6 +50,26 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B7A7E7582FEC0D3600936DDC /* Exceptions for "StelloShare" folder in "StelloShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B7A7E73E2FEC0A3300936DDC /* StelloShare */;
+		};
+		B7A7E75A2FEC0D4D00936DDC /* Exceptions for "Stello" folder in "StelloShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Capture/CaptureService.swift,
+				Capture/RuleTagger.swift,
+				Models/Item.swift,
+				Models/ItemImage.swift,
+				Models/Snippet.swift,
+				Models/Tag.swift,
+				Store/StelloStore.swift,
+			);
+			target = B7A7E73E2FEC0A3300936DDC /* StelloShare */;
+		};
 		B7C13C102FEBBFAB002911CF /* Exceptions for "Stello" folder in "Stello" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -40,8 +84,17 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				B7C13C102FEBBFAB002911CF /* Exceptions for "Stello" folder in "Stello" target */,
+				B7A7E75A2FEC0D4D00936DDC /* Exceptions for "Stello" folder in "StelloShare" target */,
 			);
 			path = Stello;
+			sourceTree = "<group>";
+		};
+		B7A7E7402FEC0A3300936DDC /* StelloShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B7A7E7582FEC0D3600936DDC /* Exceptions for "StelloShare" folder in "StelloShare" target */,
+			);
+			path = StelloShare;
 			sourceTree = "<group>";
 		};
 		B7C13C042FEBBCE8002911CF /* StelloTests */ = {
@@ -53,6 +106,11 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 		000000000000000130000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		B7A7E73C2FEC0A3300936DDC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -70,6 +128,7 @@
 			children = (
 				000000000000000000000010 /* Stello */,
 				B7C13C042FEBBCE8002911CF /* StelloTests */,
+				B7A7E7402FEC0A3300936DDC /* StelloShare */,
 				000000000000000000000020 /* Products */,
 				B7D23CE02FEB9E300008A69D /* Models */,
 			);
@@ -80,6 +139,7 @@
 			children = (
 				000000000000000000000120 /* Stello.app */,
 				B7C13C032FEBBCE8002911CF /* StelloTests.xctest */,
+				B7A7E73F2FEC0A3300936DDC /* StelloShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -105,8 +165,12 @@
 				000000000000000120000000 /* Sources */,
 				000000000000000130000000 /* Frameworks */,
 				000000000000000140000000 /* Resources */,
+				B7A7E74E2FEC0A3300936DDC /* Embed Foundation Extensions */,
 			);
 			buildRules = (
+			);
+			dependencies = (
+				B7A7E7482FEC0A3300936DDC /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				000000000000000000000010 /* Stello */,
@@ -115,6 +179,24 @@
 			productName = MyApp;
 			productReference = 000000000000000000000120 /* Stello.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B7A7E73E2FEC0A3300936DDC /* StelloShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B7A7E74A2FEC0A3300936DDC /* Build configuration list for PBXNativeTarget "StelloShare" */;
+			buildPhases = (
+				B7A7E73B2FEC0A3300936DDC /* Sources */,
+				B7A7E73C2FEC0A3300936DDC /* Frameworks */,
+				B7A7E73D2FEC0A3300936DDC /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				B7A7E7402FEC0A3300936DDC /* StelloShare */,
+			);
+			name = StelloShare;
+			productName = StelloShare;
+			productReference = B7A7E73F2FEC0A3300936DDC /* StelloShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		B7C13C022FEBBCE8002911CF /* StelloTests */ = {
 			isa = PBXNativeTarget;
@@ -150,6 +232,9 @@
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
 					};
+					B7A7E73E2FEC0A3300936DDC = {
+						CreatedOnToolsVersion = 27.0;
+					};
 					B7C13C022FEBBCE8002911CF = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = 000000000000000100000000;
@@ -172,12 +257,18 @@
 			targets = (
 				000000000000000100000000 /* Stello */,
 				B7C13C022FEBBCE8002911CF /* StelloTests */,
+				B7A7E73E2FEC0A3300936DDC /* StelloShare */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		000000000000000140000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		B7A7E73D2FEC0A3300936DDC /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -195,6 +286,11 @@
 			files = (
 			);
 		};
+		B7A7E73B2FEC0A3300936DDC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 		B7C13BFF2FEBBCE8002911CF /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -203,6 +299,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		B7A7E7482FEC0A3300936DDC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B7A7E73E2FEC0A3300936DDC /* StelloShare */;
+			targetProxy = B7A7E7472FEC0A3300936DDC /* PBXContainerItemProxy */;
+		};
 		B7C13C082FEBBCE8002911CF /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 000000000000000100000000 /* Stello */;
@@ -353,8 +454,8 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Stello/Info.plist;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = StelloShare/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -365,16 +466,17 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../../Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:identifier)";
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = iCloud.com.phloxpage.Stello;
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = iCloud.com.phloxpage.Stello;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.Stello.StelloShare;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.phloxpage.Stello;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=xros*]" = com.phloxpage.Stello;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
+				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -396,8 +498,8 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Stello/Info.plist;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = StelloShare/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -411,13 +513,14 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:identifier)";
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = iCloud.com.phloxpage.Stello;
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = iCloud.com.phloxpage.Stello;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.Stello.StelloShare;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.phloxpage.Stello;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=xros*]" = com.phloxpage.Stello;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
+				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -426,6 +529,69 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
+			};
+			name = Release;
+		};
+		B7A7E74B2FEC0A3300936DDC /* Debug configuration for PBXNativeTarget "StelloShare" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StelloShare/StelloShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 69E4GPJ74B;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StelloShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = StelloShare;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.Stello.StelloShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B7A7E74C2FEC0A3300936DDC /* Release configuration for PBXNativeTarget "StelloShare" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = StelloShare/StelloShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 69E4GPJ74B;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StelloShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = StelloShare;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.Stello.StelloShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -497,6 +663,14 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "Stello" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "Stello" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		B7A7E74A2FEC0A3300936DDC /* Build configuration list for PBXNativeTarget "StelloShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7A7E74B2FEC0A3300936DDC /* Debug configuration for PBXNativeTarget "StelloShare" */,
+				B7A7E74C2FEC0A3300936DDC /* Release configuration for PBXNativeTarget "StelloShare" */,
 			);
 			defaultConfigurationName = Release;
 		};

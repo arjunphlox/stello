@@ -469,3 +469,66 @@ struct SlugTests {
         #expect(!slug.contains("--"))
     }
 }
+
+// MARK: - StelloStore + CaptureService integration tests
+
+@Suite("CaptureService + StelloStore in-memory")
+struct StoreIntegrationTests {
+
+    @Test("captureText writes item and tags to in-memory store")
+    func captureTextWritesItem() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        try CaptureService.captureText("Typography design inspiration book", context: context)
+        let items = try context.fetch(FetchDescriptor<Item>())
+        #expect(items.count == 1)
+        #expect(items[0].title == "Typography design inspiration book")
+        let tags = try context.fetch(FetchDescriptor<Tag>())
+        #expect(!tags.isEmpty)
+        #expect(tags.allSatisfy { $0.item?.id == items[0].id })
+    }
+
+    @Test("captureText slug is first five words lowercased-hyphenated")
+    func captureTextSlug() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        try CaptureService.captureText("Hello World from Stello app", context: context)
+        let items = try context.fetch(FetchDescriptor<Item>())
+        #expect(items[0].slug == "hello-world-from-stello-app")
+    }
+
+    @Test("captureURL creates item with correct domain (fast-fail offline URL)")
+    func captureURLOffline() async throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        // 127.0.0.1:19999 — connection refused immediately, no DNS wait
+        let url = URL(string: "http://127.0.0.1:19999/")!
+        try await CaptureService.captureURL(url, context: context)
+        let items = try context.fetch(FetchDescriptor<Item>())
+        #expect(items.count == 1)
+        #expect(items[0].domain == "127.0.0.1")
+    }
+
+    @Test("captureURL deduplicates by normalized URL")
+    func captureURLDedup() async throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let url = URL(string: "http://127.0.0.1:19999/dedup")!
+        try await CaptureService.captureURL(url, context: context)
+        try await CaptureService.captureURL(url, context: context)
+        let items = try context.fetch(FetchDescriptor<Item>())
+        #expect(items.count == 1)
+    }
+
+    @Test("two captureText calls produce distinct slugs")
+    func twoTextCaptures() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        try CaptureService.captureText("First note about design", context: context)
+        try CaptureService.captureText("First note about design", context: context)
+        let items = try context.fetch(FetchDescriptor<Item>())
+        #expect(items.count == 2)
+        let slugs = Set(items.map(\.slug))
+        #expect(slugs.count == 2)
+    }
+}

@@ -16,15 +16,13 @@ struct StelloApp: App {
     }
 
     init() {
-        let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self])
-        let config = ModelConfiguration(
-            schema: schema,
-            cloudKitDatabase: .private("iCloud.com.phloxpage.Stello")
-        )
         do {
-            container = try ModelContainer(for: schema, configurations: [config])
+            container = try StelloStore.makeContainer()
         } catch {
-            fatalError("Cannot create ModelContainer: \(error)")
+            // App Group container unavailable (e.g. entitlement not yet provisioned);
+            // fall back to local store so the app still launches.
+            print("⚠️ App Group container failed (\(error)); falling back to local store")
+            container = try! StelloStore.makeLocalContainer()
         }
     }
 
