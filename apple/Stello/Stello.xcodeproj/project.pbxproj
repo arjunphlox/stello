@@ -41,7 +41,6 @@
 		B588DA16ECA48EE61C9DE7F8 /* Snippet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0AA919414688D50C5841EC /* Snippet.swift */; };
 		B5B19D7002BA4C85F361D285 /* SampleCoverGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9881FC7E6289F5ACC97430E1 /* SampleCoverGenerator.swift */; };
 		B8B3C73F56F130F8CF483B7A /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
-		BCBC2AA801F0144608484C2F /* MacTrafficLightCluster.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3E7101C4245F1166E1C7B4 /* MacTrafficLightCluster.swift */; };
 		C0C4346F567466B61A568DDA /* MasonryGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBE3208FABDC9FE868334622 /* MasonryGridView.swift */; };
 		C74D36D18CDF4DA7FE5386AC /* SidePanelContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34CAB7A42BFA377A40527746 /* SidePanelContent.swift */; };
 		CDA790F7E7DD8B1138EAF40D /* StelloLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2CDECB3448C079F9E9F155 /* StelloLayout.swift */; };
@@ -126,7 +125,6 @@
 		9AF9F20BFB190A73AC6FF77B /* StelloGlassIconButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloGlassIconButton.swift; sourceTree = "<group>"; };
 		A00AB84A8DD5556B8493537D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloTests.swift; sourceTree = "<group>"; };
-		AB3E7101C4245F1166E1C7B4 /* MacTrafficLightCluster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacTrafficLightCluster.swift; sourceTree = "<group>"; };
 		ABBD865033AC3DE033F9D814 /* ItemImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemImage.swift; sourceTree = "<group>"; };
 		B1947247242FD3D01B11106A /* SeedData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedData.swift; sourceTree = "<group>"; };
 		BA5B7E567FF7C8F12551D404 /* MasonryLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryLayout.swift; sourceTree = "<group>"; };
@@ -207,7 +205,6 @@
 				882A3667CA6FD8B029F41810 /* DetailView.swift */,
 				1EA6462332FF79D84ADE0B84 /* FloatingSearchBar.swift */,
 				45FB580D0C83D4D934FF7013 /* ItemCardView.swift */,
-				AB3E7101C4245F1166E1C7B4 /* MacTrafficLightCluster.swift */,
 				89B530A558F70C13DB03B0D3 /* MacWindowConfigurator.swift */,
 				EBE3208FABDC9FE868334622 /* MasonryGridView.swift */,
 				BA5B7E567FF7C8F12551D404 /* MasonryLayout.swift */,
@@ -386,7 +383,6 @@
 				0D18DEAA38D5D391143F61CC /* ItemCardView.swift in Sources */,
 				F0A7F3298A7230C0197F4691 /* ItemFilter.swift in Sources */,
 				1F5A6195A4BC26A62D3308F9 /* ItemImage.swift in Sources */,
-				BCBC2AA801F0144608484C2F /* MacTrafficLightCluster.swift in Sources */,
 				E760354AD35CA98506C62A17 /* MacWindowConfigurator.swift in Sources */,
 				C0C4346F567466B61A568DDA /* MasonryGridView.swift in Sources */,
 				3BB52E9A2344B9B9C4767590 /* MasonryLayout.swift in Sources */,

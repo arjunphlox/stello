@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var selectedItem: Item?
     @State private var panelContent: SidePanelContent = .none
     @State private var selectedTagNames: Set<String> = []
+    @State private var scrollOffset: CGFloat = 0
 
     private var isRegular: Bool { hSizeClass == .regular }
 
@@ -45,16 +46,18 @@ struct ContentView: View {
 
     private var regularLayout: some View {
         GeometryReader { geo in
-            let topPad = isMac
-                ? StelloLayout.macTopContentPadding(safeAreaTop: geo.safeAreaInsets.top)
-                : StelloLayout.windowInset
-            let scrollTopInset = topPad + StelloLayout.headerHeight + StelloLayout.sectionGap
+            let scrollTopInset = StelloLayout.headerHeight + StelloLayout.sectionGap
+            let headerScrollProgress = min(
+                max(scrollOffset, 0) / StelloLayout.headerScrollFadeDistance,
+                1
+            )
 
             HStack(spacing: StelloLayout.columnGap) {
                 ZStack(alignment: .top) {
                     MasonryGridView(
                         embedInPanelLayout: true,
                         scrollTopInset: scrollTopInset,
+                        scrollOffset: $scrollOffset,
                         selectedTagNames: $selectedTagNames,
                         selectedItem: selectedItem,
                         panelContent: panelContent,
@@ -66,11 +69,11 @@ struct ContentView: View {
                         hasActiveFilters: !selectedTagNames.isEmpty,
                         activePanel: panelContent,
                         integratesMacTitleBar: isMac,
+                        scrollProgress: headerScrollProgress,
                         onFilters: { togglePanel(.filters) },
                         onImport: { togglePanel(.import) },
                         onSettings: { togglePanel(.settings) }
                     )
-                    .padding(.top, topPad)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -88,7 +91,6 @@ struct ContentView: View {
                 }
             }
         }
-        .ignoresSafeArea(.container, edges: .top)
         .padding(.leading, StelloLayout.windowInset)
         .padding(.trailing, panelContent != .none
             ? StelloLayout.windowInsetPanelOpenTrailing
@@ -96,6 +98,7 @@ struct ContentView: View {
         .animation(.spring(duration: 0.28), value: panelContent)
         .background(theme.background)
         #if os(macOS)
+        .ignoresSafeArea(edges: .top)
         .background(MacWindowConfigurator())
         #endif
     }

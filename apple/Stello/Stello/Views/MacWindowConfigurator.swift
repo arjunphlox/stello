@@ -2,7 +2,8 @@
 import AppKit
 import SwiftUI
 
-/// Applies hidden-title-bar chrome; SwiftUI traffic-light replicas live in `MacTrafficLightCluster`.
+/// Transparent native title bar — real traffic-light buttons render at system position
+/// on top of the accent header (`fullSizeContentView` + hidden title).
 struct MacWindowConfigurator: NSViewRepresentable {
     func makeNSView(context: Context) -> TrafficLightAnchorView {
         let view = TrafficLightAnchorView()
@@ -28,8 +29,12 @@ struct MacWindowConfigurator: NSViewRepresentable {
         if #available(macOS 15.0, *) {
             window.titlebarSeparatorStyle = .none
         }
+        // Keep native traffic-light buttons visible — no frame repositioning.
         for role: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
-            window.standardWindowButton(role)?.isHidden = true
+            window.standardWindowButton(role)?.isHidden = false
+        }
+        if #available(macOS 11.0, *) {
+            window.toolbar?.displayMode = .iconOnly
         }
     }
 }

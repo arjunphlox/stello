@@ -23,12 +23,12 @@ enum StelloLayout {
     static let headerCountSpacing: CGFloat = 4
     /// Superscript lift for the item tally (web `<sup>` above cap-height).
     static let headerCountBaselineOffset: CGFloat = 14
-    /// macOS: leading gutter inside accent header for traffic-light cluster.
-    static let macTrafficLightLeadingPadding: CGFloat = 12
-    /// macOS: reserved width for close + miniaturize + zoom inside the header card.
-    static let macTrafficLightReservedWidth: CGFloat = 68
-    /// macOS: horizontal spacing between standard window buttons.
-    static let macTrafficLightSpacing: CGFloat = 20
+    /// macOS: leading gutter inside accent header so wordmark clears native traffic lights.
+    static let macTitleBarLeadingInset: CGFloat = 78
+    /// macOS: top padding inside header card — room for traffic-light row above wordmark baseline.
+    static let macHeaderTopPadding: CGFloat = 8
+    /// Scroll distance (pt) over which the header transitions opaque → glass.
+    static let headerScrollFadeDistance: CGFloat = 48
     /// When a side panel is open, web halves the outer trailing inset (12 → 6).
     static let windowInsetPanelOpenTrailing: CGFloat = 6
     /// Floating Liquid Glass search bar — height, bottom margin, and scroll content inset.
@@ -42,13 +42,6 @@ enum StelloLayout {
     /// Top scroll inset when the header floats over the grid (header + gap + window inset).
     static var headerOverlayScrollInset: CGFloat {
         headerHeight + sectionGap + windowInset
-    }
-    /// macOS `fullSizeContentView` adds a title-bar safe-area inset (~28pt) on top of layout
-    /// padding; subtract it (allow negative padding) so visual top gap equals `windowInset`.
-    static let macTitleBarSafeAreaFallback: CGFloat = 28
-    static func macTopContentPadding(safeAreaTop: CGFloat) -> CGFloat {
-        let barInset = safeAreaTop > 0 ? safeAreaTop : macTitleBarSafeAreaFallback
-        return windowInset - barInset
     }
     /// Header / toolbar icon buttons — fixed capsule footprint + symbol metrics.
     static let iconButtonFootprint: CGFloat = 36

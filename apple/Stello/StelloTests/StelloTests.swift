@@ -229,11 +229,22 @@ struct StelloTests {
         #expect(await SeedData.backfillSeedCovers(in: ctx) == 0)
     }
 
-    @Test("macTopContentPadding neutralizes title-bar safe area")
-    func macTopPadding() {
-        #expect(StelloLayout.macTopContentPadding(safeAreaTop: 28) == -16)
-        #expect(StelloLayout.macTopContentPadding(safeAreaTop: 0) == -16)
-        #expect(StelloLayout.macTopContentPadding(safeAreaTop: 12) == 0)
+    @Test("header layout constants support native title-bar overlay")
+    func headerLayoutConstants() {
+        // Native traffic lights need a leading gutter so the wordmark clears them.
+        #expect(StelloLayout.macTitleBarLeadingInset == 78)
+        // Top padding leaves room for the traffic-light row above the wordmark baseline.
+        #expect(StelloLayout.macHeaderTopPadding == 8)
+        // Scroll-reactive fade distance must be a positive ramp.
+        #expect(StelloLayout.headerScrollFadeDistance > 0)
+    }
+
+    @Test("headerOverlayScrollInset clears header + gap + window inset")
+    func headerOverlayScrollInset() {
+        let expected = StelloLayout.headerHeight
+            + StelloLayout.sectionGap
+            + StelloLayout.windowInset
+        #expect(StelloLayout.headerOverlayScrollInset == expected)
     }
 
     @Test("refreshSeedCatalogIfNeeded bumps catalog version")
@@ -251,7 +262,7 @@ struct StelloTests {
         try ctx.save()
 
         await SeedData.refreshSeedCatalogIfNeeded(in: ctx)
-        #expect(UserDefaults.standard.integer(forKey: "stello.seedCatalogVersion") == 2)
+        #expect(UserDefaults.standard.integer(forKey: "stello.seedCatalogVersion") == 3)
         #expect(item.sourceURL?.contains("design-systems-101") == true)
     }
 

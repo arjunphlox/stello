@@ -16,6 +16,12 @@ struct StelloApp: App {
     }
 
     init() {
+        // Screenshot runs use a clean in-memory store so CloudKit-synced legacy records
+        // (stale titles / duplicates) don't pollute the captured grid.
+        if ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore") {
+            container = try! StelloStore.makeInMemoryContainer()
+            return
+        }
         do {
             container = try StelloStore.makeContainer()
         } catch {

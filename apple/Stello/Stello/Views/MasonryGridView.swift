@@ -1,11 +1,22 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Scroll offset tracking
+
+private struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct MasonryGridView: View {
     /// When true, header lives in `ContentView` and card taps call `onCardTap`.
     var embedInPanelLayout: Bool = false
     /// Top scroll inset when header floats over the grid (regular Mac/iPad layout).
     var scrollTopInset: CGFloat = 0
+    /// Bound scroll offset for header transparency (regular Mac/iPad layout).
+    var scrollOffset: Binding<CGFloat>? = nil
     @Binding var selectedTagNames: Set<String>
     var selectedItem: Item? = nil
     var panelContent: SidePanelContent = .none
@@ -19,6 +30,7 @@ struct MasonryGridView: View {
     init(
         embedInPanelLayout: Bool = false,
         scrollTopInset: CGFloat = 0,
+        scrollOffset: Binding<CGFloat>? = nil,
         selectedTagNames: Binding<Set<String>> = .constant([]),
         selectedItem: Item? = nil,
         panelContent: SidePanelContent = .none,
@@ -29,6 +41,7 @@ struct MasonryGridView: View {
     ) {
         self.embedInPanelLayout = embedInPanelLayout
         self.scrollTopInset = scrollTopInset
+        self.scrollOffset = scrollOffset
         _selectedTagNames = selectedTagNames
         self.selectedItem = selectedItem
         self.panelContent = panelContent
@@ -65,6 +78,8 @@ struct MasonryGridView: View {
             ScrollViewReader { scrollProxy in
                 ScrollView {
                     VStack(spacing: 12) {
+                        scrollOffsetProbe
+
                         if !embedInPanelLayout {
                             StelloHeaderView(
                                 itemCount: allItems.count,
@@ -94,6 +109,10 @@ struct MasonryGridView: View {
                     .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
                     .padding(.top, embedInPanelLayout ? scrollTopInset : StelloLayout.windowInset)
                     .padding(.bottom, StelloLayout.floatingSearchScrollInset)
+                }
+                .coordinateSpace(name: "stelloScroll")
+                .onPreferenceChange(ScrollOffsetKey.self) { offset in
+                    scrollOffset?.wrappedValue = offset
                 }
                 .onAppear {
                     scrollForScreenshotIfNeeded(using: scrollProxy)
@@ -140,10 +159,29 @@ struct MasonryGridView: View {
         .navigationDestination(item: $screenshotDetailItem) { DetailView(item: $0) }
     }
 
+    /// Invisible probe at scroll content top — reports how far content has scrolled.
+    private var scrollOffsetProbe: some View {
+        GeometryReader { geo in
+            Color.clear
+                .preference(
+                    key: ScrollOffsetKey.self,
+                    value: max(0, -geo.frame(in: .named("stelloScroll")).minY)
+                )
+        }
+        .frame(height: 0)
+    }
+
     private func initExpansion() {
         guard !hasInitialized, let first = weekGroups.first else { return }
         hasInitialized = true
-        expandedWeeks = [first.key]
+        // Screenshot demos expand every week so the full cover grid is visible and there
+        // is enough content below the header to drive the opaque → glass transition.
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-screenshotScrolledHeader") || args.contains("-screenshotExpandAll") {
+            expandedWeeks = Set(weekGroups.map(\.key))
+        } else {
+            expandedWeeks = [first.key]
+        }
     }
 
     private func toggleWeek(_ key: String) {

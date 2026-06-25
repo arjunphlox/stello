@@ -4,7 +4,7 @@ import SwiftData
 enum SeedData {
 
     /// Bump when seed URLs or metadata change so persisted stores re-fetch OG covers.
-    private static let catalogVersion = 2
+    private static let catalogVersion = 3
     private static let catalogVersionKey = "stello.seedCatalogVersion"
 
     static var previewContainer: ModelContainer = {
@@ -188,20 +188,20 @@ enum SeedData {
     private static func seedURLCatalog() -> [String: String] {
         [
             "figma-auto-layout-guide": "https://www.figma.com/blog/design-systems-101-what-is-a-design-system/",
-            "figma-variables-tokens": "https://www.figma.com/blog/introducing-variables/",
+            "figma-variables-tokens": "https://www.figma.com/blog/config-2024-recap/",
             "swift-composable-architecture": "https://github.com/pointfreeco/swift-composable-architecture",
-            "dribbble-liquid-glass": "https://dribbble.com/shots/24670360-Finance-Dashboard",
-            "instagram-verte-studio": "https://www.smashingmagazine.com/2018/05/css-grid-layout/",
+            "dribbble-liquid-glass": "https://developer.apple.com/design/human-interface-guidelines/",
+            "instagram-verte-studio": "https://tailwindcss.com/blog/tailwindcss-v4",
             "robin-rendle-display-type": "https://rsms.me/inter/",
             "alist-apart-web-typography": "https://alistapart.com/article/on-web-typography/",
-            "youtube-helvetica-doc": "https://www.youtube.com/watch?v=wkoX0pEwSCw",
+            "youtube-helvetica-doc": "https://www.typewolf.com/",
             "are-na-visual-systems": "https://www.nngroup.com/articles/ten-usability-heuristics/",
-            "producthunt-linear": "https://www.producthunt.com/products/linear",
+            "producthunt-linear": "https://www.notion.so/product",
             "letterboxd-2001": "https://letterboxd.com/film/2001-a-space-odyssey/",
             "spotify-eno-ambient": "https://open.spotify.com/album/063f8Ej8rLVTz9KkjQKEMa",
             "goodreads-design-everyday-things": "https://www.goodreads.com/book/show/840.The_Design_of_Everyday_Things",
             "arxiv-attention-paper": "https://arxiv.org/abs/1706.03762",
-            "vercel-v0-launch": "https://vercel.com/blog/introducing-v0-generative-ui",
+            "vercel-v0-launch": "https://vercel.com/blog/ai-sdk-3-generative-ui",
             "github-swiftformat": "https://github.com/nicklockwood/SwiftFormat",
             "css-tricks-grid-guide": "https://css-tricks.com/snippets/css/complete-guide-grid/",
             "css-tricks-flexbox-gap": "https://css-tricks.com/minding-the-gap/",
@@ -251,10 +251,10 @@ enum SeedData {
                  tags: [("tutorial","format",0.9),("figma","tool",0.95),("design-systems","domain",0.8),("layout","subject",0.85),("clean","style",0.6)]),
 
             seed("figma-variables-tokens",
-                 title: "Variables & Design Tokens in Figma",
+                 title: "Config 2024 Recap",
                  domain: "figma.com",
-                 url: "https://www.figma.com/blog/introducing-variables/",
-                 summary: "How to use variables for color, spacing, and typography tokens across a design system.",
+                 url: "https://www.figma.com/blog/config-2024-recap/",
+                 summary: "Variables, dev mode, and the design-token workflow shipped at Figma Config 2024.",
                  daysAgo: 2,
                  tags: [("reference","format",0.85),("figma","tool",0.95),("tokens","subject",0.9),("design-systems","domain",0.85),("systematic","style",0.7)]),
 
@@ -267,18 +267,18 @@ enum SeedData {
                  tags: [("library","format",0.9),("swift","tool",0.95),("architecture","subject",0.9),("ios","domain",0.85),("functional","style",0.8)]),
 
             seed("dribbble-liquid-glass",
-                 title: "Finance Dashboard — Dribbble",
-                 domain: "dribbble.com",
-                 url: "https://dribbble.com/shots/24670360-Finance-Dashboard",
-                 summary: "UI explorations using Apple's new Liquid Glass material system.",
+                 title: "Materials — Human Interface Guidelines",
+                 domain: "developer.apple.com",
+                 url: "https://developer.apple.com/design/human-interface-guidelines/",
+                 summary: "Apple's guidance on materials, vibrancy, and the Liquid Glass system across platforms.",
                  daysAgo: 4,
                  tags: [("inspiration","format",0.85),("ui-kit","domain",0.8),("translucent","style",0.9),("blue","color",0.6),("speculative","mood",0.7)]),
 
             seed("instagram-verte-studio",
-                 title: "CSS Grid Layout Guide — Smashing Magazine",
-                 domain: "smashingmagazine.com",
-                 url: "https://www.smashingmagazine.com/2018/05/css-grid-layout/",
-                 summary: "Motion design experiments exploring transitions and material interactions.",
+                 title: "Tailwind CSS v4.0",
+                 domain: "tailwindcss.com",
+                 url: "https://tailwindcss.com/blog/tailwindcss-v4",
+                 summary: "A ground-up rewrite of the utility-first framework — faster engine, native cascade layers, design tokens.",
                  daysAgo: 5,
                  tags: [("article","format",0.9),("css","tool",0.9),("layout","subject",0.95),("web","domain",0.85),("calm","mood",0.8)]),
 
@@ -299,12 +299,12 @@ enum SeedData {
                  tags: [("article","format",0.9),("typography","subject",0.95),("web","domain",0.85),("classic","style",0.7),("reference","intent",0.9)]),
 
             seed("youtube-helvetica-doc",
-                 title: "Helvetica (2007) — Gary Hustwit",
-                 domain: "youtube.com",
-                 url: "https://www.youtube.com/watch?v=wkoX0pEwSCw",
-                 summary: "Feature-length documentary exploring the ubiquitous typeface and its cultural impact.",
+                 title: "Typewolf — Typography Inspiration",
+                 domain: "typewolf.com",
+                 url: "https://www.typewolf.com/",
+                 summary: "A daily showcase of typography in the wild — font pairings, type trends, and lettering on real sites.",
                  daysAgo: 8,
-                 tags: [("documentary","format",0.95),("typography","subject",0.95),("film","domain",0.85),("classic","style",0.8),("neutral","color",0.6)]),
+                 tags: [("reference","format",0.95),("typography","subject",0.95),("editorial","domain",0.85),("classic","style",0.8),("neutral","color",0.6)]),
 
             seed("are-na-visual-systems",
                  title: "Ten Usability Heuristics — NN/g",
@@ -315,10 +315,10 @@ enum SeedData {
                  tags: [("article","format",0.85),("ux","subject",0.9),("research","intent",0.9),("systematic","style",0.85)]),
 
             seed("producthunt-linear",
-                 title: "Linear — Issue Tracker for Modern Teams",
-                 domain: "producthunt.com",
-                 url: "https://www.producthunt.com/products/linear",
-                 summary: "The fast, focused project management tool used by the best product teams.",
+                 title: "Notion — The Connected Workspace",
+                 domain: "notion.so",
+                 url: "https://www.notion.so/product",
+                 summary: "Docs, projects, and knowledge in one place — the workspace used by modern product teams.",
                  daysAgo: 10,
                  tags: [("product-launch","format",0.85),("productivity","subject",0.9),("tool","domain",0.95),("minimal","style",0.8),("energetic","mood",0.7)]),
 
@@ -369,10 +369,10 @@ enum SeedData {
                  tags: [("note","format",0.9),("typography","subject",0.95),("reading","intent",0.85)]),
 
             seed("vercel-v0-launch",
-                 title: "Introducing v0 by Vercel",
+                 title: "Generative UI with the Vercel AI SDK",
                  domain: "vercel.com",
-                 url: "https://vercel.com/blog/introducing-v0-generative-ui",
-                 summary: "v0 generates copy-paste-friendly React code from natural language descriptions.",
+                 url: "https://vercel.com/blog/ai-sdk-3-generative-ui",
+                 summary: "Stream React components straight from the model — generative UI with the Vercel AI SDK.",
                  daysAgo: 13,
                  tags: [("article","format",0.85),("ai","subject",0.9),("web-dev","domain",0.85),("tool","intent",0.9),("modern","style",0.75)]),
 
