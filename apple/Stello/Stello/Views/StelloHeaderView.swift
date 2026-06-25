@@ -1,12 +1,12 @@
 import SwiftUI
 
 /// Accent-colored header mirroring the web app's `.header` — Stello wordmark, item tally,
-/// and action buttons (Filters → Import → Settings) with Liquid Glass icon buttons.
+/// and pill-shaped Liquid Glass icon buttons (Filters → Import → Settings).
 struct StelloHeaderView: View {
     let itemCount: Int
     var hasActiveFilters: Bool = false
     var activePanel: SidePanelContent = .none
-    /// When true (macOS), reserve leading inset for traffic lights and extend to window top.
+    /// When true (macOS), reserve leading inset for traffic lights inside the header card.
     var integratesMacTitleBar: Bool = false
     var onFilters: () -> Void
     var onImport: () -> Void
@@ -14,9 +14,9 @@ struct StelloHeaderView: View {
 
     @Environment(\.appTheme) private var theme
 
-    private var macLeadingInset: CGFloat { integratesMacTitleBar ? 78 : 0 }
-    /// Top inset: traffic-light vertical center + breathing room for wordmark baseline alignment.
-    private var topPadding: CGFloat { integratesMacTitleBar ? 8 : 12 }
+    private var macLeadingInset: CGFloat {
+        integratesMacTitleBar ? 78 : 0
+    }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 12) {
@@ -61,37 +61,14 @@ struct StelloHeaderView: View {
                 }
             }
         }
-        .padding(.leading, 12 + macLeadingInset)
-        .padding(.trailing, 12)
-        .padding(.bottom, 12)
-        .padding(.top, topPadding)
-        .frame(minHeight: integratesMacTitleBar ? 80 : 72, alignment: .bottom)
+        .padding(.leading, StelloLayout.windowInset + macLeadingInset)
+        .padding(.trailing, StelloLayout.windowInset)
+        .padding(.bottom, StelloLayout.windowInset)
+        .padding(.top, StelloLayout.windowInset)
+        .frame(minHeight: integratesMacTitleBar ? StelloLayout.macHeaderHeight : 72, alignment: .bottom)
         .frame(maxWidth: .infinity)
         .background(theme.accentColor)
-        .modifier(HeaderClipShape(integratesMacTitleBar: integratesMacTitleBar))
-        #if os(macOS)
-        .background(theme.accentColor.ignoresSafeArea(edges: .top))
-        #endif
-    }
-}
-
-private struct HeaderClipShape: ViewModifier {
-    let integratesMacTitleBar: Bool
-
-    func body(content: Content) -> some View {
-        if integratesMacTitleBar {
-            content.clipShape(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 0,
-                    bottomLeadingRadius: 12,
-                    bottomTrailingRadius: 12,
-                    topTrailingRadius: 0,
-                    style: .continuous
-                )
-            )
-        } else {
-            content.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
+        .clipShape(RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous))
     }
 }
 
@@ -105,10 +82,11 @@ extension StelloHeaderView {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .medium))
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 28)
                 .foregroundStyle(theme.accentContrast.opacity(isActive ? 1 : 0.82))
         }
         .buttonStyle(.glass)
+        .clipShape(Capsule())
         .accessibilityLabel(label)
         .help(label)
     }
@@ -123,7 +101,7 @@ extension StelloHeaderView {
         onImport: {},
         onSettings: {}
     )
-    .padding()
+    .padding(StelloLayout.windowInset)
     .background(Color(hex: "#111110"))
     .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
 }

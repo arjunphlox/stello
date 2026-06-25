@@ -1,5 +1,12 @@
 import SwiftUI
 import SwiftData
+import ImageIO
+import CoreGraphics
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 /// Image-forward masonry card mirroring the Stello web app: the cover image fills the
 /// card at its natural aspect ratio, with the title over a bottom scrim and a domain
@@ -22,11 +29,9 @@ struct ItemCardView: View {
         Self.hues[abs(stableHash(item.slug)) % Self.hues.count] / 360.0
     }
 
-    private var primaryImage: ItemImage? {
-        item.images?.first(where: \.isPrimary) ?? item.images?.first
-    }
+    private var primaryImage: ItemImage? { item.coverImage }
 
-    private var hasImage: Bool { primaryImage?.data != nil }
+    private var hasImage: Bool { item.hasRenderableCover }
 
     private var aspect: CGFloat {
         if let img = primaryImage, let w = img.width, let h = img.height, w > 0, h > 0 {
@@ -165,11 +170,16 @@ struct ItemCardView: View {
 
     static func platformImage(_ data: Data) -> Image? {
         #if os(macOS)
-        guard let ns = NSImage(data: data) else { return nil }
-        return Image(nsImage: ns)
+        if let ns = NSImage(data: data) { return Image(nsImage: ns) }
         #else
-        guard let ui = UIImage(data: data) else { return nil }
-        return Image(uiImage: ui)
+        if let ui = UIImage(data: data) { return Image(uiImage: ui) }
+        #endif
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cg = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        #if os(macOS)
+        return Image(decorative: cg, scale: 2, orientation: .up)
+        #else
+        return Image(uiImage: UIImage(cgImage: cg))
         #endif
     }
 

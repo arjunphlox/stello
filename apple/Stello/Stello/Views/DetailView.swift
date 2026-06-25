@@ -9,9 +9,7 @@ struct DetailView: View {
 
     private static let placeholderHues: [Double] = [18, 80, 38, 140, 25, 45, 12, 100]
 
-    private var coverImage: ItemImage? {
-        item.images?.first(where: \.isPrimary) ?? item.images?.first
-    }
+    private var coverImage: ItemImage? { item.coverImage }
 
     private var sortedTags: [Tag] {
         (item.tags ?? []).sorted { $0.weight > $1.weight }

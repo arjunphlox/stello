@@ -8,7 +8,7 @@ enum SeedData {
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try! ModelContainer(for: schema, configurations: [config])
         let ctx = ModelContext(container)
-        for item in makeSeedItems() { ctx.insert(item) }
+        for item in makeSeedItems() { insertItemGraph(item, in: ctx) }
         try! ctx.save()
         return container
     }()
@@ -47,7 +47,7 @@ enum SeedData {
     static func seedIfNeeded(in context: ModelContext) async {
         let count = (try? context.fetchCount(FetchDescriptor<Item>())) ?? 0
         guard count == 0 else { return }
-        for item in makeSeedItems() { context.insert(item) }
+        for item in makeSeedItems() { insertItemGraph(item, in: context) }
         try? context.save()
     }
 
@@ -59,11 +59,12 @@ enum SeedData {
         guard let items = try? context.fetch(FetchDescriptor<Item>()) else { return 0 }
         var patched = 0
         for item in items where item.domain != nil {
-            let hasCover = item.images?.contains { $0.data != nil } == true
-            guard !hasCover else { continue }
+            purgeBrokenGeneratedCovers(for: item, in: context)
+            guard !item.hasRenderableCover else { continue }
             guard let cover = SampleCoverGenerator.cover(seed: SampleCoverGenerator.stableSeed(item.slug)) else {
                 continue
             }
+            demoteExistingPrimaries(on: item)
             let img = ItemImage(
                 data: cover.data, source: "generated", isPrimary: true,
                 width: cover.width, height: cover.height
@@ -101,6 +102,38 @@ enum SeedData {
     }
 
     // MARK: - Private
+
+    /// Inserts an item and every related model so external-storage blobs persist on first save.
+    private static func insertItemGraph(_ item: Item, in context: ModelContext) {
+        for tag in item.tags ?? [] {
+            context.insert(tag)
+            tag.item = item
+        }
+        for img in item.images ?? [] {
+            context.insert(img)
+            img.item = item
+        }
+        for snippet in item.snippets ?? [] {
+            context.insert(snippet)
+            snippet.item = item
+        }
+        context.insert(item)
+    }
+
+    /// Drops generated covers whose bytes never persisted (CloudKit shell rows, failed external storage).
+    private static func purgeBrokenGeneratedCovers(for item: Item, in context: ModelContext) {
+        guard let images = item.images else { return }
+        let broken = images.filter { $0.source == "generated" && !$0.hasRenderableCoverData }
+        guard !broken.isEmpty else { return }
+        for img in broken { context.delete(img) }
+        item.images = images.filter { !broken.contains($0) }
+    }
+
+    private static func demoteExistingPrimaries(on item: Item) {
+        for img in item.images ?? [] where img.isPrimary {
+            img.isPrimary = false
+        }
+    }
 
     private static func daysAgo(_ n: Int) -> Date {
         Calendar.current.date(byAdding: .day, value: -n, to: .now)!

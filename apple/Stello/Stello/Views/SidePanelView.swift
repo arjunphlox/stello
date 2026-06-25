@@ -21,10 +21,10 @@ struct SidePanelView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(theme.background)
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(theme.border)
-                .frame(width: 1)
+        .clipShape(RoundedRectangle(cornerRadius: StelloLayout.panelCornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: StelloLayout.panelCornerRadius, style: .continuous)
+                .stroke(theme.border, lineWidth: 1)
         }
     }
 

@@ -42,6 +42,7 @@
 		B8B3C73F56F130F8CF483B7A /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
 		C0C4346F567466B61A568DDA /* MasonryGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBE3208FABDC9FE868334622 /* MasonryGridView.swift */; };
 		C74D36D18CDF4DA7FE5386AC /* SidePanelContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34CAB7A42BFA377A40527746 /* SidePanelContent.swift */; };
+		CDA790F7E7DD8B1138EAF40D /* StelloLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2CDECB3448C079F9E9F155 /* StelloLayout.swift */; };
 		CFAE2BC8E67D5C9D97ADD849 /* EnrichmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE8D7C0BB274D97989FBD8F /* EnrichmentTests.swift */; };
 		D21100D7EB2CC957D5C122CE /* StelloStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAFAF6D495AAD1B33F2619C /* StelloStore.swift */; };
 		D3C6F2BB515C95C8EC0D9320 /* EnrichmentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BC6FF63A611768E9EE2954A /* EnrichmentService.swift */; };
@@ -126,6 +127,7 @@
 		C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagFilterSheet.swift; sourceTree = "<group>"; };
 		CD1D80B79B9253C13F11D53C /* StelloShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StelloShare.entitlements; sourceTree = "<group>"; };
 		CF3875676CC21E3F317FD776 /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
+		DA2CDECB3448C079F9E9F155 /* StelloLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloLayout.swift; sourceTree = "<group>"; };
 		DAFD9FC851DB71708B74829C /* EnrichmentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentCoordinator.swift; sourceTree = "<group>"; };
 		E07B6271F9E2D3C9D455B813 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		EBE3208FABDC9FE868334622 /* MasonryGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryGridView.swift; sourceTree = "<group>"; };
@@ -138,6 +140,7 @@
 		386AFF683865EDE8B907A46A /* Theme */ = {
 			isa = PBXGroup;
 			children = (
+				DA2CDECB3448C079F9E9F155 /* StelloLayout.swift */,
 				E07B6271F9E2D3C9D455B813 /* Theme.swift */,
 			);
 			path = Theme;
@@ -387,6 +390,7 @@
 				59611335583FB4DF8B08A0AD /* Snippet.swift in Sources */,
 				74388EA1808807BBA64EA64A /* StelloApp.swift in Sources */,
 				E381D64784AD5D643DB27251 /* StelloHeaderView.swift in Sources */,
+				CDA790F7E7DD8B1138EAF40D /* StelloLayout.swift in Sources */,
 				D21100D7EB2CC957D5C122CE /* StelloStore.swift in Sources */,
 				0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */,
 				6EDC47A1A3E5FE6A1A51D727 /* TagFilterSheet.swift in Sources */,

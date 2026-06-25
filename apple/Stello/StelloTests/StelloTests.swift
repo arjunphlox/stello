@@ -182,8 +182,38 @@ struct StelloTests {
 
         let patched = SeedData.backfillSeedCovers(in: ctx)
         #expect(patched == 1)
-        #expect(withDomain.images?.first?.data != nil)
+        #expect(withDomain.hasRenderableCover)
+        #expect(withDomain.coverImage?.hasRenderableCoverData == true)
         #expect(note.images?.isEmpty != false || note.images == nil)
+    }
+
+    @Test("backfillSeedCovers replaces broken generated shell rows")
+    func backfillReplacesBrokenShells() throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let item = Item(slug: "figma-auto-layout-guide", title: "Auto Layout", domain: "figma.com")
+        let shell = ItemImage(source: "generated", isPrimary: true)
+        ctx.insert(item)
+        ctx.insert(shell)
+        shell.item = item
+        item.images = [shell]
+        try ctx.save()
+
+        #expect(SeedData.backfillSeedCovers(in: ctx) == 1)
+        #expect(item.hasRenderableCover)
+    }
+
+    @Test("seedIfNeeded persists renderable covers across relaunch context")
+    func seedCoverPersistence() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        await SeedData.seedIfNeeded(in: ctx)
+
+        let relaunch = ModelContext(container)
+        let items = try relaunch.fetch(FetchDescriptor<Item>(
+            predicate: #Predicate { $0.slug == "figma-auto-layout-guide" }
+        ))
+        #expect(items.first?.hasRenderableCover == true)
     }
 
     @Test("backfillSeedCovers is idempotent")

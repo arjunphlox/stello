@@ -86,8 +86,8 @@ struct MasonryGridView: View {
                     )
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, embedInPanelLayout ? 12 : 12)
+            .padding(.horizontal, StelloLayout.windowInset)
+            .padding(.top, embedInPanelLayout ? 0 : StelloLayout.windowInset)
             .padding(.bottom, 24)
         }
         .background(theme.background)

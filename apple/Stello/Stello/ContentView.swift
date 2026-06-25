@@ -24,6 +24,8 @@ struct ContentView: View {
             }
         }
         .task {
+            await SeedData.seedIfNeeded(in: context)
+            SeedData.backfillSeedCovers(in: context)
             if ProcessInfo.processInfo.arguments.contains("-screenshotEnrichmentDemo") {
                 selectedItem = SeedData.ensureEnrichmentDemo(in: context)
                 panelContent = .itemDetail
@@ -42,8 +44,8 @@ struct ContentView: View {
 
     private var regularLayout: some View {
         GeometryReader { geo in
-            HStack(spacing: 0) {
-                VStack(spacing: 0) {
+            HStack(spacing: StelloLayout.columnGap) {
+                VStack(spacing: StelloLayout.columnGap) {
                     StelloHeaderView(
                         itemCount: allItems.count,
                         hasActiveFilters: !selectedTagNames.isEmpty,
@@ -76,11 +78,14 @@ struct ContentView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+            .padding(.leading, StelloLayout.windowInset)
+            .padding(.trailing, StelloLayout.windowInset)
+            .padding(.top, StelloLayout.windowInset)
+            .padding(.bottom, StelloLayout.windowInset)
             .animation(.spring(duration: 0.28), value: panelContent)
         }
         .background(theme.background)
         #if os(macOS)
-        .ignoresSafeArea(edges: .top)
         .background(MacWindowConfigurator())
         #endif
     }
