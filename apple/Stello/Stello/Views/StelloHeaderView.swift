@@ -1,16 +1,15 @@
 import SwiftUI
 
 /// Accent header — Stello wordmark, item tally, and icon buttons (Filters / Add / Settings).
-/// macOS: inset rounded card; native traffic lights float at system position over the card
-/// (Sketch-style — content inset positions the card, never reposition the buttons).
-/// Scroll progress drives opaque → glass transition.
+/// macOS: inset rounded card confined to the content column; native traffic lights sit in the
+/// card's top-left (positioned by `MacWindowConfigurator`). Scroll progress drives glass intensity.
 struct StelloHeaderView: View {
     let itemCount: Int
     var hasActiveFilters: Bool = false
     var activePanel: SidePanelContent = .none
     /// When true (macOS), reserve leading inset for native traffic lights.
     var integratesMacTitleBar: Bool = false
-    /// 0 = at scroll top (fully opaque accent); 1 = scrolled (accent-tinted glass).
+    /// 0 = at scroll top; 1 = scrolled (more translucent glass).
     var scrollProgress: CGFloat = 0
     var onFilters: () -> Void
     var onImport: () -> Void
@@ -29,20 +28,22 @@ struct StelloHeaderView: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: isCompact ? 8 : 12) {
-            wordmark
-                .allowsHitTesting(false)
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            HStack(alignment: .bottom, spacing: isCompact ? 8 : 12) {
+                wordmark
+                    .allowsHitTesting(false)
 
-            Spacer(minLength: isCompact ? 4 : 8)
-                .allowsHitTesting(false)
+                Spacer(minLength: isCompact ? 4 : 8)
+                    .allowsHitTesting(false)
 
-            buttonCluster
-                .layoutPriority(0)
+                buttonCluster
+                    .layoutPriority(0)
+            }
         }
         .padding(.leading, StelloLayout.headerPadding + macLeadingInset)
         .padding(.trailing, StelloLayout.headerPadding)
         .padding(.bottom, StelloLayout.headerPadding)
-        .padding(.top, StelloLayout.headerPadding)
         .frame(height: StelloLayout.headerHeight)
         .frame(maxWidth: .infinity)
         .background { headerBackground }
@@ -50,44 +51,40 @@ struct StelloHeaderView: View {
     }
 
     private var buttonCluster: some View {
-        GlassEffectContainer(spacing: buttonClusterSpacing) {
-            HStack(spacing: buttonClusterSpacing) {
-                StelloGlassIconButton(
-                    systemName: "line.3.horizontal.decrease",
-                    isActive: activePanel == .filters || hasActiveFilters,
-                    contrastForeground: true,
-                    forceHover: screenshotHoverFilters,
-                    label: "Filters",
-                    action: onFilters
-                )
-                StelloGlassIconButton(
-                    systemName: "plus",
-                    isActive: activePanel == .import,
-                    contrastForeground: true,
-                    label: "Import",
-                    action: onImport
-                )
-                StelloGlassIconButton(
-                    systemName: "gearshape",
-                    isActive: activePanel == .settings,
-                    contrastForeground: true,
-                    label: "Settings",
-                    action: onSettings
-                )
-            }
+        HStack(spacing: buttonClusterSpacing) {
+            StelloGlassIconButton(
+                systemName: "line.3.horizontal.decrease",
+                isActive: activePanel == .filters || hasActiveFilters,
+                contrastForeground: true,
+                forceHover: screenshotHoverFilters,
+                label: "Filters",
+                action: onFilters
+            )
+            StelloGlassIconButton(
+                systemName: "plus",
+                isActive: activePanel == .import,
+                contrastForeground: true,
+                label: "Import",
+                action: onImport
+            )
+            StelloGlassIconButton(
+                systemName: "gearshape",
+                isActive: activePanel == .settings,
+                contrastForeground: true,
+                label: "Settings",
+                action: onSettings
+            )
         }
     }
 
     @ViewBuilder
     private var headerBackground: some View {
         let shape = RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous)
-        if clampedScroll < 0.01 {
-            shape.fill(theme.accentColor)
-        } else {
-            shape
-                .fill(theme.accentColor.opacity(integratesMacTitleBar ? 0.72 : 0.65))
-                .glassEffect(.regular.tint(theme.accentColor.opacity(0.45 * clampedScroll)), in: shape)
-        }
+        let baseOpacity = 0.82 - (0.18 * clampedScroll)
+        let tintOpacity = 0.42 + (0.18 * clampedScroll)
+        shape
+            .fill(theme.accentColor.opacity(baseOpacity))
+            .glassEffect(.regular.tint(theme.accentColor.opacity(tintOpacity)), in: shape)
     }
 
     private var wordmark: some View {

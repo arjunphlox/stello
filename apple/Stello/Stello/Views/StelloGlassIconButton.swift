@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Uniform capsule icon button — shared by header and panel chrome.
-/// macOS: visible hover/pressed fill; iOS: press scale.
+/// Uniform rounded-square icon button — shared by header and panel chrome.
+/// Matches web `.header-btn` (32×32, 8pt radius, accent-contrast tint fill + border).
 struct StelloGlassIconButton: View {
     let systemName: String
     var isActive: Bool = false
@@ -16,16 +16,20 @@ struct StelloGlassIconButton: View {
 
     private var showsHover: Bool { isHovered || forceHover }
 
+    private var buttonShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: StelloLayout.iconButtonCornerRadius, style: .continuous)
+    }
+
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: StelloLayout.iconButtonSymbolSize, weight: .medium))
                 .foregroundStyle(foregroundStyle)
                 .frame(width: StelloLayout.iconButtonFootprint, height: StelloLayout.iconButtonFootprint)
-                .background { capsuleBackground }
-                .contentShape(Capsule())
+                .background { buttonBackground }
+                .contentShape(buttonShape)
         }
-        .buttonStyle(GlassIconPressStyle(showsPressedOverlay: contrastForeground))
+        .buttonStyle(GlassIconPressStyle(showsPressedOverlay: false))
         .accessibilityLabel(label)
         .help(label)
         #if os(macOS)
@@ -35,9 +39,10 @@ struct StelloGlassIconButton: View {
     }
 
     @ViewBuilder
-    private var capsuleBackground: some View {
-        Capsule()
+    private var buttonBackground: some View {
+        buttonShape
             .fill(fillColor)
+            .overlay(buttonShape.stroke(borderColor, lineWidth: 1))
             .animation(.easeOut(duration: 0.12), value: showsHover)
             .animation(.easeOut(duration: 0.08), value: isActive)
     }
@@ -48,15 +53,23 @@ struct StelloGlassIconButton: View {
             return base.opacity(showsHover ? 0.20 : 0.16)
         }
         #if os(macOS)
-        return base.opacity(showsHover ? 0.14 : (contrastForeground ? 0.06 : 0))
+        return base.opacity(showsHover ? 0.16 : (contrastForeground ? 0.06 : 0))
         #else
         return base.opacity(showsHover ? 0.12 : 0)
         #endif
     }
 
+    private var borderColor: Color {
+        let base = contrastForeground ? theme.accentContrast : theme.textPrimary
+        if isActive || (contrastForeground && showsHover) {
+            return base.opacity(isActive ? 0.40 : 0.15)
+        }
+        return base.opacity(contrastForeground ? 0.15 : 0)
+    }
+
     private var foregroundStyle: Color {
         if contrastForeground {
-            theme.accentContrast.opacity(isActive || showsHover ? 1 : 0.78)
+            theme.accentContrast.opacity(isActive || showsHover ? 1 : 0.75)
         } else {
             theme.textSecondary.opacity(isActive || showsHover ? 1 : 0.82)
         }
@@ -64,20 +77,12 @@ struct StelloGlassIconButton: View {
 }
 
 private struct GlassIconPressStyle: ButtonStyle {
-    var showsPressedOverlay: Bool = true
+    var showsPressedOverlay: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .opacity(configuration.isPressed ? 0.88 : 1)
-            .overlay {
-                #if os(macOS)
-                if configuration.isPressed && showsPressedOverlay {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.14))
-                }
-                #endif
-            }
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }

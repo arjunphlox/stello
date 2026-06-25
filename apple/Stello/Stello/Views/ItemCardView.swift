@@ -8,16 +8,14 @@ import AppKit
 import UIKit
 #endif
 
-/// Image-forward masonry card mirroring the Stello web app: the cover image fills the
-/// card at its natural aspect ratio, with the title over a bottom scrim and a domain
-/// pill (tinted by the dominant color tag) in the bottom-right. Text and letter-placeholder
-/// variants cover items without an image.
+/// Image-forward masonry card mirroring the Stello web app: OG images render cleanly (title
+/// below or omitted); generated/gradient covers keep the title overlay. Text cards show
+/// title + summary. Domain pill tinted by dominant color tag.
 struct ItemCardView: View {
     let item: Item
     var isSelected: Bool = false
     @Environment(\.appTheme) private var theme
 
-    // Placeholder hue palette (from BUILD_SPEC) for text / letter cards.
     private static let hues: [Double] = [18, 80, 38, 140, 25, 45, 12, 100]
     private static let textWordCap = 40
 
@@ -33,22 +31,25 @@ struct ItemCardView: View {
 
     private var hasImage: Bool { item.hasRenderableCover }
 
+    /// Generated gradient covers from seed backfill — keep title overlay on cover.
+    private var isGeneratedCover: Bool {
+        guard hasImage else { return false }
+        return primaryImage?.source == "generated"
+    }
+
     private var aspect: CGFloat {
         if let img = primaryImage, let w = img.width, let h = img.height, w > 0, h > 0 {
             return CGFloat(w) / CGFloat(h)
         }
-        return 1200.0 / 630.0 // OG default
+        return 1200.0 / 630.0
     }
 
-    /// Mirrors web `hasTextContent`: text card only when image-less, summary is substantive,
-    /// and not the generic capture stub.
     private var hasText: Bool {
         guard !hasImage else { return false }
         guard let s = item.summary else { return false }
         return s.count > 30 && !s.hasPrefix("Saved from")
     }
 
-    /// Highest-weight `color` tag mapped to a Color, else nil (pill falls back to white, like web).
     private var dominantColor: Color? {
         let colorTags = (item.tags ?? [])
             .filter { $0.category == "color" }
@@ -58,8 +59,7 @@ struct ItemCardView: View {
     }
 
     var body: some View {
-        visual
-            .overlay(alignment: .bottom) { bottomOverlay }
+        cardContent
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -68,14 +68,13 @@ struct ItemCardView: View {
             .shadow(color: .black.opacity(theme.mode == .dark ? 0.30 : 0.08), radius: 5, x: 0, y: 2)
     }
 
-    // MARK: - Visual variants
-
-    @ViewBuilder private var visual: some View {
+    @ViewBuilder private var cardContent: some View {
         if hasImage, let data = primaryImage?.data, let img = Self.platformImage(data) {
-            img
-                .resizable()
-                .aspectRatio(aspect, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+            if isGeneratedCover {
+                imageWithOverlay(img)
+            } else {
+                fetchedImageCard(img)
+            }
         } else if hasText {
             textCard
         } else {
@@ -83,21 +82,63 @@ struct ItemCardView: View {
         }
     }
 
-    /// Web `.card-text-content`: summary only in the tinted box — no title, no multi-line dump.
+    private func fetchedImageCard(_ img: Image) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            img
+                .resizable()
+                .aspectRatio(aspect, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+
+            HStack(alignment: .bottom, spacing: 6) {
+                if !item.title.isEmpty {
+                    Text(item.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 4)
+                domainPill
+            }
+            .padding(10)
+            .background(theme.backgroundSubtle)
+        }
+    }
+
+    private func imageWithOverlay(_ img: Image) -> some View {
+        img
+            .resizable()
+            .aspectRatio(aspect, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .overlay(alignment: .bottom) { overlayFooter(includeTitle: true) }
+    }
+
     private var textCard: some View {
-        Text(Self.truncatedWords(item.summary ?? "", limit: Self.textWordCap))
-            .font(.system(size: 13))
-            .foregroundStyle(theme.textPrimary)
-            .lineLimit(8)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
-            .padding(14)
-            .padding(.bottom, item.domain?.isEmpty == false ? 26 : 0)
-            .background(
-                Color(hue: coverHue,
-                      saturation: theme.mode == .dark ? 0.15 : 0.12,
-                      brightness: theme.mode == .dark ? 0.14 : 0.92)
-            )
+        VStack(alignment: .leading, spacing: 8) {
+            if !item.title.isEmpty {
+                Text(item.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+                    .lineLimit(2)
+            }
+            Text(Self.truncatedWords(item.summary ?? "", limit: Self.textWordCap))
+                .font(.system(size: 13))
+                .foregroundStyle(theme.textPrimary.opacity(0.92))
+                .lineLimit(8)
+                .multilineTextAlignment(.leading)
+        }
+        .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
+        .padding(14)
+        .padding(.bottom, item.domain?.isEmpty == false ? 26 : 0)
+        .background(
+            Color(hue: coverHue,
+                  saturation: theme.mode == .dark ? 0.15 : 0.12,
+                  brightness: theme.mode == .dark ? 0.14 : 0.92)
+        )
+        .overlay(alignment: .bottomTrailing) {
+            if item.domain?.isEmpty == false {
+                domainPill.padding(10)
+            }
+        }
     }
 
     private var placeholderCard: some View {
@@ -108,9 +149,9 @@ struct ItemCardView: View {
                 .foregroundStyle(theme.textSecondary)
         }
         .frame(height: 140)
+        .overlay(alignment: .bottom) { overlayFooter(includeTitle: true) }
     }
 
-    /// Diagonal gradient fallback when OG fetch fails — mirrors `SampleCoverGenerator` palette rhythm.
     private var placeholderGradient: some View {
         let hash = abs(stableHash(item.slug))
         let hueShift = Double(hash % 360) / 360.0
@@ -128,33 +169,26 @@ struct ItemCardView: View {
         )
     }
 
-    // MARK: - Overlays
+    @ViewBuilder
+    private func overlayFooter(includeTitle: Bool) -> some View {
+        ZStack(alignment: .bottom) {
+            LinearGradient(
+                colors: [.black.opacity(0), .black.opacity(0.45), .black.opacity(0.82)],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: 96)
+            .frame(maxWidth: .infinity)
+            .allowsHitTesting(false)
 
-    @ViewBuilder private var bottomOverlay: some View {
-        if hasImage {
-            ZStack(alignment: .bottom) {
-                LinearGradient(
-                    colors: [.black.opacity(0), .black.opacity(0.45), .black.opacity(0.82)],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .frame(height: 96)
-                .frame(maxWidth: .infinity)
-                .allowsHitTesting(false)
-
-                HStack(alignment: .bottom, spacing: 6) {
-                    Text(item.title.isEmpty ? "" : item.title)
+            HStack(alignment: .bottom, spacing: 6) {
+                if includeTitle, !item.title.isEmpty {
+                    Text(item.title)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(2)
                         .shadow(color: .black.opacity(0.4), radius: 2)
-                    Spacer(minLength: 4)
-                    domainPill
                 }
-                .padding(10)
-            }
-        } else {
-            HStack {
-                Spacer()
+                Spacer(minLength: 4)
                 domainPill
             }
             .padding(10)
@@ -199,7 +233,6 @@ struct ItemCardView: View {
         #endif
     }
 
-    /// Maps common color-tag words to a representative Color (for the domain pill tint).
     static func namedColor(_ name: String) -> Color? {
         switch name.lowercased() {
         case "red":                      return Color(hex: "#e5484d")

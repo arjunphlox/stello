@@ -1,13 +1,15 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
-#if os(iOS)
-import UIKit
-#else
+import UniformTypeIdentifiers
+#if os(macOS)
 import AppKit
+#else
+import UIKit
 #endif
 
 /// Capture form — shared by the side panel (regular width) and `CaptureSheet` (iPhone).
+/// Mirrors web `#tpl-import`: URL textarea, Import button, or-divider, file drop zone.
 struct CaptureContent: View {
     var onComplete: (() -> Void)? = nil
 
@@ -16,64 +18,60 @@ struct CaptureContent: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
 
-    @State private var inputText = ""
+    @State private var urlText = ""
     @State private var pickedPhoto: PhotosPickerItem? = nil
     @State private var isBusy = false
+    @State private var isDropTargeted = false
     @State private var errorMessage: String? = nil
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("Paste a link, or type a note", text: $inputText, axis: .vertical)
-                        .lineLimit(4, reservesSpace: false)
-                        .autocorrectionDisabled()
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        #endif
-                        .padding(12)
-                        .background(theme.backgroundSubtle)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(theme.border, lineWidth: 1)
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                    Button("Paste from clipboard") {
-                        pasteFromClipboard()
-                    }
-                    .foregroundStyle(theme.accentColor)
+                TextField(
+                    "Paste URLs here, one per line…",
+                    text: $urlText,
+                    axis: .vertical
+                )
+                .lineLimit(5, reservesSpace: true)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .font(.system(size: 13))
+                .padding(10)
+                .background(theme.background)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(theme.border, lineWidth: 1)
                 }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Or pick an image")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(theme.textSecondary)
-                    PhotosPicker(selection: $pickedPhoto, matching: .images) {
-                        Label("Choose Photo", systemImage: "photo")
-                    }
-                    .foregroundStyle(theme.accentColor)
-                }
-
-                if let msg = errorMessage {
-                    Text(msg)
-                        .foregroundStyle(.red)
-                        .font(.caption)
-                }
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
                 if isBusy {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                 } else {
-                    Button("Add") {
-                        Task { await commit() }
+                    Button("Import URLs") {
+                        Task { await commitURLs() }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(theme.accentColor)
-                    .disabled(
-                        inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        && pickedPhoto == nil
-                    )
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(theme.accentColor)
+                    .foregroundStyle(theme.accentContrast)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                importDivider
+
+                dropZone
+
+                secondaryImageCapture
+
+                if let msg = errorMessage {
+                    Text(msg)
+                        .foregroundStyle(.red)
+                        .font(.caption)
                 }
             }
             .padding(16)
@@ -84,6 +82,51 @@ struct CaptureContent: View {
         }
     }
 
+    private var importDivider: some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(theme.border).frame(height: 1)
+            Text("or")
+                .font(.system(size: 11))
+                .foregroundStyle(theme.textSecondary)
+            Rectangle().fill(theme.border).frame(height: 1)
+        }
+    }
+
+    private var dropZone: some View {
+        VStack(spacing: 8) {
+            Text("Drop a CSV or Markdown file here")
+                .font(.system(size: 13))
+                .foregroundStyle(theme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .background(isDropTargeted ? theme.accentSubtle : Color.clear)
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(
+                    isDropTargeted ? theme.accentColor : theme.border,
+                    style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers)
+        }
+    }
+
+    private var secondaryImageCapture: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Or pick an image")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(theme.textSecondary)
+            PhotosPicker(selection: $pickedPhoto, matching: .images) {
+                Label("Choose Photo", systemImage: "photo")
+            }
+            .foregroundStyle(theme.accentColor)
+        }
+    }
+
     // MARK: - Actions
 
     private func finish() {
@@ -91,21 +134,29 @@ struct CaptureContent: View {
         else { dismiss() }
     }
 
-    private func pasteFromClipboard() {
-        #if os(iOS)
-        if let img = UIPasteboard.general.image,
-           let data = img.jpegData(compressionQuality: 0.9) {
-            captureImageData(data)
-            return
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+            guard let data = item as? Data,
+                  let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+            Task { @MainActor in
+                await importFile(at: url)
+            }
         }
-        if let text = UIPasteboard.general.string { inputText = text }
-        #else
-        if let tiff = NSPasteboard.general.data(forType: .tiff) {
-            captureImageData(tiff)
-            return
+        return true
+    }
+
+    private func importFile(at url: URL) async {
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+        do {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            urlText = text
+            await commitURLs()
+        } catch {
+            errorMessage = error.localizedDescription
         }
-        if let text = NSPasteboard.general.string(forType: .string) { inputText = text }
-        #endif
     }
 
     private func captureImageData(_ data: Data) {
@@ -142,8 +193,8 @@ struct CaptureContent: View {
         isBusy = false
     }
 
-    private func commit() async {
-        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func commitURLs() async {
+        let trimmed = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         isBusy = true
         errorMessage = nil

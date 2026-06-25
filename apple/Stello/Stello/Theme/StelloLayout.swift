@@ -2,16 +2,10 @@ import CoreGraphics
 
 /// Shared layout constants — mirrors web `.content-inner` / `.header` from `style.css`.
 enum StelloLayout {
-    /// Uniform side inset — leading, trailing, panel vertical (no bottom; content bleeds to window edge).
+    /// Uniform inset — every edge and every gap (header, content, panel, column).
     static let windowInset: CGFloat = 12
-    /// macOS: gap above the inset header card inside the transparent title-bar container.
-    /// 8pt (not 12pt) keeps native traffic lights (~14pt from window top) on the card body
-    /// without straddling the top edge; sides stay 12pt.
-    static let macHeaderCardTopInset: CGFloat = 8
-    /// macOS: horizontal inset for the floating header card (matches content column).
-    static let macHeaderCardSideInset: CGFloat = windowInset
-    /// Web `.content-inner { gap: 16px }` between header, search, and grid.
-    static let sectionGap: CGFloat = 16
+    /// Gap below the header before scroll content begins.
+    static let sectionGap: CGFloat = 12
     /// Web `.header { border-radius: 12px }`.
     static let headerCornerRadius: CGFloat = 12
     static let panelCornerRadius: CGFloat = 12
@@ -41,11 +35,12 @@ enum StelloLayout {
     static var floatingSearchScrollInset: CGFloat {
         floatingSearchBarHeight + floatingSearchBarBottomMargin
     }
-    /// Top scroll inset when the header floats over the grid (header + gap + mac card top inset).
+    /// Top scroll inset when the header floats over the grid (header + gap + top inset).
     static var headerOverlayScrollInset: CGFloat {
-        headerHeight + sectionGap + macHeaderCardTopInset
+        headerHeight + sectionGap + windowInset
     }
-    /// Header / toolbar icon buttons — fixed capsule footprint + symbol metrics.
-    static let iconButtonFootprint: CGFloat = 36
+    /// Header / toolbar icon buttons — web `.header-btn` (32×32, 8pt radius).
+    static let iconButtonFootprint: CGFloat = 32
+    static let iconButtonCornerRadius: CGFloat = 8
     static let iconButtonSymbolSize: CGFloat = 16
 }
