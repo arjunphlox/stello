@@ -5,15 +5,15 @@ struct WeekSectionView: View {
     let group: WeekGroup
     let isExpanded: Bool
     let onToggle: () -> Void
-    /// When provided (regular width: iPad/Mac), tapping a card sets the inspector
-    /// selection. When nil (compact width: iPhone), cards push via NavigationLink.
-    var selection: Binding<Item?>? = nil
+    /// When provided (regular width: iPad/Mac), tapping a card opens the side panel.
+    var selectedItem: Item? = nil
+    var panelContent: SidePanelContent = .none
+    var onCardTap: ((Item) -> Void)? = nil
 
     @Environment(\.appTheme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header — tap to collapse/expand
             Button(action: onToggle) {
                 HStack(spacing: 8) {
                     Text(group.label)
@@ -48,13 +48,14 @@ struct WeekSectionView: View {
 
     @ViewBuilder
     private func card(for item: Item) -> some View {
-        if let selection {
+        if let onCardTap {
             Button {
-                selection.wrappedValue = item
+                onCardTap(item)
             } label: {
                 ItemCardView(
                     item: item,
-                    isSelected: selection.wrappedValue?.persistentModelID == item.persistentModelID
+                    isSelected: selectedItem?.persistentModelID == item.persistentModelID
+                        && panelContent == .itemDetail
                 )
             }
             .buttonStyle(.plain)

@@ -27,21 +27,12 @@ struct StelloApp: App {
     }
 
     var body: some Scene {
+        WindowGroup {
+            rootView
+        }
         #if os(macOS)
-        WindowGroup {
-            rootView
-        }
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 800)
-
-        Settings {
-            SettingsView()
-                .environment(\.appTheme, theme)
-                .preferredColorScheme(theme.colorScheme)
-        }
-        #else
-        WindowGroup {
-            rootView
-        }
         #endif
     }
 

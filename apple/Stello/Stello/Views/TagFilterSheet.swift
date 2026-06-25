@@ -1,9 +1,9 @@
 import SwiftUI
 
-struct TagFilterSheet: View {
+/// Tag filter list — shared by the side panel (regular width) and `TagFilterSheet` (iPhone).
+struct TagFilterContent: View {
     let allItems: [Item]
     @Binding var selectedTagNames: Set<String>
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.appTheme) private var theme
 
     private let categories = ["format", "domain", "style", "subject", "tool", "location", "mood", "color", "intent"]
@@ -21,35 +21,25 @@ struct TagFilterSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                ForEach(categories, id: \.self) { category in
-                    let rows = tags(in: category)
-                    if !rows.isEmpty {
-                        Section(category.capitalized) {
-                            ForEach(rows, id: \.name) { row in
-                                tagRow(row)
-                            }
+        List {
+            if !selectedTagNames.isEmpty {
+                Section {
+                    Button("Clear all") { selectedTagNames.removeAll() }
+                        .foregroundStyle(theme.accentColor)
+                }
+            }
+            ForEach(categories, id: \.self) { category in
+                let rows = tags(in: category)
+                if !rows.isEmpty {
+                    Section(category.capitalized) {
+                        ForEach(rows, id: \.name) { row in
+                            tagRow(row)
                         }
                     }
                 }
             }
-            .navigationTitle("Filter by Tag")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(theme.accentColor)
-                }
-                if !selectedTagNames.isEmpty {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Clear") { selectedTagNames.removeAll() }
-                    }
-                }
-            }
         }
+        .listStyle(.inset)
     }
 
     private func tagRow(_ row: (name: String, count: Int)) -> some View {
@@ -70,6 +60,35 @@ struct TagFilterSheet: View {
                         .foregroundStyle(theme.accentColor)
                 }
             }
+        }
+    }
+}
+
+struct TagFilterSheet: View {
+    let allItems: [Item]
+    @Binding var selectedTagNames: Set<String>
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        NavigationStack {
+            TagFilterContent(allItems: allItems, selectedTagNames: $selectedTagNames)
+                .navigationTitle("Filter by Tag")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                            .foregroundStyle(theme.accentColor)
+                    }
+                }
+                #if os(iOS)
+                .presentationDetents(
+                    ProcessInfo.processInfo.arguments.contains("-screenshotFilterSheet")
+                        ? [.medium, .large] : [.large]
+                )
+                #endif
         }
     }
 }

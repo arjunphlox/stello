@@ -3,6 +3,7 @@ import SwiftData
 
 struct DetailView: View {
     @Bindable var item: Item
+    var embedInPanel: Bool = false
     @Environment(\.appTheme) private var theme
     @Environment(\.modelContext) private var context
 
@@ -73,10 +74,7 @@ struct DetailView: View {
             }
         }
         .background(theme.background)
-        .navigationTitle(item.title.isEmpty ? "Untitled" : item.title)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .modifier(DetailNavigationTitle(title: item.title.isEmpty ? "Untitled" : item.title, hidden: embedInPanel))
     }
 
     // MARK: - Sections
@@ -289,6 +287,25 @@ struct DetailView: View {
         guard let ui = UIImage(data: data) else { return nil }
         return Image(uiImage: ui)
         #endif
+    }
+}
+
+// MARK: - Navigation title (hidden when embedded in side panel)
+
+private struct DetailNavigationTitle: ViewModifier {
+    let title: String
+    let hidden: Bool
+
+    func body(content: Content) -> some View {
+        if hidden {
+            content
+        } else {
+            content
+                .navigationTitle(title)
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+        }
     }
 }
 

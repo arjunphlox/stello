@@ -2,18 +2,43 @@ import SwiftUI
 import SwiftData
 
 struct MasonryGridView: View {
-    /// When provided (iPad/Mac), card taps set this inspector selection instead of pushing.
-    var selection: Binding<Item?>? = nil
-    /// Inspector visibility (regular width only). Separate from selection so the panel can dismiss.
-    var isInspectorPresented: Binding<Bool>? = nil
-    var showsInspectorToggle: Bool = false
+    /// When true, header lives in `ContentView` and card taps call `onCardTap`.
+    var embedInPanelLayout: Bool = false
+    @Binding var selectedTagNames: Set<String>
+    var selectedItem: Item? = nil
+    var panelContent: SidePanelContent = .none
+    var onCardTap: ((Item) -> Void)? = nil
+
+    /// iPhone callbacks — open tool sheets from header buttons.
+    var onFilters: (() -> Void)? = nil
+    var onImport: (() -> Void)? = nil
+    var onSettings: (() -> Void)? = nil
+
+    init(
+        embedInPanelLayout: Bool = false,
+        selectedTagNames: Binding<Set<String>> = .constant([]),
+        selectedItem: Item? = nil,
+        panelContent: SidePanelContent = .none,
+        onCardTap: ((Item) -> Void)? = nil,
+        onFilters: (() -> Void)? = nil,
+        onImport: (() -> Void)? = nil,
+        onSettings: (() -> Void)? = nil
+    ) {
+        self.embedInPanelLayout = embedInPanelLayout
+        _selectedTagNames = selectedTagNames
+        self.selectedItem = selectedItem
+        self.panelContent = panelContent
+        self.onCardTap = onCardTap
+        self.onFilters = onFilters
+        self.onImport = onImport
+        self.onSettings = onSettings
+    }
 
     @Query(sort: \Item.addedAt, order: .reverse) private var allItems: [Item]
     @Environment(\.modelContext) private var context
     @Environment(\.appTheme) private var theme
 
     @State private var searchText = ""
-    @State private var selectedTagNames: Set<String> = []
     @State private var expandedWeeks: Set<String> = []
     @State private var hasInitialized = false
     @State private var showFilterSheet = false
@@ -34,13 +59,15 @@ struct MasonryGridView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                StelloHeaderView(
-                    itemCount: allItems.count,
-                    hasActiveFilters: !selectedTagNames.isEmpty,
-                    onFilters: { showFilterSheet = true },
-                    onImport: { showCapture = true },
-                    onSettings: { showSettings = true }
-                )
+                if !embedInPanelLayout {
+                    StelloHeaderView(
+                        itemCount: allItems.count,
+                        hasActiveFilters: !selectedTagNames.isEmpty,
+                        onFilters: { onFilters?() ?? (showFilterSheet = true) },
+                        onImport: { onImport?() ?? (showCapture = true) },
+                        onSettings: { onSettings?() ?? (showSettings = true) }
+                    )
+                }
 
                 searchField
 
@@ -53,35 +80,20 @@ struct MasonryGridView: View {
                         group: group,
                         isExpanded: isFiltering || expandedWeeks.contains(group.key),
                         onToggle: { toggleWeek(group.key) },
-                        selection: selection
+                        selectedItem: embedInPanelLayout ? selectedItem : nil,
+                        panelContent: embedInPanelLayout ? panelContent : .none,
+                        onCardTap: embedInPanelLayout ? onCardTap : nil
                     )
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.top, 12)
+            .padding(.top, embedInPanelLayout ? 12 : 12)
             .padding(.bottom, 24)
         }
         .background(theme.background)
         #if os(iOS)
         .navigationBarHidden(true)
-        #else
-        .navigationTitle("")
         #endif
-        .toolbar {
-            if showsInspectorToggle, let isInspectorPresented {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        isInspectorPresented.wrappedValue.toggle()
-                    } label: {
-                        Image(systemName: "sidebar.right")
-                    }
-                    .help("Toggle inspector")
-                    .foregroundStyle(
-                        isInspectorPresented.wrappedValue ? theme.accentColor : theme.textSecondary
-                    )
-                }
-            }
-        }
         .sheet(isPresented: $showFilterSheet) {
             TagFilterSheet(allItems: allItems, selectedTagNames: $selectedTagNames)
                 .environment(\.appTheme, theme)
@@ -96,6 +108,9 @@ struct MasonryGridView: View {
             await SeedData.seedIfNeeded(in: context)
             SeedData.backfillSeedCovers(in: context)
             openScreenshotDetailIfNeeded()
+            if !embedInPanelLayout && ProcessInfo.processInfo.arguments.contains("-screenshotFilterSheet") {
+                showFilterSheet = true
+            }
         }
         .onAppear { initExpansion() }
         .onChange(of: allItems.count) { _, _ in
@@ -143,7 +158,7 @@ struct MasonryGridView: View {
     private func openScreenshotDetailIfNeeded() {
         guard ProcessInfo.processInfo.arguments.contains("-screenshotDetailDemo"),
               screenshotDetailItem == nil,
-              selection == nil,
+              !embedInPanelLayout,
               let first = allItems.first else { return }
         screenshotDetailItem = first
     }
@@ -188,21 +203,17 @@ struct MasonryGridView: View {
 }
 
 #Preview("iPad Pro 13\"") {
-    NavigationStack {
-        MasonryGridView(selection: .constant(nil), isInspectorPresented: .constant(false), showsInspectorToggle: true)
-    }
-    .modelContainer(SeedData.previewContainer)
-    .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
-    .preferredColorScheme(.dark)
-    .frame(width: 1032, height: 1376)
+    ContentView()
+        .modelContainer(SeedData.previewContainer)
+        .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
+        .preferredColorScheme(.dark)
+        .frame(width: 1032, height: 1376)
 }
 
 #Preview("Mac 1280") {
-    NavigationStack {
-        MasonryGridView(selection: .constant(nil), isInspectorPresented: .constant(true), showsInspectorToggle: true)
-    }
-    .modelContainer(SeedData.previewContainer)
-    .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
-    .preferredColorScheme(.dark)
-    .frame(width: 1280, height: 900)
+    ContentView()
+        .modelContainer(SeedData.previewContainer)
+        .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
+        .preferredColorScheme(.dark)
+        .frame(width: 1280, height: 900)
 }

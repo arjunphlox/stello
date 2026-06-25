@@ -7,7 +7,10 @@ import UIKit
 import AppKit
 #endif
 
-struct CaptureSheet: View {
+/// Capture form — shared by the side panel (regular width) and `CaptureSheet` (iPhone).
+struct CaptureContent: View {
+    var onComplete: (() -> Void)? = nil
+
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appTheme) private var theme
@@ -19,15 +22,22 @@ struct CaptureSheet: View {
     @State private var errorMessage: String? = nil
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
                     TextField("Paste a link, or type a note", text: $inputText, axis: .vertical)
                         .lineLimit(4, reservesSpace: false)
                         .autocorrectionDisabled()
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
+                        .padding(12)
+                        .background(theme.backgroundSubtle)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(theme.border, lineWidth: 1)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                     Button("Paste from clipboard") {
                         pasteFromClipboard()
@@ -35,7 +45,10 @@ struct CaptureSheet: View {
                     .foregroundStyle(theme.accentColor)
                 }
 
-                Section("Or pick an image") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Or pick an image")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.textSecondary)
                     PhotosPicker(selection: $pickedPhoto, matching: .images) {
                         Label("Choose Photo", systemImage: "photo")
                     }
@@ -43,43 +56,40 @@ struct CaptureSheet: View {
                 }
 
                 if let msg = errorMessage {
-                    Section {
-                        Text(msg)
-                            .foregroundStyle(.red)
-                            .font(.caption)
+                    Text(msg)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+
+                if isBusy {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Button("Add") {
+                        Task { await commit() }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(theme.accentColor)
+                    .disabled(
+                        inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && pickedPhoto == nil
+                    )
                 }
             }
-            .navigationTitle("Add Item")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isBusy {
-                        ProgressView().scaleEffect(0.8)
-                    } else {
-                        Button("Add") {
-                            Task { await commit() }
-                        }
-                        .disabled(
-                            inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            && pickedPhoto == nil
-                        )
-                    }
-                }
-            }
-            .onChange(of: pickedPhoto) { _, item in
-                guard item != nil else { return }
-                Task { await capturePickedImage() }
-            }
+            .padding(16)
+        }
+        .onChange(of: pickedPhoto) { _, item in
+            guard item != nil else { return }
+            Task { await capturePickedImage() }
         }
     }
 
     // MARK: - Actions
+
+    private func finish() {
+        if let onComplete { onComplete() }
+        else { dismiss() }
+    }
 
     private func pasteFromClipboard() {
         #if os(iOS)
@@ -105,7 +115,7 @@ struct CaptureSheet: View {
             do {
                 let item = try CaptureService.captureImage(data, context: context)
                 enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
-                dismiss()
+                finish()
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -125,7 +135,7 @@ struct CaptureSheet: View {
             }
             let item = try CaptureService.captureImage(data, context: context)
             enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
-            dismiss()
+            finish()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -152,11 +162,31 @@ struct CaptureSheet: View {
                     enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
                 }
             }
-            dismiss()
+            finish()
         } catch {
             errorMessage = error.localizedDescription
         }
         isBusy = false
+    }
+}
+
+struct CaptureSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        NavigationStack {
+            CaptureContent()
+                .navigationTitle("Add Item")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                }
+        }
     }
 }
 
