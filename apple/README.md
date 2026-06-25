@@ -22,7 +22,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 
 ## Build workflow (switched 2026-06-25)
 Xcode GUI proved too painful (targets/capabilities/signing). Now **Cursor-driven**: Opus orchestrates/reviews/commits; **Composer 2.5** sub-agents/sessions edit Swift + a text **XcodeGen `project.yml`**, build/test via `xcodebuild` (iOS Simulator, unsigned), and post screenshots. Toolchain: xcode-select -> /Applications/Xcode-beta.app (Xcode 27); xcodegen 2.45.4. In progress: migrate the hand-managed .xcodeproj to project.yml (all 3 targets).
-- ⬜ **Sprint 2b** — Foundation Models @Generable enrichment (vision tags + snippets + why-saved) + curation panel + Claude Code prompt bake-off.
+- 🟡 **Sprint 2b** — On-device Foundation Models enrichment (vision color/style/mood + snippets + why-saved via @Generable), auto-enrich + light review in DetailView, swappable EnrichmentPrompts.swift, Mock/fallback for tests. Composer building; Claude Code prompt bake-off running in parallel to pick the prompt.
 - ⬜ **Sprint 3** — Migration (Cursor runs export once; in-app Import).
 - ⬜ **Sprint 4** — System integration + delight (mixed).
 - ⬜ **Sprint 5** — Polish + ship.
