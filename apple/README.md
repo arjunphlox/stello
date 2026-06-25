@@ -22,7 +22,11 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 
 ## Build workflow (switched 2026-06-25)
 Xcode GUI proved too painful (targets/capabilities/signing). Now **Cursor-driven**: Opus orchestrates/reviews/commits; **Composer 2.5** sub-agents/sessions edit Swift + a text **XcodeGen `project.yml`**, build/test via `xcodebuild` (iOS Simulator, unsigned), and post screenshots. Toolchain: xcode-select -> /Applications/Xcode-beta.app (Xcode 27); xcodegen 2.45.4. In progress: migrate the hand-managed .xcodeproj to project.yml (all 3 targets).
-- 🟡 **Sprint 2b** — On-device Foundation Models enrichment (vision color/style/mood + snippets + why-saved via @Generable), auto-enrich + light review in DetailView, swappable EnrichmentPrompts.swift, Mock/fallback for tests. Composer building; Claude Code prompt bake-off running in parallel to pick the prompt.
+- ✅ **Sprint 2b** — On-device Foundation Models enrichment. Swappable Enricher (FoundationModels / fallback / mock), @Generable color/style/mood + snippets + why-saved, auto-enrich after capture + launch backfill, DetailView light review (AI tags/snippets/why-saved chips -> intent tag @0.9). 83 tests green. Committed 5ff38bc7.
+  - Pending: (1) LIVE on-device AI unverified — simulator lacks Apple Intelligence; verify on a real Apple-Intelligence device (needs signing). (2) Swap in the bake-off-winning prompt into EnrichmentPrompts.swift when ready.
+
+## Sprint 2 complete (capture + intelligence)
+2a in-app capture · 2a-share Share Extension · 2b on-device enrichment. Next candidates: full curation panel, App Intents/Spotlight (Sprint 4), or real-device AI verification + data migration (Sprint 3).
 - ⬜ **Sprint 3** — Migration (Cursor runs export once; in-app Import).
 - ⬜ **Sprint 4** — System integration + delight (mixed).
 - ⬜ **Sprint 5** — Polish + ship.
