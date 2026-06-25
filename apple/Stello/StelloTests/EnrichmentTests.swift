@@ -126,6 +126,52 @@ struct EnrichmentServiceTests {
     }
 }
 
+@Suite("EnrichmentNormalize")
+struct EnrichmentNormalizeTests {
+
+    @Test("weight clamps and rounds to two decimals")
+    func weightClampRound() {
+        #expect(EnrichmentNormalize.weight(1.5) == 1.0)
+        #expect(EnrichmentNormalize.weight(-0.2) == 0.0)
+        #expect(EnrichmentNormalize.weight(0.856) == 0.86)
+    }
+
+    @Test("tag lowercases and trims")
+    func tagNormalize() {
+        #expect(EnrichmentNormalize.tag("  Teal  ") == "teal")
+    }
+
+    @Test("snippet strips quotes and ellipses")
+    func snippetNormalize() {
+        let s = EnrichmentNormalize.snippet("\"A complete thought...\"")
+        #expect(s == "A complete thought")
+    }
+
+    @Test("reason kebab-cases and caps segments")
+    func reasonNormalize() {
+        #expect(EnrichmentNormalize.reason("Layout Reference!") == "layout-reference")
+        #expect(EnrichmentNormalize.reason("one two three four five") == "one-two-three-four")
+    }
+}
+
+@Suite("Vision tag mapping")
+struct VisionTagMappingTests {
+
+    @Test("mapVisionTags assigns categories from VisionTags buckets")
+    func mapVisionTags() {
+        let tags = VisionTags(
+            color: [WeightedTag(tag: "Teal", weight: 0.9)],
+            style: [WeightedTag(tag: "minimalist", weight: 0.7)],
+            mood: [WeightedTag(tag: "Calm", weight: 0.6)]
+        )
+        let specs = FoundationModelsEnricher.mapVisionTags(tags.normalized())
+        #expect(specs.count == 3)
+        #expect(specs.contains { $0.name == "teal" && $0.category == "color" && $0.weight == 0.9 })
+        #expect(specs.contains { $0.name == "minimalist" && $0.category == "style" })
+        #expect(specs.contains { $0.name == "calm" && $0.category == "mood" })
+    }
+}
+
 @Suite("RuleBasedFallbackEnricher")
 struct FallbackEnricherTests {
 
