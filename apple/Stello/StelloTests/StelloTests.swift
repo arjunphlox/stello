@@ -233,8 +233,9 @@ struct StelloTests {
     func headerLayoutConstants() {
         // Native traffic lights need a leading gutter so the wordmark clears them.
         #expect(StelloLayout.macTitleBarLeadingInset == 78)
-        // Top padding leaves room for the traffic-light row above the wordmark baseline.
-        #expect(StelloLayout.macHeaderTopPadding == 8)
+        // Traffic lights anchor inside the inset card (window inset + header padding).
+        #expect(StelloLayout.macTrafficLightOriginX == StelloLayout.windowInset + StelloLayout.headerPadding)
+        #expect(StelloLayout.macTrafficLightOriginYInset == StelloLayout.windowInset + StelloLayout.headerPadding)
         // Scroll-reactive fade distance must be a positive ramp.
         #expect(StelloLayout.headerScrollFadeDistance > 0)
     }

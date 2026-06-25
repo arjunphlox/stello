@@ -27,17 +27,26 @@ struct ContentView: View {
         .task {
             await SeedData.prepareStore(in: context)
             await SeedData.backfillSeedCovers(in: context)
-            if ProcessInfo.processInfo.arguments.contains("-screenshotEnrichmentDemo") {
-                selectedItem = SeedData.ensureEnrichmentDemo(in: context)
-                panelContent = .itemDetail
-            } else if isRegular && ProcessInfo.processInfo.arguments.contains("-screenshotItemPanel"),
-                      let first = allItems.first {
-                selectedItem = first
-                panelContent = .itemDetail
-            } else if isRegular && ProcessInfo.processInfo.arguments.contains("-screenshotFiltersPanel") {
-                panelContent = .filters
-            }
             await enrichmentCoordinator.enrichPendingItems(context: context)
+        }
+        .onAppear {
+            applyScreenshotLaunchState()
+        }
+    }
+
+    /// Screenshot launch args — applied synchronously so captures don't race seed I/O.
+    private func applyScreenshotLaunchState() {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-screenshotEnrichmentDemo") {
+            selectedItem = SeedData.ensureEnrichmentDemo(in: context)
+            panelContent = .itemDetail
+        } else if isRegular && args.contains("-screenshotItemPanel"), let first = allItems.first {
+            selectedItem = first
+            panelContent = .itemDetail
+        } else if isRegular && args.contains("-screenshotFiltersPanel") {
+            panelContent = .filters
+        } else if isRegular && args.contains("-screenshotFiltersActive") {
+            selectedTagNames = ["figma"]
         }
     }
 
@@ -86,6 +95,7 @@ struct ContentView: View {
                     )
                     .frame(width: SidePanelContent.width(for: geo.size.width))
                     .frame(maxHeight: .infinity)
+                    .padding(.vertical, StelloLayout.windowInset)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
@@ -94,10 +104,12 @@ struct ContentView: View {
         .padding(.trailing, panelContent != .none
             ? StelloLayout.windowInsetPanelOpenTrailing
             : StelloLayout.windowInset)
+        #if os(macOS)
+        .padding(.top, StelloLayout.windowInset)
+        #endif
         .animation(.spring(duration: 0.28), value: panelContent)
         .background(theme.background)
         #if os(macOS)
-        .ignoresSafeArea(edges: .top)
         .background(MacWindowConfigurator())
         #endif
     }

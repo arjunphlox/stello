@@ -25,8 +25,9 @@ enum StelloLayout {
     static let headerCountBaselineOffset: CGFloat = 14
     /// macOS: leading gutter inside accent header so wordmark clears native traffic lights.
     static let macTitleBarLeadingInset: CGFloat = 78
-    /// macOS: top padding inside header card — room for traffic-light row above wordmark baseline.
-    static let macHeaderTopPadding: CGFloat = 8
+    /// macOS: traffic-light cluster origin inside the inset header card (window inset + header padding).
+    static var macTrafficLightOriginX: CGFloat { windowInset + headerPadding }
+    static var macTrafficLightOriginYInset: CGFloat { windowInset + headerPadding }
     /// Scroll distance (pt) over which the header transitions opaque → glass.
     static let headerScrollFadeDistance: CGFloat = 48
     /// When a side panel is open, web halves the outer trailing inset (12 → 6).

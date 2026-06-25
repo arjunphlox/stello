@@ -1,13 +1,13 @@
 import SwiftUI
 
 /// Accent header — Stello wordmark, item tally, and icon buttons (Filters / Add / Settings).
-/// macOS: extends to the window top so native traffic lights sit on the accent color;
-/// scroll progress drives opaque → glass transition.
+/// macOS: inset rounded card; native traffic lights sit inside the card via `MacWindowConfigurator`.
+/// Scroll progress drives opaque → glass transition.
 struct StelloHeaderView: View {
     let itemCount: Int
     var hasActiveFilters: Bool = false
     var activePanel: SidePanelContent = .none
-    /// When true (macOS), reserve leading inset for native traffic lights and square the top edge.
+    /// When true (macOS), reserve leading inset for native traffic lights.
     var integratesMacTitleBar: Bool = false
     /// 0 = at scroll top (fully opaque accent); 1 = scrolled (accent-tinted glass).
     var scrollProgress: CGFloat = 0
@@ -23,46 +23,39 @@ struct StelloHeaderView: View {
     private var macLeadingInset: CGFloat { integratesMacTitleBar ? StelloLayout.macTitleBarLeadingInset : 0 }
     private var clampedScroll: CGFloat { min(max(scrollProgress, 0), 1) }
 
+    private var screenshotHoverFilters: Bool {
+        ProcessInfo.processInfo.arguments.contains("-screenshotHeaderHover")
+    }
+
     var body: some View {
-        ZStack(alignment: .bottom) {
-            HStack(alignment: .bottom, spacing: isCompact ? 8 : 12) {
-                wordmark
-                    .allowsHitTesting(false)
+        HStack(alignment: .bottom, spacing: isCompact ? 8 : 12) {
+            wordmark
+                .allowsHitTesting(false)
 
-                Spacer(minLength: isCompact ? 4 : 8)
-                    .allowsHitTesting(false)
+            Spacer(minLength: isCompact ? 4 : 8)
+                .allowsHitTesting(false)
 
-                buttonCluster
-                    .layoutPriority(0)
-            }
-            .padding(.leading, StelloLayout.headerPadding + macLeadingInset)
-            .padding(.trailing, StelloLayout.headerPadding)
-            .padding(.bottom, StelloLayout.headerPadding)
-            .padding(.top, integratesMacTitleBar ? StelloLayout.macHeaderTopPadding : StelloLayout.headerPadding)
+            buttonCluster
+                .layoutPriority(0)
         }
+        .padding(.leading, StelloLayout.headerPadding + macLeadingInset)
+        .padding(.trailing, StelloLayout.headerPadding)
+        .padding(.bottom, StelloLayout.headerPadding)
+        .padding(.top, StelloLayout.headerPadding)
         .frame(height: StelloLayout.headerHeight)
         .frame(maxWidth: .infinity)
         .background { headerBackground }
-        .modifier(HeaderClipShape(integratesMacTitleBar: integratesMacTitleBar))
-        #if os(macOS)
-        .background {
-            if integratesMacTitleBar {
-                theme.accentColor
-                    .opacity(1 - clampedScroll * 0.55)
-                    .ignoresSafeArea(edges: .top)
-            }
-        }
-        #endif
+        .clipShape(RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous))
     }
 
     private var buttonCluster: some View {
         GlassEffectContainer(spacing: buttonClusterSpacing) {
             HStack(spacing: buttonClusterSpacing) {
                 StelloGlassIconButton(
-                    systemName: hasActiveFilters || activePanel == .filters
-                        ? "line.3.horizontal.decrease.circle.fill"
-                        : "line.3.horizontal.decrease",
-                    isActive: activePanel == .filters,
+                    systemName: "line.3.horizontal.decrease",
+                    isActive: activePanel == .filters || hasActiveFilters,
+                    contrastForeground: true,
+                    forceHover: screenshotHoverFilters,
                     label: "Filters",
                     action: onFilters
                 )
@@ -84,33 +77,13 @@ struct StelloHeaderView: View {
 
     @ViewBuilder
     private var headerBackground: some View {
-        if integratesMacTitleBar {
-            accentHeaderBackground
-        } else {
-            RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous)
-                .fill(theme.accentColor.opacity(1 - clampedScroll * 0.35))
-                .glassEffect(
-                    .regular.tint(theme.accentColor.opacity(0.45 * clampedScroll)),
-                    in: .rect(cornerRadius: StelloLayout.headerCornerRadius)
-                )
-        }
-    }
-
-    @ViewBuilder
-    private var accentHeaderBackground: some View {
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 0,
-            bottomLeadingRadius: StelloLayout.headerCornerRadius,
-            bottomTrailingRadius: StelloLayout.headerCornerRadius,
-            topTrailingRadius: 0,
-            style: .continuous
-        )
+        let shape = RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous)
         if clampedScroll < 0.01 {
             shape.fill(theme.accentColor)
         } else {
             shape
-                .fill(theme.accentColor.opacity(0.72))
-                .glassEffect(.regular.tint(theme.accentColor.opacity(0.55)), in: shape)
+                .fill(theme.accentColor.opacity(integratesMacTitleBar ? 0.72 : 0.65))
+                .glassEffect(.regular.tint(theme.accentColor.opacity(0.45 * clampedScroll)), in: shape)
         }
     }
 
@@ -131,28 +104,6 @@ struct StelloHeaderView: View {
         }
         .foregroundStyle(theme.accentContrast)
         .layoutPriority(1)
-    }
-}
-
-// MARK: - Clip shape
-
-private struct HeaderClipShape: ViewModifier {
-    let integratesMacTitleBar: Bool
-
-    func body(content: Content) -> some View {
-        if integratesMacTitleBar {
-            content.clipShape(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 0,
-                    bottomLeadingRadius: StelloLayout.headerCornerRadius,
-                    bottomTrailingRadius: StelloLayout.headerCornerRadius,
-                    topTrailingRadius: 0,
-                    style: .continuous
-                )
-            )
-        } else {
-            content.clipShape(RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous))
-        }
     }
 }
 

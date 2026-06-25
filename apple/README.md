@@ -43,6 +43,9 @@ Xcode GUI proved too painful (targets/capabilities/signing). Now **Cursor-driven
 ## Handoff log
 Each handoff: surface, prompt given, what came back, review notes. Append newest at top.
 
+### 2026-06-25 — macOS inset header card + robust traffic lights + panel/hover/filter fixes (Cursor/Composer)
+macOS header is now a **12pt-inset rounded card on all four corners** (removed `.ignoresSafeArea(.top)` full-bleed + square-top `UnevenRoundedRectangle`). **Native traffic lights** repositioned inside the card via `TrafficLightLayout` + `TrafficLightPositioner` — re-applied on `NSView.layout()`, `resizeSubviews`, and `NSWindow` resize/live-resize/fullscreen/key/update notifications (native path, no fallback cluster). Side panel gets **12pt top/right/bottom inset** + existing column gap. Header/panel icon buttons: **16–22% accent-contrast capsule fill** on hover/pressed/active (removed `.glassEffect` tint + `.circle.fill` filter icon that caused glow/dark-block artifact). Screenshot args moved to synchronous `onAppear`. iOS + macOS build; **115 tests green**. Screenshots: `apple/Stello/.artifacts/macos-header-inset-card.png`, `macos-panel-inset.png`, `macos-header-hover.png`, `macos-filters-active.png`, `iphone-17-pro-grid.png`.
+
 ### 2026-06-25 — Real-store seed dedupe + idempotent seeding (Cursor/Composer)
 Launch-time `SeedData.prepareStore` dedupes the persisted App Group / CloudKit store: collapse duplicate slugs, collapse catalog-URL duplicates under legacy slugs, remove ephemeral screenshot rows (`enrichment-demo`) and retired catalog slugs; then upsert seeds by slug (update-in-place, never insert a second row). CloudKit local-only seed deferred — SwiftData has no per-record sync opt-out without a second container. iOS + macOS build; **99 tests green**. Real-store verification: **21 → 20 items** (removed stale `enrichment-demo` duplicate); relaunch **20 → 20** (idempotent). Screenshot: `apple/Stello/.artifacts/macos-deduped-real-store.png`.
 
