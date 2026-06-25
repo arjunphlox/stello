@@ -1,0 +1,164 @@
+name: Stello
+options:
+  bundleIdPrefix: com.phloxpage
+  deploymentTarget:
+    iOS: "27.0"
+    macOS: "27.0"
+  xcodeVersion: "27.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: 69E4GPJ74B
+    SWIFT_VERSION: "5.0"
+
+targets:
+  Stello:
+    type: application
+    supportedDestinations: [iOS, macOS, visionOS]
+    sources:
+      - path: Stello
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: Stello/Stello.entitlements
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "1.0"
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_PREVIEWS: YES
+        ENABLE_USER_SELECTED_FILES: readonly
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Stello/Info.plist
+        REGISTER_APP_GROUPS: YES
+        SKIP_INSTALL: YES
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_EMIT_LOC_STRINGS: YES
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        TARGETED_DEVICE_FAMILY: "1,2,7"
+        PRODUCT_BUNDLE_IDENTIFIER: com.phloxpage.Stello.StelloShare
+        PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]: com.phloxpage.Stello
+        PRODUCT_BUNDLE_IDENTIFIER[sdk=iphonesimulator*]: com.phloxpage.Stello
+        PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]: com.phloxpage.Stello
+        PRODUCT_BUNDLE_IDENTIFIER[sdk=xros*]: com.phloxpage.Stello
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]: YES
+        INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]: UIStatusBarStyleDefault
+        INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]: UIStatusBarStyleDefault
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+      configs:
+        Debug:
+          LD_RUNPATH_SEARCH_PATHS: "@executable_path/../../Frameworks"
+          LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]: "@executable_path/../Frameworks"
+        Release:
+          LD_RUNPATH_SEARCH_PATHS: "@executable_path/Frameworks"
+          LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]: "@executable_path/../Frameworks"
+    dependencies:
+      - target: StelloShare
+        embed: true
+        platformFilter: iOS
+
+  StelloShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: StelloShare
+        excludes:
+          - Info.plist
+      - path: Stello/Models
+        includes:
+          - Item.swift
+          - Tag.swift
+          - ItemImage.swift
+          - Snippet.swift
+      - path: Stello/Capture
+        includes:
+          - RuleTagger.swift
+          - CaptureService.swift
+      - path: Stello/Store
+        includes:
+          - StelloStore.swift
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: StelloShare/StelloShare.entitlements
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "1.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: StelloShare/Info.plist
+        REGISTER_APP_GROUPS: YES
+        SKIP_INSTALL: YES
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        PRODUCT_BUNDLE_IDENTIFIER: com.phloxpage.Stello.StelloShare
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+          - "@executable_path/../../Frameworks"
+        INFOPLIST_KEY_CFBundleDisplayName: StelloShare
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+      configs:
+        Release:
+          VALIDATE_PRODUCT: YES
+
+  StelloTests:
+    type: bundle.unit-test
+    supportedDestinations: [iOS, macOS, visionOS]
+    sources:
+      - path: StelloTests
+    dependencies:
+      - target: Stello
+    settings:
+      base:
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stello.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Stello"
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "1.0"
+        GENERATE_INFOPLIST_FILE: YES
+        STRING_CATALOG_GENERATE_SYMBOLS: NO
+        SWIFT_EMIT_LOC_STRINGS: NO
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        TARGETED_DEVICE_FAMILY: "1,2,7"
+        PRODUCT_BUNDLE_IDENTIFIER: com.phloxpage.StelloTests
+        IPHONEOS_DEPLOYMENT_TARGET: "27.0"
+        MACOSX_DEPLOYMENT_TARGET: "27.0"
+        XROS_DEPLOYMENT_TARGET: "27.0"
+
+schemes:
+  Stello:
+    build:
+      targets:
+        Stello: all
+    test:
+      gatherCoverageData: false
+      targets:
+        - StelloTests
+    run:
+      config: Debug
+    archive:
+      config: Release
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+  StelloShare:
+    build:
+      targets:
+        StelloShare: all
+        Stello: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+    profile:
+      config: Release
+    analyze:
+      config: Debug
