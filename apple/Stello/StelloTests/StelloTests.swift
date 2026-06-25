@@ -247,6 +247,95 @@ struct StelloTests {
         #expect(StelloLayout.headerOverlayScrollInset == expected)
     }
 
+    @Test("dedupe collapses duplicate slugs and preserves unique slugs")
+    func dedupeDuplicateSlugs() throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+
+        let stale = Item(
+            slug: "figma-auto-layout-guide",
+            title: "Stale Auto Layout",
+            sourceURL: "https://figma.com/blog/auto-layout",
+            domain: "figma.com"
+        )
+        let fresh = Item(
+            slug: "figma-auto-layout-guide",
+            title: "Auto Layout Demystified",
+            sourceURL: "https://www.figma.com/blog/design-systems-101-what-is-a-design-system/",
+            domain: "figma.com",
+            enrichmentStatus: "candidates_done"
+        )
+        let user = Item(slug: "my-captured-article-2", title: "User Item")
+        ctx.insert(stale)
+        ctx.insert(fresh)
+        ctx.insert(user)
+        try ctx.save()
+
+        let result = SeedData.deduplicateAndCleanSeedStore(in: ctx)
+        #expect(result.countBefore == 3)
+        #expect(result.countAfter == 2)
+        #expect(result.removedCount == 1)
+
+        let remaining = try ctx.fetch(FetchDescriptor<Item>())
+        #expect(remaining.count == 2)
+        let slugs = Set(remaining.map(\.slug))
+        #expect(slugs == ["figma-auto-layout-guide", "my-captured-article-2"])
+
+        let figma = remaining.first { $0.slug == "figma-auto-layout-guide" }
+        #expect(figma?.sourceURL?.contains("design-systems-101") == true)
+    }
+
+    @Test("seedIfNeeded upserts by slug without creating duplicates")
+    func seedIfNeededIdempotent() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let existing = Item(
+            slug: "figma-auto-layout-guide",
+            title: "Old Title",
+            domain: "figma.com"
+        )
+        ctx.insert(existing)
+        try ctx.save()
+
+        await SeedData.seedIfNeeded(in: ctx)
+        let items = try ctx.fetch(FetchDescriptor<Item>())
+        let figmaRows = items.filter { $0.slug == "figma-auto-layout-guide" }
+        #expect(figmaRows.count == 1)
+        #expect(figmaRows.first?.title == "Auto Layout Demystified")
+        #expect(items.count == SeedData.catalogManagedSlugs().count)
+    }
+
+    @Test("dedupe removes ephemeral screenshot seed rows")
+    func dedupeRemovesEphemeralSeeds() throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        ctx.insert(Item(slug: "enrichment-demo", title: "Auto Layout Demystified"))
+        ctx.insert(Item(slug: "figma-auto-layout-guide", title: "Auto Layout Demystified", domain: "figma.com"))
+        try ctx.save()
+
+        let result = SeedData.deduplicateAndCleanSeedStore(in: ctx)
+        #expect(result.removedCount == 1)
+        let slugs = Set(try ctx.fetch(FetchDescriptor<Item>()).map(\.slug))
+        #expect(!slugs.contains("enrichment-demo"))
+        #expect(slugs.contains("figma-auto-layout-guide"))
+    }
+
+    @Test("dedupe collapses catalog URL duplicates under different slugs")
+    func dedupeCatalogURLDuplicates() throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let url = "https://www.figma.com/blog/design-systems-101-what-is-a-design-system/"
+        ctx.insert(Item(slug: "legacy-figma-auto-layout", title: "Old", sourceURL: url, domain: "figma.com"))
+        ctx.insert(Item(slug: "figma-auto-layout-guide", title: "Fresh", sourceURL: url, domain: "figma.com"))
+        try ctx.save()
+
+        let result = SeedData.deduplicateAndCleanSeedStore(in: ctx)
+        #expect(result.removedCount == 1)
+        let remaining = try ctx.fetch(FetchDescriptor<Item>())
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.slug == "figma-auto-layout-guide")
+    }
+
     @Test("refreshSeedCatalogIfNeeded bumps catalog version")
     func seedCatalogRefresh() async throws {
         UserDefaults.standard.removeObject(forKey: "stello.seedCatalogVersion")

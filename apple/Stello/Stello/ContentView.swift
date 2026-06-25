@@ -25,8 +25,7 @@ struct ContentView: View {
             }
         }
         .task {
-            await SeedData.seedIfNeeded(in: context)
-            await SeedData.refreshSeedCatalogIfNeeded(in: context)
+            await SeedData.prepareStore(in: context)
             await SeedData.backfillSeedCovers(in: context)
             if ProcessInfo.processInfo.arguments.contains("-screenshotEnrichmentDemo") {
                 selectedItem = SeedData.ensureEnrichmentDemo(in: context)

@@ -139,8 +139,6 @@ struct MasonryGridView: View {
                 .preferredColorScheme(theme.colorScheme)
         }
         .task {
-            await SeedData.seedIfNeeded(in: context)
-            await SeedData.backfillSeedCovers(in: context)
             openScreenshotDetailIfNeeded()
             if !embedInPanelLayout && ProcessInfo.processInfo.arguments.contains("-screenshotFilterSheet") {
                 showFilterSheet = true

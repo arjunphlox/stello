@@ -7,6 +7,13 @@ enum SeedData {
     private static let catalogVersion = 3
     private static let catalogVersionKey = "stello.seedCatalogVersion"
 
+    /// Outcome of the launch-time slug dedupe / stale-seed cleanup pass.
+    struct DedupeResult: Sendable {
+        let countBefore: Int
+        let countAfter: Int
+        var removedCount: Int { countBefore - countAfter }
+    }
+
     static var previewContainer: ModelContainer = {
         let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
@@ -48,12 +55,134 @@ enum SeedData {
         return item
     }
 
+    /// Launch pipeline: dedupe persisted rows, upsert catalog seeds, refresh URLs.
+    static func prepareStore(in context: ModelContext) async {
+        let result = deduplicateAndCleanSeedStore(in: context)
+        logDedupeResult(result)
+        await seedIfNeeded(in: context)
+        await refreshSeedCatalogIfNeeded(in: context)
+    }
+
+    /// Collapses duplicate slug rows, catalog-URL duplicates, and stale/ephemeral seeds. Safe to re-run.
+    @discardableResult
+    static func deduplicateAndCleanSeedStore(in context: ModelContext) -> DedupeResult {
+        let countBefore = (try? context.fetchCount(FetchDescriptor<Item>())) ?? 0
+        guard var liveItems = try? context.fetch(FetchDescriptor<Item>()) else {
+            return DedupeResult(countBefore: countBefore, countAfter: countBefore)
+        }
+
+        let catalogURLs = seedURLCatalog()
+        let currentSlugs = Set(makeSeedItems().map(\.slug))
+        let catalogURLSet = Set(catalogURLs.values)
+        var deleted = 0
+
+        deleted += collapseDuplicateSlugs(in: context, items: liveItems, catalogURLs: catalogURLs)
+        if deleted > 0 {
+            try? context.save()
+            liveItems = (try? context.fetch(FetchDescriptor<Item>())) ?? liveItems
+        }
+
+        deleted += collapseCatalogURLDuplicates(in: context, items: liveItems, catalogURLs: catalogURLs)
+        if deleted > 0 {
+            try? context.save()
+            liveItems = (try? context.fetch(FetchDescriptor<Item>())) ?? liveItems
+        }
+
+        deleted += removeStaleSeedItems(in: context, items: liveItems, currentSlugs: currentSlugs, catalogURLSet: catalogURLSet)
+
+        if deleted > 0 { try? context.save() }
+        let countAfter = (try? context.fetchCount(FetchDescriptor<Item>())) ?? countBefore
+        return DedupeResult(countBefore: countBefore, countAfter: countAfter)
+    }
+
+    private static func collapseDuplicateSlugs(
+        in context: ModelContext,
+        items: [Item],
+        catalogURLs: [String: String]
+    ) -> Int {
+        var bySlug: [String: [Item]] = [:]
+        for item in items { bySlug[item.slug, default: []].append(item) }
+
+        var deleted = 0
+        for (slug, group) in bySlug where group.count > 1 {
+            let keeper = pickCanonicalItem(from: group, slug: slug, catalogURLs: catalogURLs)
+            for item in group where item.id != keeper.id {
+                context.delete(item)
+                deleted += 1
+            }
+        }
+        return deleted
+    }
+
+    /// CloudKit can re-sync legacy rows under a different slug for the same catalog URL.
+    private static func collapseCatalogURLDuplicates(
+        in context: ModelContext,
+        items: [Item],
+        catalogURLs: [String: String]
+    ) -> Int {
+        let catalogURLSet = Set(catalogURLs.values)
+        var byURL: [String: [Item]] = [:]
+        for item in items {
+            guard let url = item.sourceURL, catalogURLSet.contains(url) else { continue }
+            byURL[url, default: []].append(item)
+        }
+
+        var deleted = 0
+        for (url, group) in byURL where group.count > 1 {
+            let expectedSlug = catalogURLs.first(where: { $0.value == url })?.key
+            let keeper = pickCanonicalForCatalogURL(from: group, expectedSlug: expectedSlug, catalogURLs: catalogURLs)
+            for item in group where item.id != keeper.id {
+                context.delete(item)
+                deleted += 1
+            }
+        }
+        return deleted
+    }
+
+    private static func removeStaleSeedItems(
+        in context: ModelContext,
+        items: [Item],
+        currentSlugs: Set<String>,
+        catalogURLSet: Set<String>
+    ) -> Int {
+        var deleted = 0
+        for item in items where !currentSlugs.contains(item.slug) {
+            guard isStaleSeedItem(item, catalogURLSet: catalogURLSet) else { continue }
+            context.delete(item)
+            deleted += 1
+        }
+        return deleted
+    }
+
+    private static func isStaleSeedItem(_ item: Item, catalogURLSet: Set<String>) -> Bool {
+        if ephemeralSeedSlugs().contains(item.slug) { return true }
+        if retiredSeedSlugs().contains(item.slug) { return true }
+        if let url = item.sourceURL, catalogURLSet.contains(url) { return true }
+        if item.domain == nil, item.sourceURL == nil, item.slug.hasPrefix("note-") { return true }
+        return false
+    }
+
+    private static func pickCanonicalForCatalogURL(
+        from group: [Item],
+        expectedSlug: String?,
+        catalogURLs: [String: String]
+    ) -> Item {
+        if let expectedSlug, let match = group.first(where: { $0.slug == expectedSlug }) {
+            return match
+        }
+        return pickCanonicalItem(from: group, slug: expectedSlug ?? group[0].slug, catalogURLs: catalogURLs)
+    }
+
+    /// Upserts every catalog seed by slug — never inserts a second row for an existing slug.
     static func seedIfNeeded(in context: ModelContext) async {
-        let count = (try? context.fetchCount(FetchDescriptor<Item>())) ?? 0
-        guard count == 0 else { return }
-        for item in makeSeedItems() { insertItemGraph(item, in: context) }
-        try? context.save()
-        UserDefaults.standard.set(catalogVersion, forKey: catalogVersionKey)
+        var touched = false
+        for template in makeSeedItems() {
+            if upsertSeedItem(template, in: context) { touched = true }
+        }
+        if touched {
+            try? context.save()
+            UserDefaults.standard.set(catalogVersion, forKey: catalogVersionKey)
+        }
     }
 
     /// Updates persisted seed slugs to resolvable URLs and clears stale covers so backfill re-fetches OG images.
@@ -147,6 +276,91 @@ enum SeedData {
     }
 
     // MARK: - Private
+
+    private static func logDedupeResult(_ result: DedupeResult) {
+        NSLog(
+            "Seed store dedupe: %d -> %d items (%d removed)",
+            result.countBefore, result.countAfter, result.removedCount
+        )
+        let line = "before=\(result.countBefore) after=\(result.countAfter) removed=\(result.removedCount)\n"
+        if let group = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: StelloStore.appGroupID
+        ) {
+            try? line.write(to: group.appendingPathComponent("dedupe-last.txt"), atomically: true, encoding: .utf8)
+        }
+        if let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        ).first {
+            try? line.write(to: appSupport.appendingPathComponent("dedupe-last.txt"), atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Slugs owned by the seed catalog (current + retired). User captures use unique slugs outside this set.
+    static func catalogManagedSlugs() -> Set<String> {
+        Set(makeSeedItems().map(\.slug)).union(retiredSeedSlugs())
+    }
+
+    /// Slugs removed from the catalog across version bumps — safe to delete on sync.
+    private static func retiredSeedSlugs() -> Set<String> {
+        []
+    }
+
+    /// Screenshot/demo rows that must not persist in the real store.
+    private static func ephemeralSeedSlugs() -> Set<String> {
+        ["enrichment-demo"]
+    }
+
+    @discardableResult
+    private static func upsertSeedItem(_ template: Item, in context: ModelContext) -> Bool {
+        let slug = template.slug
+        let descriptor = FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.slug == slug })
+        if let existing = try? context.fetch(descriptor), let item = existing.first {
+            applySeedTemplate(template, to: item, in: context)
+            return true
+        }
+        insertItemGraph(template, in: context)
+        return true
+    }
+
+    private static func applySeedTemplate(_ template: Item, to item: Item, in context: ModelContext) {
+        item.title = template.title
+        item.sourceURL = template.sourceURL
+        item.domain = template.domain
+        item.summary = template.summary
+        item.needsReview = template.needsReview
+        item.addedAt = template.addedAt
+        item.updatedAt = template.updatedAt
+        item.enrichmentStatus = template.enrichmentStatus
+
+        for tag in item.tags ?? [] { context.delete(tag) }
+        var newTags: [Tag] = []
+        for src in template.tags ?? [] {
+            let tag = Tag(name: src.name, category: src.category, weight: src.weight, source: src.source)
+            context.insert(tag)
+            tag.item = item
+            newTags.append(tag)
+        }
+        item.tags = newTags
+    }
+
+    private static func pickCanonicalItem(
+        from group: [Item],
+        slug: String,
+        catalogURLs: [String: String]
+    ) -> Item {
+        let expectedURL = catalogURLs[slug]
+        return group.max(by: { canonicalScore($0, expectedURL: expectedURL) < canonicalScore($1, expectedURL: expectedURL) })!
+    }
+
+    private static func canonicalScore(_ item: Item, expectedURL: String?) -> Int {
+        var score = 0
+        if item.hasRenderableCover { score += 100 }
+        if item.coverImage?.source == "og" { score += 50 }
+        if let expectedURL, item.sourceURL == expectedURL { score += 25 }
+        if item.enrichmentStatus == "candidates_done" { score += 10 }
+        score += Int(item.updatedAt.timeIntervalSince1970)
+        return score
+    }
 
     /// Inserts an item and every related model so external-storage blobs persist on first save.
     private static func insertItemGraph(_ item: Item, in context: ModelContext) {
