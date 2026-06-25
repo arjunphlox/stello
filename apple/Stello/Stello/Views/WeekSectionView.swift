@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct WeekSectionView: View {
     let group: WeekGroup

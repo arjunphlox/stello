@@ -36,18 +36,18 @@ import FoundationModels
 enum EnrichmentNormalize {
 
     /// Clamp to [0,1] and round to 2 decimals.
-    static func weight(_ value: Double) -> Double {
+    nonisolated static func weight(_ value: Double) -> Double {
         let clamped = min(1.0, max(0.0, value))
         return (clamped * 100).rounded() / 100
     }
 
     /// Lowercase + trim a tag. Tags are single words or internally-hyphenated.
-    static func tag(_ raw: String) -> String {
+    nonisolated static func tag(_ raw: String) -> String {
         raw.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Trim a snippet, strip wrapping quotes, drop ellipses, cap at 200 chars.
-    static func snippet(_ raw: String) -> String {
+    nonisolated static func snippet(_ raw: String) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if let first = s.first, let last = s.last,
            (first == "\"" || first == "“") && (last == "\"" || last == "”") {
@@ -61,7 +61,7 @@ enum EnrichmentNormalize {
     }
 
     /// Lowercase kebab-case, alnum + single hyphens, ≤4 word-segments.
-    static func reason(_ raw: String) -> String {
+    nonisolated static func reason(_ raw: String) -> String {
         let lowered = raw.lowercased()
         let kebab = lowered
             .replacingOccurrences(of: "[^a-z0-9\\- ]", with: "", options: .regularExpression)

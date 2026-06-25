@@ -46,6 +46,7 @@ enum CaptureService {
 
     // MARK: - URL Capture
 
+    @discardableResult
     static func captureURL(_ url: URL, context: ModelContext) async throws -> Item {
         // Dedup by normalized URL
         let normalized = normalizeURL(url)
@@ -92,6 +93,7 @@ enum CaptureService {
 
     // MARK: - Text Capture
 
+    @discardableResult
     static func captureText(_ text: String, context: ModelContext) throws -> Item {
         let words = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         let title = words.prefix(5).joined(separator: " ")
@@ -115,6 +117,7 @@ enum CaptureService {
 
     // MARK: - Image Capture
 
+    @discardableResult
     static func captureImage(_ data: Data, context: ModelContext) throws -> Item {
         let (w, h) = imageDimensions(data: data)
 

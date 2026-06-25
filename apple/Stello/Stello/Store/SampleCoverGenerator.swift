@@ -51,9 +51,9 @@ enum SampleCoverGenerator {
             )
         }
 
-        // Soft off-center highlight for depth.
-        let hx = Double(s * 13 % 100) / 100.0 * Double(w)
-        let hy = Double(s * 29 % 100) / 100.0 * Double(h)
+        // Soft off-center highlight for depth (mod before multiply — seed hash can overflow Int).
+        let hx = Double((s % 100) * 13 % 100) / 100.0 * Double(w)
+        let hy = Double((s % 100) * 29 % 100) / 100.0 * Double(h)
         let glowColors = [
             CGColor(colorSpace: space, components: [1, 1, 1, 0.16])!,
             CGColor(colorSpace: space, components: [1, 1, 1, 0])!,

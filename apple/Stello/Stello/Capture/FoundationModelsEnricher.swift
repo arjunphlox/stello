@@ -6,7 +6,7 @@ import FoundationModels
 struct FoundationModelsEnricher: Enricher {
     private let model: SystemLanguageModel
 
-    init(model: SystemLanguageModel = .default) {
+    nonisolated init(model: SystemLanguageModel = .default) {
         self.model = model
     }
 

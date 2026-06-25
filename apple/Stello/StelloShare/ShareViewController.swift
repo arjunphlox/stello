@@ -85,33 +85,44 @@ final class ShareViewController: UIViewController {
         guard let attachments = item.attachments else { return nil }
 
         // Prefer URL
-        for provider in attachments {
-            if provider.hasItemConformingToTypeIdentifier("public.url") {
-                if let url = try? await loadItem(provider, uti: "public.url") as? URL {
-                    return .url(url)
-                }
+        for provider in attachments where provider.canLoadObject(ofClass: NSURL.self) {
+            if let url = try? await loadObject(provider, ofClass: NSURL.self) {
+                return .url(url as URL)
             }
         }
         // Then image
-        for provider in attachments {
-            if provider.hasItemConformingToTypeIdentifier("public.image") {
-                if let data = try? await loadItem(provider, uti: "public.image") as? Data {
-                    return .image(data)
-                }
+        for provider in attachments where provider.canLoadObject(ofClass: UIImage.self) {
+            if let image = try? await loadObject(provider, ofClass: UIImage.self),
+               let data = image.pngData() {
+                return .image(data)
             }
         }
         // Then plain text
-        for provider in attachments {
-            if provider.hasItemConformingToTypeIdentifier("public.plain-text") {
-                if let text = try? await loadItem(provider, uti: "public.plain-text") as? String {
-                    return .text(text)
-                }
+        for provider in attachments where provider.canLoadObject(ofClass: NSString.self) {
+            if let text = try? await loadObject(provider, ofClass: NSString.self) {
+                return .text(text as String)
             }
         }
         return nil
     }
 
-    private func loadItem(_ provider: NSItemProvider, uti: String) async throws -> NSSecureCoding? {
-        try await provider.loadItem(forTypeIdentifier: uti)
+    private func loadObject<T: NSItemProviderReading>(
+        _ provider: NSItemProvider,
+        ofClass type: T.Type
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            _ = provider.loadObject(ofClass: type) { object, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let object = object as? T {
+                    continuation.resume(returning: object)
+                } else {
+                    continuation.resume(throwing: NSError(
+                        domain: "StelloShare", code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: "Unexpected shared item type."]
+                    ))
+                }
+            }
+        }
     }
 }

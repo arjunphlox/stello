@@ -44,7 +44,7 @@ final class EnrichmentCoordinator {
 // MARK: - Environment
 
 private struct EnrichmentCoordinatorKey: EnvironmentKey {
-    static let defaultValue = EnrichmentCoordinator()
+    @MainActor static let defaultValue = EnrichmentCoordinator()
 }
 
 extension EnvironmentValues {

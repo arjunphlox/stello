@@ -267,10 +267,12 @@ enum SeedData {
         // (like the web). The note items (no domain) stay as text cards.
         if domain != nil,
            let cover = SampleCoverGenerator.cover(seed: SampleCoverGenerator.stableSeed(slug)) {
-            item.images = [
-                ItemImage(data: cover.data, source: "generated", isPrimary: true,
-                          width: cover.width, height: cover.height)
-            ]
+            let img = ItemImage(
+                data: cover.data, source: "generated", isPrimary: true,
+                width: cover.width, height: cover.height
+            )
+            img.item = item
+            item.images = [img]
         }
         return item
     }
