@@ -4,6 +4,9 @@ struct WeekSectionView: View {
     let group: WeekGroup
     let isExpanded: Bool
     let onToggle: () -> Void
+    /// When provided (regular width: iPad/Mac), tapping a card sets the inspector
+    /// selection. When nil (compact width: iPhone), cards push via NavigationLink.
+    var selection: Binding<Item?>? = nil
 
     @Environment(\.appTheme) private var theme
 
@@ -31,10 +34,7 @@ struct WeekSectionView: View {
             if isExpanded {
                 MasonryLayout(spacing: 12) {
                     ForEach(group.items) { item in
-                        NavigationLink(value: item) {
-                            ItemCardView(item: item)
-                        }
-                        .buttonStyle(.plain)
+                        card(for: item)
                     }
                 }
                 .padding(.bottom, 12)
@@ -42,6 +42,26 @@ struct WeekSectionView: View {
 
             Divider()
                 .overlay(theme.border)
+        }
+    }
+
+    @ViewBuilder
+    private func card(for item: Item) -> some View {
+        if let selection {
+            Button {
+                selection.wrappedValue = item
+            } label: {
+                ItemCardView(
+                    item: item,
+                    isSelected: selection.wrappedValue?.persistentModelID == item.persistentModelID
+                )
+            }
+            .buttonStyle(.plain)
+        } else {
+            NavigationLink(value: item) {
+                ItemCardView(item: item)
+            }
+            .buttonStyle(.plain)
         }
     }
 }

@@ -2,6 +2,9 @@ import SwiftUI
 import SwiftData
 
 struct MasonryGridView: View {
+    /// When provided (iPad/Mac), card taps set this inspector selection instead of pushing.
+    var selection: Binding<Item?>? = nil
+
     @Query(sort: \Item.addedAt, order: .reverse) private var allItems: [Item]
     @Environment(\.modelContext) private var context
     @Environment(\.appTheme) private var theme
@@ -34,7 +37,8 @@ struct MasonryGridView: View {
                     WeekSectionView(
                         group: group,
                         isExpanded: isFiltering || expandedWeeks.contains(group.key),
-                        onToggle: { toggleWeek(group.key) }
+                        onToggle: { toggleWeek(group.key) },
+                        selection: selection
                     )
                 }
             }

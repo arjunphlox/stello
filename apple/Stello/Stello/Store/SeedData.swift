@@ -262,6 +262,16 @@ enum SeedData {
             enrichmentStatus: "candidates_done"
         )
         item.tags = tags.map { Tag(name: $0.0, category: $0.1, weight: $0.2) }
+
+        // Give URL-backed items a procedural cover so the masonry is image-forward
+        // (like the web). The note items (no domain) stay as text cards.
+        if domain != nil,
+           let cover = SampleCoverGenerator.cover(seed: SampleCoverGenerator.stableSeed(slug)) {
+            item.images = [
+                ItemImage(data: cover.data, source: "generated", isPrimary: true,
+                          width: cover.width, height: cover.height)
+            ]
+        }
         return item
     }
 }
