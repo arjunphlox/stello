@@ -86,9 +86,9 @@ struct MasonryGridView: View {
                     )
                 }
             }
-            .padding(.horizontal, StelloLayout.windowInset)
+            .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
             .padding(.top, embedInPanelLayout ? 0 : StelloLayout.windowInset)
-            .padding(.bottom, 24)
+            .padding(.bottom, StelloLayout.windowInset)
         }
         .background(theme.background)
         #if os(iOS)
@@ -106,7 +106,7 @@ struct MasonryGridView: View {
         }
         .task {
             await SeedData.seedIfNeeded(in: context)
-            SeedData.backfillSeedCovers(in: context)
+            await SeedData.backfillSeedCovers(in: context)
             openScreenshotDetailIfNeeded()
             if !embedInPanelLayout && ProcessInfo.processInfo.arguments.contains("-screenshotFilterSheet") {
                 showFilterSheet = true
@@ -135,6 +135,7 @@ struct MasonryGridView: View {
         }
         .font(.body)
         .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity)
         .frame(height: 48)
         .background(theme.backgroundSubtle)
         .overlay {

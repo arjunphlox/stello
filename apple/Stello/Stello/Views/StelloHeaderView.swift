@@ -13,62 +13,84 @@ struct StelloHeaderView: View {
     var onSettings: () -> Void
 
     @Environment(\.appTheme) private var theme
+    @Environment(\.horizontalSizeClass) private var hSizeClass
 
-    private var macLeadingInset: CGFloat {
-        integratesMacTitleBar ? 78 : 0
-    }
+    private var isCompact: Bool { hSizeClass == .compact }
+    private var buttonHorizontalPadding: CGFloat { isCompact ? 12 : 18 }
+    private var buttonClusterSpacing: CGFloat { isCompact ? 6 : 8 }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("Stello")
-                    .font(.system(size: 48, weight: .regular))
-                    .tracking(-1.4)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                if itemCount > 0 {
-                    Text("\(itemCount)")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(theme.accentContrast.opacity(0.55))
+        ZStack(alignment: .bottom) {
+            if integratesMacTitleBar {
+                #if os(macOS)
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        MacTrafficLightCluster()
+                        Spacer(minLength: 0)
+                    }
+                    Spacer(minLength: 0)
                 }
+                .padding(StelloLayout.headerPadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                #endif
             }
-            .foregroundStyle(theme.accentContrast)
 
-            Spacer(minLength: 8)
+            HStack(alignment: .bottom, spacing: isCompact ? 8 : 12) {
+                wordmark
 
-            GlassEffectContainer(spacing: 8) {
-                HStack(spacing: 8) {
-                    glassHeaderButton(
-                        systemName: hasActiveFilters || activePanel == .filters
-                            ? "line.3.horizontal.decrease.circle.fill"
-                            : "line.3.horizontal.decrease",
-                        isActive: activePanel == .filters,
-                        label: "Filters",
-                        action: onFilters
-                    )
-                    glassHeaderButton(
-                        systemName: "plus",
-                        isActive: activePanel == .import,
-                        label: "Import",
-                        action: onImport
-                    )
-                    glassHeaderButton(
-                        systemName: "gear",
-                        isActive: activePanel == .settings,
-                        label: "Settings",
-                        action: onSettings
-                    )
+                Spacer(minLength: isCompact ? 4 : 8)
+
+                GlassEffectContainer(spacing: buttonClusterSpacing) {
+                    HStack(spacing: buttonClusterSpacing) {
+                        glassHeaderButton(
+                            systemName: hasActiveFilters || activePanel == .filters
+                                ? "line.3.horizontal.decrease.circle.fill"
+                                : "line.3.horizontal.decrease",
+                            isActive: activePanel == .filters,
+                            label: "Filters",
+                            action: onFilters
+                        )
+                        glassHeaderButton(
+                            systemName: "plus",
+                            isActive: activePanel == .import,
+                            label: "Import",
+                            action: onImport
+                        )
+                        glassHeaderButton(
+                            systemName: "gear",
+                            isActive: activePanel == .settings,
+                            label: "Settings",
+                            action: onSettings
+                        )
+                    }
                 }
+                .layoutPriority(0)
             }
+            .padding(StelloLayout.headerPadding)
         }
-        .padding(.leading, StelloLayout.windowInset + macLeadingInset)
-        .padding(.trailing, StelloLayout.windowInset)
-        .padding(.bottom, StelloLayout.windowInset)
-        .padding(.top, StelloLayout.windowInset)
-        .frame(minHeight: integratesMacTitleBar ? StelloLayout.macHeaderHeight : 72, alignment: .bottom)
+        .frame(height: StelloLayout.headerHeight)
         .frame(maxWidth: .infinity)
         .background(theme.accentColor)
         .clipShape(RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous))
+    }
+
+    private var wordmark: some View {
+        HStack(alignment: .firstTextBaseline, spacing: StelloLayout.headerCountSpacing) {
+            Text("Stello")
+                .font(.system(size: isCompact ? 42 : StelloLayout.headerTitleSize, weight: .regular))
+                .tracking(isCompact ? -1.26 : -1.44) // web letter-spacing: -0.03em
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            if itemCount > 0 {
+                Text("\(itemCount)")
+                    .font(.system(size: StelloLayout.headerCountSize, weight: .regular))
+                    .foregroundStyle(theme.accentContrast.opacity(0.55))
+                    .baselineOffset(StelloLayout.headerCountBaselineOffset)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .foregroundStyle(theme.accentContrast)
+        .layoutPriority(1)
     }
 }
 
@@ -82,11 +104,13 @@ extension StelloHeaderView {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .medium))
-                .frame(width: 36, height: 28)
                 .foregroundStyle(theme.accentContrast.opacity(isActive ? 1 : 0.82))
+                .padding(.horizontal, buttonHorizontalPadding)
+                .padding(.vertical, isCompact ? 8 : 10)
         }
-        .buttonStyle(.glass)
-        .clipShape(Capsule())
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .fixedSize(horizontal: true, vertical: false)
         .accessibilityLabel(label)
         .help(label)
     }
@@ -97,6 +121,7 @@ extension StelloHeaderView {
         itemCount: 19,
         hasActiveFilters: true,
         activePanel: .filters,
+        integratesMacTitleBar: true,
         onFilters: {},
         onImport: {},
         onSettings: {}
@@ -104,4 +129,19 @@ extension StelloHeaderView {
     .padding(StelloLayout.windowInset)
     .background(Color(hex: "#111110"))
     .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
+}
+
+#Preview("iPhone compact") {
+    StelloHeaderView(
+        itemCount: 19,
+        hasActiveFilters: false,
+        onFilters: {},
+        onImport: {},
+        onSettings: {}
+    )
+    .padding(StelloLayout.windowInset)
+    .background(Color(hex: "#111110"))
+    .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
+    .environment(\.horizontalSizeClass, .compact)
+    .frame(width: 393)
 }

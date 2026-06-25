@@ -160,7 +160,7 @@ struct StelloTests {
     // MARK: - Seed cover backfill
 
     @Test("backfillSeedCovers attaches generated covers to URL items missing images")
-    func backfillSeedCovers() throws {
+    func backfillSeedCovers() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)
 
@@ -180,7 +180,7 @@ struct StelloTests {
         ctx.insert(note)
         try ctx.save()
 
-        let patched = SeedData.backfillSeedCovers(in: ctx)
+        let patched = await SeedData.backfillSeedCovers(in: ctx)
         #expect(patched == 1)
         #expect(withDomain.hasRenderableCover)
         #expect(withDomain.coverImage?.hasRenderableCoverData == true)
@@ -188,7 +188,7 @@ struct StelloTests {
     }
 
     @Test("backfillSeedCovers replaces broken generated shell rows")
-    func backfillReplacesBrokenShells() throws {
+    func backfillReplacesBrokenShells() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)
         let item = Item(slug: "figma-auto-layout-guide", title: "Auto Layout", domain: "figma.com")
@@ -199,7 +199,7 @@ struct StelloTests {
         item.images = [shell]
         try ctx.save()
 
-        #expect(SeedData.backfillSeedCovers(in: ctx) == 1)
+        #expect(await SeedData.backfillSeedCovers(in: ctx) == 1)
         #expect(item.hasRenderableCover)
     }
 
@@ -208,6 +208,7 @@ struct StelloTests {
         let container = try makeContainer()
         let ctx = ModelContext(container)
         await SeedData.seedIfNeeded(in: ctx)
+        await SeedData.backfillSeedCovers(in: ctx)
 
         let relaunch = ModelContext(container)
         let items = try relaunch.fetch(FetchDescriptor<Item>(
@@ -217,15 +218,15 @@ struct StelloTests {
     }
 
     @Test("backfillSeedCovers is idempotent")
-    func backfillSeedCoversIdempotent() throws {
+    func backfillSeedCoversIdempotent() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)
         let item = Item(slug: "css-tricks-grid", title: "CSS Grid", domain: "css-tricks.com")
         ctx.insert(item)
         try ctx.save()
 
-        #expect(SeedData.backfillSeedCovers(in: ctx) == 1)
-        #expect(SeedData.backfillSeedCovers(in: ctx) == 0)
+        #expect(await SeedData.backfillSeedCovers(in: ctx) == 1)
+        #expect(await SeedData.backfillSeedCovers(in: ctx) == 0)
     }
 
     // MARK: - Helpers

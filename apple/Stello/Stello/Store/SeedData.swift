@@ -51,15 +51,30 @@ enum SeedData {
         try? context.save()
     }
 
-    /// Idempotent launch migration: URL-backed items seeded before procedural covers
-    /// existed persist without images because `seedIfNeeded` only runs on an empty store.
-    /// Attaches a deterministic generated cover to any domain-backed item still missing one.
+    /// Idempotent launch migration: URL-backed items without renderable covers get an OG image
+    /// via `CaptureService` (falls back to procedural gradient when offline or fetch fails).
     @discardableResult
-    static func backfillSeedCovers(in context: ModelContext) -> Int {
+    static func backfillSeedCovers(in context: ModelContext) async -> Int {
         guard let items = try? context.fetch(FetchDescriptor<Item>()) else { return 0 }
         var patched = 0
         for item in items where item.domain != nil {
             purgeBrokenGeneratedCovers(for: item, in: context)
+
+            if let cover = item.coverImage, cover.source == "og", cover.hasRenderableCoverData {
+                continue
+            }
+
+            var attached = false
+            if let urlString = item.sourceURL, let url = URL(string: urlString) {
+                attached = await attachOGCover(to: item, url: url, in: context)
+            }
+
+            if attached {
+                removeGeneratedCovers(from: item, in: context)
+                patched += 1
+                continue
+            }
+
             guard !item.hasRenderableCover else { continue }
             guard let cover = SampleCoverGenerator.cover(seed: SampleCoverGenerator.stableSeed(item.slug)) else {
                 continue
@@ -133,6 +148,28 @@ enum SeedData {
         for img in item.images ?? [] where img.isPrimary {
             img.isPrimary = false
         }
+    }
+
+    private static func removeGeneratedCovers(from item: Item, in context: ModelContext) {
+        guard let images = item.images else { return }
+        let generated = images.filter { $0.source == "generated" }
+        guard !generated.isEmpty else { return }
+        for img in generated { context.delete(img) }
+        item.images = images.filter { !generated.contains($0) }
+    }
+
+    @discardableResult
+    private static func attachOGCover(to item: Item, url: URL, in context: ModelContext) async -> Bool {
+        let og = await CaptureService.fetchOG(url: url)
+        guard let imgURL = og.imageURL,
+              let (data, w, h) = await CaptureService.downloadImage(url: imgURL) else { return false }
+        demoteExistingPrimaries(on: item)
+        let img = ItemImage(data: data, source: "og", isPrimary: true, width: w, height: h)
+        context.insert(img)
+        img.item = item
+        if item.images == nil { item.images = [] }
+        item.images?.append(img)
+        return true
     }
 
     private static func daysAgo(_ n: Int) -> Date {
@@ -322,18 +359,6 @@ enum SeedData {
             enrichmentStatus: "candidates_done"
         )
         item.tags = tags.map { Tag(name: $0.0, category: $0.1, weight: $0.2) }
-
-        // Give URL-backed items a procedural cover so the masonry is image-forward
-        // (like the web). The note items (no domain) stay as text cards.
-        if domain != nil,
-           let cover = SampleCoverGenerator.cover(seed: SampleCoverGenerator.stableSeed(slug)) {
-            let img = ItemImage(
-                data: cover.data, source: "generated", isPrimary: true,
-                width: cover.width, height: cover.height
-            )
-            img.item = item
-            item.images = [img]
-        }
         return item
     }
 }

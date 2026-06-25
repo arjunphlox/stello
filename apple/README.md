@@ -43,6 +43,9 @@ Xcode GUI proved too painful (targets/capabilities/signing). Now **Cursor-driven
 ## Handoff log
 Each handoff: surface, prompt given, what came back, review notes. Append newest at top.
 
+### 2026-06-25 — Session end: compact header + iPhone title fixes (Cursor/Composer)
+Fixed macOS header balloon regression (fixed 120pt ZStack layout: traffic lights top-left, wordmark+pills bottom) and iPhone "St…" truncation (compact tighter pill buttons, wordmark `fixedSize` + layout priority). Kept pill glass buttons, real OG covers, equal 24pt window insets, SwiftUI traffic lights. Stronger OG card bottom scrim. 92 tests green; screenshots at `apple/Stello/.artifacts/macos-compact-header.png` + `iphone-17-pro-header.png`.
+
 ### Sprint 1 → reviewed, committed f0ec677
 PASS. Theme palettes verbatim-correct; ISO-week via Calendar(.iso8601); AND filter via subset; navigation wired (Item: Hashable); theme persisted + injected; seed status normalized. Minor non-blocking follow-ups: (1) tag filter matches by NAME only — web uses (name, category) pairs; revisit if same name appears across categories. (2) macOS filter sheet doesn't set preferredColorScheme (iOS does). (3) detail tag chips encode weight only via opacity. Carry to a later polish pass.
 

@@ -25,7 +25,7 @@ struct ContentView: View {
         }
         .task {
             await SeedData.seedIfNeeded(in: context)
-            SeedData.backfillSeedCovers(in: context)
+            await SeedData.backfillSeedCovers(in: context)
             if ProcessInfo.processInfo.arguments.contains("-screenshotEnrichmentDemo") {
                 selectedItem = SeedData.ensureEnrichmentDemo(in: context)
                 panelContent = .itemDetail
@@ -45,7 +45,7 @@ struct ContentView: View {
     private var regularLayout: some View {
         GeometryReader { geo in
             HStack(spacing: StelloLayout.columnGap) {
-                VStack(spacing: StelloLayout.columnGap) {
+                VStack(spacing: StelloLayout.sectionGap) {
                     StelloHeaderView(
                         itemCount: allItems.count,
                         hasActiveFilters: !selectedTagNames.isEmpty,
@@ -55,6 +55,7 @@ struct ContentView: View {
                         onImport: { togglePanel(.import) },
                         onSettings: { togglePanel(.settings) }
                     )
+                    .fixedSize(horizontal: false, vertical: true)
 
                     MasonryGridView(
                         embedInPanelLayout: true,
@@ -78,12 +79,15 @@ struct ContentView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            .padding(.leading, StelloLayout.windowInset)
-            .padding(.trailing, StelloLayout.windowInset)
-            .padding(.top, StelloLayout.windowInset)
-            .padding(.bottom, StelloLayout.windowInset)
-            .animation(.spring(duration: 0.28), value: panelContent)
         }
+        .ignoresSafeArea(.container, edges: .top)
+        .padding(.leading, StelloLayout.windowInset)
+        .padding(.trailing, panelContent != .none
+            ? StelloLayout.windowInsetPanelOpenTrailing
+            : StelloLayout.windowInset)
+        .padding(.top, StelloLayout.windowInset)
+        .padding(.bottom, StelloLayout.windowInset)
+        .animation(.spring(duration: 0.28), value: panelContent)
         .background(theme.background)
         #if os(macOS)
         .background(MacWindowConfigurator())

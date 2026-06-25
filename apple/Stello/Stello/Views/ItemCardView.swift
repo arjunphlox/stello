@@ -118,10 +118,10 @@ struct ItemCardView: View {
         if hasImage {
             ZStack(alignment: .bottom) {
                 LinearGradient(
-                    colors: [.black.opacity(0), .black.opacity(0.62)],
-                    startPoint: .center, endPoint: .bottom
+                    colors: [.black.opacity(0), .black.opacity(0.45), .black.opacity(0.82)],
+                    startPoint: .top, endPoint: .bottom
                 )
-                .frame(height: 88)
+                .frame(height: 96)
                 .frame(maxWidth: .infinity)
                 .allowsHitTesting(false)
 
