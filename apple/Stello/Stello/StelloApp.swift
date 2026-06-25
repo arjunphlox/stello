@@ -37,7 +37,6 @@ struct StelloApp: App {
             rootView
         }
         #if os(macOS)
-        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 800)
         #endif
     }

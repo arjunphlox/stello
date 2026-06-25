@@ -2,8 +2,11 @@ import CoreGraphics
 
 /// Shared layout constants — mirrors web `.content-inner` / `.header` from `style.css`.
 enum StelloLayout {
-    /// Uniform window edge inset — top, leading, trailing (no bottom; content bleeds to window edge).
+    /// Uniform side inset — leading, trailing, panel vertical (no bottom; content bleeds to window edge).
     static let windowInset: CGFloat = 12
+    /// macOS top inset only — 0pt so native traffic lights (~14pt from window top)
+    /// land on the inset header card body; sides use `windowInset` (12pt).
+    static let macWindowTopInset: CGFloat = 0
     /// Web `.content-inner { gap: 16px }` between header, search, and grid.
     static let sectionGap: CGFloat = 16
     /// Web `.header { border-radius: 12px }`.
@@ -25,9 +28,6 @@ enum StelloLayout {
     static let headerCountBaselineOffset: CGFloat = 14
     /// macOS: leading gutter inside accent header so wordmark clears native traffic lights.
     static let macTitleBarLeadingInset: CGFloat = 78
-    /// macOS: traffic-light cluster origin inside the inset header card (window inset + header padding).
-    static var macTrafficLightOriginX: CGFloat { windowInset + headerPadding }
-    static var macTrafficLightOriginYInset: CGFloat { windowInset + headerPadding }
     /// Scroll distance (pt) over which the header transitions opaque → glass.
     static let headerScrollFadeDistance: CGFloat = 48
     /// When a side panel is open, web halves the outer trailing inset (12 → 6).
@@ -40,9 +40,9 @@ enum StelloLayout {
     static var floatingSearchScrollInset: CGFloat {
         floatingSearchBarHeight + floatingSearchBarBottomMargin
     }
-    /// Top scroll inset when the header floats over the grid (header + gap + window inset).
+    /// Top scroll inset when the header floats over the grid (header + gap + mac top inset).
     static var headerOverlayScrollInset: CGFloat {
-        headerHeight + sectionGap + windowInset
+        headerHeight + sectionGap + macWindowTopInset
     }
     /// Header / toolbar icon buttons — fixed capsule footprint + symbol metrics.
     static let iconButtonFootprint: CGFloat = 36

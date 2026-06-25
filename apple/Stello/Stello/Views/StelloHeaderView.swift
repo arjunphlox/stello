@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Accent header — Stello wordmark, item tally, and icon buttons (Filters / Add / Settings).
-/// macOS: inset rounded card; native traffic lights sit inside the card via `MacWindowConfigurator`.
+/// macOS: inset rounded card; native traffic lights float at system position over the card
+/// (Sketch-style — content inset positions the card, never reposition the buttons).
 /// Scroll progress drives opaque → glass transition.
 struct StelloHeaderView: View {
     let itemCount: Int

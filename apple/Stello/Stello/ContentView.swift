@@ -105,7 +105,8 @@ struct ContentView: View {
             ? StelloLayout.windowInsetPanelOpenTrailing
             : StelloLayout.windowInset)
         #if os(macOS)
-        .padding(.top, StelloLayout.windowInset)
+        .ignoresSafeArea(edges: .top)
+        .padding(.top, StelloLayout.macWindowTopInset)
         #endif
         .animation(.spring(duration: 0.28), value: panelContent)
         .background(theme.background)
