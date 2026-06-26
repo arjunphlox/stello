@@ -43,6 +43,16 @@
 | **Pre-resize oversized images before vision** — some items hit Anthropic `400 invalid_request` in `enrich.js` Phase A (image too large / bad dimensions) → terminal `error`, never healed (backfill + drain both skip `error`). Resize/re-encode via the CF Images binding before the vision call so these recover. Surfaced 2026-06-15 during the drain pilot (~6 items already stuck this way) | Claude Code | Desktop | Sonnet | Open |
 | **Fix desktop-context hanging pytest** — `test_poll_loop_logs_only_on_change` blocks full `pytest tests/` run; skip, timeout, or rewrite | Cursor | Desktop | Sonnet | Open |
 
+## Native app
+
+| Task | Tool | Platform | Model | Status |
+|---|---|---|---|---|
+| **Verify live on-device AFM** — Foundation Models enrichment on a real Apple-Intelligence device (signing required); mock-tested only in sim | Cursor | iOS/macOS | Composer | Open |
+| **Verify CloudKit cross-device sync + Supabase→native migration** — Sprint 3: prove sync across devices, build one-way import from Supabase web data | Cursor | iOS/macOS | Opus | Open |
+| **Domain-pill tint + subtle visual polish** — native card/tag styling refinements vs web reference | Cursor | iOS/macOS | Composer | Open |
+| **Full curation panel + App Intents/Spotlight/Visual Intelligence** — Sprint 4, deferred | Cursor | iOS/macOS | Opus | Open |
+| **Consider local-only seed container** — if CloudKit dupes recur, isolate seed catalog in a non-synced container | Cursor | iOS/macOS | Composer | Open |
+
 ## Maintenance (run periodically via Claude Code)
 
 | Task | Tool | Platform | Model | Status |
