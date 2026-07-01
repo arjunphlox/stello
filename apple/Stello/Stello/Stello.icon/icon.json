@@ -39,11 +39,21 @@
               }
             },
             {
+              "idiom" : "square",
+              "value" : {
+                "scale" : 1,
+                "translation-in-points" : [
+                  -40,
+                  260
+                ]
+              }
+            },
+            {
               "idiom" : "watchOS",
               "value" : {
                 "scale" : 0.9,
                 "translation-in-points" : [
-                  -63.4140625,
+                  -40,
                   237.015625
                 ]
               }
@@ -78,11 +88,21 @@
               }
             },
             {
+              "idiom" : "square",
+              "value" : {
+                "scale" : 1,
+                "translation-in-points" : [
+                  254,
+                  129
+                ]
+              }
+            },
+            {
               "idiom" : "watchOS",
               "value" : {
                 "scale" : 0.9,
                 "translation-in-points" : [
-                  204.78593749999993,
+                  224,
                   119.11562500000002
                 ]
               }
@@ -104,19 +124,11 @@
       "blur-material" : 0.5,
       "layers" : [
         {
-          "fill-specializations" : [
-            {
-              "appearance" : "dark",
-              "value" : {
-                "solid" : "extended-srgb:1.00000,0.80000,0.00000,1.00000"
-              }
-            }
-          ],
-          "glass" : true,
-          "image-name" : "Image 2.png",
-          "name" : "Image 2",
+          "image-name" : "Image 5.png",
+          "name" : "Image 5",
           "position-specializations" : [
             {
+              "idiom" : "square",
               "value" : {
                 "scale" : 0.92,
                 "translation-in-points" : [

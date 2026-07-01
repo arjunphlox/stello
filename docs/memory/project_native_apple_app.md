@@ -58,3 +58,12 @@ Large web-parity + interaction pass (Karst font, single grid + timeline, panel, 
 - **XcodeGen + iCloud path** spawns `Stello 2.xcodeproj` / `Stello 3.xcodeproj` duplicate siblings on `xcodegen generate`. Gitignore `apple/**/*[0-9].xcodeproj/` and delete strays; only `Stello.xcodeproj` is real.
 - **Codesign "resource fork / detritus"** on `StelloShare.appex` blocks signed build/test under the iCloud/space workspace path. Clear with `xattr -cr <project>` and build/test into `-derivedDataPath /tmp/StelloDD`.
 - **`.build-artifacts/` (Xcode DerivedData) is ~1.3 GB** — must be gitignored, never committed.
+
+## Optacos CMS import + typed detail panel (2026-07-02, branch `cursor/native-visual-karst-zoom`)
+
+- **Schema:** `Item.kind` (String) + `Item.metadataJSON` (Codable per-kind: `TypefaceMeta`, `WebsiteMeta`, …) + `ItemImage.role` (cover/specimen/gallery). Avoids SwiftData model explosion + keeps CloudKit syncable.
+- **Seed:** `Stello/Resources/OptacosSeed.json` — 10 Framer CMS collections (162 entity rows + 197 tag rows). Export via `@framer/agent`; bundle as app resource.
+- **Import:** `OptacosImporter.importIfNeeded` runs once after demo seed (UserDefaults guard + skip if typed items exist). Tag collections applied in a second pass; entity refs resolve by slug. Cross-collection slug collisions → `slug-kind` suffix.
+- **Images:** async fetch w/ concurrency 5; Optacos SVGs skip the 500-byte OG floor. Offline test hook: `Options.offline` (no network, no guard).
+- **Panel:** `CardSubcards` — outline-only sub-cards, render-if-data, 2 columns at ≥520pt panel width. Entity refs → tappable chips when target `Item` exists in store.
+- **App icon:** Icon Composer `.icon` bundle in `Stello/Stello.icon/`; `ASSETCATALOG_COMPILER_APPICON_NAME = Stello`. Copy from Downloads when the design updates — do not hand-edit PNG layers inside the bundle.

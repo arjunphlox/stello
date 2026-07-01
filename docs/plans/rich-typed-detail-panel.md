@@ -1,6 +1,6 @@
 # Plan — Rich typed detail panel + Optacos CMS port
 
-Status: **PLAN ONLY** (approved scope this round). Implementation + data import = next round.
+Status: **DONE** (2026-07-02, branch `cursor/native-visual-karst-zoom`). Seed bundled; importer + `CardSubcards` shipped; Icon Composer app icon wired.
 Source of truth: Optacos Framer project `YB5gCIPhUzluc6sy8HIM` (read live via `@framer/agent` on 2026-07-01).
 
 ## 1. Card types (derived from Optacos CMS collections)
