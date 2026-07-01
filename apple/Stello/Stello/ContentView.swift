@@ -46,6 +46,7 @@ struct ContentView: View {
         }
         .onAppear {
             applyScreenshotLaunchState()
+            scheduleScreenshotLaunchStateRetryIfNeeded()
         }
         .onChange(of: allItems.count) { _, _ in
             applyScreenshotLaunchState()
@@ -85,6 +86,11 @@ struct ContentView: View {
             panelContent = .filters
         } else if isRegular && args.contains("-screenshotImportPanel") {
             panelContent = .import
+        } else if args.contains("-screenshotSettingsPanel")
+                    || args.contains("-screenshotUserPrefs")
+                    || args.contains("-screenshotAccentsDark")
+                    || args.contains("-screenshotAccentsLight") {
+            panelContent = .settings
         } else if isRegular && args.contains("-screenshotFiltersActive") {
             selectedTagNames = ["figma"]
         } else if !isRegular && args.contains("-screenshotDetailSheet"), let first = sortedItems.first {
@@ -119,6 +125,14 @@ struct ContentView: View {
         if isRegular { panelContent = .itemDetail }
     }
 
+    private func scheduleScreenshotLaunchStateRetryIfNeeded() {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains(where: { $0.hasPrefix("-screenshot") }) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            applyScreenshotLaunchState()
+        }
+    }
+
     /// Prefer live `@Query` items; fall back to a direct fetch when hooks run before Query refreshes.
     private var screenshotItems: [Item] {
         if !allItems.isEmpty { return allItems }
@@ -135,6 +149,15 @@ struct ContentView: View {
                 max(scrollOffset, 0) / StelloLayout.headerScrollFadeDistance,
                 1
             )
+            let panelOpen = panelContent != .none
+            let panelWidth = panelOpen
+                ? SidePanelContent.width(for: geo.size.width, fraction: clampedPanelFraction)
+                : 0
+            let contentWidth = geo.size.width - 2 * StelloLayout.windowInset
+            let gridWidth = max(
+                0,
+                contentWidth - (panelOpen ? panelWidth + StelloLayout.columnGap : 0)
+            )
 
             HStack(alignment: .top, spacing: StelloLayout.columnGap) {
                 ZStack(alignment: .top) {
@@ -150,22 +173,20 @@ struct ContentView: View {
                         onImport: { togglePanel(.import) },
                         onSettings: { togglePanel(.settings) }
                     )
-                    .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(width: gridWidth)
+                    .frame(maxHeight: .infinity)
 
                     headerOverlay(
                         itemCount: allItems.count,
                         headerScrollProgress: headerScrollProgress
                     )
                 }
-                .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+                .frame(width: gridWidth)
+                .frame(maxHeight: .infinity)
+                .clipped()
                 .layoutPriority(0)
 
-                if panelContent != .none {
-                    let panelWidth = SidePanelContent.width(
-                        for: geo.size.width,
-                        fraction: clampedPanelFraction
-                    )
-
+                if panelOpen {
                     SidePanelView(
                         content: panelContent,
                         selectedItem: selectedItem,

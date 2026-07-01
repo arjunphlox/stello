@@ -12,6 +12,8 @@ struct GridBottomControlBar: View {
     let onFilter: () -> Void
     let onSettings: () -> Void
 
+    @Environment(UserProfileStore.self) private var profile
+
     var body: some View {
         HStack(spacing: StelloLayout.controlBarSpacing) {
             StelloGlassIconButton(
@@ -34,9 +36,11 @@ struct GridBottomControlBar: View {
                 systemName: "person.crop.circle.fill",
                 style: .controlBarAvatar,
                 isActive: isSettingsPanelOpen,
-                label: "Settings",
+                avatarImage: profile.avatarImage(),
+                label: "User Preferences",
                 action: onSettings
             )
+            .id(profile.avatarRevision)
         }
         .frame(maxWidth: .infinity)
     }

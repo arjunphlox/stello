@@ -18,6 +18,7 @@ struct StelloGlassIconButton: View {
     var style: StelloGlassIconButtonStyle = .roundedSquare
     var isActive: Bool = false
     var contrastForeground: Bool = true
+    var avatarImage: Image? = nil
     /// Screenshot fixture — forces hover highlight without cursor focus.
     var forceHover: Bool = false
     let label: String
@@ -56,9 +57,9 @@ struct StelloGlassIconButton: View {
             .applyGlassButtonHover($isHovered)
         case .controlBar:
             Button(action: action) {
-                iconLabel
-                    .background { controlBarSquareBackground }
-                    .contentShape(squareShape)
+                controlBarIconLabel
+                    .background { controlBarCircularBackground }
+                    .contentShape(Circle())
             }
             .buttonStyle(GlassIconPressStyle(showsPressedOverlay: false))
             .accessibilityLabel(label)
@@ -66,7 +67,7 @@ struct StelloGlassIconButton: View {
             .applyGlassButtonHover($isHovered)
         case .controlBarAvatar:
             Button(action: action) {
-                iconLabel
+                controlBarIconLabel
                     .background { controlBarCircularBackground }
                     .contentShape(Circle())
             }
@@ -82,6 +83,29 @@ struct StelloGlassIconButton: View {
             .font(.system(size: StelloLayout.iconButtonSymbolSize, weight: .medium))
             .foregroundStyle(foregroundStyle)
             .frame(width: StelloLayout.iconButtonFootprint, height: StelloLayout.iconButtonFootprint)
+    }
+
+    private var controlBarIconLabel: some View {
+        Group {
+            if style == .controlBarAvatar, let avatarImage {
+                avatarImage
+                    .resizable()
+                    .scaledToFill()
+                    .frame(
+                        width: StelloLayout.controlBarButtonSize,
+                        height: StelloLayout.controlBarButtonSize
+                    )
+                    .clipShape(Circle())
+            } else {
+                Image(systemName: systemName)
+                    .font(.system(size: StelloLayout.iconButtonSymbolSize, weight: .medium))
+                    .foregroundStyle(foregroundStyle)
+                    .frame(
+                        width: StelloLayout.controlBarButtonSize,
+                        height: StelloLayout.controlBarButtonSize
+                    )
+            }
+        }
     }
 
     @ViewBuilder
@@ -101,11 +125,6 @@ struct StelloGlassIconButton: View {
             .overlay(Circle().stroke(theme.textPrimary.opacity(showsHover ? 0.30 : 0.18), lineWidth: 1))
             .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
             .animation(.easeOut(duration: 0.12), value: showsHover)
-    }
-
-    @ViewBuilder
-    private var controlBarSquareBackground: some View {
-        controlBarGlassBackground(in: squareShape)
     }
 
     @ViewBuilder

@@ -28,7 +28,9 @@ enum StelloLayout {
     /// Scroll distance (pt) over which the header transitions opaque → glass.
     static let headerScrollFadeDistance: CGFloat = 48
     /// Floating Liquid Glass control bar — search field height, glass fill, and insets.
-    static let floatingSearchBarHeight: CGFloat = 48
+    static let floatingSearchBarHeight: CGFloat = 40
+    /// Bottom control bar icon buttons — 40×40 circles (Add, Filter, Avatar).
+    static let controlBarButtonSize: CGFloat = 40
     /// Reduced tint so Liquid Glass occlusion reads through the control cluster.
     static let controlBarGlassFillOpacity: CGFloat = 0.62
     static let controlBarSpacing: CGFloat = 8
