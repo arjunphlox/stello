@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		039FCD128F3DA094FAC0BDCD /* karst-regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = AC609798A2ABC0F89A52C233 /* karst-regular.otf */; };
+		09083E266BBA3FBDDF4324B0 /* TimelineOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C6C07F9EB2A0D34C34B983 /* TimelineOverlay.swift */; };
 		0B06BB149A3084F452AE49D9 /* SeedData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1947247242FD3D01B11106A /* SeedData.swift */; };
 		0BED40EA90D2D56657E3AAD1 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 882A3667CA6FD8B029F41810 /* DetailView.swift */; };
 		0BFD342E6D18B4F386806AE0 /* RuleBasedFallbackEnricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EE305B0353EE75E12D3652 /* RuleBasedFallbackEnricher.swift */; };
@@ -14,14 +16,17 @@
 		0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA340D3CF1CBA31162EB51C /* Tag.swift */; };
 		145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
 		1BA6DD6CFC0DEB0DAF398922 /* StelloTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */; };
+		1BB5F26CDC1399B7F9DB527F /* StelloFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 845E57725F7C132A200501D5 /* StelloFont.swift */; };
 		1F5A6195A4BC26A62D3308F9 /* ItemImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBD865033AC3DE033F9D814 /* ItemImage.swift */; };
+		26DC04C319F3D4C1BBB7D376 /* karst-bolditalic.otf in Resources */ = {isa = PBXBuildFile; fileRef = 0DD84A10906A771C01474CDD /* karst-bolditalic.otf */; };
+		28E2E3F6378754DE2FAD7244 /* karst-semibolditalic.otf in Resources */ = {isa = PBXBuildFile; fileRef = 1D2D0E4A6530C37D991A6C0A /* karst-semibolditalic.otf */; };
+		31F8C3A05361AC9082931BDA /* karst-bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 055B0D7023CEE521B2FF8162 /* karst-bold.otf */; };
 		369DB62EAD24041FBD1F5E28 /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46CA82DF31A4106A0516059A /* ShareView.swift */; };
 		36C99740D4D554DE3105834C /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00738803FA808043711E5764 /* ShareViewController.swift */; };
 		37683EFDD2B7112B5D216AB4 /* EnrichmentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAFD9FC851DB71708B74829C /* EnrichmentCoordinator.swift */; };
 		394817DF2A59D53E4857BDBC /* MasonryLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBCA04FFD515FAA636671FEE /* MasonryLayoutTests.swift */; };
 		39AAB8A6045F0CDC63AD1E7E /* Enricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 079399A5195A6EF8A1ADC6D8 /* Enricher.swift */; };
 		3BB52E9A2344B9B9C4767590 /* MasonryLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA5B7E567FF7C8F12551D404 /* MasonryLayout.swift */; };
-		413B21D6931EAA848DB4885D /* WeekSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02F453DB00E270E29BB0AF99 /* WeekSectionView.swift */; };
 		483A97EDB5D05F0D52B78078 /* StelloGlassIconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF9F20BFB190A73AC6FF77B /* StelloGlassIconButton.swift */; };
 		4F7D4306DB34920A4F292188 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07B6271F9E2D3C9D455B813 /* Theme.swift */; };
 		51973386299AAFAC7ABEEB9E /* StelloShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 73F3E5B16B30645B3B36E3DE /* StelloShare.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -29,27 +34,38 @@
 		59611335583FB4DF8B08A0AD /* Snippet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0AA919414688D50C5841EC /* Snippet.swift */; };
 		5C38E5380ED85E12CD92E4A6 /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA340D3CF1CBA31162EB51C /* Tag.swift */; };
 		5D7D4FA7CB4C57AE9607A27C /* StelloStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAFAF6D495AAD1B33F2619C /* StelloStore.swift */; };
+		626350FE654C6C0691A08438 /* karst-regularitalic.otf in Resources */ = {isa = PBXBuildFile; fileRef = 54489E25EF30D9490FDD6C44 /* karst-regularitalic.otf */; };
 		6BBAFD4311A5F8D30F0DC008 /* RuleTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937DE9FDF9111BED793134C5 /* RuleTagger.swift */; };
 		6EDC47A1A3E5FE6A1A51D727 /* TagFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */; };
 		74388EA1808807BBA64EA64A /* StelloApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 622010C33FAF12A91AAEED16 /* StelloApp.swift */; };
+		75ED53896ACD9059FFB1F0EE /* LocalAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3A7AF5327F2CC97C27319D /* LocalAttachment.swift */; };
 		772C34B424FA316A5CE898A2 /* EnrichmentPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD800789C18740B64B46ACD /* EnrichmentPrompts.swift */; };
+		7C0209814A409C74AB02734F /* LocalAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3A7AF5327F2CC97C27319D /* LocalAttachment.swift */; };
+		7CC8BC877716030542FF5BC1 /* DropImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73BCFEBCDCAAAD6466F619F2 /* DropImportTests.swift */; };
 		7EE56848C1DBC960DFA35A62 /* FoundationModelsEnricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23876ECEF543E378B833D11F /* FoundationModelsEnricher.swift */; };
+		84EC469468B82D1BD4464B03 /* karst-light.otf in Resources */ = {isa = PBXBuildFile; fileRef = 10003D1D830BED9661B77901 /* karst-light.otf */; };
+		89C8F19C9B1510720E1AD354 /* karst-semibold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 8DEF0E510A922A5FF8CBB382 /* karst-semibold.otf */; };
+		8DE3F6EC159C8DF145E361A8 /* DetailImageStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3CA34AF62B2777DF5A05B12 /* DetailImageStrip.swift */; };
 		9498342EF3E4CBB327460667 /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132393C0AAACA6E4F794BBBC /* Item.swift */; };
 		9554CC3CBEB01A3F738AA507 /* MockEnricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28073A97E7A248FEF415DD89 /* MockEnricher.swift */; };
 		9879AD01CDECDA8225C1722B /* CaptureSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF3875676CC21E3F317FD776 /* CaptureSheet.swift */; };
 		B08AE07BA6BBDFD3FEBA8D16 /* SidePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C8183A688751612461786D /* SidePanelView.swift */; };
+		B32B2D873E4B20730962F6C2 /* karst-mediumitalic.otf in Resources */ = {isa = PBXBuildFile; fileRef = D38FC889771694CCFA01FC97 /* karst-mediumitalic.otf */; };
 		B588DA16ECA48EE61C9DE7F8 /* Snippet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0AA919414688D50C5841EC /* Snippet.swift */; };
 		B5B19D7002BA4C85F361D285 /* SampleCoverGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9881FC7E6289F5ACC97430E1 /* SampleCoverGenerator.swift */; };
 		B8B3C73F56F130F8CF483B7A /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
 		C0C4346F567466B61A568DDA /* MasonryGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBE3208FABDC9FE868334622 /* MasonryGridView.swift */; };
 		C74D36D18CDF4DA7FE5386AC /* SidePanelContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34CAB7A42BFA377A40527746 /* SidePanelContent.swift */; };
 		CDA790F7E7DD8B1138EAF40D /* StelloLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2CDECB3448C079F9E9F155 /* StelloLayout.swift */; };
+		CF7CCB3D7C59218547FC8D3F /* ItemBundleExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF67B06512E411ACB7989DC9 /* ItemBundleExportTests.swift */; };
 		CFAE2BC8E67D5C9D97ADD849 /* EnrichmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE8D7C0BB274D97989FBD8F /* EnrichmentTests.swift */; };
 		D21100D7EB2CC957D5C122CE /* StelloStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAFAF6D495AAD1B33F2619C /* StelloStore.swift */; };
 		D3C6F2BB515C95C8EC0D9320 /* EnrichmentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BC6FF63A611768E9EE2954A /* EnrichmentService.swift */; };
 		D42C96BA4F1424193B6248F6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00AB84A8DD5556B8493537D /* SettingsView.swift */; };
 		DA0EA172B9E7AE41D30A18E4 /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132393C0AAACA6E4F794BBBC /* Item.swift */; };
+		DAB2CF0150F54886DB4AE83B /* DropImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 541215E7DBC65AD295A805F3 /* DropImportService.swift */; };
 		E1FE78336EED97EC3B2B5614 /* ItemImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBD865033AC3DE033F9D814 /* ItemImage.swift */; };
+		E35CF11DE75C2DE2C15357F7 /* karst-lightitalic.otf in Resources */ = {isa = PBXBuildFile; fileRef = CEB0F17AD625C00F29A6A81C /* karst-lightitalic.otf */; };
 		E381D64784AD5D643DB27251 /* StelloHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37680488FAFA888F74C995C /* StelloHeaderView.swift */; };
 		E745441DDF2FAF4095B9DF12 /* CaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FDE089AFD4A8D168D8E7002 /* CaptureTests.swift */; };
 		E760354AD35CA98506C62A17 /* MacWindowConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B530A558F70C13DB03B0D3 /* MacWindowConfigurator.swift */; };
@@ -57,6 +73,8 @@
 		EF4080454C7313AD6493D38E /* RuleTagger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937DE9FDF9111BED793134C5 /* RuleTagger.swift */; };
 		F0A7F3298A7230C0197F4691 /* ItemFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30254CBEFA41454C4622D144 /* ItemFilter.swift */; };
 		F4EDCB9DB68C204BB9CC1A1D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4598C5A4C515E410BAE3ADBA /* ContentView.swift */; };
+		FC8771CEC7442B7B7C3D0993 /* ItemBundleExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83097E76A52FB79D3EB5104 /* ItemBundleExporter.swift */; };
+		FD1D3DB9022E9D057A0D777D /* karst-medium.otf in Resources */ = {isa = PBXBuildFile; fileRef = C252C08ADEF84FA292D4AA32 /* karst-medium.otf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -92,11 +110,14 @@
 
 /* Begin PBXFileReference section */
 		00738803FA808043711E5764 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
-		02F453DB00E270E29BB0AF99 /* WeekSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekSectionView.swift; sourceTree = "<group>"; };
+		055B0D7023CEE521B2FF8162 /* karst-bold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-bold.otf"; sourceTree = "<group>"; };
 		079399A5195A6EF8A1ADC6D8 /* Enricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enricher.swift; sourceTree = "<group>"; };
+		0DD84A10906A771C01474CDD /* karst-bolditalic.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-bolditalic.otf"; sourceTree = "<group>"; };
+		10003D1D830BED9661B77901 /* karst-light.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-light.otf"; sourceTree = "<group>"; };
 		132393C0AAACA6E4F794BBBC /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
 		1BA340D3CF1CBA31162EB51C /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
 		1BC6FF63A611768E9EE2954A /* EnrichmentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentService.swift; sourceTree = "<group>"; };
+		1D2D0E4A6530C37D991A6C0A /* karst-semibolditalic.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-semibolditalic.otf"; sourceTree = "<group>"; };
 		1EA6462332FF79D84ADE0B84 /* FloatingSearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingSearchBar.swift; sourceTree = "<group>"; };
 		23876ECEF543E378B833D11F /* FoundationModelsEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsEnricher.swift; sourceTree = "<group>"; };
 		28073A97E7A248FEF415DD89 /* MockEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockEnricher.swift; sourceTree = "<group>"; };
@@ -112,25 +133,38 @@
 		45FB580D0C83D4D934FF7013 /* ItemCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCardView.swift; sourceTree = "<group>"; };
 		46CA82DF31A4106A0516059A /* ShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
 		4CE8D7C0BB274D97989FBD8F /* EnrichmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentTests.swift; sourceTree = "<group>"; };
+		541215E7DBC65AD295A805F3 /* DropImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropImportService.swift; sourceTree = "<group>"; };
+		54489E25EF30D9490FDD6C44 /* karst-regularitalic.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-regularitalic.otf"; sourceTree = "<group>"; };
 		622010C33FAF12A91AAEED16 /* StelloApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloApp.swift; sourceTree = "<group>"; };
 		67EE220C3FE5F648024764D5 /* WeekGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekGroup.swift; sourceTree = "<group>"; };
 		6A03DCB58661EF2272162E31 /* Stello.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Stello.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		73BCFEBCDCAAAD6466F619F2 /* DropImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropImportTests.swift; sourceTree = "<group>"; };
 		73F3E5B16B30645B3B36E3DE /* StelloShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StelloShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		74EE305B0353EE75E12D3652 /* RuleBasedFallbackEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleBasedFallbackEnricher.swift; sourceTree = "<group>"; };
+		845E57725F7C132A200501D5 /* StelloFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloFont.swift; sourceTree = "<group>"; };
 		882A3667CA6FD8B029F41810 /* DetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailView.swift; sourceTree = "<group>"; };
 		89B530A558F70C13DB03B0D3 /* MacWindowConfigurator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacWindowConfigurator.swift; sourceTree = "<group>"; };
+		8A3A7AF5327F2CC97C27319D /* LocalAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAttachment.swift; sourceTree = "<group>"; };
+		8DEF0E510A922A5FF8CBB382 /* karst-semibold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-semibold.otf"; sourceTree = "<group>"; };
 		918DFF8962898B3139189A24 /* CaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureService.swift; sourceTree = "<group>"; };
 		937DE9FDF9111BED793134C5 /* RuleTagger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleTagger.swift; sourceTree = "<group>"; };
 		9881FC7E6289F5ACC97430E1 /* SampleCoverGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleCoverGenerator.swift; sourceTree = "<group>"; };
 		9AF9F20BFB190A73AC6FF77B /* StelloGlassIconButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloGlassIconButton.swift; sourceTree = "<group>"; };
 		A00AB84A8DD5556B8493537D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloTests.swift; sourceTree = "<group>"; };
+		A3CA34AF62B2777DF5A05B12 /* DetailImageStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailImageStrip.swift; sourceTree = "<group>"; };
 		ABBD865033AC3DE033F9D814 /* ItemImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemImage.swift; sourceTree = "<group>"; };
+		AC609798A2ABC0F89A52C233 /* karst-regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-regular.otf"; sourceTree = "<group>"; };
 		B1947247242FD3D01B11106A /* SeedData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedData.swift; sourceTree = "<group>"; };
 		BA5B7E567FF7C8F12551D404 /* MasonryLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryLayout.swift; sourceTree = "<group>"; };
+		C252C08ADEF84FA292D4AA32 /* karst-medium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-medium.otf"; sourceTree = "<group>"; };
+		C4C6C07F9EB2A0D34C34B983 /* TimelineOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineOverlay.swift; sourceTree = "<group>"; };
 		C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagFilterSheet.swift; sourceTree = "<group>"; };
+		C83097E76A52FB79D3EB5104 /* ItemBundleExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemBundleExporter.swift; sourceTree = "<group>"; };
 		CD1D80B79B9253C13F11D53C /* StelloShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StelloShare.entitlements; sourceTree = "<group>"; };
+		CEB0F17AD625C00F29A6A81C /* karst-lightitalic.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-lightitalic.otf"; sourceTree = "<group>"; };
 		CF3875676CC21E3F317FD776 /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
+		D38FC889771694CCFA01FC97 /* karst-mediumitalic.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-mediumitalic.otf"; sourceTree = "<group>"; };
 		DA2CDECB3448C079F9E9F155 /* StelloLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloLayout.swift; sourceTree = "<group>"; };
 		DAFD9FC851DB71708B74829C /* EnrichmentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentCoordinator.swift; sourceTree = "<group>"; };
 		E07B6271F9E2D3C9D455B813 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -138,12 +172,14 @@
 		EC4FE0C184835F8E3B9A25F7 /* Stello.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stello.entitlements; sourceTree = "<group>"; };
 		F37680488FAFA888F74C995C /* StelloHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloHeaderView.swift; sourceTree = "<group>"; };
 		FBCA04FFD515FAA636671FEE /* MasonryLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryLayoutTests.swift; sourceTree = "<group>"; };
+		FF67B06512E411ACB7989DC9 /* ItemBundleExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemBundleExportTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
 		386AFF683865EDE8B907A46A /* Theme */ = {
 			isa = PBXGroup;
 			children = (
+				845E57725F7C132A200501D5 /* StelloFont.swift */,
 				DA2CDECB3448C079F9E9F155 /* StelloLayout.swift */,
 				E07B6271F9E2D3C9D455B813 /* Theme.swift */,
 			);
@@ -160,11 +196,29 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		5690DB45D85F519E5FA08FEE /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				055B0D7023CEE521B2FF8162 /* karst-bold.otf */,
+				0DD84A10906A771C01474CDD /* karst-bolditalic.otf */,
+				10003D1D830BED9661B77901 /* karst-light.otf */,
+				CEB0F17AD625C00F29A6A81C /* karst-lightitalic.otf */,
+				C252C08ADEF84FA292D4AA32 /* karst-medium.otf */,
+				D38FC889771694CCFA01FC97 /* karst-mediumitalic.otf */,
+				AC609798A2ABC0F89A52C233 /* karst-regular.otf */,
+				54489E25EF30D9490FDD6C44 /* karst-regularitalic.otf */,
+				8DEF0E510A922A5FF8CBB382 /* karst-semibold.otf */,
+				1D2D0E4A6530C37D991A6C0A /* karst-semibolditalic.otf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
 		6380A3482C8562C45AF6701B /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				132393C0AAACA6E4F794BBBC /* Item.swift */,
 				ABBD865033AC3DE033F9D814 /* ItemImage.swift */,
+				8A3A7AF5327F2CC97C27319D /* LocalAttachment.swift */,
 				2F0AA919414688D50C5841EC /* Snippet.swift */,
 				1BA340D3CF1CBA31162EB51C /* Tag.swift */,
 				67EE220C3FE5F648024764D5 /* WeekGroup.swift */,
@@ -179,7 +233,9 @@
 				EC4FE0C184835F8E3B9A25F7 /* Stello.entitlements */,
 				622010C33FAF12A91AAEED16 /* StelloApp.swift */,
 				E9D2CEC499D89E3E75079D31 /* Capture */,
+				E4543DB97720B2586AFDB479 /* Export */,
 				6380A3482C8562C45AF6701B /* Models */,
+				D1B304289C103D63C32A028E /* Resources */,
 				72CD5A126F63E422B5506204 /* Store */,
 				386AFF683865EDE8B907A46A /* Theme */,
 				A7E40FCA4A0B3D3B82AFD429 /* Views */,
@@ -202,6 +258,7 @@
 			isa = PBXGroup;
 			children = (
 				CF3875676CC21E3F317FD776 /* CaptureSheet.swift */,
+				A3CA34AF62B2777DF5A05B12 /* DetailImageStrip.swift */,
 				882A3667CA6FD8B029F41810 /* DetailView.swift */,
 				1EA6462332FF79D84ADE0B84 /* FloatingSearchBar.swift */,
 				45FB580D0C83D4D934FF7013 /* ItemCardView.swift */,
@@ -214,7 +271,7 @@
 				9AF9F20BFB190A73AC6FF77B /* StelloGlassIconButton.swift */,
 				F37680488FAFA888F74C995C /* StelloHeaderView.swift */,
 				C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */,
-				02F453DB00E270E29BB0AF99 /* WeekSectionView.swift */,
+				C4C6C07F9EB2A0D34C34B983 /* TimelineOverlay.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -223,11 +280,21 @@
 			isa = PBXGroup;
 			children = (
 				2FDE089AFD4A8D168D8E7002 /* CaptureTests.swift */,
+				73BCFEBCDCAAAD6466F619F2 /* DropImportTests.swift */,
 				4CE8D7C0BB274D97989FBD8F /* EnrichmentTests.swift */,
+				FF67B06512E411ACB7989DC9 /* ItemBundleExportTests.swift */,
 				FBCA04FFD515FAA636671FEE /* MasonryLayoutTests.swift */,
 				A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */,
 			);
 			path = StelloTests;
+			sourceTree = "<group>";
+		};
+		D1B304289C103D63C32A028E /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				5690DB45D85F519E5FA08FEE /* Fonts */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		DF4489D8688394E311760AE9 = {
@@ -250,10 +317,19 @@
 			path = StelloShare;
 			sourceTree = "<group>";
 		};
+		E4543DB97720B2586AFDB479 /* Export */ = {
+			isa = PBXGroup;
+			children = (
+				C83097E76A52FB79D3EB5104 /* ItemBundleExporter.swift */,
+			);
+			path = Export;
+			sourceTree = "<group>";
+		};
 		E9D2CEC499D89E3E75079D31 /* Capture */ = {
 			isa = PBXGroup;
 			children = (
 				918DFF8962898B3139189A24 /* CaptureService.swift */,
+				541215E7DBC65AD295A805F3 /* DropImportService.swift */,
 				079399A5195A6EF8A1ADC6D8 /* Enricher.swift */,
 				DAFD9FC851DB71708B74829C /* EnrichmentCoordinator.swift */,
 				2DD800789C18740B64B46ACD /* EnrichmentPrompts.swift */,
@@ -309,6 +385,7 @@
 			buildConfigurationList = 8308F64C05D56FF8DF3C3726 /* Build configuration list for PBXNativeTarget "Stello" */;
 			buildPhases = (
 				7A57F92B3CF54B1F162FAB34 /* Sources */,
+				46F9CC19A2EE3C3991EB0316 /* Resources */,
 				424223BEA23C93A4C7CE52F5 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -364,6 +441,26 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		46F9CC19A2EE3C3991EB0316 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				31F8C3A05361AC9082931BDA /* karst-bold.otf in Resources */,
+				26DC04C319F3D4C1BBB7D376 /* karst-bolditalic.otf in Resources */,
+				84EC469468B82D1BD4464B03 /* karst-light.otf in Resources */,
+				E35CF11DE75C2DE2C15357F7 /* karst-lightitalic.otf in Resources */,
+				FD1D3DB9022E9D057A0D777D /* karst-medium.otf in Resources */,
+				B32B2D873E4B20730962F6C2 /* karst-mediumitalic.otf in Resources */,
+				039FCD128F3DA094FAC0BDCD /* karst-regular.otf in Resources */,
+				626350FE654C6C0691A08438 /* karst-regularitalic.otf in Resources */,
+				89C8F19C9B1510720E1AD354 /* karst-semibold.otf in Resources */,
+				28E2E3F6378754DE2FAD7244 /* karst-semibolditalic.otf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		7A57F92B3CF54B1F162FAB34 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -372,7 +469,9 @@
 				145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */,
 				9879AD01CDECDA8225C1722B /* CaptureSheet.swift in Sources */,
 				F4EDCB9DB68C204BB9CC1A1D /* ContentView.swift in Sources */,
+				8DE3F6EC159C8DF145E361A8 /* DetailImageStrip.swift in Sources */,
 				0BED40EA90D2D56657E3AAD1 /* DetailView.swift in Sources */,
+				DAB2CF0150F54886DB4AE83B /* DropImportService.swift in Sources */,
 				39AAB8A6045F0CDC63AD1E7E /* Enricher.swift in Sources */,
 				37683EFDD2B7112B5D216AB4 /* EnrichmentCoordinator.swift in Sources */,
 				772C34B424FA316A5CE898A2 /* EnrichmentPrompts.swift in Sources */,
@@ -380,9 +479,11 @@
 				EA2356203C37F250AF3BFDC2 /* FloatingSearchBar.swift in Sources */,
 				7EE56848C1DBC960DFA35A62 /* FoundationModelsEnricher.swift in Sources */,
 				DA0EA172B9E7AE41D30A18E4 /* Item.swift in Sources */,
+				FC8771CEC7442B7B7C3D0993 /* ItemBundleExporter.swift in Sources */,
 				0D18DEAA38D5D391143F61CC /* ItemCardView.swift in Sources */,
 				F0A7F3298A7230C0197F4691 /* ItemFilter.swift in Sources */,
 				1F5A6195A4BC26A62D3308F9 /* ItemImage.swift in Sources */,
+				7C0209814A409C74AB02734F /* LocalAttachment.swift in Sources */,
 				E760354AD35CA98506C62A17 /* MacWindowConfigurator.swift in Sources */,
 				C0C4346F567466B61A568DDA /* MasonryGridView.swift in Sources */,
 				3BB52E9A2344B9B9C4767590 /* MasonryLayout.swift in Sources */,
@@ -396,6 +497,7 @@
 				B08AE07BA6BBDFD3FEBA8D16 /* SidePanelView.swift in Sources */,
 				59611335583FB4DF8B08A0AD /* Snippet.swift in Sources */,
 				74388EA1808807BBA64EA64A /* StelloApp.swift in Sources */,
+				1BB5F26CDC1399B7F9DB527F /* StelloFont.swift in Sources */,
 				483A97EDB5D05F0D52B78078 /* StelloGlassIconButton.swift in Sources */,
 				E381D64784AD5D643DB27251 /* StelloHeaderView.swift in Sources */,
 				CDA790F7E7DD8B1138EAF40D /* StelloLayout.swift in Sources */,
@@ -403,8 +505,8 @@
 				0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */,
 				6EDC47A1A3E5FE6A1A51D727 /* TagFilterSheet.swift in Sources */,
 				4F7D4306DB34920A4F292188 /* Theme.swift in Sources */,
+				09083E266BBA3FBDDF4324B0 /* TimelineOverlay.swift in Sources */,
 				57820614E4D3B3A466EC1B90 /* WeekGroup.swift in Sources */,
-				413B21D6931EAA848DB4885D /* WeekSectionView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -413,7 +515,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				E745441DDF2FAF4095B9DF12 /* CaptureTests.swift in Sources */,
+				7CC8BC877716030542FF5BC1 /* DropImportTests.swift in Sources */,
 				CFAE2BC8E67D5C9D97ADD849 /* EnrichmentTests.swift in Sources */,
+				CF7CCB3D7C59218547FC8D3F /* ItemBundleExportTests.swift in Sources */,
 				394817DF2A59D53E4857BDBC /* MasonryLayoutTests.swift in Sources */,
 				1BA6DD6CFC0DEB0DAF398922 /* StelloTests.swift in Sources */,
 			);
@@ -426,6 +530,7 @@
 				B8B3C73F56F130F8CF483B7A /* CaptureService.swift in Sources */,
 				9498342EF3E4CBB327460667 /* Item.swift in Sources */,
 				E1FE78336EED97EC3B2B5614 /* ItemImage.swift in Sources */,
+				75ED53896ACD9059FFB1F0EE /* LocalAttachment.swift in Sources */,
 				EF4080454C7313AD6493D38E /* RuleTagger.swift in Sources */,
 				369DB62EAD24041FBD1F5E28 /* ShareView.swift in Sources */,
 				36C99740D4D554DE3105834C /* ShareViewController.swift in Sources */,
@@ -461,7 +566,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Stello/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -744,7 +849,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Stello/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
