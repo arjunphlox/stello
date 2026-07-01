@@ -29,3 +29,11 @@ desktop-context/**/__pycache__/
 desktop-context/.pytest_cache/
 desktop-context/**/*.pyc
 desktop-context/*.egg-info/
+
+# Native Apple app — Xcode build output / QA artifacts (regenerated, not source)
+apple/Stello/.build-artifacts/
+**/DerivedData/
+**/xcuserdata/
+*.xcuserstate
+# XcodeGen iCloud duplication artifacts
+apple/**/*[0-9].xcodeproj/
