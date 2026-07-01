@@ -45,6 +45,9 @@ struct StelloApp: App {
             UserDefaults.standard.set("Arjun", forKey: "profile.name")
             UserDefaults.standard.set("Designer", forKey: "profile.designation")
         }
+        if args.contains("-screenshotPanelHalf") {
+            UserDefaults.standard.set(0.5, forKey: "panel.widthFraction")
+        }
     }
 }
 

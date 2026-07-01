@@ -373,7 +373,54 @@ struct StelloTests {
         #expect(item.sourceURL?.contains("design-systems-101") == true)
     }
 
+    // MARK: - Optacos seed
+
+    @Test("OptacosSeed.json collection counts")
+    func optacosSeedCollectionCounts() {
+        guard let counts = OptacosImporter.seedCollectionCounts(from: stelloAppBundle()) else {
+            Issue.record("OptacosSeed.json missing from Stello.app bundle")
+            return
+        }
+        #expect(counts.typefaces == 36)
+        #expect(counts.websites == 38)
+        #expect(counts.creatives == 47)
+    }
+
+    @Test("TypefaceMeta decodes after Optacos import (offline)")
+    func typefaceMetaDecodesAfterImport() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+
+        // Offline, guard-free run so it's deterministic and doesn't touch the network.
+        await OptacosImporter.importIfNeeded(in: ctx, options: .offline)
+
+        let typefaces = try ctx.fetch(
+            FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind == "typeface" })
+        )
+        #expect(typefaces.count == 36)
+
+        let websites = try ctx.fetch(
+            FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind == "website" })
+        )
+        #expect(websites.count == 38)
+
+        let creatives = try ctx.fetch(
+            FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind == "individual" })
+        )
+        #expect(creatives.count == 47)
+
+        // A known typeface decodes with real, non-empty facets.
+        let dmMono = try #require(typefaces.first { $0.slug == "dm-mono" })
+        let meta = try #require(dmMono.typefaceMeta())
+        #expect(meta.classification.isEmpty == false)
+        #expect(meta.weightTypes.isEmpty == false)
+    }
+
     // MARK: - Helpers
+
+    private func stelloAppBundle() -> Bundle {
+        Bundle.allBundles.first { $0.bundlePath.hasSuffix("Stello.app") } ?? .main
+    }
 
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self, LocalAttachment.self])

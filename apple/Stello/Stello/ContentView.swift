@@ -40,6 +40,7 @@ struct ContentView: View {
         .environment(\.font, .karst(.body))
         .task {
             await SeedData.prepareStore(in: context)
+            await OptacosImporter.importIfNeeded(in: context)
             await SeedData.backfillSeedCovers(in: context)
             await enrichmentCoordinator.enrichPendingItems(context: context)
             applyScreenshotLaunchState()
@@ -67,8 +68,16 @@ struct ContentView: View {
 
         let sortedItems = screenshotItems
 
+        if args.contains("-screenshotPanelHalf") {
+            panelWidthFraction = 0.5
+        }
+
         if args.contains("-screenshotEnrichmentDemo") {
             selectedItem = SeedData.ensureEnrichmentDemo(in: context)
+            panelContent = .itemDetail
+        } else if isRegular, let kind = screenshotKind(from: args),
+                  let match = sortedItems.first(where: { $0.kind == kind }) {
+            selectedItem = match
             panelContent = .itemDetail
         } else if isRegular && args.contains("-screenshotItemPanel"), let first = sortedItems.first {
             selectedItem = first
@@ -133,6 +142,12 @@ struct ContentView: View {
         }
     }
 
+    private func screenshotKind(from args: [String]) -> String? {
+        guard let idx = args.firstIndex(of: "-screenshotKind"), idx + 1 < args.count else { return nil }
+        let kind = args[idx + 1]
+        return kind.isEmpty ? nil : kind
+    }
+
     /// Prefer live `@Query` items; fall back to a direct fetch when hooks run before Query refreshes.
     private var screenshotItems: [Item] {
         if !allItems.isEmpty { return allItems }
@@ -192,7 +207,11 @@ struct ContentView: View {
                         selectedItem: selectedItem,
                         allItems: allItems,
                         selectedTagNames: $selectedTagNames,
-                        onClose: closePanel
+                        onClose: closePanel,
+                        onSelectItem: { item in
+                            selectedItem = item
+                            panelContent = .itemDetail
+                        }
                     )
                     .frame(width: panelWidth)
                     .overlay(alignment: .leading) {
@@ -242,6 +261,7 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .environment(\.appTheme, theme)
+                .environment(\.detailOpenItem, { selectedItem = $0 })
                 .preferredColorScheme(theme.colorScheme)
         }
     }
