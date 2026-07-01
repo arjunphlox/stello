@@ -21,7 +21,7 @@ targets:
         excludes:
           - Info.plist
     resources:
-      - path: Stello/Resources/Fonts
+      - Stello/Resources/Fonts
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: Stello/Stello.entitlements
@@ -38,6 +38,7 @@ targets:
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_EMIT_LOC_STRINGS: YES
         SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: Stello
         OTHER_LDFLAGS:
           - "$(inherited)"
           - "-framework FoundationModels"
