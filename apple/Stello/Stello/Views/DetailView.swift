@@ -11,7 +11,7 @@ struct DetailView: View {
 
     @State private var contentWidth: CGFloat = 300
 
-    private static let twoColumnThreshold: CGFloat = 420
+    private static let twoColumnThreshold: CGFloat = 520
 
     private var sortedTags: [Tag] {
         (item.tags ?? []).sorted { $0.weight > $1.weight }
@@ -44,31 +44,73 @@ struct DetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                DetailImageStrip(item: item, bleedsToTop: embedsInPanel)
-
-                VStack(alignment: .leading, spacing: 20) {
-                    metaSection
-
-                    if let summary = item.summary, !summary.isEmpty {
-                        Text(summary)
-                            .font(.karst(.body))
-                            .foregroundStyle(theme.textSecondary)
-                    }
-
-                    lowerSections
+            Group {
+                if item.hasRichTypedPanel {
+                    typedPanelContent
+                } else {
+                    genericPanelContent
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 24)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(theme.background)
+        .background(embedsInPanel ? Color.clear : theme.background)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { _, newWidth in
             contentWidth = newWidth
         }
+    }
+
+    // MARK: - Typed rich panel
+
+    @ViewBuilder
+    private var typedPanelContent: some View {
+        if embedsInPanel {
+            if item.renderableImages(matchingRoles: item.typedTopMediaRoles).isEmpty {
+                DetailImageStrip(item: item, bleedsToTop: true)
+            } else {
+                TypedTopMedia(item: item, roles: item.typedTopMediaRoles)
+            }
+        } else {
+            DetailImageStrip(item: item, bleedsToTop: false)
+        }
+
+        VStack(alignment: .leading, spacing: 16) {
+            metaSection
+
+            if let summary = item.summary, !summary.isEmpty {
+                Text(summary)
+                    .font(.karst(.body))
+                    .foregroundStyle(theme.textSecondary)
+            }
+
+            CardSubcards(item: item)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, embedsInPanel ? 12 : 16)
+        .padding(.bottom, 24)
+    }
+
+    // MARK: - Generic link panel (web parity)
+
+    @ViewBuilder
+    private var genericPanelContent: some View {
+        DetailImageStrip(item: item, bleedsToTop: embedsInPanel)
+
+        VStack(alignment: .leading, spacing: 20) {
+            metaSection
+
+            if let summary = item.summary, !summary.isEmpty {
+                Text(summary)
+                    .font(.karst(.body))
+                    .foregroundStyle(theme.textSecondary)
+            }
+
+            lowerSections
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 24)
     }
 
     // MARK: - Lower sections (multi-column when panel is wide)

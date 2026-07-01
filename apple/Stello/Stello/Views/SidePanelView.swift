@@ -8,6 +8,7 @@ struct SidePanelView: View {
     let allItems: [Item]
     @Binding var selectedTagNames: Set<String>
     var onClose: () -> Void
+    var onSelectItem: ((Item) -> Void)? = nil
 
     @Environment(\.appTheme) private var theme
     @Environment(\.modelContext) private var context
@@ -21,7 +22,7 @@ struct SidePanelView: View {
                 toolPanel
             }
         }
-        .background(theme.background)
+        .background(content == .itemDetail ? Color.clear : theme.background)
         .clipShape(RoundedRectangle(cornerRadius: StelloLayout.panelCornerRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: StelloLayout.panelCornerRadius, style: .continuous)
@@ -108,6 +109,7 @@ struct SidePanelView: View {
         case .itemDetail:
             if let item = selectedItem {
                 DetailView(item: item, embedsInPanel: true)
+                    .environment(\.detailOpenItem, onSelectItem)
             } else {
                 ContentUnavailableView("Select an item", systemImage: "photo.on.rectangle")
                     .foregroundStyle(theme.textSecondary)
