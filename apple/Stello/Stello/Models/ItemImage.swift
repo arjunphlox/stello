@@ -16,6 +16,8 @@ final class ItemImage {
     var width: Int?
     var height: Int?
     var label: String?
+    /// `cover`, `specimen`, `graphic`, `gallery`, or `preview`.
+    var role: String = "cover"
 
     var item: Item?
 
@@ -25,7 +27,8 @@ final class ItemImage {
         isPrimary: Bool = false,
         width: Int? = nil,
         height: Int? = nil,
-        label: String? = nil
+        label: String? = nil,
+        role: String = "cover"
     ) {
         self.data = data
         self.source = source
@@ -33,6 +36,7 @@ final class ItemImage {
         self.width = width
         self.height = height
         self.label = label
+        self.role = role
     }
 }
 
