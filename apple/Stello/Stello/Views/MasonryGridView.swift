@@ -24,6 +24,13 @@ private struct WeekAnchorPreferenceKey: PreferenceKey {
     }
 }
 
+private struct ScrollContentBottomKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct MasonryGridView: View {
     /// When true, header lives in `ContentView` and card taps call `onCardTap`.
     var embedInPanelLayout: Bool = false
@@ -85,8 +92,11 @@ struct MasonryGridView: View {
     @State private var gridContainerWidth: CGFloat = 375
 
     @State private var weekAnchorYs: [String: CGFloat] = [:]
+    @State private var scrollContentBottom: CGFloat = 0
+    @State private var cachedContentWeekRanges: [String: (top: CGFloat, bottom: CGFloat)] = [:]
     @State private var activeWeekKey: String?
     @State private var interactionWeekKey: String?
+    @State private var selectedWeekKey: String?
     /// Local scroll offset when header is owned here (compact iPhone layout).
     @State private var compactScrollOffset: CGFloat = 0
 
@@ -103,12 +113,21 @@ struct MasonryGridView: View {
         MasonryLayout(forcedColumns: effectiveForcedColumns).resolvedColumnCount(for: width)
     }
 
-    private var displayItems: [Item] {
+    private var tagFilteredItems: [Item] {
         ItemFilter.apply(allItems, searchText: searchText, selectedTagNames: selectedTagNames)
     }
 
-    private var weekGroups: [WeekGroup] {
-        WeekGroup.makeGroups(from: displayItems)
+    private var displayItems: [Item] {
+        ItemFilter.apply(
+            allItems,
+            searchText: searchText,
+            selectedTagNames: selectedTagNames,
+            selectedWeekKey: selectedWeekKey
+        )
+    }
+
+    private var timelineWeekGroups: [WeekGroup] {
+        WeekGroup.makeGroups(from: tagFilteredItems)
     }
 
     private var effectiveScrollOffset: CGFloat {
@@ -134,7 +153,7 @@ struct MasonryGridView: View {
 
     var body: some View {
         gridWithTimeline
-        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxHeight: .infinity)
         .clipped()
         .background {
             theme.background.ignoresSafeArea()
@@ -154,6 +173,7 @@ struct MasonryGridView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environment(\.appTheme, theme)
+                .environment(UserProfileStore.shared)
                 .preferredColorScheme(theme.colorScheme)
         }
         .task {
@@ -161,7 +181,10 @@ struct MasonryGridView: View {
             if !embedInPanelLayout && ProcessInfo.processInfo.arguments.contains("-screenshotFilterSheet") {
                 showFilterSheet = true
             }
-            if ProcessInfo.processInfo.arguments.contains("-screenshotSettings") {
+            if ProcessInfo.processInfo.arguments.contains(where: {
+                ["-screenshotSettings", "-screenshotUserPrefs", "-screenshotSettingsPanel",
+                 "-screenshotAccentsDark", "-screenshotAccentsLight"].contains($0)
+            }) {
                 showSettings = true
             }
         }
@@ -181,12 +204,6 @@ struct MasonryGridView: View {
 
     private var gridWithTimeline: some View {
         ScrollViewReader { scrollProxy in
-            let scrollToWeek: (String) -> Void = { weekKey in
-                withAnimation(.easeOut(duration: 0.25)) {
-                    scrollProxy.scrollTo(weekKey, anchor: .top)
-                }
-            }
-
             GeometryReader { viewport in
                 let safeTop = embedInPanelLayout ? 0 : viewport.safeAreaInsets.top
                 let compactScrollInset = embedInPanelLayout
@@ -216,15 +233,22 @@ struct MasonryGridView: View {
                     .onPreferenceChange(WeekAnchorPreferenceKey.self) { anchors in
                         weekAnchorYs = anchors
                         updateActiveWeekKey()
+                        cacheContentWeekRangesIfNeeded()
+                    }
+                    .onPreferenceChange(ScrollContentBottomKey.self) { bottom in
+                        scrollContentBottom = bottom
+                        cacheContentWeekRangesIfNeeded()
                     }
                     .simultaneousGesture(gridPinchGesture)
                     .overlay(alignment: .leading) {
-                        if !weekGroups.isEmpty {
+                        if !timelineWeekGroups.isEmpty {
                             TimelineOverlay(
-                                weekGroups: weekGroups,
+                                weekGroups: timelineWeekGroups,
+                                weekBarLayouts: timelineBarLayouts(scrollTopInset: compactScrollInset),
                                 activeWeekKey: activeWeekKey,
                                 interactionWeekKey: interactionWeekKey,
-                                onWeekSelected: scrollToWeek,
+                                selectedWeekKey: selectedWeekKey,
+                                onWeekFilterToggled: toggleWeekFilter,
                                 onInteractionChanged: { interactionWeekKey = $0 }
                             )
                             .padding(.leading, embedInPanelLayout ? 0 : StelloLayout.windowInset)
@@ -241,12 +265,13 @@ struct MasonryGridView: View {
                     bottomControlOverlay(safeBottom: viewport.safeAreaInsets.bottom)
                 }
             }
-            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxHeight: .infinity)
             .clipped()
             .onAppear {
                 scrollForScreenshotIfNeeded(using: scrollProxy)
                 updateActiveWeekKey()
                 applyScreenshotTimelineHoverIfNeeded()
+                applyScreenshotWeekFilterIfNeeded()
             }
         }
     }
@@ -268,7 +293,7 @@ struct MasonryGridView: View {
 
         return GridBottomControlBar(
             searchText: $searchText,
-            hasActiveFilters: !selectedTagNames.isEmpty,
+            hasActiveFilters: !selectedTagNames.isEmpty || selectedWeekKey != nil,
             isFilterPanelOpen: panelContent == .filters,
             isImportPanelOpen: panelContent == .import,
             isSettingsPanelOpen: panelContent == .settings,
@@ -286,7 +311,7 @@ struct MasonryGridView: View {
         VStack(spacing: 12) {
             scrollOffsetProbe
 
-            if !selectedTagNames.isEmpty {
+            if !selectedTagNames.isEmpty || selectedWeekKey != nil {
                 filterPillsRow
             }
 
@@ -299,6 +324,8 @@ struct MasonryGridView: View {
                 }
             }
             .padding(Self.selectionOutlineInset)
+
+            scrollContentBottomProbe
         }
         .background {
             GeometryReader { geo in
@@ -311,6 +338,20 @@ struct MasonryGridView: View {
         .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
         .padding(.top, topInset)
         .padding(.bottom, StelloLayout.floatingSearchScrollInset)
+    }
+
+    /// Reports the scroll content's bottom edge in `"stelloScroll"` viewport space.
+    private var scrollContentBottomProbe: some View {
+        Color.clear
+            .frame(height: 1)
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: ScrollContentBottomKey.self,
+                        value: geo.frame(in: .named("stelloScroll")).maxY
+                    )
+                }
+            }
     }
 
     /// Invisible probe at scroll content top — reports how far content has scrolled.
@@ -399,9 +440,76 @@ struct MasonryGridView: View {
 
     private func updateActiveWeekKey() {
         let threshold = TimelineMetrics.scrollSpyThreshold
-        activeWeekKey = weekGroups.last { group in
+        activeWeekKey = timelineWeekGroups.last { group in
             (weekAnchorYs[group.key] ?? .infinity) <= threshold
-        }?.key ?? weekGroups.first?.key
+        }?.key ?? timelineWeekGroups.first?.key
+    }
+
+    private func toggleWeekFilter(_ key: String) {
+        if selectedWeekKey == key {
+            selectedWeekKey = nil
+        } else {
+            cacheContentWeekRangesIfNeeded(force: true)
+            selectedWeekKey = key
+        }
+    }
+
+    /// Scroll-content Y ranges for each week — cached while unfiltered, replayed when filtered.
+    private func cacheContentWeekRangesIfNeeded(force: Bool = false) {
+        guard force || selectedWeekKey == nil else { return }
+        guard !timelineWeekGroups.isEmpty, scrollContentBottom > 0 else { return }
+
+        let scrollOffset = effectiveScrollOffset
+        var ranges: [String: (top: CGFloat, bottom: CGFloat)] = [:]
+        for (index, group) in timelineWeekGroups.enumerated() {
+            guard let viewportTop = weekAnchorYs[group.key] else { continue }
+            let contentTop = viewportTop + scrollOffset
+            let contentBottom: CGFloat
+            if index + 1 < timelineWeekGroups.count,
+               let nextViewportTop = weekAnchorYs[timelineWeekGroups[index + 1].key] {
+                contentBottom = nextViewportTop + scrollOffset
+            } else {
+                contentBottom = scrollContentBottom + scrollOffset
+            }
+            if contentBottom > contentTop {
+                ranges[group.key] = (contentTop, contentBottom)
+            }
+        }
+        if !ranges.isEmpty {
+            cachedContentWeekRanges = ranges
+        }
+    }
+
+    /// Viewport Y positions for timeline bars — live anchors when unfiltered, cached replay when filtered.
+    private func timelineBarLayouts(scrollTopInset: CGFloat) -> [String: WeekBarLayout] {
+        let scrollOffset = effectiveScrollOffset
+        var layouts: [String: WeekBarLayout] = [:]
+
+        for (index, group) in timelineWeekGroups.enumerated() {
+            let topY: CGFloat
+            let bottomY: CGFloat
+
+            if selectedWeekKey == nil,
+               let liveTop = weekAnchorYs[group.key] {
+                topY = liveTop - scrollTopInset
+                if index + 1 < timelineWeekGroups.count,
+                   let nextTop = weekAnchorYs[timelineWeekGroups[index + 1].key] {
+                    bottomY = nextTop - scrollTopInset
+                } else {
+                    bottomY = scrollContentBottom - scrollTopInset
+                }
+            } else if let cached = cachedContentWeekRanges[group.key] {
+                topY = cached.top - scrollOffset - scrollTopInset
+                bottomY = cached.bottom - scrollOffset - scrollTopInset
+            } else {
+                continue
+            }
+
+            if bottomY > topY {
+                layouts[group.key] = WeekBarLayout(topY: topY, bottomY: bottomY)
+            }
+        }
+        return layouts
     }
 
     private func openScreenshotDetailIfNeeded() {
@@ -414,13 +522,33 @@ struct MasonryGridView: View {
 
     private func applyScreenshotTimelineHoverIfNeeded() {
         guard ProcessInfo.processInfo.arguments.contains("-screenshotTimelineHover"),
-              let target = weekGroups.dropFirst().first?.key ?? weekGroups.first?.key else { return }
+              let target = timelineWeekGroups.dropFirst().first?.key ?? timelineWeekGroups.first?.key else { return }
         interactionWeekKey = target
+    }
+
+    private func applyScreenshotWeekFilterIfNeeded() {
+        guard ProcessInfo.processInfo.arguments.contains("-screenshotWeekFilter") else { return }
+        scheduleScreenshotWeekFilter(attempt: 0)
+    }
+
+    private func scheduleScreenshotWeekFilter(attempt: Int) {
+        let delay = attempt == 0 ? 1.0 : 0.5
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            cacheContentWeekRangesIfNeeded(force: true)
+            let ready = scrollContentBottom > 0 && !cachedContentWeekRanges.isEmpty
+            if !ready && attempt < 8 {
+                scheduleScreenshotWeekFilter(attempt: attempt + 1)
+                return
+            }
+            if let target = timelineWeekGroups.dropFirst().first?.key ?? timelineWeekGroups.first?.key {
+                selectedWeekKey = target
+            }
+        }
     }
 
     private func scrollForScreenshotIfNeeded(using proxy: ScrollViewProxy) {
         guard ProcessInfo.processInfo.arguments.contains("-screenshotScrolledHeader"),
-              let target = weekGroups.dropFirst(2).first?.key ?? weekGroups.last?.key else { return }
+              let target = timelineWeekGroups.dropFirst(2).first?.key ?? timelineWeekGroups.last?.key else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             withAnimation(.none) {
                 proxy.scrollTo(target, anchor: .top)
@@ -431,6 +559,20 @@ struct MasonryGridView: View {
     private var filterPillsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if let weekKey = selectedWeekKey,
+                   let label = timelineWeekGroups.first(where: { $0.key == weekKey })?.label {
+                    HStack(spacing: 4) {
+                        Text(label).font(.karst(.caption, weight: .medium))
+                        Button { selectedWeekKey = nil } label: {
+                            Image(systemName: "xmark").font(.caption2)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(theme.accentSubtle)
+                    .foregroundStyle(theme.textPrimary)
+                    .clipShape(Capsule())
+                }
                 ForEach(Array(selectedTagNames).sorted(), id: \.self) { tag in
                     HStack(spacing: 4) {
                         Text(tag).font(.karst(.caption, weight: .medium))
@@ -444,9 +586,14 @@ struct MasonryGridView: View {
                     .foregroundStyle(theme.textPrimary)
                     .clipShape(Capsule())
                 }
-                Button("Clear all") { selectedTagNames.removeAll() }
+                if !selectedTagNames.isEmpty || selectedWeekKey != nil {
+                    Button("Clear all") {
+                        selectedTagNames.removeAll()
+                        selectedWeekKey = nil
+                    }
                     .font(.karst(.caption))
                     .foregroundStyle(theme.accentColor)
+                }
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 8)

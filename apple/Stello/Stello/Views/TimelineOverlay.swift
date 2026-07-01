@@ -2,41 +2,89 @@ import SwiftUI
 
 enum TimelineMetrics {
     static let interactionStripWidth: CGFloat = 44
-    static let lineHeight: CGFloat = 2
-    static let lineGap: CGFloat = 8
-    static let defaultLineWidth: CGFloat = 20
-    static let expandedLineWidth: CGFloat = 36
+    static let barWidth: CGFloat = 2
+    static let barCornerRadius: CGFloat = 1
     static let scrollSpyThreshold: CGFloat = 16
+}
+
+struct WeekBarLayout {
+    let topY: CGFloat
+    let bottomY: CGFloat
+
+    var height: CGFloat { max(2, bottomY - topY) }
+    var midY: CGFloat { topY + height / 2 }
 }
 
 struct TimelineOverlay: View {
     let weekGroups: [WeekGroup]
+    let weekBarLayouts: [String: WeekBarLayout]
     let activeWeekKey: String?
     let interactionWeekKey: String?
-    let onWeekSelected: (String) -> Void
+    let selectedWeekKey: String?
+    let onWeekFilterToggled: (String) -> Void
     let onInteractionChanged: (String?) -> Void
 
     @Environment(\.appTheme) private var theme
-    @State private var lineCenters: [String: CGFloat] = [:]
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                VStack(spacing: TimelineMetrics.lineGap) {
-                    ForEach(weekGroups) { group in
-                        timelineLine(for: group)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .allowsHitTesting(false)
+        ZStack(alignment: .topLeading) {
+            barsLayer
+                .allowsHitTesting(false)
 
             interactionStrip
         }
         .coordinateSpace(name: "timelineStack")
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .onPreferenceChange(TimelineLineCenterKey.self) { lineCenters = $0 }
+        .clipped()
+    }
+
+    private var barsLayer: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(weekGroups) { group in
+                if let layout = weekBarLayouts[group.key] {
+                    timelineBar(for: group, layout: layout)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func timelineBar(for group: WeekGroup, layout: WeekBarLayout) -> some View {
+        let isInteraction = interactionWeekKey == group.key
+        let isSelected = selectedWeekKey == group.key
+        let isScrollSpy = activeWeekKey == group.key && !isInteraction && !isSelected
+        let isHighlighted = isInteraction || isSelected || isScrollSpy
+
+        let color: Color = {
+            if isInteraction || isSelected {
+                return theme.accentColor
+            }
+            if isScrollSpy {
+                return theme.accentColor.opacity(0.55)
+            }
+            return theme.textSecondary.opacity(0.5)
+        }()
+
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: TimelineMetrics.barCornerRadius, style: .continuous)
+                .fill(color)
+                .frame(width: TimelineMetrics.barWidth, height: layout.height)
+                .animation(.easeOut(duration: 0.2), value: isHighlighted)
+
+            if isInteraction {
+                Text(group.label)
+                    .font(.karst(size: 11, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(theme.backgroundSubtle, in: Capsule())
+                    .fixedSize()
+                    .offset(x: TimelineMetrics.barWidth + 6, y: max(0, layout.height / 2 - 12))
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+            }
+        }
+        .offset(y: layout.topY)
     }
 
     private var interactionStrip: some View {
@@ -57,51 +105,10 @@ struct TimelineOverlay: View {
             #else
             .onTapGesture(coordinateSpace: .named("timelineStack")) { location in
                 if let key = weekKey(at: location.y) {
-                    onWeekSelected(key)
+                    onWeekFilterToggled(key)
                 }
             }
             #endif
-    }
-
-    @ViewBuilder
-    private func timelineLine(for group: WeekGroup) -> some View {
-        let isInteraction = interactionWeekKey == group.key
-        let isScrollSpy = activeWeekKey == group.key && !isInteraction
-        let isHighlighted = isInteraction || isScrollSpy
-        let width = isInteraction ? TimelineMetrics.expandedLineWidth : TimelineMetrics.defaultLineWidth
-        let color: Color = isHighlighted
-            ? theme.accentColor
-            : theme.textSecondary.opacity(0.5)
-
-        ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(color)
-                .frame(width: width, height: TimelineMetrics.lineHeight)
-                .animation(.easeOut(duration: 0.2), value: width)
-                .animation(.easeOut(duration: 0.2), value: isHighlighted)
-
-            if isInteraction {
-                Text(group.label)
-                    .font(.karst(size: 11, weight: .medium))
-                    .foregroundStyle(theme.textPrimary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(theme.backgroundSubtle, in: Capsule())
-                    .fixedSize()
-                    .offset(x: width + 6)
-                    .allowsHitTesting(false)
-                    .transition(.opacity.combined(with: .move(edge: .leading)))
-            }
-        }
-        .frame(height: TimelineMetrics.lineHeight, alignment: .leading)
-        .background {
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: TimelineLineCenterKey.self,
-                    value: [group.key: geo.frame(in: .named("timelineStack")).midY]
-                )
-            }
-        }
     }
 
     #if os(iOS)
@@ -112,7 +119,7 @@ struct TimelineOverlay: View {
             }
             .onEnded { value in
                 if let key = weekKey(at: value.location.y) {
-                    onWeekSelected(key)
+                    onWeekFilterToggled(key)
                 }
                 onInteractionChanged(nil)
             }
@@ -123,19 +130,12 @@ struct TimelineOverlay: View {
         guard !weekGroups.isEmpty else { return nil }
         var best: (key: String, distance: CGFloat)?
         for group in weekGroups {
-            guard let center = lineCenters[group.key] else { continue }
-            let distance = abs(center - y)
+            guard let layout = weekBarLayouts[group.key] else { continue }
+            let distance = abs(layout.midY - y)
             if best == nil || distance < best!.distance {
                 best = (group.key, distance)
             }
         }
         return best?.key ?? weekGroups.first?.key
-    }
-}
-
-private struct TimelineLineCenterKey: PreferenceKey {
-    static var defaultValue: [String: CGFloat] = [:]
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue()) { _, new in new }
     }
 }
