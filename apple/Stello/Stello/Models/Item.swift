@@ -30,6 +30,9 @@ final class Item {
     @Relationship(deleteRule: .cascade, inverse: \Snippet.item)
     var snippets: [Snippet]?
 
+    @Relationship(deleteRule: .cascade, inverse: \LocalAttachment.item)
+    var attachments: [LocalAttachment]?
+
     init(
         id: UUID = UUID(),
         slug: String = "",
