@@ -95,7 +95,7 @@ struct SidePanelView: View {
             return t.isEmpty ? "Untitled" : t
         case .filters:  return "Filter by Tag"
         case .import:   return "Add Item"
-        case .settings: return "Settings"
+        case .settings: return "User Preferences"
         case .none:     return ""
         }
     }
@@ -124,62 +124,13 @@ struct SidePanelView: View {
     }
 }
 
-/// Settings body for the side panel — theme + iCloud status + About.
+/// User Preferences body for the side panel — profile + theme + iCloud status + About.
 struct SettingsPanelContent: View {
-    @AppStorage(ThemeAppearancePreference.storageKey) private var rawMode: String = ThemeAppearancePreference.defaultMode
-    @AppStorage("theme.accent") private var rawAccent: String = AccentColor.amber.rawValue
-    @Environment(\.appTheme) private var theme
-
     var body: some View {
         ScrollView {
-            Form {
-                Section("Appearance") {
-                    Picker("Mode", selection: $rawMode) {
-                        Text("System").tag(ThemeAppearancePreference.system)
-                        Text("Light").tag(ColorMode.light.rawValue)
-                        Text("Dark").tag(ColorMode.dark.rawValue)
-                    }
-                    .pickerStyle(.segmented)
-
-                    HStack {
-                        Text("Accent")
-                        Spacer()
-                        HStack(spacing: 14) {
-                            ForEach(AccentColor.allCases, id: \.rawValue) { a in
-                                Button { rawAccent = a.rawValue } label: {
-                                    ZStack {
-                                        Circle()
-                                            .fill(a.swatchColor)
-                                            .frame(width: 22, height: 22)
-                                        if rawAccent == a.rawValue {
-                                            Circle()
-                                                .strokeBorder(theme.textPrimary, lineWidth: 2)
-                                                .frame(width: 28, height: 28)
-                                        }
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-
-                Section("Sync") {
-                    LabeledContent("iCloud") {
-                        Text("Private database")
-                            .foregroundStyle(theme.textSecondary)
-                    }
-                }
-
-                Section("About") {
-                    LabeledContent("Version", value: "1.0")
-                    Text("Personal knowledge base")
-                        .font(.karst(.caption))
-                        .foregroundStyle(theme.textSecondary)
-                }
-            }
-            .formStyle(.grouped)
-            .padding(.bottom, 24)
+            UserPreferencesContent(showsSyncSection: true, showsAboutSection: true)
+                .formStyle(.grouped)
+                .padding(.bottom, 24)
         }
     }
 }

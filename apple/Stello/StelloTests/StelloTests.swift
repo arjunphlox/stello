@@ -147,6 +147,22 @@ struct StelloTests {
         #expect(t.accent == .amber)
     }
 
+    @Test("AccentColor resolves to mode-appropriate default when stored accent is out-of-set")
+    func accentColorModeResolution() {
+        #expect(AccentColor.resolved(storedRawValue: "iris", for: .dark) == .amber)
+        #expect(AccentColor.resolved(storedRawValue: "lime", for: .light) == .iris)
+        #expect(AccentColor.resolved(storedRawValue: "cyan", for: .dark) == .cyan)
+        #expect(AccentColor.resolved(storedRawValue: "teal", for: .light) == .teal)
+    }
+
+    @Test("Accent picker sets differ by color mode")
+    func accentChoicesByMode() {
+        #expect(AccentColor.choices(for: .dark) == AccentColor.brightChoices)
+        #expect(AccentColor.choices(for: .light) == AccentColor.mutedChoices)
+        #expect(AccentColor.choices(for: .dark).count == 6)
+        #expect(AccentColor.choices(for: .light).count == 6)
+    }
+
     @Test("AppTheme reconstructed from raw strings matches original")
     func themeRoundTrip() {
         let original = AppTheme(mode: .light, accent: .iris)

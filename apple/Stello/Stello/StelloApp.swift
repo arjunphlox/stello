@@ -7,6 +7,7 @@ struct StelloApp: App {
 
     init() {
         StelloFont.registerBundledKarstFonts()
+        Self.applyScreenshotLaunchFixtures()
 
         // Screenshot runs use a clean in-memory store so CloudKit-synced legacy records
         // (stale titles / duplicates) don't pollute the captured grid.
@@ -32,6 +33,19 @@ struct StelloApp: App {
         .defaultSize(width: 1200, height: 800)
         #endif
     }
+
+    private static func applyScreenshotLaunchFixtures() {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-screenshotAccentsDark") {
+            UserDefaults.standard.set(ColorMode.dark.rawValue, forKey: ThemeAppearancePreference.storageKey)
+        } else if args.contains("-screenshotAccentsLight") {
+            UserDefaults.standard.set(ColorMode.light.rawValue, forKey: ThemeAppearancePreference.storageKey)
+        }
+        if args.contains("-screenshotUserPrefs") {
+            UserDefaults.standard.set("Arjun", forKey: "profile.name")
+            UserDefaults.standard.set("Designer", forKey: "profile.designation")
+        }
+    }
 }
 
 /// Resolves stored appearance preference (`system` / `light` / `dark`) against the device scheme.
@@ -45,10 +59,9 @@ private struct RootView: View {
     private let enrichmentCoordinator = EnrichmentCoordinator()
 
     private var theme: AppTheme {
-        AppTheme(
-            mode: ThemeAppearancePreference.resolvedColorMode(rawMode: rawMode, systemScheme: systemScheme),
-            accent: AccentColor(rawValue: rawAccent) ?? .amber
-        )
+        let mode = ThemeAppearancePreference.resolvedColorMode(rawMode: rawMode, systemScheme: systemScheme)
+        let accent = AccentColor.resolved(storedRawValue: rawAccent, for: mode)
+        return AppTheme(mode: mode, accent: accent)
     }
 
     var body: some View {
@@ -56,6 +69,7 @@ private struct RootView: View {
             .modelContainer(container)
             .environment(\.appTheme, theme)
             .environment(\.enrichmentCoordinator, enrichmentCoordinator)
+            .environment(UserProfileStore.shared)
             .preferredColorScheme(ThemeAppearancePreference.preferredColorScheme(rawMode: rawMode, theme: theme))
             .onOpenURL { url in
                 DropImportService.importFileURL(url, context: context, coordinator: enrichmentCoordinator)

@@ -14,7 +14,7 @@ enum SidePanelContent: Equatable {
         case .itemDetail: "Detail"
         case .filters:    "Filters"
         case .import:     "Import"
-        case .settings:   "Settings"
+        case .settings:   "User Preferences"
         }
     }
 
