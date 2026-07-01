@@ -15,6 +15,7 @@
 		0D18DEAA38D5D391143F61CC /* ItemCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45FB580D0C83D4D934FF7013 /* ItemCardView.swift */; };
 		0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA340D3CF1CBA31162EB51C /* Tag.swift */; };
 		145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
+		1AFDFF2A1AA22AE8F6806246 /* UserPreferencesContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8C21E2EC36E821776F7C3B /* UserPreferencesContent.swift */; };
 		1BA6DD6CFC0DEB0DAF398922 /* StelloTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */; };
 		1BB5F26CDC1399B7F9DB527F /* StelloFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 845E57725F7C132A200501D5 /* StelloFont.swift */; };
 		1F5A6195A4BC26A62D3308F9 /* ItemImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBD865033AC3DE033F9D814 /* ItemImage.swift */; };
@@ -30,6 +31,7 @@
 		483A97EDB5D05F0D52B78078 /* StelloGlassIconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF9F20BFB190A73AC6FF77B /* StelloGlassIconButton.swift */; };
 		4F7D4306DB34920A4F292188 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07B6271F9E2D3C9D455B813 /* Theme.swift */; };
 		51973386299AAFAC7ABEEB9E /* StelloShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 73F3E5B16B30645B3B36E3DE /* StelloShare.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		56650FB0A946291E83B5803B /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB48B426C62C711AA78C1AA /* UserProfile.swift */; };
 		57820614E4D3B3A466EC1B90 /* WeekGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EE220C3FE5F648024764D5 /* WeekGroup.swift */; };
 		59611335583FB4DF8B08A0AD /* Snippet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0AA919414688D50C5841EC /* Snippet.swift */; };
 		5C38E5380ED85E12CD92E4A6 /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA340D3CF1CBA31162EB51C /* Tag.swift */; };
@@ -157,6 +159,7 @@
 		AC609798A2ABC0F89A52C233 /* karst-regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-regular.otf"; sourceTree = "<group>"; };
 		B1947247242FD3D01B11106A /* SeedData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedData.swift; sourceTree = "<group>"; };
 		BA5B7E567FF7C8F12551D404 /* MasonryLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryLayout.swift; sourceTree = "<group>"; };
+		BEB48B426C62C711AA78C1AA /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		C252C08ADEF84FA292D4AA32 /* karst-medium.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-medium.otf"; sourceTree = "<group>"; };
 		C4C6C07F9EB2A0D34C34B983 /* TimelineOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineOverlay.swift; sourceTree = "<group>"; };
 		C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagFilterSheet.swift; sourceTree = "<group>"; };
@@ -166,6 +169,7 @@
 		CF3875676CC21E3F317FD776 /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
 		D38FC889771694CCFA01FC97 /* karst-mediumitalic.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-mediumitalic.otf"; sourceTree = "<group>"; };
 		DA2CDECB3448C079F9E9F155 /* StelloLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloLayout.swift; sourceTree = "<group>"; };
+		DA8C21E2EC36E821776F7C3B /* UserPreferencesContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPreferencesContent.swift; sourceTree = "<group>"; };
 		DAFD9FC851DB71708B74829C /* EnrichmentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrichmentCoordinator.swift; sourceTree = "<group>"; };
 		E07B6271F9E2D3C9D455B813 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		EBE3208FABDC9FE868334622 /* MasonryGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryGridView.swift; sourceTree = "<group>"; };
@@ -250,6 +254,7 @@
 				9881FC7E6289F5ACC97430E1 /* SampleCoverGenerator.swift */,
 				B1947247242FD3D01B11106A /* SeedData.swift */,
 				2FAFAF6D495AAD1B33F2619C /* StelloStore.swift */,
+				BEB48B426C62C711AA78C1AA /* UserProfile.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -272,6 +277,7 @@
 				F37680488FAFA888F74C995C /* StelloHeaderView.swift */,
 				C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */,
 				C4C6C07F9EB2A0D34C34B983 /* TimelineOverlay.swift */,
+				DA8C21E2EC36E821776F7C3B /* UserPreferencesContent.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -506,6 +512,8 @@
 				6EDC47A1A3E5FE6A1A51D727 /* TagFilterSheet.swift in Sources */,
 				4F7D4306DB34920A4F292188 /* Theme.swift in Sources */,
 				09083E266BBA3FBDDF4324B0 /* TimelineOverlay.swift in Sources */,
+				1AFDFF2A1AA22AE8F6806246 /* UserPreferencesContent.swift in Sources */,
+				56650FB0A946291E83B5803B /* UserProfile.swift in Sources */,
 				57820614E4D3B3A466EC1B90 /* WeekGroup.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
