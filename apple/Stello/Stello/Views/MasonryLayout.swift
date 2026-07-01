@@ -2,6 +2,8 @@ import SwiftUI
 
 struct MasonryLayout: Layout {
     var spacing: CGFloat = 12
+    /// When set, overrides width-based column count (clamped to 1…12).
+    var forcedColumns: Int? = nil
 
     // Internal so tests can verify column-count decisions directly.
     func columnCount(for width: CGFloat) -> Int {
@@ -11,6 +13,13 @@ struct MasonryLayout: Layout {
         return 5
     }
 
+    func resolvedColumnCount(for width: CGFloat) -> Int {
+        if let forcedColumns {
+            return min(max(forcedColumns, 1), 12)
+        }
+        return columnCount(for: width)
+    }
+
     func sizeThatFits(
         proposal: ProposedViewSize,
         subviews: Subviews,
@@ -18,7 +27,7 @@ struct MasonryLayout: Layout {
     ) -> CGSize {
         guard !subviews.isEmpty else { return .zero }
         let width = proposal.width ?? 375
-        let cols = columnCount(for: width)
+        let cols = resolvedColumnCount(for: width)
         let colWidth = (width - spacing * CGFloat(cols - 1)) / CGFloat(cols)
 
         var heights = [CGFloat](repeating: 0, count: cols)
@@ -49,7 +58,7 @@ struct MasonryLayout: Layout {
         cache: inout ()
     ) {
         guard !subviews.isEmpty else { return }
-        let cols = columnCount(for: bounds.width)
+        let cols = resolvedColumnCount(for: bounds.width)
         let colWidth = (bounds.width - spacing * CGFloat(cols - 1)) / CGFloat(cols)
 
         var tops = [CGFloat](repeating: bounds.minY, count: cols)

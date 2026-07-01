@@ -27,13 +27,38 @@ enum StelloLayout {
     static let macTitleBarLeadingInset: CGFloat = 78
     /// Scroll distance (pt) over which the header transitions opaque → glass.
     static let headerScrollFadeDistance: CGFloat = 48
-    /// Floating Liquid Glass search bar — height, bottom margin, and scroll content inset.
+    /// Floating Liquid Glass control bar — search field height, glass fill, and insets.
     static let floatingSearchBarHeight: CGFloat = 48
-    static let floatingSearchBarBottomMargin: CGFloat = 12
-    static let floatingSearchBarMaxWidth: CGFloat = 420
-    /// Scroll padding so last grid cards clear the floating search overlay.
+    /// Reduced tint so Liquid Glass occlusion reads through the control cluster.
+    static let controlBarGlassFillOpacity: CGFloat = 0.62
+    static let controlBarSpacing: CGFloat = 8
+    /// iPhone: inset from rounded screen corners (beyond windowInset).
+    static let controlBarSideInsetCompact: CGFloat = 16
+    /// iPhone: extra margin below the home-indicator safe area.
+    static let controlBarBottomExtraCompact: CGFloat = 10
+    /// iPad / regular width: sit closer to the bottom edge.
+    static let controlBarBottomMarginRegular: CGFloat = 8
+    /// macOS: comfortable bottom inset for the floating row.
+    static let controlBarBottomMarginMac: CGFloat = 12
+    /// Scroll padding so last grid cards clear the floating control overlay.
     static var floatingSearchScrollInset: CGFloat {
-        floatingSearchBarHeight + floatingSearchBarBottomMargin
+        floatingSearchBarHeight + controlBarBottomMarginRegular + controlBarBottomExtraCompact
+    }
+    /// Bottom padding for the floating control row (safe-area extra added at call site on iOS).
+    static func controlBarBottomPadding(embedInPanelLayout: Bool) -> CGFloat {
+        #if os(macOS)
+        controlBarBottomMarginMac
+        #else
+        embedInPanelLayout ? controlBarBottomMarginRegular : controlBarBottomExtraCompact
+        #endif
+    }
+    /// Horizontal padding for the floating control row.
+    static func controlBarHorizontalPadding(embedInPanelLayout: Bool) -> CGFloat {
+        #if os(iOS)
+        embedInPanelLayout ? 0 : controlBarSideInsetCompact
+        #else
+        embedInPanelLayout ? 0 : windowInset
+        #endif
     }
     /// Top scroll inset when the header floats over the grid (header + gap + top inset).
     static var headerOverlayScrollInset: CGFloat {

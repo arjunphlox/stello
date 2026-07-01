@@ -31,6 +31,26 @@ struct MasonryLayoutTests {
         #expect(layout.columnCount(for: 1201) == 5)
     }
 
+    @Test("forcedColumns overrides width-based count")
+    func forcedColumnsOverride() {
+        let layout = MasonryLayout(forcedColumns: 12)
+        #expect(layout.resolvedColumnCount(for: 480) == 12)
+        #expect(layout.resolvedColumnCount(for: 1400) == 12)
+    }
+
+    @Test("forcedColumns clamps to 1...12")
+    func forcedColumnsClamping() {
+        #expect(MasonryLayout(forcedColumns: 0).resolvedColumnCount(for: 480) == 1)
+        #expect(MasonryLayout(forcedColumns: -3).resolvedColumnCount(for: 480) == 1)
+        #expect(MasonryLayout(forcedColumns: 99).resolvedColumnCount(for: 480) == 12)
+    }
+
+    @Test("nil forcedColumns uses width-based count")
+    func autoColumns() {
+        #expect(layout.resolvedColumnCount(for: 480) == 2)
+        #expect(layout.resolvedColumnCount(for: 1400) == 5)
+    }
+
     // MARK: Shortest-column packing
 
     @Test("All columns filled when cards > columns", arguments: 2...5)
