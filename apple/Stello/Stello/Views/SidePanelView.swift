@@ -14,11 +14,12 @@ struct SidePanelView: View {
     @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
 
     var body: some View {
-        VStack(spacing: 0) {
-            panelHeader
-            Divider().overlay(theme.border)
-            panelBody
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Group {
+            if content == .itemDetail {
+                itemDetailPanel
+            } else {
+                toolPanel
+            }
         }
         .background(theme.background)
         .clipShape(RoundedRectangle(cornerRadius: StelloLayout.panelCornerRadius, style: .continuous))
@@ -28,26 +29,56 @@ struct SidePanelView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Item detail (cover bleeds to top; floating glass close)
+
+    private var itemDetailPanel: some View {
+        ZStack(alignment: .topTrailing) {
+            panelBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Legibility scrim behind the floating close control
+            RadialGradient(
+                colors: [.black.opacity(0.28), .clear],
+                center: .topTrailing,
+                startRadius: 0,
+                endRadius: 72
+            )
+            .frame(width: 96, height: 96, alignment: .topTrailing)
+            .allowsHitTesting(false)
+
+            StelloGlassIconButton(
+                systemName: "xmark",
+                style: .circularGlass,
+                label: "Close panel",
+                action: onClose
+            )
+            .padding(.top, 12)
+            .padding(.trailing, 12)
+            .zIndex(1)
+        }
+    }
+
+    // MARK: - Tool panels (header row + body)
+
+    private var toolPanel: some View {
+        VStack(spacing: 0) {
+            panelHeader
+            Divider().overlay(theme.border)
+            panelBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
 
     private var panelHeader: some View {
         HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(headerTitle)
-                    .font(.headline)
-                    .foregroundStyle(theme.textPrimary)
-                    .lineLimit(2)
-                if content == .itemDetail, let domain = selectedItem?.domain, !domain.isEmpty {
-                    Text(domain)
-                        .font(.caption)
-                        .foregroundStyle(theme.textSecondary)
-                        .lineLimit(1)
-                }
-            }
+            Text(headerTitle)
+                .font(.karst(.headline))
+                .foregroundStyle(theme.textPrimary)
+                .lineLimit(2)
             Spacer(minLength: 8)
             StelloGlassIconButton(
                 systemName: "xmark",
-                contrastForeground: false,
+                style: .circularGlass,
                 label: "Close panel",
                 action: onClose
             )
@@ -76,7 +107,7 @@ struct SidePanelView: View {
         switch content {
         case .itemDetail:
             if let item = selectedItem {
-                DetailView(item: item, embedInPanel: true)
+                DetailView(item: item, embedsInPanel: true)
             } else {
                 ContentUnavailableView("Select an item", systemImage: "photo.on.rectangle")
                     .foregroundStyle(theme.textSecondary)
@@ -95,7 +126,7 @@ struct SidePanelView: View {
 
 /// Settings body for the side panel — theme + iCloud status + About.
 struct SettingsPanelContent: View {
-    @AppStorage("theme.mode")   private var rawMode:   String = ColorMode.dark.rawValue
+    @AppStorage(ThemeAppearancePreference.storageKey) private var rawMode: String = ThemeAppearancePreference.defaultMode
     @AppStorage("theme.accent") private var rawAccent: String = AccentColor.amber.rawValue
     @Environment(\.appTheme) private var theme
 
@@ -104,6 +135,7 @@ struct SettingsPanelContent: View {
             Form {
                 Section("Appearance") {
                     Picker("Mode", selection: $rawMode) {
+                        Text("System").tag(ThemeAppearancePreference.system)
                         Text("Light").tag(ColorMode.light.rawValue)
                         Text("Dark").tag(ColorMode.dark.rawValue)
                     }
@@ -142,7 +174,7 @@ struct SettingsPanelContent: View {
                 Section("About") {
                     LabeledContent("Version", value: "1.0")
                     Text("Personal knowledge base")
-                        .font(.caption)
+                        .font(.karst(.caption))
                         .foregroundStyle(theme.textSecondary)
                 }
             }

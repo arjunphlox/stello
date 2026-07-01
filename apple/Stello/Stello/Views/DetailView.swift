@@ -3,38 +3,34 @@ import SwiftData
 
 struct DetailView: View {
     @Bindable var item: Item
-    var embedInPanel: Bool = false
+    var embedsInPanel: Bool = false
+
     @Environment(\.appTheme) private var theme
     @Environment(\.modelContext) private var context
+    @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
 
-    private static let placeholderHues: [Double] = [18, 80, 38, 140, 25, 45, 12, 100]
+    @State private var contentWidth: CGFloat = 300
 
-    private var coverImage: ItemImage? { item.coverImage }
+    private static let twoColumnThreshold: CGFloat = 420
 
     private var sortedTags: [Tag] {
         (item.tags ?? []).sorted { $0.weight > $1.weight }
     }
 
-    private var aiTags: [Tag] {
-        (item.tags ?? []).filter { $0.source == "ai" }.sorted { $0.weight > $1.weight }
-    }
-
-    private var aiSnippets: [Snippet] {
-        (item.snippets ?? []).filter { $0.source == "ai" }
-            .sorted { $0.addedAt < $1.addedAt }
+    private var sortedSnippets: [Snippet] {
+        (item.snippets ?? []).sorted { $0.addedAt < $1.addedAt }
     }
 
     private var whySavedSuggestions: [String] {
         EnrichmentService.decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON)
     }
 
-    private var hasAIReviewContent: Bool {
-        !aiTags.isEmpty || !aiSnippets.isEmpty || !whySavedSuggestions.isEmpty
+    private var canEnrich: Bool {
+        item.enrichmentStatus == "text_done"
     }
 
-    private var placeholderHue: Double {
-        let idx = abs(item.slug.hashValue) % Self.placeholderHues.count
-        return Self.placeholderHues[idx] / 360.0
+    private var usesTwoColumns: Bool {
+        embedsInPanel && contentWidth >= Self.twoColumnThreshold
     }
 
     /// Panel footer label "Wnn YYYY" per BUILD_SPEC.
@@ -43,76 +39,83 @@ struct DetailView: View {
         guard key != "undated" else { return "Undated" }
         let parts = key.split(separator: "-")
         guard parts.count == 2 else { return key }
-        return "\(parts[1]) \(parts[0])"
+        return "W\(parts[1]) \(parts[0])"
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                coverSection
-                VStack(alignment: .leading, spacing: 16) {
+                DetailImageStrip(item: item, bleedsToTop: embedsInPanel)
+
+                VStack(alignment: .leading, spacing: 20) {
                     metaSection
+
                     if let summary = item.summary, !summary.isEmpty {
                         Text(summary)
-                            .font(.body)
+                            .font(.karst(.body))
                             .foregroundStyle(theme.textSecondary)
                     }
-                    if let md = item.bodyMarkdown, !md.isEmpty {
-                        markdownSection(md)
-                    }
-                    if hasAIReviewContent {
-                        aiReviewSection
-                    }
-                    if !sortedTags.isEmpty {
-                        tagSection
-                    }
+
+                    lowerSections
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
                 .padding(.bottom, 24)
             }
         }
         .background(theme.background)
-        .modifier(DetailNavigationTitle(title: item.title.isEmpty ? "Untitled" : item.title, hidden: embedInPanel))
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { _, newWidth in
+            contentWidth = newWidth
+        }
+    }
+
+    // MARK: - Lower sections (multi-column when panel is wide)
+
+    @ViewBuilder
+    private var lowerSections: some View {
+        let columns = usesTwoColumns
+            ? [GridItem(.flexible(), alignment: .top), GridItem(.flexible(), alignment: .top)]
+            : [GridItem(.flexible(), alignment: .top)]
+
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
+            if let md = item.bodyMarkdown, !md.isEmpty {
+                markdownSection(md)
+            }
+
+            snippetsSection
+            whySavedSection
+            tagSection
+
+            if canEnrich {
+                enrichButton
+            }
+        }
     }
 
     // MARK: - Sections
 
-    @ViewBuilder
-    private var coverSection: some View {
-        if let data = coverImage?.data, let img = platformImage(from: data) {
-            img
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(maxWidth: .infinity)
-                .frame(height: 240)
-                .clipped()
-        } else {
-            Color(hue: placeholderHue,
-                  saturation: 0.4,
-                  brightness: theme.mode == .dark ? 0.26 : 0.88)
-                .frame(height: 180)
-        }
-    }
-
     private var metaSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(item.title.isEmpty ? "Untitled" : item.title)
-                .font(.title2.weight(.semibold))
+                .font(.karst(.title2, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
 
             HStack(spacing: 6) {
-                if let domain = item.domain, !domain.isEmpty {
-                    Text(domain)
-                        .font(.caption.weight(.semibold))
+                let linkLabel = item.displayLink
+                if !linkLabel.isEmpty {
+                    Text(linkLabel)
+                        .font(.karst(.caption, weight: .semibold))
                         .foregroundStyle(theme.accentColor)
                 }
                 if let author = item.author, !author.isEmpty {
                     Text("·").foregroundStyle(theme.border)
-                    Text(author).font(.caption).foregroundStyle(theme.textSecondary)
+                    Text(author).font(.karst(.caption)).foregroundStyle(theme.textSecondary)
                 }
                 Spacer()
                 Text(weekFooter)
-                    .font(.caption.monospacedDigit())
+                    .font(.karst(.caption).monospacedDigit())
                     .foregroundStyle(theme.textSecondary)
             }
         }
@@ -126,32 +129,91 @@ struct DetailView: View {
                 Text(text)
             }
         }
-        .font(.callout)
+        .font(.karst(.callout))
         .foregroundStyle(theme.textSecondary)
     }
 
-    private var aiReviewSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("AI suggestions")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(theme.textSecondary)
-                .textCase(.uppercase)
-                .kerning(0.5)
+    @ViewBuilder
+    private var snippetsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionLabel("Key snippets")
 
-            if !aiTags.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Vision tags")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(theme.textSecondary)
-                    TagFlowLayout(spacing: 6) {
-                        ForEach(aiTags, id: \.persistentModelID) { tag in
-                            HStack(spacing: 4) {
+            if sortedSnippets.isEmpty {
+                Text("No snippets yet.")
+                    .font(.karst(.caption))
+                    .foregroundStyle(theme.textSecondary)
+                    .italic()
+            } else {
+                ForEach(sortedSnippets, id: \.persistentModelID) { snippet in
+                    HStack(alignment: .top, spacing: 8) {
+                        Rectangle()
+                            .fill(theme.accentColor)
+                            .frame(width: 2)
+                        Text(snippet.text)
+                            .font(.karst(.callout))
+                            .foregroundStyle(theme.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button {
+                            removeSnippet(snippet)
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(theme.textSecondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Remove snippet")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(theme.borderSubtle)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var whySavedSection: some View {
+        if !whySavedSuggestions.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                sectionLabel("Why save?")
+                TagFlowLayout(spacing: 6) {
+                    ForEach(whySavedSuggestions, id: \.self) { suggestion in
+                        Button {
+                            acceptWhySavedSuggestion(suggestion)
+                        } label: {
+                            Text(humanizeReason(suggestion))
+                                .font(.karst(.caption))
+                                .foregroundStyle(theme.accentContrast)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(theme.accentColor)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tagSection: some View {
+        if !sortedTags.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                sectionLabel("Tags")
+                TagFlowLayout(spacing: 6) {
+                    ForEach(sortedTags, id: \.persistentModelID) { tag in
+                        HStack(spacing: 4) {
+                            if tag.source == "ai" {
                                 Circle()
                                     .fill(theme.accentColor)
                                     .frame(width: 5, height: 5)
-                                Text(tag.name)
-                                    .font(.caption)
-                                    .foregroundStyle(theme.textPrimary)
+                            }
+                            Text(tag.name)
+                                .font(.karst(.caption))
+                                .foregroundStyle(theme.textPrimary)
+                            if tag.source == "ai" {
                                 Button {
                                     removeAITag(tag)
                                 } label: {
@@ -160,101 +222,47 @@ struct DetailView: View {
                                         .foregroundStyle(theme.textSecondary)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Remove tag")
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(theme.accentSubtle)
-                            .clipShape(Capsule())
-                            .opacity(max(0.55, tag.weight))
                         }
-                    }
-                }
-            }
-
-            if !aiSnippets.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Snippets")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(theme.textSecondary)
-                    ForEach(aiSnippets, id: \.persistentModelID) { snippet in
-                        HStack(alignment: .top, spacing: 8) {
-                            Text(snippet.text)
-                                .font(.callout)
-                                .foregroundStyle(theme.textSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Button {
-                                removeAISnippet(snippet)
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(theme.textSecondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(10)
-                        .background(theme.borderSubtle)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                }
-            }
-
-            if !whySavedSuggestions.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Why save?")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(theme.textSecondary)
-                    TagFlowLayout(spacing: 6) {
-                        ForEach(whySavedSuggestions, id: \.self) { suggestion in
-                            Button {
-                                acceptWhySavedSuggestion(suggestion)
-                            } label: {
-                                Text(suggestion)
-                                    .font(.caption)
-                                    .foregroundStyle(theme.accentContrast)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(theme.accentColor)
-                                    .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(tag.source == "ai" ? theme.accentSubtle : theme.borderSubtle)
+                        .clipShape(Capsule())
+                        .opacity(max(0.55, tag.weight))
                     }
                 }
             }
         }
-        .padding(12)
-        .background(theme.surfaceRaised)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    private var tagSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Tags")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(theme.textSecondary)
-                .textCase(.uppercase)
-                .kerning(0.5)
-
-            TagFlowLayout(spacing: 6) {
-                ForEach(sortedTags, id: \.persistentModelID) { tag in
-                    HStack(spacing: 4) {
-                        if tag.source == "ai" {
-                            Circle()
-                                .fill(theme.accentColor)
-                                .frame(width: 5, height: 5)
-                        }
-                        Text(tag.name)
-                            .font(.caption)
-                            .foregroundStyle(theme.textPrimary)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(theme.borderSubtle)
-                    .clipShape(Capsule())
-                    .opacity(max(0.55, tag.weight))
-                }
-            }
+    private var enrichButton: some View {
+        Button {
+            enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
+        } label: {
+            Label("Enrich", systemImage: "sparkles")
+                .font(.karst(.callout, weight: .semibold))
+                .foregroundStyle(theme.accentContrast)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(theme.accentColor)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+        .buttonStyle(.plain)
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.karst(.caption, weight: .semibold))
+            .foregroundStyle(theme.textSecondary)
+            .textCase(.uppercase)
+            .kerning(0.5)
+    }
+
+    private func humanizeReason(_ reason: String) -> String {
+        reason.replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
     }
 
     // MARK: - Mutations
@@ -265,7 +273,7 @@ struct DetailView: View {
         try? context.save()
     }
 
-    private func removeAISnippet(_ snippet: Snippet) {
+    private func removeSnippet(_ snippet: Snippet) {
         context.delete(snippet)
         item.updatedAt = .now
         try? context.save()
@@ -273,37 +281,6 @@ struct DetailView: View {
 
     private func acceptWhySavedSuggestion(_ suggestion: String) {
         try? EnrichmentService.addIntentTag(name: suggestion, to: item, context: context)
-    }
-
-    // MARK: - Platform image helper
-
-    private func platformImage(from data: Data) -> Image? {
-        #if os(macOS)
-        guard let ns = NSImage(data: data) else { return nil }
-        return Image(nsImage: ns)
-        #else
-        guard let ui = UIImage(data: data) else { return nil }
-        return Image(uiImage: ui)
-        #endif
-    }
-}
-
-// MARK: - Navigation title (hidden when embedded in side panel)
-
-private struct DetailNavigationTitle: ViewModifier {
-    let title: String
-    let hidden: Bool
-
-    func body(content: Content) -> some View {
-        if hidden {
-            content
-        } else {
-            content
-                .navigationTitle(title)
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-        }
     }
 }
 
@@ -339,7 +316,7 @@ struct TagFlowLayout: Layout {
 // MARK: - Preview
 
 #Preview {
-    NavigationStack {
+    ScrollView {
         DetailView(item: SeedData.enrichedSampleItem)
     }
     .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
