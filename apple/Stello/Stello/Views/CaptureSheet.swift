@@ -37,7 +37,7 @@ struct CaptureContent: View {
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
                 #endif
-                .font(.system(size: 13))
+                .font(.karst(.subheadline))
                 .padding(10)
                 .background(theme.background)
                 .overlay {
@@ -53,7 +53,7 @@ struct CaptureContent: View {
                     Button("Import URLs") {
                         Task { await commitURLs() }
                     }
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.karst(.subheadline, weight: .medium))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background(theme.accentColor)
@@ -71,7 +71,7 @@ struct CaptureContent: View {
                 if let msg = errorMessage {
                     Text(msg)
                         .foregroundStyle(.red)
-                        .font(.caption)
+                        .font(.karst(.caption))
                 }
             }
             .padding(16)
@@ -86,7 +86,7 @@ struct CaptureContent: View {
         HStack(spacing: 8) {
             Rectangle().fill(theme.border).frame(height: 1)
             Text("or")
-                .font(.system(size: 11))
+                .font(.karst(.caption))
                 .foregroundStyle(theme.textSecondary)
             Rectangle().fill(theme.border).frame(height: 1)
         }
@@ -95,7 +95,7 @@ struct CaptureContent: View {
     private var dropZone: some View {
         VStack(spacing: 8) {
             Text("Drop a CSV or Markdown file here")
-                .font(.system(size: 13))
+                .font(.karst(.subheadline))
                 .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
@@ -118,7 +118,7 @@ struct CaptureContent: View {
     private var secondaryImageCapture: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Or pick an image")
-                .font(.caption.weight(.semibold))
+                .font(.karst(.caption, weight: .semibold))
                 .foregroundStyle(theme.textSecondary)
             PhotosPicker(selection: $pickedPhoto, matching: .images) {
                 Label("Choose Photo", systemImage: "photo")

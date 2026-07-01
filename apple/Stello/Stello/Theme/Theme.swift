@@ -6,6 +6,25 @@ enum ColorMode: String, CaseIterable {
     case light, dark
 }
 
+/// Stored `theme.mode` values; `"system"` follows the device appearance.
+enum ThemeAppearancePreference {
+    static let storageKey = "theme.mode"
+    static let system = "system"
+    static let defaultMode = ColorMode.dark.rawValue
+
+    static func resolvedColorMode(rawMode: String, systemScheme: ColorScheme) -> ColorMode {
+        switch rawMode {
+        case ColorMode.light.rawValue: .light
+        case ColorMode.dark.rawValue:  .dark
+        default:                        systemScheme == .dark ? .dark : .light
+        }
+    }
+
+    static func preferredColorScheme(rawMode: String, theme: AppTheme) -> ColorScheme? {
+        rawMode == system ? nil : theme.colorScheme
+    }
+}
+
 enum AccentColor: String, CaseIterable {
     case lime, amber, iris
 
@@ -127,7 +146,7 @@ struct AppTheme: Equatable {
     }
 
     // Sand-based surface tokens
-    var background:       Color { sand[1] }
+    var background:       Color { mode == .light ? Color(hex: "#f2f1ee") : sand[1] }
     var backgroundSubtle: Color { sand[2] }
     var surfaceRaised:    Color { sand[3] }
     var borderSubtle:     Color { sand[4] }

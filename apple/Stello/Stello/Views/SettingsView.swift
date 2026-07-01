@@ -1,10 +1,15 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("theme.mode")   private var rawMode:   String = ColorMode.dark.rawValue
+    @AppStorage(ThemeAppearancePreference.storageKey) private var rawMode: String = ThemeAppearancePreference.defaultMode
     @AppStorage("theme.accent") private var rawAccent: String = AccentColor.amber.rawValue
+    @AppStorage("stello.gridColumns") private var gridColumns: Int = 0
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appTheme) private var theme
+
+    private var gridColumnsLabel: String {
+        gridColumns == 0 ? "Auto" : "\(gridColumns) columns"
+    }
 
     var body: some View {
         #if os(macOS)
@@ -31,6 +36,7 @@ struct SettingsView: View {
         Form {
             Section("Appearance") {
                 Picker("Mode", selection: $rawMode) {
+                    Text("System").tag(ThemeAppearancePreference.system)
                     Text("Light").tag(ColorMode.light.rawValue)
                     Text("Dark").tag(ColorMode.dark.rawValue)
                 }
@@ -57,6 +63,13 @@ struct SettingsView: View {
                         }
                     }
                 }
+            }
+
+            Section("Grid") {
+                Stepper(gridColumnsLabel, value: $gridColumns, in: 0...12)
+                Text("Pinch the grid to zoom, or set columns here.")
+                    .font(.karst(.caption))
+                    .foregroundStyle(.secondary)
             }
         }
     }

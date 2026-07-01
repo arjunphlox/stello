@@ -39,7 +39,7 @@ struct TagFilterContent: View {
             VStack(alignment: .leading, spacing: 12) {
                 TextField("Search tags…", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(.karst(.subheadline))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .background(theme.background)
@@ -51,7 +51,7 @@ struct TagFilterContent: View {
 
                 if !selectedTagNames.isEmpty {
                     Button("Clear all") { selectedTagNames.removeAll() }
-                        .font(.system(size: 13))
+                        .font(.karst(.subheadline))
                         .foregroundStyle(theme.accentColor)
                 }
 
@@ -76,11 +76,11 @@ struct TagFilterContent: View {
             } label: {
                 HStack(spacing: 8) {
                     Text(category.capitalized)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.karst(.footnote, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                     Spacer(minLength: 4)
                     Text("\(totalCount)")
-                        .font(.system(size: 11))
+                        .font(.karst(.caption))
                         .foregroundStyle(theme.textSecondary)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
@@ -121,9 +121,9 @@ struct TagFilterContent: View {
         } label: {
             HStack(spacing: 4) {
                 Text(row.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.karst(.footnote, weight: .medium))
                 Text("\(row.count)")
-                    .font(.system(size: 10))
+                    .font(.karst(.caption2))
                     .opacity(0.6)
             }
             .padding(.horizontal, 10)
