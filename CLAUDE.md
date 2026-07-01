@@ -10,10 +10,14 @@ This repo follows Arjun's AI coding workflow. See the full spec: https://github.
 
 **Claude Code is occasional** — only for primitives that live only there: fan-out Dynamic Workflows (Agent Spawns) and mobile capture (iOS / Remote Control). It is not the default tool or brain.
 
-**Model routing (3-tier):**
-- **Composer 2.5** — Cursor, default coding.
-- **Opus 4.8** — hard/risky + all non-coding latent work; runs in Cursor.
+**Model routing (delegate by task type — parent plans/orchestrates, sub-agents execute):**
+- **Composer 2.5** — default coding: well-specified edits, boilerplate, mechanical refactors, codemods, fast iterative builds. Cheapest + most token-efficient.
+- **Sonnet 5** — mid-complexity: multi-file features, non-trivial refactors, code review, test authoring, moderate debugging, agentic tool-use where Composer is too shallow. Balanced quality/cost.
+- **Opus 4.8** — hard/risky: architecture, ambiguous or high-blast-radius changes, deep debugging, planning + orchestration, and all non-coding latent work. Highest accuracy/thinking; reserve.
 - **GPT-5.5** — gated: 1M-token single-doc reasoning or native Codex/ChatGPT computer-use.
+- **Fan-out/swarm** — parallel-safe, many-independent-unit work → hand off a paste-ready **Claude Code Dynamic Workflow** prompt; parent only plans + coordinates.
+
+For any non-trivial task, delegate execution to the right-tier sub-agent (Task tool) rather than doing everything inline; escalate a tier on stalls/growing blast radius, de-escalate when it turns mechanical. See gems memory [`subagent-model-routing`](https://github.com/arjunphlox/arjun-ai-gems/blob/main/docs/memory/subagent-model-routing.md).
 
 **Branch prefixes** (app-based, keeps parallel work from colliding):
 - `cursor/*` — Cursor sessions
