@@ -31,6 +31,14 @@ enum StelloLayout {
     static let floatingSearchBarHeight: CGFloat = 40
     /// Bottom control bar icon buttons — 40×40 circles (Add, Filter, Avatar).
     static let controlBarButtonSize: CGFloat = 40
+    /// iPhone compact: taller control row (search + icon buttons).
+    static let compactControlBarHeight: CGFloat = 60
+    static let compactControlBarButtonSize: CGFloat = 60
+    static let compactControlBarSymbolSize: CGFloat = 20
+    /// iPhone compact: lift the control row up from the home-indicator edge.
+    static let controlBarCompactBottomLift: CGFloat = 40
+    /// iPhone: gap between Dynamic Island / notch and the sticky header card.
+    static let compactHeaderBelowSafeAreaGap: CGFloat = 8
     /// Reduced tint so Liquid Glass occlusion reads through the control cluster.
     static let controlBarGlassFillOpacity: CGFloat = 0.62
     static let controlBarSpacing: CGFloat = 8
@@ -46,12 +54,42 @@ enum StelloLayout {
     static var floatingSearchScrollInset: CGFloat {
         floatingSearchBarHeight + controlBarBottomMarginRegular + controlBarBottomExtraCompact
     }
+    /// iPhone compact scroll inset below the floating control row.
+    static var compactFloatingSearchScrollInset: CGFloat {
+        compactControlBarHeight + max(0, controlBarBottomExtraCompact - controlBarCompactBottomLift)
+    }
+    /// Top scroll inset when the sticky header floats over the grid on iPhone.
+    static func compactHeaderScrollInset(safeTop: CGFloat) -> CGFloat {
+        safeTop + compactHeaderBelowSafeAreaGap + headerHeight + sectionGap
+    }
+    /// Control bar height for the current layout width.
+    static func controlBarHeight(compactPhone: Bool) -> CGFloat {
+        compactPhone ? compactControlBarHeight : floatingSearchBarHeight
+    }
+    static func controlBarButtonDiameter(compactPhone: Bool) -> CGFloat {
+        compactPhone ? compactControlBarButtonSize : controlBarButtonSize
+    }
+    static func controlBarSymbolSize(compactPhone: Bool) -> CGFloat {
+        compactPhone ? compactControlBarSymbolSize : iconButtonSymbolSize
+    }
     /// Bottom padding for the floating control row (safe-area extra added at call site on iOS).
-    static func controlBarBottomPadding(embedInPanelLayout: Bool) -> CGFloat {
+    static func controlBarBottomPadding(embedInPanelLayout: Bool, compactPhone: Bool = false) -> CGFloat {
         #if os(macOS)
         controlBarBottomMarginMac
         #else
-        embedInPanelLayout ? controlBarBottomMarginRegular : controlBarBottomExtraCompact
+        if embedInPanelLayout { return controlBarBottomMarginRegular }
+        if compactPhone {
+            return max(0, controlBarBottomExtraCompact - controlBarCompactBottomLift)
+        }
+        return controlBarBottomExtraCompact
+        #endif
+    }
+    static func floatingSearchScrollInset(embedInPanelLayout: Bool, compactPhone: Bool) -> CGFloat {
+        if embedInPanelLayout { return floatingSearchScrollInset }
+        #if os(iOS)
+        return compactPhone ? compactFloatingSearchScrollInset : floatingSearchScrollInset
+        #else
+        return floatingSearchScrollInset
         #endif
     }
     /// Horizontal padding for the floating control row.

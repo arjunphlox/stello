@@ -63,12 +63,42 @@ extension Item {
 /// Shared cover decode check for persistence tests and card rendering.
 enum CoverImageDecoder {
     static func canDecode(_ data: Data) -> Bool {
-        #if os(macOS)
-        if NSImage(data: data) != nil { return true }
-        #else
-        if UIImage(data: data) != nil { return true }
-        #endif
+        guard !data.isEmpty else { return false }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
-        return CGImageSourceCreateImageAtIndex(source, 0, nil) != nil
+        return CGImageSourceGetStatus(source) == .statusComplete
+            || CGImageSourceCreateImageAtIndex(source, 0, nil) != nil
+    }
+}
+
+/// Decoded grid thumbnails — avoids re-decoding full cover bytes on every masonry layout pass.
+enum CoverImageCache {
+    #if os(macOS)
+    typealias PlatformImage = NSImage
+    #else
+    typealias PlatformImage = UIImage
+    #endif
+
+    private final class CacheBox: NSObject {
+        let image: PlatformImage
+        init(_ image: PlatformImage) { self.image = image }
+    }
+
+    private static let cache: NSCache<NSString, CacheBox> = {
+        let c = NSCache<NSString, CacheBox>()
+        c.countLimit = 200
+        c.totalCostLimit = 48 * 1024 * 1024
+        return c
+    }()
+
+    static func platformImage(data: Data, cacheKey: String) -> PlatformImage? {
+        let key = cacheKey as NSString
+        if let cached = cache.object(forKey: key)?.image { return cached }
+        #if os(macOS)
+        guard let image = NSImage(data: data) else { return nil }
+        #else
+        guard let image = UIImage(data: data) else { return nil }
+        #endif
+        cache.setObject(CacheBox(image), forKey: key, cost: data.count)
+        return image
     }
 }

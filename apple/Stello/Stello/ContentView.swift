@@ -40,10 +40,12 @@ struct ContentView: View {
         .environment(\.font, .karst(.body))
         .task {
             await SeedData.prepareStore(in: context)
+            applyScreenshotLaunchState()
+        }
+        .task(priority: .background) {
             await OptacosImporter.importIfNeeded(in: context)
             await SeedData.backfillSeedCovers(in: context)
             await enrichmentCoordinator.enrichPendingItems(context: context)
-            applyScreenshotLaunchState()
         }
         .onAppear {
             applyScreenshotLaunchState()
@@ -180,6 +182,7 @@ struct ContentView: View {
                         embedInPanelLayout: true,
                         scrollTopInset: scrollTopInset,
                         scrollOffset: $scrollOffset,
+                        catalogItems: allItems,
                         selectedTagNames: $selectedTagNames,
                         selectedItem: selectedItem,
                         panelContent: panelContent,
@@ -247,6 +250,7 @@ struct ContentView: View {
     private var compactLayout: some View {
         NavigationStack {
             MasonryGridView(
+                catalogItems: allItems,
                 selectedTagNames: $selectedTagNames,
                 onCardTap: { selectedItem = $0 },
                 isDropTargeted: isDropTargeted

@@ -4,6 +4,7 @@ enum TimelineMetrics {
     static let interactionStripWidth: CGFloat = 44
     static let barWidth: CGFloat = 2
     static let barCornerRadius: CGFloat = 1
+    static let barGap: CGFloat = 4
     static let scrollSpyThreshold: CGFloat = 16
 }
 
@@ -69,7 +70,7 @@ struct TimelineOverlay: View {
             RoundedRectangle(cornerRadius: TimelineMetrics.barCornerRadius, style: .continuous)
                 .fill(color)
                 .frame(width: TimelineMetrics.barWidth, height: layout.height)
-                .animation(.easeOut(duration: 0.2), value: isHighlighted)
+                .animation(isInteraction || isSelected ? .easeOut(duration: 0.2) : nil, value: isHighlighted)
 
             if isInteraction {
                 Text(group.label)

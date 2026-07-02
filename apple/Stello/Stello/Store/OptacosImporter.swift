@@ -4,19 +4,21 @@ import SwiftData
 // MARK: - OptacosImporter
 
 enum OptacosImporter {
-    static let importedFlagKey = "optacos.imported.v1"
+    static let importedFlagKey = "optacos.imported.v2"
+    private static let legacyImportedFlagKey = "optacos.imported.v1"
     nonisolated static let placeholderImageID = "3J1aDWLqoCZI38iuKXlxAHyrlFA"
     private nonisolated static let imageConcurrency = 5
+    private nonisolated static let spreadWeekCount = 24
 
     /// Ordered so import is deterministic; a cross-collection slug collision is disambiguated
     /// in favor of the earlier collection (Typefaces > Websites > Creatives > …).
+    /// Geographies (places) are excluded — place cards are not imported.
     private static let entityCollections: [(name: String, kind: ItemKind)] = [
         ("Typefaces", .typeface),
         ("Websites", .website),
         ("Creatives", .individual),
         ("Agency/ Studio", .studio),
         ("Type Foundries", .foundry),
-        ("Geographies", .place),
     ]
 
     private static let refFieldKinds: [String: ItemKind] = [
@@ -54,6 +56,8 @@ enum OptacosImporter {
 
     /// Runs once after demo seed; idempotent by slug and guarded by UserDefaults + existing typed items.
     static func importIfNeeded(in context: ModelContext, options: Options = Options()) async {
+        await migrateOptacosDatesIfNeeded(in: context)
+
         if options.respectGuard {
             if UserDefaults.standard.bool(forKey: importedFlagKey) { return }
             if hasTypedItems(in: context) {
@@ -74,6 +78,7 @@ enum OptacosImporter {
         var importedCount = 0
         var pendingImages: [PendingImage] = []
         var usedSlugs = Set<String>()
+        var importQueue: [(row: [String: Any], slug: String, kind: ItemKind, collectionName: String)] = []
 
         for (collectionName, kind) in entityCollections {
             guard let col = collections[collectionName],
@@ -83,42 +88,45 @@ enum OptacosImporter {
                 guard let slug = row["slug"] as? String, !slug.isEmpty else { continue }
                 slugKindMap[slug] = kind
 
-                // Cross-collection collision within this run → disambiguate so no entity is dropped.
                 var itemSlug = slug
                 if usedSlugs.contains(slug) {
                     itemSlug = "\(slug)-\(kind.rawValue)"
                 } else {
-                    // Pre-existing row (demo seed / prior import) → skip for idempotency.
                     let exists = await MainActor.run { itemExists(slug: slug, in: context) }
                     if exists { continue }
                 }
                 usedSlugs.insert(itemSlug)
-
-                let result = await buildItem(
-                    row: row,
-                    slug: itemSlug,
-                    kind: kind,
-                    collectionName: collectionName,
-                    slugKindMap: slugKindMap,
-                    tagCatalog: tagCatalog
-                )
-
-                await MainActor.run {
-                    context.insert(result.item)
-                    for tag in result.tags {
-                        context.insert(tag)
-                        tag.item = result.item
-                    }
-                    for img in result.images {
-                        context.insert(img)
-                        img.item = result.item
-                    }
-                    try? context.save()
-                }
-
-                pendingImages.append(contentsOf: result.pendingDownloads)
-                importedCount += 1
+                importQueue.append((row, itemSlug, kind, collectionName))
             }
+        }
+
+        let spreadTotal = importQueue.count
+        for (spreadIndex, entry) in importQueue.enumerated() {
+            let result = await buildItem(
+                row: entry.row,
+                slug: entry.slug,
+                kind: entry.kind,
+                collectionName: entry.collectionName,
+                slugKindMap: slugKindMap,
+                tagCatalog: tagCatalog
+            )
+            result.item.addedAt = addedAt(forSpreadIndex: spreadIndex, total: spreadTotal)
+
+            await MainActor.run {
+                context.insert(result.item)
+                for tag in result.tags {
+                    context.insert(tag)
+                    tag.item = result.item
+                }
+                for img in result.images {
+                    context.insert(img)
+                    img.item = result.item
+                }
+                try? context.save()
+            }
+
+            pendingImages.append(contentsOf: result.pendingDownloads)
+            importedCount += 1
         }
 
         await applyTagCollections(
@@ -139,6 +147,105 @@ enum OptacosImporter {
         }
 
         print("✅ OptacosImporter: imported \(importedCount) items, fetched images for \(options.fetchImages ? pendingImages.count : 0) slots")
+    }
+
+    // MARK: - v1 → v2 migration
+
+    /// One-time upgrade for installs that ran the v1 import: drop place cards and re-spread `addedAt`.
+    private static func migrateOptacosDatesIfNeeded(in context: ModelContext) async {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: importedFlagKey) else { return }
+        guard defaults.bool(forKey: legacyImportedFlagKey) else { return }
+
+        await MainActor.run {
+            deletePlaceItems(in: context)
+        }
+
+        guard let root = await Task.detached(priority: .utility, operation: { loadSeedRoot() }).value else {
+            defaults.set(true, forKey: importedFlagKey)
+            return
+        }
+
+        let collections = root["collections"] as? [String: [String: Any]] ?? [:]
+        let itemsToSpread = await MainActor.run {
+            fetchItemsForDateMigration(in: context, collections: collections)
+        }
+        let total = itemsToSpread.count
+
+        await MainActor.run {
+            for (index, item) in itemsToSpread.enumerated() {
+                item.addedAt = addedAt(forSpreadIndex: index, total: total)
+            }
+            try? context.save()
+            defaults.set(true, forKey: importedFlagKey)
+        }
+
+        print("✅ OptacosImporter: migrated v1 → v2 (\(total) items re-dated, place cards removed)")
+    }
+
+    /// Spread index `i` of `N` items across the last 24 ISO weeks (oldest = 24 weeks ago, newest = this week).
+    private static func addedAt(forSpreadIndex index: Int, total: Int) -> Date {
+        let weekOffset = spreadWeekCount - 1 - (index * (spreadWeekCount - 1) / max(total - 1, 1))
+        return isoWeekAnchor(weeksAgo: weekOffset)
+    }
+
+    /// Noon on Monday of the ISO week `weeksAgo` before the current ISO week.
+    private static func isoWeekAnchor(weeksAgo: Int) -> Date {
+        var cal = Calendar(identifier: .iso8601)
+        cal.locale = Locale(identifier: "en_US_POSIX")
+        let now = Date.now
+        guard let thisWeekStart = cal.date(
+            from: cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
+        ) else { return now }
+        guard let targetWeekStart = cal.date(byAdding: .weekOfYear, value: -weeksAgo, to: thisWeekStart) else {
+            return now
+        }
+        return cal.date(byAdding: .hour, value: 12, to: targetWeekStart) ?? targetWeekStart
+    }
+
+    @MainActor
+    private static func deletePlaceItems(in context: ModelContext) {
+        let placeKind = ItemKind.place.rawValue
+        let descriptor = FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind == placeKind })
+        guard let places = try? context.fetch(descriptor) else { return }
+        for item in places {
+            context.delete(item)
+        }
+        try? context.save()
+    }
+
+    /// Non-link typed items excluding demo seeds, ordered like the import loop then by slug.
+    @MainActor
+    private static func fetchItemsForDateMigration(
+        in context: ModelContext,
+        collections: [String: [String: Any]]
+    ) -> [Item] {
+        let demoSlugs = SeedData.catalogManagedSlugs()
+        let linkKind = ItemKind.link.rawValue
+        let descriptor = FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind != linkKind })
+        let candidates = ((try? context.fetch(descriptor)) ?? []).filter { !demoSlugs.contains($0.slug) }
+
+        var ordered: [Item] = []
+        var seen = Set<String>()
+
+        for (collectionName, kind) in entityCollections {
+            guard let rows = collections[collectionName]?["items"] as? [[String: Any]] else { continue }
+            for row in rows {
+                guard let slug = row["slug"] as? String else { continue }
+                let slugs = [slug, "\(slug)-\(kind.rawValue)"]
+                guard let item = candidates.first(where: { slugs.contains($0.slug) && !seen.contains($0.slug) }) else {
+                    continue
+                }
+                ordered.append(item)
+                seen.insert(item.slug)
+            }
+        }
+
+        let remainder = candidates
+            .filter { !seen.contains($0.slug) }
+            .sorted { $0.slug < $1.slug }
+        ordered.append(contentsOf: remainder)
+        return ordered
     }
 
     // MARK: - Guards

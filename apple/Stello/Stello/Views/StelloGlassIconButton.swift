@@ -21,6 +21,9 @@ struct StelloGlassIconButton: View {
     var avatarImage: Image? = nil
     /// Screenshot fixture — forces hover highlight without cursor focus.
     var forceHover: Bool = false
+    /// Control-bar circle diameter (defaults to 40pt).
+    var controlBarDiameter: CGFloat = StelloLayout.controlBarButtonSize
+    var controlBarSymbolSize: CGFloat = StelloLayout.iconButtonSymbolSize
     let label: String
     let action: () -> Void
 
@@ -91,19 +94,13 @@ struct StelloGlassIconButton: View {
                 avatarImage
                     .resizable()
                     .scaledToFill()
-                    .frame(
-                        width: StelloLayout.controlBarButtonSize,
-                        height: StelloLayout.controlBarButtonSize
-                    )
+                    .frame(width: controlBarDiameter, height: controlBarDiameter)
                     .clipShape(Circle())
             } else {
                 Image(systemName: systemName)
-                    .font(.system(size: StelloLayout.iconButtonSymbolSize, weight: .medium))
+                    .font(.system(size: controlBarSymbolSize, weight: .medium))
                     .foregroundStyle(foregroundStyle)
-                    .frame(
-                        width: StelloLayout.controlBarButtonSize,
-                        height: StelloLayout.controlBarButtonSize
-                    )
+                    .frame(width: controlBarDiameter, height: controlBarDiameter)
             }
         }
     }

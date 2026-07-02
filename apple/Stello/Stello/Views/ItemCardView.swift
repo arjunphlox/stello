@@ -47,7 +47,15 @@ struct ItemCardView: View {
 
     private var primaryImage: ItemImage? { item.coverImage }
 
-    private var hasImage: Bool { item.hasRenderableCover }
+    private var hasImage: Bool {
+        guard let data = primaryImage?.data, !data.isEmpty else { return false }
+        return true
+    }
+
+    private var coverCacheKey: String {
+        let count = primaryImage?.data?.count ?? 0
+        return "\(item.persistentModelID)-\(count)"
+    }
 
     private var aspect: CGFloat {
         if let img = primaryImage, let w = img.width, let h = img.height, w > 0, h > 0 {
@@ -146,7 +154,7 @@ struct ItemCardView: View {
     }
 
     @ViewBuilder private var cardContent: some View {
-        if hasImage, let data = primaryImage?.data, let img = Self.platformImage(data) {
+        if hasImage, let data = primaryImage?.data, let img = Self.platformImage(data, cacheKey: coverCacheKey) {
             imageCard(img)
         } else if isVideoCard {
             videoCard
@@ -280,7 +288,7 @@ struct ItemCardView: View {
     }
 
     @ViewBuilder private var cardPreviewBody: some View {
-        if hasImage, let data = primaryImage?.data, let img = Self.platformImage(data) {
+        if hasImage, let data = primaryImage?.data, let img = Self.platformImage(data, cacheKey: coverCacheKey) {
             img
                 .resizable()
                 .aspectRatio(aspect, contentMode: .fit)
@@ -560,7 +568,15 @@ struct ItemCardView: View {
 
     // MARK: - Helpers
 
-    static func platformImage(_ data: Data) -> Image? {
+    static func platformImage(_ data: Data, cacheKey: String? = nil) -> Image? {
+        if let cacheKey,
+           let cached = CoverImageCache.platformImage(data: data, cacheKey: cacheKey) {
+            #if os(macOS)
+            return Image(nsImage: cached)
+            #else
+            return Image(uiImage: cached)
+            #endif
+        }
         #if os(macOS)
         if let ns = NSImage(data: data) { return Image(nsImage: ns) }
         #else

@@ -23,12 +23,19 @@ extension EnvironmentValues {
 
 struct CardSubcards: View {
     @Bindable var item: Item
+    var embedsInPanel: Bool = false
 
     @Environment(\.appTheme) private var theme
-    @Query(sort: \Item.slug) private var storeItems: [Item]
+    @Environment(\.modelContext) private var context
+    @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
+    @State private var storeItems: [Item] = []
     @State private var gridWidth: CGFloat = 300
 
     private static let twoColumnThreshold: CGFloat = 520
+
+    private var itemKind: ItemKind {
+        ItemKind(rawValue: item.kind) ?? .link
+    }
 
     private var columns: [GridItem] {
         gridWidth >= Self.twoColumnThreshold
@@ -36,45 +43,336 @@ struct CardSubcards: View {
             : [GridItem(.flexible(), alignment: .top)]
     }
 
+    private var sortedTags: [Tag] {
+        (item.tags ?? []).sorted { $0.weight > $1.weight }
+    }
+
+    private var sortedSnippets: [Snippet] {
+        (item.snippets ?? []).sorted { $0.addedAt < $1.addedAt }
+    }
+
+    private var whySavedSuggestions: [String] {
+        EnrichmentService.decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON)
+    }
+
+    private var canEnrich: Bool {
+        item.enrichmentStatus == "text_done"
+    }
+
+    /// Panel footer label "Wnn YYYY" per BUILD_SPEC.
+    private var weekFooter: String {
+        let key = WeekGroup.isoWeekKey(for: item.addedAt)
+        guard key != "undated" else { return "Undated" }
+        let parts = key.split(separator: "-")
+        guard parts.count == 2 else { return key }
+        return "W\(parts[1]) \(parts[0])"
+    }
+
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
-            switch ItemKind(rawValue: item.kind) ?? .link {
-            case .typeface:
-                if let meta = item.typefaceMeta() { typefaceCards(meta) }
-            case .website:
-                if let meta = item.websiteMeta() { websiteCards(meta) }
-            case .individual:
-                if let meta = item.individualMeta() { individualCards(meta) }
-            case .studio:
-                if let meta = item.studioMeta() { studioCards(meta) }
-            case .foundry:
-                if let meta = item.foundryMeta() { foundryCards(meta) }
-            case .place:
-                if let meta = item.placeMeta() { placeCards(meta) }
-            case .link:
-                EmptyView()
+            topImagesSubCard()
+                .gridCellColumns(columns.count)
+
+            panelSummaryCard()
+                .gridCellColumns(columns.count)
+
+            if item.hasRichTypedPanel {
+                switch itemKind {
+                case .typeface:
+                    if let meta = item.typefaceMeta() { typefaceCards(meta) }
+                case .website:
+                    if let meta = item.websiteMeta() { websiteCards(meta) }
+                case .individual:
+                    if let meta = item.individualMeta() { individualCards(meta) }
+                case .studio:
+                    if let meta = item.studioMeta() { studioCards(meta) }
+                case .foundry:
+                    if let meta = item.foundryMeta() { foundryCards(meta) }
+                case .place:
+                    if let meta = item.placeMeta() { placeCards(meta) }
+                case .link:
+                    EmptyView()
+                }
+            } else {
+                genericSubCards()
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.top, embedsInPanel ? 0 : 16)
+        .padding(.bottom, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { _, newWidth in
             gridWidth = newWidth
         }
+        .task { await loadStoreItemsIfNeeded() }
+    }
+
+    @MainActor
+    private func loadStoreItemsIfNeeded() async {
+        guard storeItems.isEmpty else { return }
+        let descriptor = FetchDescriptor<Item>(sortBy: [SortDescriptor(\.slug)])
+        storeItems = (try? context.fetch(descriptor)) ?? []
+    }
+
+    // MARK: - Shared top sub-cards
+
+    @ViewBuilder
+    private func topImagesSubCard() -> some View {
+        let isTyped = itemKind != .link && item.hasRichTypedPanel
+        let typedImages = item.renderableImages(matchingRoles: item.typedTopMediaRoles)
+
+        if embedsInPanel, isTyped, !typedImages.isEmpty {
+            imageGalleryCard(
+                title: "Images",
+                roles: item.typedTopMediaRoles,
+                bleedsToTop: true,
+                mainHeight: 220,
+                showsThumbnails: true
+            )
+        } else {
+            SubCard(title: embedsInPanel ? "" : "Images", bleedsToTop: embedsInPanel) {
+                DetailImageStrip(item: item, bleedsToTop: embedsInPanel)
+            }
+            .horizontalBleed(active: embedsInPanel)
+        }
+    }
+
+    @ViewBuilder
+    private func panelSummaryCard() -> some View {
+        let kindRows = kindSpecificSummaryRows()
+        summaryCard(title: "Summary", rows: mergedSummaryRows(kindSpecific: kindRows))
+    }
+
+    private func mergedSummaryRows(kindSpecific: [(String, String?)]) -> [(String, String?)] {
+        var rows: [(String, String?)] = [
+            ("Title", item.title.nilIfEmpty ?? "Untitled"),
+        ]
+
+        let metaTexts = Set(kindSpecific.compactMap { $0.1?.nilIfEmpty?.lowercased() })
+        if let summary = item.summary?.nilIfEmpty,
+           !metaTexts.contains(summary.lowercased()) {
+            rows.append(("Overview", summary))
+        }
+
+        rows.append(contentsOf: kindSpecific)
+
+        if let author = item.author?.nilIfEmpty {
+            rows.append(("Author", author))
+        }
+
+        let linkLabel = item.displayLink
+        if !linkLabel.isEmpty, linkLabel != "local" {
+            rows.append(("Link", linkLabel))
+        }
+        if let url = item.sourceURL?.nilIfEmpty {
+            rows.append(("URL", url))
+        }
+        rows.append(("Added", weekFooter))
+
+        return rows
+    }
+
+    private func kindSpecificSummaryRows() -> [(String, String?)] {
+        switch itemKind {
+        case .typeface:
+            guard let meta = item.typefaceMeta() else { return [] }
+            return [
+                ("Overview", meta.overview),
+                ("Description", meta.description),
+                ("Specimen link", meta.specimenLink ?? meta.specimenURL),
+            ]
+        case .website:
+            guard let meta = item.websiteMeta() else { return [] }
+            return [
+                ("Tagline", meta.tagline),
+                ("Description", meta.description),
+            ]
+        default:
+            return []
+        }
+    }
+
+    // MARK: - Generic link sub-cards
+
+    @ViewBuilder
+    private func genericSubCards() -> some View {
+        if let md = item.bodyMarkdown, !md.isEmpty {
+            markdownSubCard(md)
+        }
+
+        snippetsSubCard
+        whySavedSubCard
+        tagsSubCard
+
+        if canEnrich {
+            enrichSubCard
+        }
+    }
+
+    @ViewBuilder
+    private func markdownSubCard(_ text: String) -> some View {
+        SubCard(title: "Notes") {
+            Group {
+                if let attr = try? AttributedString(markdown: text) {
+                    Text(attr)
+                } else {
+                    Text(text)
+                }
+            }
+            .font(.karst(.callout))
+            .foregroundStyle(theme.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var snippetsSubCard: some View {
+        SubCard(title: "Key snippets") {
+            if sortedSnippets.isEmpty {
+                Text("No snippets yet.")
+                    .font(.karst(.caption))
+                    .foregroundStyle(theme.textSecondary)
+                    .italic()
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(sortedSnippets, id: \.persistentModelID) { snippet in
+                        HStack(alignment: .top, spacing: 8) {
+                            Rectangle()
+                                .fill(theme.accentColor)
+                                .frame(width: 2)
+                            Text(snippet.text)
+                                .font(.karst(.callout))
+                                .foregroundStyle(theme.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Button {
+                                removeSnippet(snippet)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(theme.textSecondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Remove snippet")
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(theme.borderSubtle)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var whySavedSubCard: some View {
+        if !whySavedSuggestions.isEmpty {
+            SubCard(title: "Why save?") {
+                TagFlowLayout(spacing: 6) {
+                    ForEach(whySavedSuggestions, id: \.self) { suggestion in
+                        Button {
+                            acceptWhySavedSuggestion(suggestion)
+                        } label: {
+                            Text(humanizeReason(suggestion))
+                                .font(.karst(.caption))
+                                .foregroundStyle(theme.accentContrast)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(theme.accentColor)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tagsSubCard: some View {
+        if !sortedTags.isEmpty {
+            SubCard(title: "Tags") {
+                TagFlowLayout(spacing: 6) {
+                    ForEach(sortedTags, id: \.persistentModelID) { tag in
+                        HStack(spacing: 4) {
+                            if tag.source == "ai" {
+                                Circle()
+                                    .fill(theme.accentColor)
+                                    .frame(width: 5, height: 5)
+                            }
+                            Text(tag.name)
+                                .font(.karst(.caption))
+                                .foregroundStyle(theme.textPrimary)
+                            if tag.source == "ai" {
+                                Button {
+                                    removeAITag(tag)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(theme.textSecondary)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Remove tag")
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(tag.source == "ai" ? theme.accentSubtle : theme.borderSubtle)
+                        .clipShape(Capsule())
+                        .opacity(max(0.55, tag.weight))
+                    }
+                }
+            }
+        }
+    }
+
+    private var enrichSubCard: some View {
+        SubCard(title: "Actions") {
+            Button {
+                enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
+            } label: {
+                Label("Enrich", systemImage: "sparkles")
+                    .font(.karst(.callout, weight: .semibold))
+                    .foregroundStyle(theme.accentContrast)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(theme.accentColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func humanizeReason(_ reason: String) -> String {
+        reason.replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
+    }
+
+    // MARK: - Mutations
+
+    private func removeAITag(_ tag: Tag) {
+        context.delete(tag)
+        item.updatedAt = .now
+        try? context.save()
+    }
+
+    private func removeSnippet(_ snippet: Snippet) {
+        context.delete(snippet)
+        item.updatedAt = .now
+        try? context.save()
+    }
+
+    private func acceptWhySavedSuggestion(_ suggestion: String) {
+        try? EnrichmentService.addIntentTag(name: suggestion, to: item, context: context)
     }
 
     // MARK: - Typeface
 
     @ViewBuilder
     private func typefaceCards(_ meta: TypefaceMeta) -> some View {
-        summaryCard(title: "Summary", rows: [
-            ("Name", item.title.nilIfEmpty),
-            ("Overview", meta.overview),
-            ("Description", meta.description),
-            ("URL", item.sourceURL),
-            ("Specimen link", meta.specimenLink ?? meta.specimenURL),
-        ])
-
         chipsCard(title: "Classification", chips: meta.classification + meta.personality)
 
         let weightCount = meta.weightsCount ?? meta.weightCount.map(String.init)
@@ -145,13 +443,6 @@ struct CardSubcards: View {
 
     @ViewBuilder
     private func websiteCards(_ meta: WebsiteMeta) -> some View {
-        summaryCard(title: "Summary", rows: [
-            ("Name", item.title.nilIfEmpty),
-            ("Tagline", meta.tagline),
-            ("Description", meta.description),
-            ("URL", item.sourceURL),
-        ])
-
         chipsCard(title: "Category", chips: meta.categories)
         chipsCard(title: "Traits", chips: meta.traits)
         chipsCard(title: "Focus areas", chips: meta.focusAreas)
@@ -196,7 +487,6 @@ struct CardSubcards: View {
     @ViewBuilder
     private func individualCards(_ meta: IndividualMeta) -> some View {
         factsCard(title: "Identity", rows: [
-            ("Name", item.title.nilIfEmpty),
             ("Pronouns", meta.pronouns),
             ("Bio", meta.bio),
             ("Location", meta.location?.name),
@@ -247,10 +537,6 @@ struct CardSubcards: View {
 
     @ViewBuilder
     private func studioCards(_ meta: StudioMeta) -> some View {
-        factsCard(title: "Identity", rows: [
-            ("Name", item.title.nilIfEmpty),
-            ("URL", item.sourceURL),
-        ])
         refsCard(title: "Work", refs: meta.work)
         refsCard(title: "Team", refs: meta.team)
     }
@@ -259,10 +545,8 @@ struct CardSubcards: View {
 
     @ViewBuilder
     private func foundryCards(_ meta: FoundryMeta) -> some View {
-        factsCard(title: "Identity", rows: [
-            ("Name", item.title.nilIfEmpty),
+        factsCard(title: "About", rows: [
             ("Description", meta.description),
-            ("URL", item.sourceURL),
             ("Category", meta.category),
         ])
 
@@ -399,12 +683,23 @@ struct CardSubcards: View {
     }
 
     @ViewBuilder
-    private func imageGalleryCard(title: String, roles: [String]) -> some View {
+    private func imageGalleryCard(
+        title: String,
+        roles: [String],
+        bleedsToTop: Bool = false,
+        mainHeight: CGFloat = 140,
+        showsThumbnails: Bool = false
+    ) -> some View {
         let imgs = item.renderableImages(matchingRoles: roles)
         if !imgs.isEmpty {
-            SubCard(title: title) {
-                ImageGallerySubCardBody(images: imgs)
+            SubCard(title: bleedsToTop ? "" : title, bleedsToTop: bleedsToTop) {
+                ImageGallerySubCardBody(
+                    images: imgs,
+                    mainHeight: mainHeight,
+                    showsThumbnails: showsThumbnails
+                )
             }
+            .horizontalBleed(active: bleedsToTop && embedsInPanel)
         }
     }
 
@@ -419,22 +714,23 @@ struct CardSubcards: View {
     }
 }
 
-// MARK: - Typed top media (full-width above sub-cards)
+// MARK: - Horizontal bleed (panel cover)
 
-struct TypedTopMedia: View {
-    let item: Item
-    var roles: [String]
+private struct HorizontalBleedModifier: ViewModifier {
+    let active: Bool
 
-    @Environment(\.appTheme) private var theme
-
-    private var images: [ItemImage] {
-        item.renderableImages(matchingRoles: roles)
-    }
-
-    var body: some View {
-        if !images.isEmpty {
-            ImageGallerySubCardBody(images: images, mainHeight: 220, showsThumbnails: true)
+    func body(content: Content) -> some View {
+        if active {
+            content.padding(.horizontal, -16)
+        } else {
+            content
         }
+    }
+}
+
+private extension View {
+    func horizontalBleed(active: Bool) -> some View {
+        modifier(HorizontalBleedModifier(active: active))
     }
 }
 
@@ -442,23 +738,61 @@ struct TypedTopMedia: View {
 
 struct SubCard<Content: View>: View {
     let title: String
+    var bleedsToTop: Bool = false
     @ViewBuilder var content: () -> Content
 
     @Environment(\.appTheme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.karst(.caption, weight: .semibold))
-                .foregroundStyle(theme.textSecondary)
-                .textCase(.uppercase)
-                .kerning(0.5)
+            if !bleedsToTop, !title.isEmpty {
+                titleLabel
+            }
 
             content()
+
+            if bleedsToTop, !title.isEmpty {
+                titleLabel
+                    .padding(.horizontal, 12)
+            }
         }
-        .padding(12)
+        .padding(cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay {
+            cardOutline
+        }
+    }
+
+    private var titleLabel: some View {
+        Text(title)
+            .font(.karst(.caption, weight: .semibold))
+            .foregroundStyle(theme.textSecondary)
+            .textCase(.uppercase)
+            .kerning(0.5)
+    }
+
+    private var cardPadding: EdgeInsets {
+        if bleedsToTop {
+            EdgeInsets(top: 0, leading: 0, bottom: 12, trailing: 0)
+        } else {
+            EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
+        }
+    }
+
+    @ViewBuilder
+    private var cardOutline: some View {
+        if bleedsToTop {
+            UnevenRoundedRectangle(
+                cornerRadii: .init(
+                    topLeading: 0,
+                    bottomLeading: 10,
+                    bottomTrailing: 10,
+                    topTrailing: 0
+                ),
+                style: .continuous
+            )
+            .stroke(theme.border, lineWidth: 1)
+        } else {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(theme.border, lineWidth: 1)
         }

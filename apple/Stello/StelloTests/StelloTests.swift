@@ -409,6 +409,11 @@ struct StelloTests {
         )
         #expect(creatives.count == 47)
 
+        let places = try ctx.fetch(
+            FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind == "place" })
+        )
+        #expect(places.isEmpty)
+
         // A known typeface decodes with real, non-empty facets.
         let dmMono = try #require(typefaces.first { $0.slug == "dm-mono" })
         let meta = try #require(dmMono.typefaceMeta())
