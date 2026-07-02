@@ -18,6 +18,10 @@ final class Item {
     var updatedAt: Date = Date.now
     var enrichmentStatus: String = "pending"
     var enrichmentError: String?
+    /// Card type: `typeface`, `website`, `individual`, `studio`, `foundry`, `place`, or `link` (default).
+    var kind: String = "link"
+    /// Codable per-kind metadata (`TypefaceMeta`, `WebsiteMeta`, …) encoded as JSON.
+    var metadataJSON: String?
   /// JSON-encoded `[String]` of suggested why-saved reasons from AI enrichment.
     var whySavedSuggestionsJSON: String?
 
@@ -29,6 +33,9 @@ final class Item {
 
     @Relationship(deleteRule: .cascade, inverse: \Snippet.item)
     var snippets: [Snippet]?
+
+    @Relationship(deleteRule: .cascade, inverse: \LocalAttachment.item)
+    var attachments: [LocalAttachment]?
 
     init(
         id: UUID = UUID(),
@@ -46,6 +53,8 @@ final class Item {
         updatedAt: Date = .now,
         enrichmentStatus: String = "pending",
         enrichmentError: String? = nil,
+        kind: String = "link",
+        metadataJSON: String? = nil,
         whySavedSuggestionsJSON: String? = nil
     ) {
         self.id = id
@@ -63,6 +72,8 @@ final class Item {
         self.updatedAt = updatedAt
         self.enrichmentStatus = enrichmentStatus
         self.enrichmentError = enrichmentError
+        self.kind = kind
+        self.metadataJSON = metadataJSON
         self.whySavedSuggestionsJSON = whySavedSuggestionsJSON
     }
 }

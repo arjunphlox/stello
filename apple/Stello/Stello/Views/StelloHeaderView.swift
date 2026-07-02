@@ -1,45 +1,32 @@
 import SwiftUI
 
-/// Accent header — Stello wordmark, item tally, and icon buttons (Filters / Add / Settings).
+/// Accent header — Stello wordmark and item tally only.
 /// macOS: inset rounded card confined to the content column; native traffic lights sit in the
 /// card's top-left (positioned by `MacWindowConfigurator`). Scroll progress drives glass intensity.
 struct StelloHeaderView: View {
     let itemCount: Int
-    var hasActiveFilters: Bool = false
-    var activePanel: SidePanelContent = .none
     /// True on macOS; traffic lights sit top-left (via `MacWindowConfigurator`) so the
     /// bottom-left title needs no extra gutter and keeps the uniform 12pt header padding.
     var integratesMacTitleBar: Bool = false
     /// 0 = at scroll top; 1 = scrolled (more translucent glass).
     var scrollProgress: CGFloat = 0
-    var onFilters: () -> Void
-    var onImport: () -> Void
-    var onSettings: () -> Void
+    /// True while a file drag hovers over the window drop target.
+    var isDropTargeted: Bool = false
 
     @Environment(\.appTheme) private var theme
     @Environment(\.horizontalSizeClass) private var hSizeClass
 
     private var isCompact: Bool { hSizeClass == .compact }
-    private var buttonClusterSpacing: CGFloat { isCompact ? 6 : 8 }
     private var clampedScroll: CGFloat { min(max(scrollProgress, 0), 1) }
-
-    private var screenshotHoverFilters: Bool {
-        ProcessInfo.processInfo.arguments.contains("-screenshotHeaderHover")
-    }
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
-            HStack(alignment: .bottom, spacing: isCompact ? 8 : 12) {
-                wordmark
-                    .allowsHitTesting(false)
-
-                Spacer(minLength: isCompact ? 4 : 8)
-                    .allowsHitTesting(false)
-
-                buttonCluster
-                    .layoutPriority(0)
-            }
+            wordmarkGroup
+                .alignmentGuide(.bottom) { $0[.lastTextBaseline] }
+                .allowsHitTesting(false)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
         }
         .padding(.leading, StelloLayout.headerPadding)
         .padding(.trailing, StelloLayout.headerPadding)
@@ -48,74 +35,72 @@ struct StelloHeaderView: View {
         .frame(maxWidth: .infinity)
         .background { headerBackground }
         .clipShape(RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous))
-    }
-
-    private var buttonCluster: some View {
-        HStack(spacing: buttonClusterSpacing) {
-            StelloGlassIconButton(
-                systemName: "line.3.horizontal.decrease",
-                isActive: activePanel == .filters || hasActiveFilters,
-                contrastForeground: true,
-                forceHover: screenshotHoverFilters,
-                label: "Filters",
-                action: onFilters
-            )
-            StelloGlassIconButton(
-                systemName: "plus",
-                isActive: activePanel == .import,
-                contrastForeground: true,
-                label: "Import",
-                action: onImport
-            )
-            StelloGlassIconButton(
-                systemName: "gearshape",
-                isActive: activePanel == .settings,
-                contrastForeground: true,
-                label: "Settings",
-                action: onSettings
-            )
-        }
+        .animation(.smooth(duration: 0.25), value: isDropTargeted)
     }
 
     @ViewBuilder
     private var headerBackground: some View {
         let shape = RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous)
-        let baseOpacity = 0.82 - (0.18 * clampedScroll)
-        let tintOpacity = 0.42 + (0.18 * clampedScroll)
-        shape
-            .fill(theme.accentColor.opacity(baseOpacity))
-            .glassEffect(.regular.tint(theme.accentColor.opacity(tintOpacity)), in: shape)
+        if isDropTargeted {
+            shape
+                .fill(theme.accentColor.opacity(0.35))
+                .overlay {
+                    shape
+                        .strokeBorder(
+                            theme.accentContrast,
+                            style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                        )
+                }
+                .glassEffect(.regular.tint(theme.accentColor.opacity(0.25)), in: shape)
+        } else {
+            let baseOpacity = 0.82 - (0.18 * clampedScroll)
+            let tintOpacity = 0.42 + (0.18 * clampedScroll)
+            shape
+                .fill(theme.accentColor.opacity(baseOpacity))
+                .glassEffect(.regular.tint(theme.accentColor.opacity(tintOpacity)), in: shape)
+        }
     }
 
-    private var wordmark: some View {
-        HStack(alignment: .firstTextBaseline, spacing: StelloLayout.headerCountSpacing) {
-            Text("Stello")
-                .font(.system(size: isCompact ? 42 : StelloLayout.headerTitleSize, weight: .regular))
-                .tracking(isCompact ? -1.26 : -1.44)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-            if itemCount > 0 {
-                Text("\(itemCount)")
-                    .font(.system(size: StelloLayout.headerCountSize, weight: .regular))
-                    .foregroundStyle(theme.accentContrast.opacity(0.55))
-                    .baselineOffset(StelloLayout.headerCountBaselineOffset)
+    private var wordmarkTitleSize: CGFloat { isCompact ? 42 : StelloLayout.headerTitleSize }
+
+    @ViewBuilder
+    private var wordmarkGroup: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            if isDropTargeted {
+                Text("Drop to capture and save")
+                    .font(.karst(size: isCompact ? 22 : 26, weight: .medium))
+                    .tracking(isCompact ? -0.6 : -0.72)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .foregroundStyle(theme.accentContrast)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            } else {
+                Text("Stello")
+                    .font(.karst(size: wordmarkTitleSize, weight: .regular))
+                    .tracking(isCompact ? -1.26 : -1.44)
+                    .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
+                    .foregroundStyle(theme.accentContrast)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+
+                if itemCount > 0 {
+                    Text("\(itemCount)")
+                        .font(.karst(size: StelloLayout.headerCountSize, weight: .regular))
+                        .foregroundStyle(theme.accentContrast.opacity(0.55))
+                        .baselineOffset(StelloLayout.headerCountBaselineOffset)
+                        .padding(.leading, StelloLayout.headerCountSpacing)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
             }
         }
-        .foregroundStyle(theme.accentContrast)
-        .layoutPriority(1)
     }
 }
 
-#Preview {
+#Preview("Drop targeted") {
     StelloHeaderView(
         itemCount: 19,
-        hasActiveFilters: true,
-        activePanel: .filters,
         integratesMacTitleBar: true,
-        onFilters: {},
-        onImport: {},
-        onSettings: {}
+        isDropTargeted: true
     )
     .padding(StelloLayout.windowInset)
     .background(Color(hex: "#111110"))
@@ -123,16 +108,10 @@ struct StelloHeaderView: View {
 }
 
 #Preview("iPhone compact") {
-    StelloHeaderView(
-        itemCount: 19,
-        hasActiveFilters: false,
-        onFilters: {},
-        onImport: {},
-        onSettings: {}
-    )
-    .padding(StelloLayout.windowInset)
-    .background(Color(hex: "#111110"))
-    .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
-    .environment(\.horizontalSizeClass, .compact)
-    .frame(width: 393)
+    StelloHeaderView(itemCount: 19)
+        .padding(StelloLayout.windowInset)
+        .background(Color(hex: "#111110"))
+        .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
+        .environment(\.horizontalSizeClass, .compact)
+        .frame(width: 393)
 }

@@ -27,13 +27,78 @@ enum StelloLayout {
     static let macTitleBarLeadingInset: CGFloat = 78
     /// Scroll distance (pt) over which the header transitions opaque → glass.
     static let headerScrollFadeDistance: CGFloat = 48
-    /// Floating Liquid Glass search bar — height, bottom margin, and scroll content inset.
-    static let floatingSearchBarHeight: CGFloat = 48
-    static let floatingSearchBarBottomMargin: CGFloat = 12
-    static let floatingSearchBarMaxWidth: CGFloat = 420
-    /// Scroll padding so last grid cards clear the floating search overlay.
+    /// Floating Liquid Glass control bar — search field height, glass fill, and insets.
+    static let floatingSearchBarHeight: CGFloat = 40
+    /// Bottom control bar icon buttons — 40×40 circles (Add, Filter, Avatar).
+    static let controlBarButtonSize: CGFloat = 40
+    /// iPhone compact: taller control row (search + icon buttons).
+    static let compactControlBarHeight: CGFloat = 60
+    static let compactControlBarButtonSize: CGFloat = 60
+    static let compactControlBarSymbolSize: CGFloat = 20
+    /// iPhone compact: lift the control row up from the home-indicator edge.
+    static let controlBarCompactBottomLift: CGFloat = 40
+    /// iPhone: gap between Dynamic Island / notch and the sticky header card.
+    static let compactHeaderBelowSafeAreaGap: CGFloat = 8
+    /// Reduced tint so Liquid Glass occlusion reads through the control cluster.
+    static let controlBarGlassFillOpacity: CGFloat = 0.62
+    static let controlBarSpacing: CGFloat = 8
+    /// iPhone: inset from rounded screen corners (beyond windowInset).
+    static let controlBarSideInsetCompact: CGFloat = 16
+    /// iPhone: extra margin below the home-indicator safe area.
+    static let controlBarBottomExtraCompact: CGFloat = 10
+    /// iPad / regular width: sit closer to the bottom edge.
+    static let controlBarBottomMarginRegular: CGFloat = 8
+    /// macOS: comfortable bottom inset for the floating row.
+    static let controlBarBottomMarginMac: CGFloat = 12
+    /// Scroll padding so last grid cards clear the floating control overlay.
     static var floatingSearchScrollInset: CGFloat {
-        floatingSearchBarHeight + floatingSearchBarBottomMargin
+        floatingSearchBarHeight + controlBarBottomMarginRegular + controlBarBottomExtraCompact
+    }
+    /// iPhone compact scroll inset below the floating control row.
+    static var compactFloatingSearchScrollInset: CGFloat {
+        compactControlBarHeight + max(0, controlBarBottomExtraCompact - controlBarCompactBottomLift)
+    }
+    /// Top scroll inset when the sticky header floats over the grid on iPhone.
+    static func compactHeaderScrollInset(safeTop: CGFloat) -> CGFloat {
+        safeTop + compactHeaderBelowSafeAreaGap + headerHeight + sectionGap
+    }
+    /// Control bar height for the current layout width.
+    static func controlBarHeight(compactPhone: Bool) -> CGFloat {
+        compactPhone ? compactControlBarHeight : floatingSearchBarHeight
+    }
+    static func controlBarButtonDiameter(compactPhone: Bool) -> CGFloat {
+        compactPhone ? compactControlBarButtonSize : controlBarButtonSize
+    }
+    static func controlBarSymbolSize(compactPhone: Bool) -> CGFloat {
+        compactPhone ? compactControlBarSymbolSize : iconButtonSymbolSize
+    }
+    /// Bottom padding for the floating control row (safe-area extra added at call site on iOS).
+    static func controlBarBottomPadding(embedInPanelLayout: Bool, compactPhone: Bool = false) -> CGFloat {
+        #if os(macOS)
+        controlBarBottomMarginMac
+        #else
+        if embedInPanelLayout { return controlBarBottomMarginRegular }
+        if compactPhone {
+            return max(0, controlBarBottomExtraCompact - controlBarCompactBottomLift)
+        }
+        return controlBarBottomExtraCompact
+        #endif
+    }
+    static func floatingSearchScrollInset(embedInPanelLayout: Bool, compactPhone: Bool) -> CGFloat {
+        if embedInPanelLayout { return floatingSearchScrollInset }
+        #if os(iOS)
+        return compactPhone ? compactFloatingSearchScrollInset : floatingSearchScrollInset
+        #else
+        return floatingSearchScrollInset
+        #endif
+    }
+    /// Horizontal padding for the floating control row.
+    static func controlBarHorizontalPadding(embedInPanelLayout: Bool) -> CGFloat {
+        #if os(iOS)
+        embedInPanelLayout ? 0 : controlBarSideInsetCompact
+        #else
+        embedInPanelLayout ? 0 : windowInset
+        #endif
     }
     /// Top scroll inset when the header floats over the grid (header + gap + top inset).
     static var headerOverlayScrollInset: CGFloat {

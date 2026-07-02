@@ -14,13 +14,13 @@ enum SidePanelContent: Equatable {
         case .itemDetail: "Detail"
         case .filters:    "Filters"
         case .import:     "Import"
-        case .settings:   "Settings"
+        case .settings:   "User Preferences"
         }
     }
 
-    /// Web PanelManager: 25% of viewport, clamped [360, 480].
-    static func width(for viewportWidth: CGFloat) -> CGFloat {
-        let raw = (viewportWidth * 0.25).rounded()
-        return min(480, max(360, raw))
+    /// Panel width as a fraction of viewport, clamped 25%–50%.
+    static func width(for viewportWidth: CGFloat, fraction: Double) -> CGFloat {
+        let clamped = min(0.5, max(0.25, fraction))
+        return (viewportWidth * clamped).rounded()
     }
 }

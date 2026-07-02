@@ -147,6 +147,22 @@ struct StelloTests {
         #expect(t.accent == .amber)
     }
 
+    @Test("AccentColor resolves to mode-appropriate default when stored accent is out-of-set")
+    func accentColorModeResolution() {
+        #expect(AccentColor.resolved(storedRawValue: "iris", for: .dark) == .amber)
+        #expect(AccentColor.resolved(storedRawValue: "lime", for: .light) == .iris)
+        #expect(AccentColor.resolved(storedRawValue: "cyan", for: .dark) == .cyan)
+        #expect(AccentColor.resolved(storedRawValue: "teal", for: .light) == .teal)
+    }
+
+    @Test("Accent picker sets differ by color mode")
+    func accentChoicesByMode() {
+        #expect(AccentColor.choices(for: .dark) == AccentColor.brightChoices)
+        #expect(AccentColor.choices(for: .light) == AccentColor.mutedChoices)
+        #expect(AccentColor.choices(for: .dark).count == 6)
+        #expect(AccentColor.choices(for: .light).count == 6)
+    }
+
     @Test("AppTheme reconstructed from raw strings matches original")
     func themeRoundTrip() {
         let original = AppTheme(mode: .light, accent: .iris)
@@ -357,10 +373,62 @@ struct StelloTests {
         #expect(item.sourceURL?.contains("design-systems-101") == true)
     }
 
+    // MARK: - Optacos seed
+
+    @Test("OptacosSeed.json collection counts")
+    func optacosSeedCollectionCounts() {
+        guard let counts = OptacosImporter.seedCollectionCounts(from: stelloAppBundle()) else {
+            Issue.record("OptacosSeed.json missing from Stello.app bundle")
+            return
+        }
+        #expect(counts.typefaces == 36)
+        #expect(counts.websites == 38)
+        #expect(counts.creatives == 47)
+    }
+
+    @Test("TypefaceMeta decodes after Optacos import (offline)")
+    func typefaceMetaDecodesAfterImport() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+
+        // Offline, guard-free run so it's deterministic and doesn't touch the network.
+        await OptacosImporter.importIfNeeded(in: ctx, options: .offline)
+
+        let typefaces = try ctx.fetch(
+            FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind == "typeface" })
+        )
+        #expect(typefaces.count == 36)
+
+        let websites = try ctx.fetch(
+            FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind == "website" })
+        )
+        #expect(websites.count == 38)
+
+        let creatives = try ctx.fetch(
+            FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind == "individual" })
+        )
+        #expect(creatives.count == 47)
+
+        let places = try ctx.fetch(
+            FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.kind == "place" })
+        )
+        #expect(places.isEmpty)
+
+        // A known typeface decodes with real, non-empty facets.
+        let dmMono = try #require(typefaces.first { $0.slug == "dm-mono" })
+        let meta = try #require(dmMono.typefaceMeta())
+        #expect(meta.classification.isEmpty == false)
+        #expect(meta.weightTypes.isEmpty == false)
+    }
+
     // MARK: - Helpers
 
+    private func stelloAppBundle() -> Bundle {
+        Bundle.allBundles.first { $0.bundlePath.hasSuffix("Stello.app") } ?? .main
+    }
+
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self])
+        let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self, LocalAttachment.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try ModelContainer(for: schema, configurations: [config])
     }
