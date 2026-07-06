@@ -263,6 +263,11 @@ struct MasonryGridView: View {
         .onChange(of: selectedTagNames) { _, _ in refreshFilterCaches() }
         .onChange(of: selectedWeekKey) { _, _ in refreshFilterCaches() }
         .onChange(of: needsReviewOnly) { _, _ in refreshFilterCaches() }
+        // Reviewing an item flips needsReview at the store layer; the cached filter results
+        // must follow so a just-reviewed card leaves the "Needs review"-filtered grid live.
+        .onChange(of: allItems.map(\.needsReview)) { _, _ in
+            if needsReviewOnly { refreshFilterCaches() }
+        }
         .onChange(of: weekAnchorYs) { _, _ in
             cacheContentWeekRangesIfNeeded()
         }
