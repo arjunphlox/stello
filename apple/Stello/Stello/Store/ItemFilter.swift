@@ -6,7 +6,8 @@ enum ItemFilter {
         _ items: [Item],
         searchText: String,
         selectedTagNames: Set<String>,
-        selectedWeekKey: String? = nil
+        selectedWeekKey: String? = nil,
+        needsReviewOnly: Bool = false
     ) -> [Item] {
         var result = items
 
@@ -24,6 +25,10 @@ enum ItemFilter {
 
         if let selectedWeekKey {
             result = result.filter { WeekGroup.isoWeekKey(for: $0.addedAt) == selectedWeekKey }
+        }
+
+        if needsReviewOnly {
+            result = result.filter { AwaitingReviewFilter.isEligible($0) }
         }
 
         return result

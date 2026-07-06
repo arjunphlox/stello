@@ -4,6 +4,7 @@ import SwiftUI
 struct TagFilterContent: View {
     let allItems: [Item]
     @Binding var selectedTagNames: Set<String>
+    @Binding var needsReviewOnly: Bool
     @Environment(\.appTheme) private var theme
 
     @State private var searchText = ""
@@ -56,10 +57,15 @@ struct TagFilterContent: View {
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
-                if !selectedTagNames.isEmpty {
-                    Button("Clear all") { selectedTagNames.removeAll() }
-                        .font(.karst(.subheadline))
-                        .foregroundStyle(theme.accentColor)
+                needsReviewToggleRow
+
+                if !selectedTagNames.isEmpty || needsReviewOnly {
+                    Button("Clear all") {
+                        selectedTagNames.removeAll()
+                        needsReviewOnly = false
+                    }
+                    .font(.karst(.subheadline))
+                    .foregroundStyle(theme.accentColor)
                 }
 
                 ForEach(categories, id: \.self) { category in
@@ -118,6 +124,32 @@ struct TagFilterContent: View {
         } else {
             expandedCategories.insert(category)
         }
+    }
+
+    /// Filters item state (needs review), not tags — kept visually distinct from the
+    /// tag-category sections below, near the search field like the other top-level controls.
+    private var needsReviewToggleRow: some View {
+        Button {
+            needsReviewOnly.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: needsReviewOnly ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 13, weight: .medium))
+                Text("Needs review")
+                    .font(.karst(.footnote, weight: .medium))
+                Spacer(minLength: 4)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .foregroundStyle(theme.textPrimary)
+            .background(needsReviewOnly ? theme.accentSubtle : theme.backgroundSubtle)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(needsReviewOnly ? theme.textPrimary : Color.clear, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func tagChip(_ row: (name: String, count: Int)) -> some View {
@@ -192,12 +224,13 @@ private struct FlowLayout: Layout {
 struct TagFilterSheet: View {
     let allItems: [Item]
     @Binding var selectedTagNames: Set<String>
+    @Binding var needsReviewOnly: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appTheme) private var theme
 
     var body: some View {
         NavigationStack {
-            TagFilterContent(allItems: allItems, selectedTagNames: $selectedTagNames)
+            TagFilterContent(allItems: allItems, selectedTagNames: $selectedTagNames, needsReviewOnly: $needsReviewOnly)
                 .navigationTitle("Filter by Tag")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
@@ -219,7 +252,7 @@ struct TagFilterSheet: View {
 }
 
 #Preview {
-    TagFilterSheet(allItems: [], selectedTagNames: .constant([]))
+    TagFilterSheet(allItems: [], selectedTagNames: .constant([]), needsReviewOnly: .constant(false))
         .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
         .preferredColorScheme(.dark)
 }

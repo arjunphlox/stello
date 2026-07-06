@@ -56,6 +56,7 @@ struct MasonryGridView: View {
     /// Bound scroll offset for header transparency (regular Mac/iPad layout).
     var scrollOffset: Binding<CGFloat>? = nil
     @Binding var selectedTagNames: Set<String>
+    @Binding var needsReviewOnly: Bool
     var selectedItem: Item? = nil
     var panelContent: SidePanelContent = .none
     var onCardTap: ((Item) -> Void)? = nil
@@ -75,6 +76,7 @@ struct MasonryGridView: View {
         scrollOffset: Binding<CGFloat>? = nil,
         catalogItems: [Item]? = nil,
         selectedTagNames: Binding<Set<String>> = .constant([]),
+        needsReviewOnly: Binding<Bool> = .constant(false),
         selectedItem: Item? = nil,
         panelContent: SidePanelContent = .none,
         onCardTap: ((Item) -> Void)? = nil,
@@ -87,6 +89,7 @@ struct MasonryGridView: View {
         self.scrollTopInset = scrollTopInset
         self.scrollOffset = scrollOffset
         _selectedTagNames = selectedTagNames
+        _needsReviewOnly = needsReviewOnly
         self.selectedItem = selectedItem
         self.panelContent = panelContent
         self.onCardTap = onCardTap
@@ -157,7 +160,12 @@ struct MasonryGridView: View {
     private var lastOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedLastWeekAnchorByItemID }
 
     private func refreshFilterCaches() {
-        let tagFiltered = ItemFilter.apply(allItems, searchText: searchText, selectedTagNames: selectedTagNames)
+        let tagFiltered = ItemFilter.apply(
+            allItems,
+            searchText: searchText,
+            selectedTagNames: selectedTagNames,
+            needsReviewOnly: needsReviewOnly
+        )
         cachedTagFilteredItems = tagFiltered
         if let selectedWeekKey {
             cachedDisplayItems = tagFiltered.filter { WeekGroup.isoWeekKey(for: $0.addedAt) == selectedWeekKey }
@@ -223,7 +231,7 @@ struct MasonryGridView: View {
         .ignoresSafeArea(edges: embedInPanelLayout ? [] : .bottom)
         #endif
         .sheet(isPresented: $showFilterSheet) {
-            TagFilterSheet(allItems: allItems, selectedTagNames: $selectedTagNames)
+            TagFilterSheet(allItems: allItems, selectedTagNames: $selectedTagNames, needsReviewOnly: $needsReviewOnly)
                 .environment(\.appTheme, theme)
                 .preferredColorScheme(theme.colorScheme)
         }
@@ -254,6 +262,7 @@ struct MasonryGridView: View {
         .onChange(of: searchText) { _, _ in refreshFilterCaches() }
         .onChange(of: selectedTagNames) { _, _ in refreshFilterCaches() }
         .onChange(of: selectedWeekKey) { _, _ in refreshFilterCaches() }
+        .onChange(of: needsReviewOnly) { _, _ in refreshFilterCaches() }
         .onChange(of: weekAnchorYs) { _, _ in
             cacheContentWeekRangesIfNeeded()
         }
@@ -371,7 +380,7 @@ struct MasonryGridView: View {
 
         return GridBottomControlBar(
             searchText: $searchText,
-            hasActiveFilters: !selectedTagNames.isEmpty || selectedWeekKey != nil,
+            hasActiveFilters: !selectedTagNames.isEmpty || selectedWeekKey != nil || needsReviewOnly,
             isFilterPanelOpen: panelContent == .filters,
             isImportPanelOpen: panelContent == .import,
             isSettingsPanelOpen: panelContent == .settings,
@@ -398,7 +407,7 @@ struct MasonryGridView: View {
         VStack(spacing: 12) {
             scrollOffsetProbe
 
-            if !selectedTagNames.isEmpty || selectedWeekKey != nil {
+            if !selectedTagNames.isEmpty || selectedWeekKey != nil || needsReviewOnly {
                 filterPillsRow
             }
 
@@ -684,6 +693,19 @@ struct MasonryGridView: View {
     private var filterPillsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if needsReviewOnly {
+                    HStack(spacing: 4) {
+                        Text("Needs review").font(.karst(.caption, weight: .medium))
+                        Button { needsReviewOnly = false } label: {
+                            Image(systemName: "xmark").font(.caption2)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(theme.accentSubtle)
+                    .foregroundStyle(theme.textPrimary)
+                    .clipShape(Capsule())
+                }
                 if let weekKey = selectedWeekKey,
                    let label = timelineWeekGroups.first(where: { $0.key == weekKey })?.label {
                     HStack(spacing: 4) {
@@ -711,10 +733,11 @@ struct MasonryGridView: View {
                     .foregroundStyle(theme.textPrimary)
                     .clipShape(Capsule())
                 }
-                if !selectedTagNames.isEmpty || selectedWeekKey != nil {
+                if !selectedTagNames.isEmpty || selectedWeekKey != nil || needsReviewOnly {
                     Button("Clear all") {
                         selectedTagNames.removeAll()
                         selectedWeekKey = nil
+                        needsReviewOnly = false
                     }
                     .font(.karst(.caption))
                     .foregroundStyle(theme.accentColor)

@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var selectedItem: Item?
     @State private var panelContent: SidePanelContent = .none
     @State private var selectedTagNames: Set<String> = []
+    @State private var needsReviewOnly = false
     @State private var scrollOffset: CGFloat = 0
     @State private var isResizingPanel = false
     @State private var isDropTargeted = false
@@ -191,6 +192,7 @@ struct ContentView: View {
                         scrollOffset: $scrollOffset,
                         catalogItems: allItems,
                         selectedTagNames: $selectedTagNames,
+                        needsReviewOnly: $needsReviewOnly,
                         selectedItem: selectedItem,
                         panelContent: panelContent,
                         onCardTap: handleCardTap,
@@ -220,6 +222,7 @@ struct ContentView: View {
                         selectedItem: selectedItem,
                         allItems: allItems,
                         selectedTagNames: $selectedTagNames,
+                        needsReviewOnly: $needsReviewOnly,
                         onClose: closePanel,
                         onSelectItem: { item in
                             selectedItem = item
@@ -261,6 +264,7 @@ struct ContentView: View {
             MasonryGridView(
                 catalogItems: allItems,
                 selectedTagNames: $selectedTagNames,
+                needsReviewOnly: $needsReviewOnly,
                 onCardTap: { selectedItem = $0 },
                 isDropTargeted: isDropTargeted
             )

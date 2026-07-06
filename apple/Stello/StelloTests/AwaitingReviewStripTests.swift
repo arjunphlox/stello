@@ -129,4 +129,72 @@ struct AwaitingReviewStripTests {
         )
         #expect(AwaitingReviewFilter.isEligible(item))
     }
+
+    // MARK: - "Needs review" filter-sheet toggle (ItemFilter.apply(needsReviewOnly:))
+    //
+    // Same predicate (`AwaitingReviewFilter.isEligible`) as the on-card badge, so the
+    // toggle and the badge can never disagree.
+
+    @Test("needsReviewOnly returns only eligible items")
+    func needsReviewOnlyReturnsOnlyEligibleItems() {
+        let now = Date.now
+        let eligible = Item(
+            title: "Ready",
+            needsReview: true,
+            addedAt: now,
+            enrichmentStatus: "candidates_done",
+            whySavedSuggestionsJSON: EnrichmentService.encodeWhySavedSuggestions(["layout-reference"])
+        )
+        let pending = Item(
+            title: "Still enriching",
+            needsReview: true,
+            addedAt: now.addingTimeInterval(60),
+            enrichmentStatus: "pending"
+        )
+        let dismissed = Item(
+            title: "Reviewed",
+            needsReview: false,
+            addedAt: now.addingTimeInterval(120),
+            enrichmentStatus: "candidates_done"
+        )
+
+        let result = ItemFilter.apply(
+            [eligible, pending, dismissed],
+            searchText: "",
+            selectedTagNames: [],
+            needsReviewOnly: true
+        )
+
+        #expect(result.count == 1)
+        #expect(result.first?.title == "Ready")
+    }
+
+    @Test("needsReviewOnly defaults to off and passes every item through")
+    func needsReviewOnlyDefaultsToOff() {
+        let item = Item(title: "Reviewed", needsReview: false, enrichmentStatus: "candidates_done")
+        let result = ItemFilter.apply([item], searchText: "", selectedTagNames: [])
+        #expect(result.count == 1)
+    }
+
+    @Test("item drops out of needsReviewOnly filter after its last suggestion is accepted")
+    func acceptingLastSuggestionRemovesItemFromNeedsReviewFilter() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let item = Item(
+            title: "One suggestion left",
+            needsReview: true,
+            enrichmentStatus: "candidates_done",
+            whySavedSuggestionsJSON: EnrichmentService.encodeWhySavedSuggestions(["layout-reference"])
+        )
+        context.insert(item)
+        try context.save()
+
+        let before = ItemFilter.apply([item], searchText: "", selectedTagNames: [], needsReviewOnly: true)
+        #expect(before.count == 1)
+
+        try EnrichmentService.addIntentTag(name: "layout-reference", to: item, context: context)
+
+        let after = ItemFilter.apply([item], searchText: "", selectedTagNames: [], needsReviewOnly: true)
+        #expect(after.isEmpty)
+    }
 }
