@@ -108,6 +108,8 @@ struct ContentView: View {
             selectedItem = first
         } else if args.contains("-screenshotDropState") {
             isDropTargeted = true
+        } else if args.contains("-screenshotAwaitingReview") {
+            SeedData.ensureAwaitingReviewFixtures(in: context)
         } else if args.contains("-screenshotLocalLink") {
             ensureScreenshotLocalItem()
         }

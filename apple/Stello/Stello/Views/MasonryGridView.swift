@@ -140,6 +140,7 @@ struct MasonryGridView: View {
 
     private var tagFilteredItems: [Item] { cachedTagFilteredItems }
     private var displayItems: [Item] { cachedDisplayItems }
+    private var awaitingReviewItems: [Item] { AwaitingReviewFilter.items(from: allItems) }
     private var timelineWeekGroups: [WeekGroup] { cachedTimelineWeekGroups }
     private var firstOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedFirstWeekAnchorByItemID }
     private var lastOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedLastWeekAnchorByItemID }
@@ -371,6 +372,16 @@ struct MasonryGridView: View {
                 filterPillsRow
             }
 
+            if !awaitingReviewItems.isEmpty {
+                AwaitingReviewStripView(
+                    items: awaitingReviewItems,
+                    selectedItem: selectedItem,
+                    panelContent: panelContent,
+                    onCardTap: onCardTap,
+                    onDismiss: dismissAwaitingReview
+                )
+            }
+
             MasonryLayout(spacing: 12, forcedColumns: effectiveForcedColumns) {
                 ForEach(displayItems) { item in
                     card(for: item)
@@ -510,6 +521,10 @@ struct MasonryGridView: View {
         activeWeekKey = timelineWeekGroups.last { group in
             (weekAnchorYs[group.key] ?? .infinity) <= threshold
         }?.key ?? timelineWeekGroups.first?.key
+    }
+
+    private func dismissAwaitingReview(_ item: Item) {
+        try? AwaitingReviewFilter.dismissReview(for: item, context: context)
     }
 
     private func toggleWeekFilter(_ key: String) {

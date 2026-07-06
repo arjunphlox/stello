@@ -47,6 +47,7 @@
 
 | Task | Tool | Platform | Model | Status |
 |---|---|---|---|---|
+| ~~**Native quick-wins A–E**~~ — revisit tracking, why-saved intent chips, full-text search blob, awaiting-review strip, deterministic PageClassifier at capture (`cursor/native-quick-wins`, 117→138 tests) | Cursor | iOS/macOS | Composer | Done |
 | **Verify live on-device AFM** — Foundation Models enrichment on a real Apple-Intelligence device (signing required); mock-tested only in sim | Cursor | iOS/macOS | Composer | Open |
 | **Verify CloudKit cross-device sync + Supabase→native migration** — Sprint 3: prove sync across devices, build one-way import from Supabase web data | Cursor | iOS/macOS | Opus | Open |
 | ~~**Domain-pill tint + subtle visual polish**~~ — DONE (2026-07-01, branch `cursor/native-visual-karst-zoom`): shipped as part of a large native UI overhaul — Karst default font (System/Light/Dark, off-white light, 14pt Apple-native type scale), web-faithful cards (flat 6px, 12px gaps, hover/long-press title, domain pill), single continuous grid + left-edge timeline overlay (scroll-spy/hover/scrub), granular pinch zoom, bottom control bar (add/filter/search/avatar) w/ Liquid Glass, web-parity detail panel (adjustable 25–50%, top-bleed image, multi-column, image strip), drag & drop capture (window/card/panel/app-icon; video local-only; "local" link), Download Full Item (zip). 111→113 tests green | Cursor | iOS/macOS | Composer | Done |

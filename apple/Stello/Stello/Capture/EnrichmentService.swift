@@ -125,4 +125,18 @@ enum EnrichmentService {
         item.updatedAt = .now
         try context.save()
     }
+
+    static func dismissWhySavedSuggestion(
+        name: String,
+        from item: Item,
+        context: ModelContext
+    ) throws {
+        guard item.whySavedSuggestionsJSON != nil else { return }
+        let key = name.lowercased()
+        let remaining = decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON)
+            .filter { $0.lowercased() != key }
+        item.whySavedSuggestionsJSON = encodeWhySavedSuggestions(remaining)
+        item.updatedAt = .now
+        try context.save()
+    }
 }

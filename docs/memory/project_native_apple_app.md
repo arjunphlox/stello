@@ -67,3 +67,30 @@ Large web-parity + interaction pass (Karst font, single grid + timeline, panel, 
 - **Images:** async fetch w/ concurrency 5; Optacos SVGs skip the 500-byte OG floor. Offline test hook: `Options.offline` (no network, no guard).
 - **Panel:** `CardSubcards` — outline-only sub-cards, render-if-data, 2 columns at ≥520pt panel width. Entity refs → tappable chips when target `Item` exists in store.
 - **App icon:** Icon Composer `.icon` bundle in `Stello/Stello.icon/`; `ASSETCATALOG_COMPILER_APPICON_NAME = Stello`. Copy from Downloads when the design updates — do not hand-edit PNG layers inside the bundle.
+
+## Native quick-wins sprint (2026-07-06, branch `cursor/native-quick-wins`)
+
+Shipped A–E (117→138 macOS tests). Timeline nudge session same day **reverted** — deferred to a future session.
+
+| Task | What shipped |
+|---|---|
+| A Revisit tracking | `Item.lastOpenedAt`, `Item.openCount`; `StelloStore.recordOpen(for:)` + session debounce; `DetailView.onAppear` |
+| B Why-saved intent | Tappable chips → intent tag @0.9; dismiss; `TagFilterSheet` "Why saved" first |
+| C Search blob | `ItemSearchBlob.swift`; extended `ItemFilter` full-text match |
+| D Awaiting review strip | `AwaitingReviewFilter.swift`, `AwaitingReviewStripView.swift`, masonry integration + seed `-screenshotAwaitingReview` |
+| E Page classification | `PageClassifier.swift` in capture path; `PageClassifierTests.swift`; Share target includes `PageClassifier.swift` + `CardMetadata.swift` via `project.yml` |
+
+### Timeline + header — frozen until explicit OK (2026-07-06 failed session)
+
+A timeline nudge pass (4px left, +1px bar, max corners) broke macOS chrome. Root causes:
+
+- **`embedInPanelLayout: true` on macOS** — gating timeline tweaks on `!embedInPanelLayout` meant offsets never applied on macOS (the primary surface).
+- **Negative `.offset(x:)`** — parent `.clipped()` cut the timeline off-screen.
+- **`gridLeadingInset` on cards** — pushed masonry; timeline looked like it invaded the grid gutter.
+- **Header/toolbar edits** — removing macOS top padding, square-top shape, solid-at-rest fill, scroll inset changes, and `MacWindowConfigurator` NSToolbar/`showsBaselineSeparator = false` caused clipped header + **duplicate "Stello" title** in the titlebar.
+
+**Do not touch (future timeline session):** `StelloHeaderView.swift`, `MacWindowConfigurator.swift`, `ContentView.headerOverlay`, `StelloLayout` header constants, negative offsets, NSToolbar/titlebar separator.
+
+**Safe scope for timeline nudges:** `TimelineOverlay.swift` only, plus at most one targeted padding tweak on the card/masonry stack in `MasonryGridView.swift` — trace macOS vs iPhone invariants first (`embedInPanelLayout`), one change at a time, screenshot gate before done, revert on first visual fail.
+
+**Process gate:** Composer executes; visual screenshot verification required before marking UI tasks done; never batch header + timeline in one pass.

@@ -16,6 +16,11 @@ struct OGResult {
     var imageURL: URL?
 }
 
+struct PageFetchResult {
+    var html: String
+    var og: OGResult
+}
+
 // MARK: - CaptureService
 
 enum CaptureService {
@@ -57,7 +62,9 @@ enum CaptureService {
             return first
         }
 
-        let og = await fetchOG(url: url)
+        let page = await fetchPage(url: url)
+        let og = page?.og ?? OGResult()
+        let html = page?.html ?? ""
         let title = og.title ?? url.host ?? url.absoluteString
         let summary = og.description.map { String($0.prefix(200)) }
         let dom = domain(from: url)
@@ -69,11 +76,22 @@ enum CaptureService {
 
         let slug = makeSlug(from: title, context: context)
         let tagSpecs = RuleTagger.generateTags(title: title, description: summary, domain: dom)
+        let classification = PageClassifier.classify(
+            html: html,
+            baseURL: url,
+            domain: dom,
+            title: title,
+            ogDescription: og.description
+        )
 
         let item = Item(
             slug: slug, title: title, sourceURL: normalized, domain: dom,
-            summary: summary, enrichmentStatus: "text_done"
+            summary: summary, enrichmentStatus: "text_done",
+            kind: classification.kind.rawValue
         )
+        if let meta = classification.individualMeta {
+            item.setMetadata(meta)
+        }
         context.insert(item)
 
         if let img = itemImage {
@@ -145,18 +163,22 @@ enum CaptureService {
 
     // MARK: - OG Fetching
 
-    static func fetchOG(url: URL) async -> OGResult {
+    static func fetchPage(url: URL) async -> PageFetchResult? {
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             forHTTPHeaderField: "User-Agent"
         )
-        guard let (data, _) = try? await URLSession.shared.data(for: request) else { return OGResult() }
+        guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
         let slice = data.prefix(50_000)
         guard let html = String(data: slice, encoding: .utf8)
-                      ?? String(data: slice, encoding: .isoLatin1) else { return OGResult() }
-        return parseOG(html: html, baseURL: url)
+                      ?? String(data: slice, encoding: .isoLatin1) else { return nil }
+        return PageFetchResult(html: html, og: parseOG(html: html, baseURL: url))
+    }
+
+    static func fetchOG(url: URL) async -> OGResult {
+        await fetchPage(url: url)?.og ?? OGResult()
     }
 
     /// Parses OG/Twitter meta tags order-independently (no assumption on attribute order within a tag).

@@ -12,10 +12,14 @@ enum ItemFilter {
 
         if !searchText.isEmpty {
             let q = searchText.lowercased()
+            var searchBlobCache: [UUID: String] = [:]
             result = result.filter { item in
-                item.title.lowercased().contains(q)
-                    || (item.summary?.lowercased().contains(q) ?? false)
-                    || (item.tags?.contains { $0.name.lowercased().contains(q) } ?? false)
+                let blob = searchBlobCache[item.id] ?? {
+                    let built = ItemSearchBlob.build(for: item)
+                    searchBlobCache[item.id] = built
+                    return built
+                }()
+                return blob.contains(q)
             }
         }
 

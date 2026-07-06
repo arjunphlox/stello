@@ -272,18 +272,31 @@ struct CardSubcards: View {
             SubCard(title: "Why save?") {
                 TagFlowLayout(spacing: 6) {
                     ForEach(whySavedSuggestions, id: \.self) { suggestion in
-                        Button {
-                            acceptWhySavedSuggestion(suggestion)
-                        } label: {
-                            Text(humanizeReason(suggestion))
-                                .font(.karst(.caption))
-                                .foregroundStyle(theme.accentContrast)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(theme.accentColor)
-                                .clipShape(Capsule())
+                        HStack(spacing: 4) {
+                            Button {
+                                acceptWhySavedSuggestion(suggestion)
+                            } label: {
+                                Text(humanizeReason(suggestion))
+                                    .font(.karst(.caption))
+                                    .foregroundStyle(theme.accentContrast)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Accept \(humanizeReason(suggestion))")
+
+                            Button {
+                                dismissWhySavedSuggestion(suggestion)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(theme.accentContrast.opacity(0.85))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Dismiss suggestion")
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(theme.accentColor)
+                        .clipShape(Capsule())
                     }
                 }
             }
@@ -367,6 +380,10 @@ struct CardSubcards: View {
 
     private func acceptWhySavedSuggestion(_ suggestion: String) {
         try? EnrichmentService.addIntentTag(name: suggestion, to: item, context: context)
+    }
+
+    private func dismissWhySavedSuggestion(_ suggestion: String) {
+        try? EnrichmentService.dismissWhySavedSuggestion(name: suggestion, from: item, context: context)
     }
 
     // MARK: - Typeface

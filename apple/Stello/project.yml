@@ -84,10 +84,12 @@ targets:
           - ItemImage.swift
           - Snippet.swift
           - LocalAttachment.swift
+          - CardMetadata.swift
       - path: Stello/Capture
         includes:
           - RuleTagger.swift
           - CaptureService.swift
+          - PageClassifier.swift
       - path: Stello/Store
         includes:
           - StelloStore.swift

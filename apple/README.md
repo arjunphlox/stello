@@ -43,6 +43,9 @@ Xcode GUI proved too painful (targets/capabilities/signing). Now **Cursor-driven
 ## Handoff log
 Each handoff: surface, prompt given, what came back, review notes. Append newest at top.
 
+### 2026-07-06 — Native quick-wins sprint A–E (`cursor/native-quick-wins`, Cursor/Composer fan-out)
+Five scoped tasks shipped in one branch: **(A)** revisit tracking (`lastOpenedAt`, `openCount`, session-debounced `StelloStore.recordOpen` on `DetailView` panel/detail surfaces); **(B)** why-saved chips → tappable accept (intent tag @0.9) + dismiss, `TagFilterSheet` "Why saved" section first; **(C)** `ItemSearchBlob` lazy lowercase blob (author/domain/snippets/why-saved/metadata JSON per `CardMetadata`); **(D)** awaiting-review horizontal strip (≤8, `needsReview` + enrichment past `pending`, dismiss ✕); **(E)** deterministic `PageClassifier` at URL capture (`individual`/`foundry`/`link`, `IndividualMeta` from JSON-LD + social + og:description). **117 → 138 tests** green iOS Simulator + macOS. StelloShare target updated for `PageClassifier` + `CardMetadata`. Screenshots: `apple/Stello/.artifacts/macos-awaiting-review-strip.png`, `iphone-17-pro-awaiting-review.png`.
+
 ### 2026-06-26 — macOS traffic-light inset + bottom-left title with symmetric header padding (Cursor/Composer)
 Two changes: (1) `WindowChromeController.repositionTrafficLights` inset = **`windowInset + headerPadding` (24pt from window origin → ~12pt inside the amber header card on x and y)**, re-applied on layout/resize/fullscreen/key; (2) removed the **78pt `macTitleBarLeadingInset` gutter** from `StelloHeaderView` leading padding — title "Stello" + count now sit **bottom-left at the uniform 12pt header padding**, so **title left-gap == icons right-gap == bottom-gap == 12pt** (traffic lights live top-left, title bottom-left — no collision). iOS + macOS build; **99 tests green**. Screenshots: `apple/Stello/.artifacts/macos-controls-inset-12.png`, `macos-header-title-controls.png`.
 

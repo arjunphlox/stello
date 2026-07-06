@@ -5,6 +5,22 @@ enum StelloStore {
     static let appGroupID = "group.com.phloxpage.Stello"
     static let cloudKitContainerID = "iCloud.com.phloxpage.Stello"
 
+    /// Item IDs already counted as opened this app session (in-memory debounce).
+    private(set) static var openedItemIDsThisSession = Set<UUID>()
+
+    /// Records a detail-surface open for revisit tracking. Debounced per item per session.
+    /// Does not mutate `updatedAt` — opens are activity, not content edits.
+    static func recordOpen(for item: Item) {
+        guard openedItemIDsThisSession.insert(item.id).inserted else { return }
+        item.openCount += 1
+        item.lastOpenedAt = .now
+    }
+
+    /// Clears session debounce — tests simulating a fresh app launch.
+    static func resetRevisitSession() {
+        openedItemIDsThisSession.removeAll()
+    }
+
     /// Main app container — App Group SQLite with CloudKit sync.
     static func makeContainer() throws -> ModelContainer {
         let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self, LocalAttachment.self])
