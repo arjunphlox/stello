@@ -46,7 +46,7 @@ enum OptacosImporter {
     // MARK: - Public entry
 
     /// Import tuning — tests disable the once-guard and network fetch for determinism.
-    struct Options: Sendable {
+    nonisolated struct Options: Sendable {
         var fetchImages: Bool = true
         var respectGuard: Bool = true
 
@@ -167,17 +167,15 @@ enum OptacosImporter {
         }
 
         let collections = root["collections"] as? [String: [String: Any]] ?? [:]
-        let itemsToSpread = await MainActor.run {
-            fetchItemsForDateMigration(in: context, collections: collections)
-        }
-        let total = itemsToSpread.count
-
-        await MainActor.run {
+        // Fetch + re-date in one MainActor block — Item is a PersistentModel and must not cross actors.
+        let total = await MainActor.run { () -> Int in
+            let itemsToSpread = fetchItemsForDateMigration(in: context, collections: collections)
             for (index, item) in itemsToSpread.enumerated() {
-                item.addedAt = addedAt(forSpreadIndex: index, total: total)
+                item.addedAt = addedAt(forSpreadIndex: index, total: itemsToSpread.count)
             }
             try? context.save()
             defaults.set(true, forKey: importedFlagKey)
+            return itemsToSpread.count
         }
 
         print("✅ OptacosImporter: migrated v1 → v2 (\(total) items re-dated, place cards removed)")

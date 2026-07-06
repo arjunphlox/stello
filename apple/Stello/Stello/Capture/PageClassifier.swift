@@ -10,7 +10,7 @@ struct PageClassificationResult: Sendable {
 // MARK: - PageClassifier
 
 /// Deterministic page kind + metadata from fetched HTML. No AI.
-struct PageClassifier {
+nonisolated struct PageClassifier {
 
     /// Strong foundry keywords — matched as whole words in the title or domain.
     /// ("type-foundry" and "typefoundry" both tokenize to these on word boundaries.)

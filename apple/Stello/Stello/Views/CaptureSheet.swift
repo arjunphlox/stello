@@ -136,9 +136,8 @@ struct CaptureContent: View {
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
-        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-            guard let data = item as? Data,
-                  let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+            guard let url else { return }
             Task { @MainActor in
                 await importFile(at: url)
             }

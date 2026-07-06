@@ -107,7 +107,7 @@ final class WindowChromeHostView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let window {
+        if window != nil {
             DispatchQueue.main.async { [weak self] in
                 guard let window = self?.window else { return }
                 self?.onWindowChange?(window)

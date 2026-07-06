@@ -322,29 +322,41 @@ enum DropImportService {
     }
 
     private static func loadTypedURL(from provider: NSItemProvider, type: UTType) async -> URL? {
-        await withCheckedContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: type.identifier) { item, _ in
-                if let url = item as? URL {
+        if type == .fileURL {
+            return await withCheckedContinuation { continuation in
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     continuation.resume(returning: url)
-                } else if let data = item as? Data, let str = String(data: data, encoding: .utf8) {
-                    continuation.resume(returning: URL(string: str))
-                } else {
-                    continuation.resume(returning: nil)
                 }
             }
+        }
+        // Non-URL types (e.g. movies) expose a handler-scoped temp file — copy it out before it's reclaimed.
+        return await withCheckedContinuation { continuation in
+            _ = provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { url, _ in
+                guard let url else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: copyToTemp(url))
+            }
+        }
+    }
+
+    nonisolated private static func copyToTemp(_ source: URL) -> URL? {
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(source.pathExtension)
+        do {
+            try FileManager.default.copyItem(at: source, to: dest)
+            return dest
+        } catch {
+            return nil
         }
     }
 
     private static func loadData(from provider: NSItemProvider, type: UTType) async -> Data? {
         await withCheckedContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: type.identifier) { item, _ in
-                if let data = item as? Data {
-                    continuation.resume(returning: data)
-                } else if let url = item as? URL, let data = try? Data(contentsOf: url) {
-                    continuation.resume(returning: data)
-                } else {
-                    continuation.resume(returning: nil)
-                }
+            provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in
+                continuation.resume(returning: data)
             }
         }
     }

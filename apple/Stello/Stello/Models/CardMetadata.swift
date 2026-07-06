@@ -16,7 +16,7 @@ struct FAQItem: Codable, Hashable, Sendable {
 
 // MARK: - Typeface
 
-struct TypefaceMeta: Codable, Sendable {
+nonisolated struct TypefaceMeta: Codable, Sendable {
     var overview: String?
     var description: String?
     var specimenURL: String?
@@ -64,7 +64,7 @@ struct TypefaceMeta: Codable, Sendable {
 
 // MARK: - Website
 
-struct WebsiteMeta: Codable, Sendable {
+nonisolated struct WebsiteMeta: Codable, Sendable {
     var tagline: String?
     var description: String?
     var categories: [String] = []
@@ -99,7 +99,7 @@ struct WebsiteMeta: Codable, Sendable {
 
 // MARK: - Individual (Creative)
 
-struct IndividualMeta: Codable, Sendable {
+nonisolated struct IndividualMeta: Codable, Sendable {
     var pronouns: String?
     var bio: String?
     var location: EntityRef?
@@ -138,14 +138,14 @@ struct IndividualMeta: Codable, Sendable {
 
 // MARK: - Studio
 
-struct StudioMeta: Codable, Sendable {
+nonisolated struct StudioMeta: Codable, Sendable {
     var work: [EntityRef] = []
     var team: [EntityRef] = []
 }
 
 // MARK: - Foundry
 
-struct FoundryMeta: Codable, Sendable {
+nonisolated struct FoundryMeta: Codable, Sendable {
     var description: String?
     var category: String?
     var geography: EntityRef?
@@ -170,7 +170,7 @@ struct FoundryMeta: Codable, Sendable {
 
 // MARK: - Place
 
-struct PlaceMeta: Codable, Sendable {
+nonisolated struct PlaceMeta: Codable, Sendable {
     var city: String?
     var country: String?
 }
