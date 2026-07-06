@@ -10,6 +10,9 @@ enum StelloLayout {
     static let headerCornerRadius: CGFloat = 12
     static let panelCornerRadius: CGFloat = 12
     static let columnGap: CGFloat = 12
+    /// Horizontal clip slack around the grid so the 4pt outset selection ring on
+    /// edge cards stays visible while the cards sit flush with the header edges.
+    static let gridRingClipOutset: CGFloat = 6
     /// Web `.header { min-height: 120px }` — fixed card height on native (do not grow with window).
     static let headerMinHeight: CGFloat = 120
     static let headerHeight: CGFloat = 120

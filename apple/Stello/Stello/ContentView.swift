@@ -209,7 +209,9 @@ struct ContentView: View {
                 }
                 .frame(width: gridColumnWidth)
                 .frame(maxHeight: .infinity)
-                .clipped()
+                // Horizontal outset keeps the selection ring visible on edge cards,
+                // which sit flush with the header edges (ring slack, not card inset).
+                .clipShape(HorizontalOutsetClip(outset: StelloLayout.gridRingClipOutset))
                 .layoutPriority(0)
 
                 if panelOpen {

@@ -2,8 +2,9 @@ import SwiftUI
 
 enum TimelineMetrics {
     static let interactionStripWidth: CGFloat = 44
-    static let barWidth: CGFloat = 2
-    static let barCornerRadius: CGFloat = 1
+    static let barWidth: CGFloat = 3
+    static let barCornerRadius: CGFloat = barWidth / 2
+    static let barMinHeight: CGFloat = 6
     static let barGap: CGFloat = 4
     static let scrollSpyThreshold: CGFloat = 16
 }
@@ -66,10 +67,12 @@ struct TimelineOverlay: View {
             return theme.textSecondary.opacity(0.5)
         }()
 
+        let barHeight = max(TimelineMetrics.barMinHeight, layout.height)
+
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: TimelineMetrics.barCornerRadius, style: .continuous)
                 .fill(color)
-                .frame(width: TimelineMetrics.barWidth, height: layout.height)
+                .frame(width: TimelineMetrics.barWidth, height: barHeight)
                 .animation(isInteraction || isSelected ? .easeOut(duration: 0.2) : nil, value: isHighlighted)
 
             if isInteraction {

@@ -10,6 +10,16 @@ private struct ScrollOffsetKey: PreferenceKey {
     }
 }
 
+/// Rectangle clip extended horizontally past the view bounds, so the 4pt outset
+/// selection ring on edge cards survives the grid's clip while vertical scroll
+/// containment stays exact.
+struct HorizontalOutsetClip: Shape {
+    var outset: CGFloat
+    func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: -outset, dy: 0))
+    }
+}
+
 private struct GridContainerWidthKey: PreferenceKey {
     static var defaultValue: CGFloat = 375
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -124,8 +134,10 @@ struct MasonryGridView: View {
     @State private var cachedAwaitingReviewItems: [Item] = []
     @State private var filterCacheToken: UInt = 0
 
-    /// Inset inside the scroll clip so the 4pt outset selection ring stays visible at grid edges.
-    private static let selectionOutlineInset: CGFloat = 6
+    /// Ring headroom for the 4pt outset selection ring. Applied vertically inside the
+    /// card stack; horizontally it lives in the HorizontalOutsetClip boundaries so the
+    /// outer card edges stay flush with the header edges.
+    private static let selectionOutlineInset: CGFloat = StelloLayout.gridRingClipOutset
     /// Deadband past a column boundary before stepping to the next count (prevents flicker).
     private static let columnHysteresis: Double = 0.35
     /// Minimum scroll delta before updating header / week-spy state.
@@ -200,7 +212,9 @@ struct MasonryGridView: View {
     var body: some View {
         gridWithTimeline
         .frame(maxHeight: .infinity)
-        .clipped()
+        // Horizontal outset keeps the selection ring visible on edge cards now that
+        // the card stack sits flush with the header edges (see gridScrollContent).
+        .clipShape(HorizontalOutsetClip(outset: Self.selectionOutlineInset))
         .background {
             theme.background.ignoresSafeArea()
         }
@@ -271,6 +285,10 @@ struct MasonryGridView: View {
                         gridScrollContent(topInset: compactScrollInset)
                             .frame(width: viewport.size.width, alignment: .leading)
                     }
+                    // The scroll clip would cut the selection ring at the flush card
+                    // edges; the enclosing HorizontalOutsetClip shapes contain scrolled
+                    // content instead (exact vertically, +ring slack horizontally).
+                    .scrollClipDisabled()
                     #if os(iOS)
                     .scrollContentBackground(.hidden)
                     #endif
@@ -306,13 +324,12 @@ struct MasonryGridView: View {
                                 onWeekFilterToggled: toggleWeekFilter,
                                 onInteractionChanged: { interactionWeekKey = $0 }
                             )
-                            // Embed: bars centered in the 12pt window-edge↔grid-edge gutter.
-                            // Compact (iPhone): unchanged floating-overlay position.
+                            // Bars centered in the 12pt window-edge↔grid-edge margin on all
+                            // platforms — cards now sit flush at windowInset (header-aligned),
+                            // so the old compact windowInset offset would overlap edge cards.
                             .padding(
                                 .leading,
-                                embedInPanelLayout
-                                    ? (StelloLayout.windowInset - TimelineMetrics.barWidth) / 2
-                                    : StelloLayout.windowInset
+                                (StelloLayout.windowInset - TimelineMetrics.barWidth) / 2
                             )
                             .padding(.top, compactScrollInset)
                             .allowsHitTesting(true)
@@ -328,7 +345,7 @@ struct MasonryGridView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            .clipped()
+            .clipShape(HorizontalOutsetClip(outset: Self.selectionOutlineInset))
             .onAppear {
                 scrollForScreenshotIfNeeded(using: scrollProxy)
                 updateActiveWeekKey()
@@ -413,6 +430,10 @@ struct MasonryGridView: View {
                 }
             }
             .padding(Self.selectionOutlineInset)
+            // Cancel the outline inset horizontally so the outer card edges sit flush
+            // with the header's left/right edges; the ring's horizontal slack lives in
+            // the HorizontalOutsetClip boundaries instead of inside the card stack.
+            .padding(.horizontal, -Self.selectionOutlineInset)
 
             scrollContentBottomProbe
         }
