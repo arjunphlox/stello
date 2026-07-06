@@ -87,6 +87,7 @@ Items stored as markdown files in `_items/` directory with YAML frontmatter meta
 ## Active Work
 - [ ] **Desktop-context follow-ups** — e2e smoke (BACKLOG), cards UI scoping (BACKLOG). V1 pipeline shipped 2026-06-17.
 - [~] **Native Apple app** (`apple/Stello`) — foundations shipped (Sprints 0-2 + refinement): local-first SwiftData+CloudKit, on-device Foundation Models enrichment, capture + Share Extension, masonry/weeks/search/filters/detail/themes, web-faithful macOS chrome. Refinement ongoing; data migration (Sprint 3) + real-device AI verification pending.
+- [ ] **Native quick-wins sprint** — revisit tracking, why-saved→intent facet, awaiting-review strip, search-over-everything, kind classification + deterministic metadata at capture. Prompt for Cursor/Composer: `docs/plans/native-quick-wins-sprint.md`. Feasibility pass of `BOOKMARK_POSSIBILITIES.md` against the native app done 2026-07-06 (status header added to that doc).
 
 ## Decisions Log
 - 2026-06-26 · Native Apple app under `apple/` (SwiftUI multiplatform iOS/iPadOS/macOS 27, local-first SwiftData+CloudKit, on-device AFM 3, no backend) · matures Stello to local-first/privacy/Apple-native per PRD; coexists with web (web NOT sunset until explicit OK)

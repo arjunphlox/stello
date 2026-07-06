@@ -1,5 +1,17 @@
 # Stello — Blue-Sky Possibilities for Designer Bookmarks
 
+## Status — 2026-07-06 (native-app era)
+
+Written for the web stack; since then the **native Apple app** (`apple/Stello`, SwiftUI iOS/iPadOS/macOS 27, local-first SwiftData + CloudKit, on-device Foundation Models enrichment) shipped its foundations and is now the primary implementation surface for most of this doc. Three facts change the feasibility math:
+
+1. **Local-first flips the cost of Axis 1/3/8.** Pure queries/aggregations over local data (revisit tracking, taste timeline, calendar resurfacing, palette view) need no API/migration/egress — they're SwiftData properties and in-process math.
+2. **On-device AI exists but is small and unverified.** `EnrichmentPrompts.swift` already runs vision tags + snippets + why-saved on-device (@Generable, ~3B model, small context window). Everything corpus-scale (vibe search 2.1, zeitgeist 3.3, synthesis 6.2) must be retrieval-then-rerank, and all AI-quality features are **gated on verifying live Apple Intelligence on a real device** (simulator can't — still pending).
+3. **The native app has a per-kind metadata schema this doc predates.** `Item.kind` (`typeface|website|individual|studio|foundry|place|link`) + `WebsiteMeta`/`IndividualMeta`/`FoundryMeta`… in `apple/Stello/Stello/Models/CardMetadata.swift` — structured fields for typography credits, socials, founders, location. Populated today only by the Optacos import; capture doesn't classify or fill it yet. Kind-specific capture (typed per-kind enrichment + typed "highlights" — the structured evolution of §2.3) is the planned direction; see `docs/plans/native-quick-wins-sprint.md`.
+
+Per-item status (native): **1.1 why-saved** — generated + stored on-device (`whySavedSuggestionsJSON`), rendered as detail sub-card chips; facet/filter promotion in the quick-wins sprint. **1.3 revisit tracking** — in the quick-wins sprint. **1.5 review strip** — in the quick-wins sprint. **7.1 screenshot-native capture** — image paste/drop/Share-Extension capture shipped; source inference not. **7.3 artifact preservation** — local-first storage + "Download Full Item" zip shipped; rendered-page archive not. Everything else: not started.
+
+Also stale below (kept for the record): web code paths moved `api/*` → `src/routes/*` + `src/lib/*` in the Cloudflare migration, and enrichment now takes **one 1440×900 screenshot**, not three breakpoints (2026-05-20 decision).
+
 ## Context
 
 Stello already captures more signal than it surfaces. At ingest it harvests: weighted tags across 8 categories (format, domain, style, subject, tool, location, mood, color), vision-derived palettes, "why saved" reason candidates, snippet candidates, full-page screenshots at 3 breakpoints, and the raw HTML. Per item it also stores `added_at`, `analyzed_at`, `updated_at`, a transient `enrichment_candidates` bag, and a `needs_review` flag. What it does *not* do: track view/revisit behavior, compute cross-project overlaps, reason about time, or do anything with accumulated taste.
@@ -233,12 +245,18 @@ Everything else fans out from these three.
 
 ## Critical files (for when any of this becomes a real plan)
 
-- Schema / columns to add: `scripts/schema.sql:35-65`
-- Tag generation (already shaped for reuse): `api/_lib/supabase.js:241-278`, `api/_lib/enrich-rules.js:12-150`
-- Vision enrichment (extendable to embeddings/crops): `api/enrich.js:59-120`, 313-398
-- Related-items graph (foundation for co-occurrence view): `app.js:401-432`
-- Panel curation UI (extend for annotation, walks, exports): `app.js:754-924`, `api/item-update.js:24-265`
-- Filter drawer (extend for reason facet, vibe search): `app.js:440-499`
+Native app (primary surface now):
+- Schema / models to extend: `apple/Stello/Stello/Models/Item.swift`, `Tag.swift`, `CardMetadata.swift` (per-kind metadata)
+- On-device enrichment (extendable to new @Generable jobs): `apple/Stello/Stello/Capture/EnrichmentPrompts.swift`, `EnrichmentService.swift`
+- Capture pipeline (kind classification, deterministic extraction): `apple/Stello/Stello/Capture/CaptureService.swift`, `RuleTagger.swift`
+- Search / filters (extend for facets, vibe search recall): `apple/Stello/Stello/Store/ItemFilter.swift`, `Views/TagFilterSheet.swift`
+- Detail/review UI (chips, highlights, review strip): `apple/Stello/Stello/Views/CardSubcards.swift`, `SidePanelContent.swift`, `MasonryGridView.swift`
+- Constants source of truth: `apple/BUILD_SPEC.md`
+
+Web app (post-Cloudflare-migration paths; the `api/*` refs above are historical):
+- Schema / columns to add: `scripts/schema.sql`
+- Tag generation: `src/lib/supabase.js`, enrichment: `src/routes/enrich.js`
+- Related-items graph: `app.js` (`relatedIndex`); panel curation: `app.js` + `src/routes/item-update.js`; filter drawer: `app.js`
 
 ## Verification (when any one of these lands)
 
