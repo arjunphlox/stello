@@ -102,4 +102,6 @@ A timeline nudge pass (4px left, +1px bar, max corners) broke macOS chrome. Root
 
 **Safe scope for timeline nudges:** `TimelineOverlay.swift` only, plus at most one targeted padding tweak on the card/masonry stack in `MasonryGridView.swift` — trace macOS vs iPhone invariants first (`embedInPanelLayout`), one change at a time, screenshot gate before done, revert on first visual fail.
 
+**Timeline-in-gutter (shipped 2026-07-06, second attempt):** the 12pt window gutter is `ContentView.regularLayout`'s HStack leading padding — OUTSIDE MasonryGridView's three `.clipped()` boundaries, so no TimelineOverlay/MasonryGridView edit can reach it (this is why negative offsets got clipped invisible last time). Working pattern: grid column absorbs the inset (`gridColumnWidth = gridWidth + windowInset`, HStack leading pad removed), then card stack / control bar / headerOverlay call-site frame compensate so only the timeline moves; bars centered via `(windowInset − barWidth)/2`. Gotcha caught at gate: blanket compensation pads flatten platform-conditional insets — iPhone's control bar uses `controlBarSideInsetCompact` (16pt) ≠ `windowInset` (12pt); keep compensations `embedInPanelLayout`-conditional.
+
 **Process gate:** Composer executes; visual screenshot verification required before marking UI tasks done; never batch header + timeline in one pass.

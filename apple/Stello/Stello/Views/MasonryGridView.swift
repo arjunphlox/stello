@@ -306,7 +306,14 @@ struct MasonryGridView: View {
                                 onWeekFilterToggled: toggleWeekFilter,
                                 onInteractionChanged: { interactionWeekKey = $0 }
                             )
-                            .padding(.leading, embedInPanelLayout ? 0 : StelloLayout.windowInset)
+                            // Embed: bars centered in the 12pt window-edge↔grid-edge gutter.
+                            // Compact (iPhone): unchanged floating-overlay position.
+                            .padding(
+                                .leading,
+                                embedInPanelLayout
+                                    ? (StelloLayout.windowInset - TimelineMetrics.barWidth) / 2
+                                    : StelloLayout.windowInset
+                            )
                             .padding(.top, compactScrollInset)
                             .allowsHitTesting(true)
                         }
@@ -361,7 +368,15 @@ struct MasonryGridView: View {
             onFilter: { onFilters?() ?? (showFilterSheet = true) },
             onSettings: { onSettings?() ?? (showSettings = true) }
         )
-        .padding(.horizontal, StelloLayout.controlBarHorizontalPadding(embedInPanelLayout: embedInPanelLayout))
+        // Embed: leading pad compensates the gutter now included in the grid column
+        // (see gridScrollContent). Non-embed (iPhone): unchanged 16pt compact side inset.
+        .padding(
+            .leading,
+            embedInPanelLayout
+                ? StelloLayout.windowInset
+                : StelloLayout.controlBarHorizontalPadding(embedInPanelLayout: embedInPanelLayout)
+        )
+        .padding(.trailing, StelloLayout.controlBarHorizontalPadding(embedInPanelLayout: embedInPanelLayout))
         .padding(.bottom, bottomPadding)
         .frame(maxWidth: .infinity, alignment: .bottom)
     }
@@ -409,7 +424,11 @@ struct MasonryGridView: View {
                 )
             }
         }
-        .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
+        // Embed (Mac/iPad): the grid column includes the leading window gutter, so the
+        // card stack pads leading by the inset to keep cards at the baseline x while the
+        // timeline overlay occupies the gutter. Compact (iPhone): unchanged 12pt both sides.
+        .padding(.leading, StelloLayout.windowInset)
+        .padding(.trailing, embedInPanelLayout ? 0 : StelloLayout.windowInset)
         .padding(.top, topInset)
         .padding(
             .bottom,
