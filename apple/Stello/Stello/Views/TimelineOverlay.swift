@@ -41,10 +41,17 @@ struct TimelineOverlay: View {
     }
 
     private var barsLayer: some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(weekGroups) { group in
-                if let layout = weekBarLayouts[group.key] {
-                    timelineBar(for: group, layout: layout)
+        // GeometryReader fills the overlay and anchors children at topLeading,
+        // so offset-positioned bars never contribute intrinsic height. A plain
+        // ZStack sizes to its tallest bar; when one week's bar exceeds the
+        // viewport height, the enclosing frame vertically centers the oversized
+        // stack and every bar drifts upward (store-size-dependent misalignment).
+        GeometryReader { _ in
+            ZStack(alignment: .topLeading) {
+                ForEach(weekGroups) { group in
+                    if let layout = weekBarLayouts[group.key] {
+                        timelineBar(for: group, layout: layout)
+                    }
                 }
             }
         }
