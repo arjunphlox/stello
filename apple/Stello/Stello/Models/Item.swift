@@ -16,6 +16,8 @@ final class Item {
     var addedAt: Date = Date.now
     var analyzedAt: Date?
     var updatedAt: Date = Date.now
+    var lastOpenedAt: Date?
+    var openCount: Int = 0
     var enrichmentStatus: String = "pending"
     var enrichmentError: String?
     /// Card type: `typeface`, `website`, `individual`, `studio`, `foundry`, `place`, or `link` (default).

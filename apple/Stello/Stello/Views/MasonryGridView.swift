@@ -10,6 +10,16 @@ private struct ScrollOffsetKey: PreferenceKey {
     }
 }
 
+/// Rectangle clip extended horizontally past the view bounds, so the 4pt outset
+/// selection ring on edge cards survives the grid's clip while vertical scroll
+/// containment stays exact.
+struct HorizontalOutsetClip: Shape {
+    var outset: CGFloat
+    func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: -outset, dy: 0))
+    }
+}
+
 private struct GridContainerWidthKey: PreferenceKey {
     static var defaultValue: CGFloat = 375
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -121,10 +131,13 @@ struct MasonryGridView: View {
     @State private var cachedTimelineWeekGroups: [WeekGroup] = []
     @State private var cachedFirstWeekAnchorByItemID: [PersistentIdentifier: String] = [:]
     @State private var cachedLastWeekAnchorByItemID: [PersistentIdentifier: String] = [:]
+    @State private var cachedAwaitingReviewItems: [Item] = []
     @State private var filterCacheToken: UInt = 0
 
-    /// Inset inside the scroll clip so the 4pt outset selection ring stays visible at grid edges.
-    private static let selectionOutlineInset: CGFloat = 6
+    /// Ring headroom for the 4pt outset selection ring. Applied vertically inside the
+    /// card stack; horizontally it lives in the HorizontalOutsetClip boundaries so the
+    /// outer card edges stay flush with the header edges.
+    private static let selectionOutlineInset: CGFloat = StelloLayout.gridRingClipOutset
     /// Deadband past a column boundary before stepping to the next count (prevents flicker).
     private static let columnHysteresis: Double = 0.35
     /// Minimum scroll delta before updating header / week-spy state.
@@ -140,6 +153,7 @@ struct MasonryGridView: View {
 
     private var tagFilteredItems: [Item] { cachedTagFilteredItems }
     private var displayItems: [Item] { cachedDisplayItems }
+    private var awaitingReviewItems: [Item] { cachedAwaitingReviewItems }
     private var timelineWeekGroups: [WeekGroup] { cachedTimelineWeekGroups }
     private var firstOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedFirstWeekAnchorByItemID }
     private var lastOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedLastWeekAnchorByItemID }
@@ -147,13 +161,13 @@ struct MasonryGridView: View {
     private func refreshFilterCaches() {
         let tagFiltered = ItemFilter.apply(allItems, searchText: searchText, selectedTagNames: selectedTagNames)
         cachedTagFilteredItems = tagFiltered
-        cachedDisplayItems = ItemFilter.apply(
-            allItems,
-            searchText: searchText,
-            selectedTagNames: selectedTagNames,
-            selectedWeekKey: selectedWeekKey
-        )
+        if let selectedWeekKey {
+            cachedDisplayItems = tagFiltered.filter { WeekGroup.isoWeekKey(for: $0.addedAt) == selectedWeekKey }
+        } else {
+            cachedDisplayItems = tagFiltered
+        }
         cachedTimelineWeekGroups = WeekGroup.makeGroups(from: tagFiltered)
+        cachedAwaitingReviewItems = AwaitingReviewFilter.items(from: allItems)
 
         var firstMap: [PersistentIdentifier: String] = [:]
         var lastMap: [PersistentIdentifier: String] = [:]
@@ -198,7 +212,9 @@ struct MasonryGridView: View {
     var body: some View {
         gridWithTimeline
         .frame(maxHeight: .infinity)
-        .clipped()
+        // Horizontal outset keeps the selection ring visible on edge cards now that
+        // the card stack sits flush with the header edges (see gridScrollContent).
+        .clipShape(HorizontalOutsetClip(outset: Self.selectionOutlineInset))
         .background {
             theme.background.ignoresSafeArea()
         }
@@ -238,6 +254,7 @@ struct MasonryGridView: View {
             refreshFilterCaches()
             openScreenshotDetailIfNeeded()
         }
+        .onChange(of: allItems.map(\.needsReview)) { _, _ in refreshFilterCaches() }
         .onChange(of: searchText) { _, _ in refreshFilterCaches() }
         .onChange(of: selectedTagNames) { _, _ in refreshFilterCaches() }
         .onChange(of: selectedWeekKey) { _, _ in refreshFilterCaches() }
@@ -268,6 +285,10 @@ struct MasonryGridView: View {
                         gridScrollContent(topInset: compactScrollInset)
                             .frame(width: viewport.size.width, alignment: .leading)
                     }
+                    // The scroll clip would cut the selection ring at the flush card
+                    // edges; the enclosing HorizontalOutsetClip shapes contain scrolled
+                    // content instead (exact vertically, +ring slack horizontally).
+                    .scrollClipDisabled()
                     #if os(iOS)
                     .scrollContentBackground(.hidden)
                     #endif
@@ -303,7 +324,13 @@ struct MasonryGridView: View {
                                 onWeekFilterToggled: toggleWeekFilter,
                                 onInteractionChanged: { interactionWeekKey = $0 }
                             )
-                            .padding(.leading, embedInPanelLayout ? 0 : StelloLayout.windowInset)
+                            // Bars centered in the 12pt window-edge↔grid-edge margin on all
+                            // platforms — cards now sit flush at windowInset (header-aligned),
+                            // so the old compact windowInset offset would overlap edge cards.
+                            .padding(
+                                .leading,
+                                (StelloLayout.windowInset - TimelineMetrics.barWidth) / 2
+                            )
                             .padding(.top, compactScrollInset)
                             .allowsHitTesting(true)
                         }
@@ -318,7 +345,7 @@ struct MasonryGridView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            .clipped()
+            .clipShape(HorizontalOutsetClip(outset: Self.selectionOutlineInset))
             .onAppear {
                 scrollForScreenshotIfNeeded(using: scrollProxy)
                 updateActiveWeekKey()
@@ -358,7 +385,15 @@ struct MasonryGridView: View {
             onFilter: { onFilters?() ?? (showFilterSheet = true) },
             onSettings: { onSettings?() ?? (showSettings = true) }
         )
-        .padding(.horizontal, StelloLayout.controlBarHorizontalPadding(embedInPanelLayout: embedInPanelLayout))
+        // Embed: leading pad compensates the gutter now included in the grid column
+        // (see gridScrollContent). Non-embed (iPhone): unchanged 16pt compact side inset.
+        .padding(
+            .leading,
+            embedInPanelLayout
+                ? StelloLayout.windowInset
+                : StelloLayout.controlBarHorizontalPadding(embedInPanelLayout: embedInPanelLayout)
+        )
+        .padding(.trailing, StelloLayout.controlBarHorizontalPadding(embedInPanelLayout: embedInPanelLayout))
         .padding(.bottom, bottomPadding)
         .frame(maxWidth: .infinity, alignment: .bottom)
     }
@@ -369,6 +404,16 @@ struct MasonryGridView: View {
 
             if !selectedTagNames.isEmpty || selectedWeekKey != nil {
                 filterPillsRow
+            }
+
+            if !awaitingReviewItems.isEmpty {
+                AwaitingReviewStripView(
+                    items: awaitingReviewItems,
+                    selectedItem: selectedItem,
+                    panelContent: panelContent,
+                    onCardTap: onCardTap,
+                    onDismiss: dismissAwaitingReview
+                )
             }
 
             MasonryLayout(spacing: 12, forcedColumns: effectiveForcedColumns) {
@@ -385,6 +430,10 @@ struct MasonryGridView: View {
                 }
             }
             .padding(Self.selectionOutlineInset)
+            // Cancel the outline inset horizontally so the outer card edges sit flush
+            // with the header's left/right edges; the ring's horizontal slack lives in
+            // the HorizontalOutsetClip boundaries instead of inside the card stack.
+            .padding(.horizontal, -Self.selectionOutlineInset)
 
             scrollContentBottomProbe
         }
@@ -396,7 +445,11 @@ struct MasonryGridView: View {
                 )
             }
         }
-        .padding(.horizontal, embedInPanelLayout ? 0 : StelloLayout.windowInset)
+        // Embed (Mac/iPad): the grid column includes the leading window gutter, so the
+        // card stack pads leading by the inset to keep cards at the baseline x while the
+        // timeline overlay occupies the gutter. Compact (iPhone): unchanged 12pt both sides.
+        .padding(.leading, StelloLayout.windowInset)
+        .padding(.trailing, embedInPanelLayout ? 0 : StelloLayout.windowInset)
         .padding(.top, topInset)
         .padding(
             .bottom,
@@ -510,6 +563,11 @@ struct MasonryGridView: View {
         activeWeekKey = timelineWeekGroups.last { group in
             (weekAnchorYs[group.key] ?? .infinity) <= threshold
         }?.key ?? timelineWeekGroups.first?.key
+    }
+
+    private func dismissAwaitingReview(_ item: Item) {
+        try? AwaitingReviewFilter.dismissReview(for: item, context: context)
+        refreshFilterCaches()
     }
 
     private func toggleWeekFilter(_ key: String) {

@@ -12,11 +12,7 @@ enum ItemFilter {
 
         if !searchText.isEmpty {
             let q = searchText.lowercased()
-            result = result.filter { item in
-                item.title.lowercased().contains(q)
-                    || (item.summary?.lowercased().contains(q) ?? false)
-                    || (item.tags?.contains { $0.name.lowercased().contains(q) } ?? false)
-            }
+            result = result.filter { ItemSearchBlob.build(for: $0).contains(q) }
         }
 
         if !selectedTagNames.isEmpty {

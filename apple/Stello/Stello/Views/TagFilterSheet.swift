@@ -7,9 +7,16 @@ struct TagFilterContent: View {
     @Environment(\.appTheme) private var theme
 
     @State private var searchText = ""
-    @State private var expandedCategories: Set<String> = ["domain"]
+    @State private var expandedCategories: Set<String> = ["intent"]
 
-    private let categories = ["format", "domain", "style", "subject", "tool", "location", "mood", "color", "intent"]
+    private let categories = ["intent", "format", "domain", "style", "subject", "tool", "location", "mood", "color"]
+
+    private func categoryLabel(_ category: String) -> String {
+        switch category {
+        case "intent": "Why saved"
+        default: category.capitalized
+        }
+    }
 
     private var isSearching: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -75,7 +82,7 @@ struct TagFilterContent: View {
                 toggleCategory(category)
             } label: {
                 HStack(spacing: 8) {
-                    Text(category.capitalized)
+                    Text(categoryLabel(category))
                         .font(.karst(.footnote, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                     Spacer(minLength: 4)

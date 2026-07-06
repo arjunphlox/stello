@@ -108,6 +108,8 @@ struct ContentView: View {
             selectedItem = first
         } else if args.contains("-screenshotDropState") {
             isDropTargeted = true
+        } else if args.contains("-screenshotAwaitingReview") {
+            SeedData.ensureAwaitingReviewFixtures(in: context)
         } else if args.contains("-screenshotLocalLink") {
             ensureScreenshotLocalItem()
         }
@@ -176,8 +178,13 @@ struct ContentView: View {
                 contentWidth - (panelOpen ? panelWidth + StelloLayout.columnGap : 0)
             )
 
+            // Grid column absorbs the leading window inset so the timeline overlay can
+            // render in the window-edge↔grid-edge gutter without being clipped.
+            // Cards + header keep their exact baseline x via compensating padding/frames.
+            let gridColumnWidth = gridWidth + StelloLayout.windowInset
+
             HStack(alignment: .top, spacing: StelloLayout.columnGap) {
-                ZStack(alignment: .top) {
+                ZStack(alignment: .topTrailing) {
                     MasonryGridView(
                         embedInPanelLayout: true,
                         scrollTopInset: scrollTopInset,
@@ -191,17 +198,20 @@ struct ContentView: View {
                         onImport: { togglePanel(.import) },
                         onSettings: { togglePanel(.settings) }
                     )
-                    .frame(width: gridWidth)
+                    .frame(width: gridColumnWidth)
                     .frame(maxHeight: .infinity)
 
                     headerOverlay(
                         itemCount: allItems.count,
                         headerScrollProgress: headerScrollProgress
                     )
+                    .frame(width: gridWidth)
                 }
-                .frame(width: gridWidth)
+                .frame(width: gridColumnWidth)
                 .frame(maxHeight: .infinity)
-                .clipped()
+                // Horizontal outset keeps the selection ring visible on edge cards,
+                // which sit flush with the header edges (ring slack, not card inset).
+                .clipShape(HorizontalOutsetClip(outset: StelloLayout.gridRingClipOutset))
                 .layoutPriority(0)
 
                 if panelOpen {
@@ -230,7 +240,6 @@ struct ContentView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            .padding(.leading, StelloLayout.windowInset)
             .padding(.trailing, StelloLayout.windowInset)
         }
         .clipped()

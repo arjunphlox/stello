@@ -13,6 +13,7 @@ struct DetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(embedsInPanel ? Color.clear : theme.background)
+        .task(id: item.persistentModelID) { StelloStore.recordOpen(for: item) }
     }
 }
 

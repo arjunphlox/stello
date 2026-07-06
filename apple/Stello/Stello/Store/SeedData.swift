@@ -253,6 +253,44 @@ enum SeedData {
         return patched
     }
 
+    /// Marks recent enriched seed rows for the awaiting-review strip screenshot (`-screenshotAwaitingReview`).
+    static func ensureAwaitingReviewFixtures(in context: ModelContext) {
+        guard context.container.configurations.allSatisfy(\.isStoredInMemoryOnly) else { return }
+
+        let descriptor = FetchDescriptor<Item>(
+            sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
+        )
+        guard let items = try? context.fetch(descriptor) else { return }
+
+        let suggestionSets = [
+            ["layout-reference"],
+            ["layout-reference", "inspiration"],
+            ["layout-reference", "inspiration", "design-system-tips"],
+            ["typography-reference", "color-palette"],
+        ]
+
+        for (index, item) in items.filter({ $0.enrichmentStatus != "pending" }).prefix(4).enumerated() {
+            item.needsReview = true
+            if EnrichmentService.decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON).isEmpty {
+                let suggestions = suggestionSets[min(index, suggestionSets.count - 1)]
+                item.whySavedSuggestionsJSON = EnrichmentService.encodeWhySavedSuggestions(suggestions)
+            }
+        }
+
+        if let pending = items.first(where: { $0.enrichmentStatus == "pending" }) {
+            pending.needsReview = true
+        } else {
+            let pending = Item(
+                slug: "awaiting-review-pending-fixture",
+                title: "Pending enrichment",
+                needsReview: true,
+                enrichmentStatus: "pending"
+            )
+            context.insert(pending)
+        }
+        try? context.save()
+    }
+
     /// Inserts a fixed AI-enrichment demo item for simulator screenshots (`-screenshotEnrichmentDemo`).
     static func ensureEnrichmentDemo(in context: ModelContext) -> Item {
         let slug = "enrichment-demo"
