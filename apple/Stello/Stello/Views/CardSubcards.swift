@@ -55,8 +55,10 @@ struct CardSubcards: View {
         EnrichmentService.decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON)
     }
 
+    // User-invoked Enrich may re-run terminal states (candidates_done/error) — see
+    // EnrichmentService.enrich(force:); only an in-flight capture is off-limits.
     private var canEnrich: Bool {
-        item.enrichmentStatus == "text_done"
+        item.enrichmentStatus != "pending"
     }
 
     /// Panel footer label "Wnn YYYY" per BUILD_SPEC.
@@ -354,7 +356,7 @@ struct CardSubcards: View {
     private var enrichSubCard: some View {
         SubCard(title: "Actions") {
             Button {
-                enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
+                enrichmentCoordinator.scheduleEnrichment(for: item, context: context, force: true)
             } label: {
                 Label("Enrich", systemImage: "sparkles")
                     .font(.karst(.callout, weight: .semibold))

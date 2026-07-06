@@ -24,9 +24,10 @@ enum EnrichmentService {
 
         item.enrichmentStatus = "vision_done"
 
+        let existingSnippets = Set((item.snippets ?? []).map { $0.text.lowercased() })
         for text in result.snippets {
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
+            guard !trimmed.isEmpty, !existingSnippets.contains(trimmed.lowercased()) else { continue }
             let snippet = Snippet(text: trimmed, source: "ai")
             context.insert(snippet)
             snippet.item = item
@@ -55,9 +56,17 @@ enum EnrichmentService {
     static func enrich(
         item: Item,
         context: ModelContext,
-        enricher: Enricher
+        enricher: Enricher,
+        force: Bool = false
     ) async {
-        guard item.enrichmentStatus == "text_done" else { return }
+        // Auto-enrichment only advances text_done items; a user-invoked Enrich (force)
+        // may re-run terminal states too (candidates_done after an unavailable-AI capture,
+        // or error) — but never an in-flight capture that has no text yet.
+        if force {
+            guard item.enrichmentStatus != "pending" else { return }
+        } else {
+            guard item.enrichmentStatus == "text_done" else { return }
+        }
 
         do {
             guard enricher.isAvailable else {

@@ -19,14 +19,14 @@ final class EnrichmentCoordinator {
         primary.isAvailable ? primary : fallback
     }
 
-    func scheduleEnrichment(for item: Item, context: ModelContext) {
+    func scheduleEnrichment(for item: Item, context: ModelContext, force: Bool = false) {
         Task {
-            await enrichItem(item, context: context)
+            await enrichItem(item, context: context, force: force)
         }
     }
 
-    func enrichItem(_ item: Item, context: ModelContext) async {
-        await EnrichmentService.enrich(item: item, context: context, enricher: activeEnricher)
+    func enrichItem(_ item: Item, context: ModelContext, force: Bool = false) async {
+        await EnrichmentService.enrich(item: item, context: context, enricher: activeEnricher, force: force)
     }
 
     func enrichPendingItems(context: ModelContext) async {

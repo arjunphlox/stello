@@ -487,7 +487,7 @@ struct ItemCardView: View {
         }
 
         Button {
-            enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
+            enrichmentCoordinator.scheduleEnrichment(for: item, context: context, force: true)
         } label: {
             Label("Enrich", systemImage: "sparkles")
         }
