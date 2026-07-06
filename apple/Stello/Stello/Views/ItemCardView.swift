@@ -278,7 +278,10 @@ struct ItemCardView: View {
 
     #if os(iOS)
     private var previewWidth: CGFloat {
-        min(UIScreen.main.bounds.width - 32, 380)
+        let screenWidth = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.screen.bounds.width }
+            .first ?? 390
+        return min(screenWidth - 32, 380)
     }
 
     @ViewBuilder private var cardPreview: some View {
