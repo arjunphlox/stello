@@ -255,6 +255,8 @@ enum SeedData {
 
     /// Marks recent enriched seed rows for the awaiting-review strip screenshot (`-screenshotAwaitingReview`).
     static func ensureAwaitingReviewFixtures(in context: ModelContext) {
+        guard context.container.configurations.allSatisfy(\.isStoredInMemoryOnly) else { return }
+
         let descriptor = FetchDescriptor<Item>(
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
         )

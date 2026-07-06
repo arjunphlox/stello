@@ -272,29 +272,39 @@ struct CardSubcards: View {
             SubCard(title: "Why save?") {
                 TagFlowLayout(spacing: 6) {
                     ForEach(whySavedSuggestions, id: \.self) { suggestion in
-                        HStack(spacing: 4) {
+                        HStack(spacing: 0) {
                             Button {
                                 acceptWhySavedSuggestion(suggestion)
                             } label: {
                                 Text(humanizeReason(suggestion))
                                     .font(.karst(.caption))
                                     .foregroundStyle(theme.accentContrast)
+                                    .padding(.leading, 12)
+                                    .padding(.trailing, 8)
+                                    .padding(.vertical, 8)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Accept \(humanizeReason(suggestion))")
 
-                            Button {
+                            Rectangle()
+                                .fill(theme.accentContrast.opacity(0.25))
+                                .frame(width: 1, height: 14)
+
+                            Button(role: .destructive) {
                                 dismissWhySavedSuggestion(suggestion)
                             } label: {
                                 Image(systemName: "xmark")
                                     .font(.caption2.weight(.bold))
                                     .foregroundStyle(theme.accentContrast.opacity(0.85))
+                                    .padding(.leading, 8)
+                                    .padding(.trailing, 12)
+                                    .padding(.vertical, 8)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Dismiss suggestion")
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
                         .background(theme.accentColor)
                         .clipShape(Capsule())
                     }

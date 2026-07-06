@@ -50,7 +50,8 @@ struct AwaitingReviewStripTests {
                 title: "Item \(index)",
                 needsReview: true,
                 addedAt: base.addingTimeInterval(TimeInterval(index)),
-                enrichmentStatus: "candidates_done"
+                enrichmentStatus: "candidates_done",
+                whySavedSuggestionsJSON: EnrichmentService.encodeWhySavedSuggestions(["suggestion"])
             )
         }
         let result = AwaitingReviewFilter.items(from: items)
@@ -85,5 +86,64 @@ struct AwaitingReviewStripTests {
 
         #expect(item.needsReview == false)
         #expect(AwaitingReviewFilter.items(from: [item]).isEmpty)
+    }
+
+    @Test("accepting the last suggestion clears needsReview and removes item from strip")
+    func acceptingLastSuggestionClearsReview() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let item = Item(
+            title: "One suggestion left",
+            needsReview: true,
+            enrichmentStatus: "candidates_done",
+            whySavedSuggestionsJSON: EnrichmentService.encodeWhySavedSuggestions(["layout-reference"])
+        )
+        context.insert(item)
+        try context.save()
+
+        try EnrichmentService.addIntentTag(name: "layout-reference", to: item, context: context)
+
+        #expect(item.needsReview == false)
+        #expect(AwaitingReviewFilter.items(from: [item]).isEmpty)
+    }
+
+    @Test("dismissing the last suggestion clears needsReview and removes item from strip")
+    func dismissingLastSuggestionClearsReview() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let item = Item(
+            title: "One suggestion left",
+            needsReview: true,
+            enrichmentStatus: "candidates_done",
+            whySavedSuggestionsJSON: EnrichmentService.encodeWhySavedSuggestions(["inspiration"])
+        )
+        context.insert(item)
+        try context.save()
+
+        try EnrichmentService.dismissWhySavedSuggestion(name: "inspiration", from: item, context: context)
+
+        #expect(item.needsReview == false)
+        #expect(AwaitingReviewFilter.items(from: [item]).isEmpty)
+    }
+
+    @Test("zero-suggestion candidates_done item is ineligible even if needsReview wasn't cleared")
+    func zeroSuggestionItemIneligible() {
+        let item = Item(
+            title: "Legacy leftover",
+            needsReview: true,
+            enrichmentStatus: "candidates_done"
+        )
+        #expect(!AwaitingReviewFilter.isEligible(item))
+        #expect(AwaitingReviewFilter.items(from: [item]).isEmpty)
+    }
+
+    @Test("text_done item with zero suggestions is still eligible (suggestions not produced yet)")
+    func textDoneZeroSuggestionsStillEligible() {
+        let item = Item(
+            title: "Still enriching",
+            needsReview: true,
+            enrichmentStatus: "text_done"
+        )
+        #expect(AwaitingReviewFilter.isEligible(item))
     }
 }

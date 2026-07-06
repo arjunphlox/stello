@@ -6,8 +6,12 @@ enum AwaitingReviewFilter {
     static let maxVisibleCount = 8
 
     /// Enrichment has started (`enrichmentStatus` is not `pending`) and the item still needs review.
+    /// Once enrichment has reached a suggestion-producing state, an empty suggestion list means
+    /// there's nothing left to review, so the item is excluded even if `needsReview` wasn't cleared.
     static func isEligible(_ item: Item) -> Bool {
-        item.needsReview && item.enrichmentStatus != "pending"
+        guard item.needsReview, item.enrichmentStatus != "pending" else { return false }
+        if item.enrichmentStatus == "text_done" { return true }
+        return suggestionCount(for: item) > 0
     }
 
     /// Newest first, capped at `maxVisibleCount`.

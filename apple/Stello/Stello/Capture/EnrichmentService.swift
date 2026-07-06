@@ -120,6 +120,9 @@ enum EnrichmentService {
             let remaining = decodeWhySavedSuggestions(from: json)
                 .filter { $0.lowercased() != key }
             item.whySavedSuggestionsJSON = encodeWhySavedSuggestions(remaining)
+            if remaining.isEmpty {
+                item.needsReview = false
+            }
         }
 
         item.updatedAt = .now
@@ -136,6 +139,9 @@ enum EnrichmentService {
         let remaining = decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON)
             .filter { $0.lowercased() != key }
         item.whySavedSuggestionsJSON = encodeWhySavedSuggestions(remaining)
+        if remaining.isEmpty {
+            item.needsReview = false
+        }
         item.updatedAt = .now
         try context.save()
     }

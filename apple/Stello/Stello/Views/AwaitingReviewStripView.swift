@@ -9,6 +9,7 @@ struct AwaitingReviewStripView: View {
     var onDismiss: (Item) -> Void
 
     @Environment(\.appTheme) private var theme
+    @State private var suggestionsLabels: [PersistentIdentifier: String] = [:]
 
     private static let thumbSize: CGFloat = 48
     private static let thumbCornerRadius: CGFloat = 6
@@ -24,6 +25,16 @@ struct AwaitingReviewStripView: View {
             .padding(.vertical, 2)
         }
         .accessibilityIdentifier("awaitingReviewStrip")
+        .onAppear { recomputeLabels() }
+        .onChange(of: items) { _, _ in recomputeLabels() }
+    }
+
+    private func recomputeLabels() {
+        var labels: [PersistentIdentifier: String] = [:]
+        for item in items {
+            labels[item.persistentModelID] = AwaitingReviewFilter.suggestionsLabel(for: item)
+        }
+        suggestionsLabels = labels
     }
 
     @ViewBuilder
@@ -39,7 +50,7 @@ struct AwaitingReviewStripView: View {
                         .font(.karst(.subheadline, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
-                    Text(AwaitingReviewFilter.suggestionsLabel(for: item))
+                    Text(suggestionsLabels[item.persistentModelID] ?? AwaitingReviewFilter.suggestionsLabel(for: item))
                         .font(.karst(.caption))
                         .foregroundStyle(theme.textSecondary)
                         .lineLimit(1)

@@ -121,6 +121,7 @@ struct MasonryGridView: View {
     @State private var cachedTimelineWeekGroups: [WeekGroup] = []
     @State private var cachedFirstWeekAnchorByItemID: [PersistentIdentifier: String] = [:]
     @State private var cachedLastWeekAnchorByItemID: [PersistentIdentifier: String] = [:]
+    @State private var cachedAwaitingReviewItems: [Item] = []
     @State private var filterCacheToken: UInt = 0
 
     /// Inset inside the scroll clip so the 4pt outset selection ring stays visible at grid edges.
@@ -140,7 +141,7 @@ struct MasonryGridView: View {
 
     private var tagFilteredItems: [Item] { cachedTagFilteredItems }
     private var displayItems: [Item] { cachedDisplayItems }
-    private var awaitingReviewItems: [Item] { AwaitingReviewFilter.items(from: allItems) }
+    private var awaitingReviewItems: [Item] { cachedAwaitingReviewItems }
     private var timelineWeekGroups: [WeekGroup] { cachedTimelineWeekGroups }
     private var firstOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedFirstWeekAnchorByItemID }
     private var lastOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedLastWeekAnchorByItemID }
@@ -148,13 +149,13 @@ struct MasonryGridView: View {
     private func refreshFilterCaches() {
         let tagFiltered = ItemFilter.apply(allItems, searchText: searchText, selectedTagNames: selectedTagNames)
         cachedTagFilteredItems = tagFiltered
-        cachedDisplayItems = ItemFilter.apply(
-            allItems,
-            searchText: searchText,
-            selectedTagNames: selectedTagNames,
-            selectedWeekKey: selectedWeekKey
-        )
+        if let selectedWeekKey {
+            cachedDisplayItems = tagFiltered.filter { WeekGroup.isoWeekKey(for: $0.addedAt) == selectedWeekKey }
+        } else {
+            cachedDisplayItems = tagFiltered
+        }
         cachedTimelineWeekGroups = WeekGroup.makeGroups(from: tagFiltered)
+        cachedAwaitingReviewItems = AwaitingReviewFilter.items(from: allItems)
 
         var firstMap: [PersistentIdentifier: String] = [:]
         var lastMap: [PersistentIdentifier: String] = [:]
@@ -239,6 +240,7 @@ struct MasonryGridView: View {
             refreshFilterCaches()
             openScreenshotDetailIfNeeded()
         }
+        .onChange(of: allItems.map(\.needsReview)) { _, _ in refreshFilterCaches() }
         .onChange(of: searchText) { _, _ in refreshFilterCaches() }
         .onChange(of: selectedTagNames) { _, _ in refreshFilterCaches() }
         .onChange(of: selectedWeekKey) { _, _ in refreshFilterCaches() }
@@ -525,6 +527,7 @@ struct MasonryGridView: View {
 
     private func dismissAwaitingReview(_ item: Item) {
         try? AwaitingReviewFilter.dismissReview(for: item, context: context)
+        refreshFilterCaches()
     }
 
     private func toggleWeekFilter(_ key: String) {

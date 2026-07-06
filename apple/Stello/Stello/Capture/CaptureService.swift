@@ -14,6 +14,7 @@ struct OGResult {
     var title: String?
     var description: String?
     var imageURL: URL?
+    var ogType: String?
 }
 
 struct PageFetchResult {
@@ -24,6 +25,52 @@ struct PageFetchResult {
 // MARK: - CaptureService
 
 enum CaptureService {
+
+    // MARK: - Shared HTML parsing regexes
+
+    /// Matches a `<meta ...>` tag, capturing its attribute string. Shared with PageClassifier.
+    static let metaTagRegex = try? NSRegularExpression(
+        pattern: #"<meta\s+([^>]*)>"#,
+        options: .caseInsensitive
+    )
+
+    /// Matches `key="value"` / `key='value'` / `key=value` attribute pairs. Shared with PageClassifier.
+    static let htmlAttrRegex = try? NSRegularExpression(
+        pattern: #"([\w:.-]+)\s*=\s*(?:"([^"]*?)"|'([^']*?)'|([^\s>]+))"#,
+        options: .caseInsensitive
+    )
+
+    /// Parses an attribute string (the captured group from `metaTagRegex`/an opening tag) into a
+    /// lowercase-keyed dictionary. Shared with PageClassifier to avoid duplicating the regex.
+    static func parseAttributes(_ attrsStr: String) -> [String: String] {
+        guard let attrRegex = htmlAttrRegex else { return [:] }
+        var attrs: [String: String] = [:]
+        let nsAttrs = attrsStr as NSString
+        for match in attrRegex.matches(in: attrsStr, range: NSRange(location: 0, length: nsAttrs.length)) {
+            guard let keyRange = Range(match.range(at: 1), in: attrsStr) else { continue }
+            let key = String(attrsStr[keyRange]).lowercased()
+            var value = ""
+            for group in 2...4 {
+                let range = match.range(at: group)
+                if range.location != NSNotFound, let valueRange = Range(range, in: attrsStr) {
+                    value = String(attrsStr[valueRange])
+                    break
+                }
+            }
+            attrs[key] = value
+        }
+        return attrs
+    }
+
+    /// Parses all `<meta ...>` tags in `html` into per-tag attribute dictionaries. Shared with PageClassifier.
+    static func metaTagAttributes(in html: String) -> [[String: String]] {
+        guard let metaRegex = metaTagRegex else { return [] }
+        let nsHTML = html as NSString
+        return metaRegex.matches(in: html, range: NSRange(location: 0, length: nsHTML.length)).compactMap { match in
+            guard let attrRange = Range(match.range(at: 1), in: html) else { return nil }
+            return parseAttributes(String(html[attrRange]))
+        }
+    }
 
     // MARK: - Input Classification
 
@@ -81,7 +128,8 @@ enum CaptureService {
             baseURL: url,
             domain: dom,
             title: title,
-            ogDescription: og.description
+            ogDescription: og.description,
+            ogType: og.ogType
         )
 
         let item = Item(
@@ -184,47 +232,9 @@ enum CaptureService {
     /// Parses OG/Twitter meta tags order-independently (no assumption on attribute order within a tag).
     static func parseOG(html: String, baseURL: URL) -> OGResult {
         var result = OGResult()
-
-        guard let metaRegex = try? NSRegularExpression(
-            pattern: #"<meta\s+([^>]*)>"#,
-            options: .caseInsensitive
-        ) else { return result }
-
-        // Handles double-quoted, single-quoted, and unquoted attribute values.
-        guard let attrRegex = try? NSRegularExpression(
-            pattern: #"([\w:.-]+)\s*=\s*(?:"([^"]*?)"|'([^']*?)'|([^\s>]+))"#,
-            options: .caseInsensitive
-        ) else { return result }
-
         let nsHTML = html as NSString
-        let metaMatches = metaRegex.matches(
-            in: html, range: NSRange(location: 0, length: nsHTML.length)
-        )
 
-        for metaMatch in metaMatches {
-            guard let attrRange = Range(metaMatch.range(at: 1), in: html) else { continue }
-            let attrsStr = String(html[attrRange])
-            let nsAttrs = attrsStr as NSString
-
-            // Extract all key=value pairs from this <meta> tag into a dictionary.
-            var attrs: [String: String] = [:]
-            let attrMatches = attrRegex.matches(
-                in: attrsStr, range: NSRange(location: 0, length: nsAttrs.length)
-            )
-            for am in attrMatches {
-                guard let kr = Range(am.range(at: 1), in: attrsStr) else { continue }
-                let key = String(attrsStr[kr]).lowercased()
-                var value = ""
-                for g in 2...4 {
-                    let r = am.range(at: g)
-                    if r.location != NSNotFound, let vr = Range(r, in: attrsStr) {
-                        value = String(attrsStr[vr])
-                        break
-                    }
-                }
-                attrs[key] = value
-            }
-
+        for attrs in metaTagAttributes(in: html) {
             let property = attrs["property"] ?? ""
             let name = attrs["name"] ?? ""
             let content = attrs["content"] ?? ""
@@ -233,6 +243,7 @@ enum CaptureService {
             case "og:title":        if result.title == nil { result.title = content }
             case "og:description":  if result.description == nil { result.description = content }
             case "og:image":        if result.imageURL == nil { result.imageURL = resolve(content, base: baseURL) }
+            case "og:type":         if result.ogType == nil { result.ogType = content }
             case "twitter:image":   if result.imageURL == nil { result.imageURL = resolve(content, base: baseURL) }
             default: break
             }

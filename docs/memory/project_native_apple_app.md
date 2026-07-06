@@ -80,6 +80,15 @@ Shipped A–E (117→138 macOS tests). Timeline nudge session same day **reverte
 | D Awaiting review strip | `AwaitingReviewFilter.swift`, `AwaitingReviewStripView.swift`, masonry integration + seed `-screenshotAwaitingReview` |
 | E Page classification | `PageClassifier.swift` in capture path; `PageClassifierTests.swift`; Share target includes `PageClassifier.swift` + `CardMetadata.swift` via `project.yml` |
 
+### PR #30 fix round lessons (2026-07-06, Sonnet 5 sub-agent round)
+
+138 → 154 macOS tests. Durable gotchas from the review fixes:
+
+- **Computed property → cached @State migration = staleness trap.** Replacing a computed filter (`awaitingReviewItems`) with a `cached*` @State silently loses the "body re-eval sees model mutations" behavior. Every mutation path that used to be picked up implicitly needs an explicit invalidation: refresh in the same handler for in-view mutations, plus a cheap signature `.onChange(of: allItems.map(\.someFlag))` (bool array) for mutations arriving from other views (panel/EnrichmentService).
+- **`.onAppear` undercounts in persistent panel views.** SidePanel keeps one DetailView mounted across `selectedItem` changes (same view identity, no `.id()`), so `.onAppear` fires once per panel open, not per item. Use `.task(id: item.persistentModelID)` for per-item side effects — it re-runs on id change even with stable view identity, and covers sheet/push/panel/related-nav in one place.
+- **Screenshot fixtures must never mutate persisted rows.** `ensureAwaitingReviewFixtures` was flipping flags + fabricating JSON on the 4 newest real items and CloudKit-synced the fake data. Guard fixture mutators with `context.container.configurations.allSatisfy(\.isStoredInMemoryOnly)`.
+- **Classifier signals need structural context, not presence.** Any JSON-LD `Person` ⇒ individual mis-fired on every Yoast article (author Person in `@graph`); require top-level or `mainEntity`/`about` targeting. Host matching must be exact-host or dot-suffix (`host.contains("linkedin.com")` matched `linkedin.com.evil.net`); keyword signals whole-word/domain-label, never substring. When signals are weak/conflicting, stay `link`.
+
 ### Timeline + header — frozen until explicit OK (2026-07-06 failed session)
 
 A timeline nudge pass (4px left, +1px bar, max corners) broke macOS chrome. Root causes:

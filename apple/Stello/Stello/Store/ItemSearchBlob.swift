@@ -2,13 +2,29 @@ import Foundation
 
 /// Builds a lowercase concatenation of all searchable text for an item.
 enum ItemSearchBlob {
+    /// Persistent per-item cache keyed by item id, invalidated when `updatedAt` changes.
+    /// `build(for:)` is called on the main thread once per filter pass, so a plain
+    /// dictionary (no actor) is safe here.
+    private static var cache: [UUID: (stamp: Date, blob: String)] = [:]
+
     static func build(for item: Item) -> String {
+        if let cached = cache[item.id], cached.stamp == item.updatedAt {
+            return cached.blob
+        }
+
+        let blob = buildFresh(for: item)
+        cache[item.id] = (stamp: item.updatedAt, blob: blob)
+        return blob
+    }
+
+    private static func buildFresh(for item: Item) -> String {
         var parts: [String] = []
 
         parts.append(item.title)
         appendOptional(item.summary, to: &parts)
         appendOptional(item.author, to: &parts)
         appendOptional(item.domain, to: &parts)
+        appendOptional(item.bodyMarkdown, to: &parts)
 
         if let tags = item.tags {
             parts.append(contentsOf: tags.map(\.name))

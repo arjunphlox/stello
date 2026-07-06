@@ -74,6 +74,18 @@ struct SearchBlobTests {
         #expect(tagResult.map(\.title) == ["Unrelated"])
     }
 
+    @Test("Search hits by body markdown text")
+    func searchByBodyMarkdown() {
+        let item = Item(
+            title: "Dropped Note",
+            bodyMarkdown: "A paragraph about kerning pairs and optical alignment."
+        )
+
+        let result = ItemFilter.apply([item], searchText: "optical alignment", selectedTagNames: [])
+        #expect(result.count == 1)
+        #expect(result.first?.title == "Dropped Note")
+    }
+
     @Test("Search miss returns empty")
     func searchMissReturnsEmpty() {
         let items = [
