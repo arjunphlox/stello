@@ -16,7 +16,7 @@ enum AwaitingReviewFilter {
 
     /// Newest first, capped at `maxVisibleCount`.
     static func items(from all: [Item]) -> [Item] {
-        all.filter(isEligible)
+        all.filter { isEligible($0) }
             .sorted { $0.addedAt > $1.addedAt }
             .prefix(maxVisibleCount)
             .map { $0 }

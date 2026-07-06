@@ -29,20 +29,20 @@ enum CaptureService {
     // MARK: - Shared HTML parsing regexes
 
     /// Matches a `<meta ...>` tag, capturing its attribute string. Shared with PageClassifier.
-    static let metaTagRegex = try? NSRegularExpression(
+    nonisolated static let metaTagRegex = try? NSRegularExpression(
         pattern: #"<meta\s+([^>]*)>"#,
         options: .caseInsensitive
     )
 
     /// Matches `key="value"` / `key='value'` / `key=value` attribute pairs. Shared with PageClassifier.
-    static let htmlAttrRegex = try? NSRegularExpression(
+    nonisolated static let htmlAttrRegex = try? NSRegularExpression(
         pattern: #"([\w:.-]+)\s*=\s*(?:"([^"]*?)"|'([^']*?)'|([^\s>]+))"#,
         options: .caseInsensitive
     )
 
     /// Parses an attribute string (the captured group from `metaTagRegex`/an opening tag) into a
     /// lowercase-keyed dictionary. Shared with PageClassifier to avoid duplicating the regex.
-    static func parseAttributes(_ attrsStr: String) -> [String: String] {
+    nonisolated static func parseAttributes(_ attrsStr: String) -> [String: String] {
         guard let attrRegex = htmlAttrRegex else { return [:] }
         var attrs: [String: String] = [:]
         let nsAttrs = attrsStr as NSString
