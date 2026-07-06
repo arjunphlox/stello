@@ -9,6 +9,14 @@ import AppKit
 import UIKit
 #endif
 
+/// Reports the domain pill's rendered height so the review badge circle can match it exactly.
+private struct DomainPillHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 /// Image-forward masonry card mirroring the Stello web app: OG images with title/domain
 /// overlays; text cards use a tinted block with the same overlay treatment.
 struct ItemCardView: View {
@@ -26,6 +34,12 @@ struct ItemCardView: View {
     @State private var isHovered = false
     #endif
     @State private var isDropTargeted = false
+    /// Cross-platform: `.onHover` only fires from a pointer (macOS/iPadOS trackpad),
+    /// never from a touch, so this doubles as the pointer-vs-touch signal for the badge.
+    @State private var isReviewBadgeHovered = false
+    /// Measured from the domain pill via `DomainPillHeightKey` so the review badge's
+    /// circle diameter matches it exactly instead of a hardcoded constant.
+    @State private var domainPillHeight: CGFloat = 0
 
     @State private var showMarkdownExporter = false
     @State private var showImageExporter = false
@@ -73,6 +87,12 @@ struct ItemCardView: View {
 
     private var isVideoCard: Bool {
         item.hasVideoAttachment || item.coverImage?.label == "video"
+    }
+
+    /// SwiftUI observes `@Model` properties read during body evaluation, so this reads
+    /// `item.needsReview` fresh on every render — no cache/invalidation plumbing needed.
+    private var isAwaitingReview: Bool {
+        AwaitingReviewFilter.isEligible(item)
     }
 
     private var showCardOverlays: Bool { resolvedColumns <= 9 }
@@ -125,6 +145,7 @@ struct ItemCardView: View {
             .onDrop(of: DropImportService.attachDropTypes, isTargeted: $isDropTargeted) { providers in
                 DropImportService.attachToItem(item, from: providers, context: context)
             }
+            .onPreferenceChange(DomainPillHeightKey.self) { domainPillHeight = $0 }
             #if os(macOS)
             .onHover { isHovered = $0 }
             #endif
@@ -177,6 +198,11 @@ struct ItemCardView: View {
                 domainPill.padding(10)
             }
         }
+        .overlay(alignment: .bottomLeading) {
+            if showCardOverlays {
+                reviewBadge.padding(10)
+            }
+        }
         .overlay(alignment: .topLeading) {
             #if os(macOS)
             if showCardOverlays {
@@ -205,6 +231,11 @@ struct ItemCardView: View {
                 domainPill.padding(10)
             }
         }
+        .overlay(alignment: .bottomLeading) {
+            if showCardOverlays {
+                reviewBadge.padding(10)
+            }
+        }
         .overlay(alignment: .topLeading) {
             #if os(macOS)
             if showCardOverlays {
@@ -224,6 +255,11 @@ struct ItemCardView: View {
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {
                 domainPill.padding(10)
+            }
+        }
+        .overlay(alignment: .bottomLeading) {
+            if showCardOverlays {
+                reviewBadge.padding(10)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -248,6 +284,11 @@ struct ItemCardView: View {
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {
                 domainPill.padding(10)
+            }
+        }
+        .overlay(alignment: .bottomLeading) {
+            if showCardOverlays {
+                reviewBadge.padding(10)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -371,6 +412,57 @@ struct ItemCardView: View {
                 .foregroundStyle(.white)
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 0.5))
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(key: DomainPillHeightKey.self, value: geo.size.height)
+                    }
+                }
+                // Fades out (no layout jump) while the review badge is expanded, so the
+                // two bottom-corner overlays never fight for attention at once.
+                .opacity(isReviewBadgeHovered ? 0 : 1)
+                .scaleEffect(isReviewBadgeHovered ? 0.92 : 1)
+                .animation(.smooth(duration: 0.22), value: isReviewBadgeHovered)
+        }
+    }
+
+    /// Bottom-left counterpart to `domainPill`: a static outlined circle for items awaiting
+    /// review (`eye.fill`); on pointer platforms it expands into a capsule revealing a
+    /// "Review" label on hover. Tapping/clicking routes through the same `onOpen` callback
+    /// the context menu's "Open" action uses — no parallel navigation path.
+    @ViewBuilder private var reviewBadge: some View {
+        if isAwaitingReview {
+            // Matches the domain pill's own height so the two bottom-corner badges align;
+            // falls back to the pill's own font+padding formula before the first layout pass.
+            let diameter = domainPillHeight > 0 ? domainPillHeight : scaledPillSize + 6
+            let tint = dominantColor ?? .white
+
+            Button {
+                onOpen?()
+            } label: {
+                HStack(spacing: isReviewBadgeHovered ? 4 : 0) {
+                    Image(systemName: "eye.fill")
+                        .font(.system(size: scaledPillSize, weight: .medium))
+                    if isReviewBadgeHovered {
+                        Text("Review")
+                            .font(.karst(size: scaledPillSize, weight: .medium))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.horizontal, isReviewBadgeHovered ? 10 : 0)
+                .frame(width: isReviewBadgeHovered ? nil : diameter, height: diameter)
+                .foregroundStyle(.white)
+                .background(tint.opacity(0.22))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
+            .contentShape(Capsule())
+            .onHover { isReviewBadgeHovered = $0 }
+            .animation(.smooth(duration: 0.22), value: isReviewBadgeHovered)
+            .accessibilityLabel("Awaiting review")
+            .help("Awaiting review")
         }
     }
 

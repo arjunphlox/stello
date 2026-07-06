@@ -77,7 +77,7 @@ Shipped A–E (117→138 macOS tests). Timeline nudge session same day **reverte
 | A Revisit tracking | `Item.lastOpenedAt`, `Item.openCount`; `StelloStore.recordOpen(for:)` + session debounce; `DetailView.onAppear` |
 | B Why-saved intent | Tappable chips → intent tag @0.9; dismiss; `TagFilterSheet` "Why saved" first |
 | C Search blob | `ItemSearchBlob.swift`; extended `ItemFilter` full-text match |
-| D Awaiting review strip | `AwaitingReviewFilter.swift`, `AwaitingReviewStripView.swift`, masonry integration + seed `-screenshotAwaitingReview` |
+| D Awaiting review strip | `AwaitingReviewFilter.swift`, `AwaitingReviewStripView.swift`, masonry integration + seed `-screenshotAwaitingReview` (2026-07-06: strip view replaced by an on-card review badge in `ItemCardView.swift` — see Handoff log; `AwaitingReviewFilter.isEligible`/`dismissReview` lifecycle unchanged) |
 | E Page classification | `PageClassifier.swift` in capture path; `PageClassifierTests.swift`; Share target includes `PageClassifier.swift` + `CardMetadata.swift` via `project.yml` |
 
 ### PR #30 fix round lessons (2026-07-06, Sonnet 5 sub-agent round)

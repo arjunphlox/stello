@@ -131,7 +131,6 @@ struct MasonryGridView: View {
     @State private var cachedTimelineWeekGroups: [WeekGroup] = []
     @State private var cachedFirstWeekAnchorByItemID: [PersistentIdentifier: String] = [:]
     @State private var cachedLastWeekAnchorByItemID: [PersistentIdentifier: String] = [:]
-    @State private var cachedAwaitingReviewItems: [Item] = []
     @State private var filterCacheToken: UInt = 0
 
     /// Ring headroom for the 4pt outset selection ring. Applied vertically inside the
@@ -153,7 +152,6 @@ struct MasonryGridView: View {
 
     private var tagFilteredItems: [Item] { cachedTagFilteredItems }
     private var displayItems: [Item] { cachedDisplayItems }
-    private var awaitingReviewItems: [Item] { cachedAwaitingReviewItems }
     private var timelineWeekGroups: [WeekGroup] { cachedTimelineWeekGroups }
     private var firstOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedFirstWeekAnchorByItemID }
     private var lastOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedLastWeekAnchorByItemID }
@@ -167,7 +165,6 @@ struct MasonryGridView: View {
             cachedDisplayItems = tagFiltered
         }
         cachedTimelineWeekGroups = WeekGroup.makeGroups(from: tagFiltered)
-        cachedAwaitingReviewItems = AwaitingReviewFilter.items(from: allItems)
 
         var firstMap: [PersistentIdentifier: String] = [:]
         var lastMap: [PersistentIdentifier: String] = [:]
@@ -254,7 +251,6 @@ struct MasonryGridView: View {
             refreshFilterCaches()
             openScreenshotDetailIfNeeded()
         }
-        .onChange(of: allItems.map(\.needsReview)) { _, _ in refreshFilterCaches() }
         .onChange(of: searchText) { _, _ in refreshFilterCaches() }
         .onChange(of: selectedTagNames) { _, _ in refreshFilterCaches() }
         .onChange(of: selectedWeekKey) { _, _ in refreshFilterCaches() }
@@ -406,16 +402,6 @@ struct MasonryGridView: View {
                 filterPillsRow
             }
 
-            if !awaitingReviewItems.isEmpty {
-                AwaitingReviewStripView(
-                    items: awaitingReviewItems,
-                    selectedItem: selectedItem,
-                    panelContent: panelContent,
-                    onCardTap: onCardTap,
-                    onDismiss: dismissAwaitingReview
-                )
-            }
-
             MasonryLayout(spacing: 12, forcedColumns: effectiveForcedColumns) {
                 ForEach(displayItems) { item in
                     card(for: item)
@@ -563,11 +549,6 @@ struct MasonryGridView: View {
         activeWeekKey = timelineWeekGroups.last { group in
             (weekAnchorYs[group.key] ?? .infinity) <= threshold
         }?.key ?? timelineWeekGroups.first?.key
-    }
-
-    private func dismissAwaitingReview(_ item: Item) {
-        try? AwaitingReviewFilter.dismissReview(for: item, context: context)
-        refreshFilterCaches()
     }
 
     private func toggleWeekFilter(_ key: String) {

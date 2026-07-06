@@ -3,10 +3,14 @@ import Foundation
 import SwiftData
 @testable import Stello
 
+/// Lifecycle tests for `AwaitingReviewFilter.isEligible` — the SAME predicate that drives
+/// the on-card review badge in `ItemCardView`. Kept as `AwaitingReviewStripTests` (filename
+/// unchanged to minimize project-file churn) after the horizontal awaiting-review strip was
+/// replaced by the badge; strip-only behavior (the 8-item cap, `suggestionsLabel`) was removed.
 @Suite("AwaitingReviewStrip")
 struct AwaitingReviewStripTests {
 
-    @Test("strip includes needsReview items past pending enrichment only")
+    @Test("eligibility includes needsReview items past pending enrichment only")
     func stripPredicate() {
         let now = Date.now
         let eligible = Item(
@@ -35,29 +39,10 @@ struct AwaitingReviewStripTests {
             enrichmentStatus: "text_done"
         )
 
-        let result = AwaitingReviewFilter.items(from: [pending, dismissed, eligible, textDone])
-
-        #expect(result.map(\.title) == ["Text done", "Ready"])
-        #expect(!result.contains(where: { $0.title == "Still enriching" }))
-        #expect(!result.contains(where: { $0.title == "Reviewed" }))
-    }
-
-    @Test("strip caps at eight items newest first")
-    func stripLimitAndSort() {
-        let base = Date.now
-        let items = (0..<10).map { index in
-            Item(
-                title: "Item \(index)",
-                needsReview: true,
-                addedAt: base.addingTimeInterval(TimeInterval(index)),
-                enrichmentStatus: "candidates_done",
-                whySavedSuggestionsJSON: EnrichmentService.encodeWhySavedSuggestions(["suggestion"])
-            )
-        }
-        let result = AwaitingReviewFilter.items(from: items)
-        #expect(result.count == 8)
-        #expect(result.first?.title == "Item 9")
-        #expect(result.last?.title == "Item 2")
+        #expect(AwaitingReviewFilter.isEligible(eligible))
+        #expect(AwaitingReviewFilter.isEligible(textDone))
+        #expect(!AwaitingReviewFilter.isEligible(pending))
+        #expect(!AwaitingReviewFilter.isEligible(dismissed))
     }
 
     @Test("suggestion count reads whySavedSuggestionsJSON")
@@ -71,7 +56,6 @@ struct AwaitingReviewStripTests {
             ])
         )
         #expect(AwaitingReviewFilter.suggestionCount(for: item) == 2)
-        #expect(AwaitingReviewFilter.suggestionsLabel(for: item) == "2 suggestions")
     }
 
     @Test("dismiss sets needsReview false")
@@ -85,10 +69,10 @@ struct AwaitingReviewStripTests {
         try AwaitingReviewFilter.dismissReview(for: item, context: context)
 
         #expect(item.needsReview == false)
-        #expect(AwaitingReviewFilter.items(from: [item]).isEmpty)
+        #expect(!AwaitingReviewFilter.isEligible(item))
     }
 
-    @Test("accepting the last suggestion clears needsReview and removes item from strip")
+    @Test("accepting the last suggestion clears needsReview and removes item from the badge")
     func acceptingLastSuggestionClearsReview() throws {
         let container = try StelloStore.makeInMemoryContainer()
         let context = ModelContext(container)
@@ -104,10 +88,10 @@ struct AwaitingReviewStripTests {
         try EnrichmentService.addIntentTag(name: "layout-reference", to: item, context: context)
 
         #expect(item.needsReview == false)
-        #expect(AwaitingReviewFilter.items(from: [item]).isEmpty)
+        #expect(!AwaitingReviewFilter.isEligible(item))
     }
 
-    @Test("dismissing the last suggestion clears needsReview and removes item from strip")
+    @Test("dismissing the last suggestion clears needsReview and removes item from the badge")
     func dismissingLastSuggestionClearsReview() throws {
         let container = try StelloStore.makeInMemoryContainer()
         let context = ModelContext(container)
@@ -123,7 +107,7 @@ struct AwaitingReviewStripTests {
         try EnrichmentService.dismissWhySavedSuggestion(name: "inspiration", from: item, context: context)
 
         #expect(item.needsReview == false)
-        #expect(AwaitingReviewFilter.items(from: [item]).isEmpty)
+        #expect(!AwaitingReviewFilter.isEligible(item))
     }
 
     @Test("zero-suggestion candidates_done item is ineligible even if needsReview wasn't cleared")
@@ -134,7 +118,6 @@ struct AwaitingReviewStripTests {
             enrichmentStatus: "candidates_done"
         )
         #expect(!AwaitingReviewFilter.isEligible(item))
-        #expect(AwaitingReviewFilter.items(from: [item]).isEmpty)
     }
 
     @Test("text_done item with zero suggestions is still eligible (suggestions not produced yet)")

@@ -45,7 +45,6 @@
 		6EDC47A1A3E5FE6A1A51D727 /* TagFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76FA3449BF2FBFFB041BE55 /* TagFilterSheet.swift */; };
 		74388EA1808807BBA64EA64A /* StelloApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 622010C33FAF12A91AAEED16 /* StelloApp.swift */; };
 		75ED53896ACD9059FFB1F0EE /* LocalAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3A7AF5327F2CC97C27319D /* LocalAttachment.swift */; };
-		76043A3B7F73154E5C8626AE /* AwaitingReviewStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE056C58F9C6538E05D5EDF4 /* AwaitingReviewStripView.swift */; };
 		772C34B424FA316A5CE898A2 /* EnrichmentPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD800789C18740B64B46ACD /* EnrichmentPrompts.swift */; };
 		7C0209814A409C74AB02734F /* LocalAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3A7AF5327F2CC97C27319D /* LocalAttachment.swift */; };
 		7CC8BC877716030542FF5BC1 /* DropImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73BCFEBCDCAAAD6466F619F2 /* DropImportTests.swift */; };
@@ -183,7 +182,6 @@
 		A3CA34AF62B2777DF5A05B12 /* DetailImageStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailImageStrip.swift; sourceTree = "<group>"; };
 		ABBD865033AC3DE033F9D814 /* ItemImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemImage.swift; sourceTree = "<group>"; };
 		AC609798A2ABC0F89A52C233 /* karst-regular.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "karst-regular.otf"; sourceTree = "<group>"; };
-		AE056C58F9C6538E05D5EDF4 /* AwaitingReviewStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AwaitingReviewStripView.swift; sourceTree = "<group>"; };
 		B1947247242FD3D01B11106A /* SeedData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedData.swift; sourceTree = "<group>"; };
 		BA5B7E567FF7C8F12551D404 /* MasonryLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MasonryLayout.swift; sourceTree = "<group>"; };
 		BEB48B426C62C711AA78C1AA /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
@@ -297,7 +295,6 @@
 		A7E40FCA4A0B3D3B82AFD429 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				AE056C58F9C6538E05D5EDF4 /* AwaitingReviewStripView.swift */,
 				CF3875676CC21E3F317FD776 /* CaptureSheet.swift */,
 				78CEE7016DF0EAFDF801BE43 /* CardSubcards.swift */,
 				A3CA34AF62B2777DF5A05B12 /* DetailImageStrip.swift */,
@@ -519,7 +516,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				BFB82713E934B386E4735BB3 /* AwaitingReviewFilter.swift in Sources */,
-				76043A3B7F73154E5C8626AE /* AwaitingReviewStripView.swift in Sources */,
 				145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */,
 				9879AD01CDECDA8225C1722B /* CaptureSheet.swift in Sources */,
 				3A289AC85AD5CB5F3A6D33E4 /* CardMetadata.swift in Sources */,
