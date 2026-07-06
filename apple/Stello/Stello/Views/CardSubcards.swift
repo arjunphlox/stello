@@ -355,18 +355,28 @@ struct CardSubcards: View {
 
     private var enrichSubCard: some View {
         SubCard(title: "Actions") {
-            Button {
-                enrichmentCoordinator.scheduleEnrichment(for: item, context: context, force: true)
-            } label: {
-                Label("Enrich", systemImage: "sparkles")
-                    .font(.karst(.callout, weight: .semibold))
-                    .foregroundStyle(theme.accentContrast)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(theme.accentColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    enrichmentCoordinator.scheduleEnrichment(for: item, context: context, force: true)
+                } label: {
+                    Label("Enrich", systemImage: "sparkles")
+                        .font(.karst(.callout, weight: .semibold))
+                        .foregroundStyle(theme.accentContrast)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(theme.accentColor)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
+                // Surfaced so AI failures are diagnosable in-app — the web app's PR #17
+                // lesson: a swallowed enrichment error makes no-result items a forensics job.
+                if let error = item.enrichmentError, !error.isEmpty {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.karst(.footnote))
+                        .foregroundStyle(theme.textSecondary)
+                }
             }
-            .buttonStyle(.plain)
         }
     }
 
