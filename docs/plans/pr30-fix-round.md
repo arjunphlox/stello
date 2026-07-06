@@ -14,6 +14,22 @@ Findings source: adversarially verified review of PR #30 (2026-07-06), 9 confirm
 
 You are orchestrating a fix round for PR #30 (`cursor/native-quick-wins`) on the native Stello app (`apple/Stello`, SwiftUI multiplatform iOS/iPadOS/macOS 27, SwiftData + CloudKit). Check out `cursor/native-quick-wins` and push fixes there so PR #30 updates.
 
+**First, read `docs/memory/MEMORY.md` and `docs/memory/project_native_apple_app.md`** (on this branch) — they carry the build harness, SwiftData/CloudKit gotchas, and hard guardrails below.
+
+### Build harness — zero Xcode GUI (hard rule)
+All building/testing is CLI-only; never open or ask the user to open Xcode. The toolchain is already configured (`xcode-select` → Xcode-beta / Xcode 27; xcodegen installed).
+- `apple/Stello/project.yml` (XcodeGen) is the project source of truth. If (and only if) a bundle needs target-membership changes, edit `project.yml` and run `xcodegen generate` from `apple/Stello/` — then check for and delete stray `Stello 2.xcodeproj`-style duplicates (an iCloud-path XcodeGen artifact; only `Stello.xcodeproj` is real). None of the bundles below should need this.
+- Tests (gate): `xcodebuild -project apple/Stello/Stello.xcodeproj -scheme Stello -destination 'platform=macOS' -derivedDataPath /tmp/StelloDD test`
+- iOS build (gate): same with `-destination 'platform=iOS Simulator,name=iPhone 17 Pro' build` (unsigned sim — no signing setup ever).
+- If codesign fails with "resource fork / detritus" on `StelloShare.appex`: `xattr -cr apple/Stello` and keep `-derivedDataPath /tmp/StelloDD`.
+- Screenshots: the existing launch-arg pattern (`-screenshotCleanStore` + feature args) into `apple/Stello/.artifacts/`; launch macOS builds with `open -g` (non-foreground, no focus-stealing).
+
+### Frozen files — do not touch (from the failed 2026-07-06 timeline/header session)
+`StelloHeaderView.swift`, `MacWindowConfigurator.swift`, `ContentView`'s `headerOverlay`, `StelloLayout` header constants, `TimelineOverlay.swift`, anything NSToolbar/titlebar. Bundle 4 edits ContentView's selection path (`handleCardTap`) ONLY — if a fix seems to require a frozen file, stop and report instead of editing.
+
+### Session discipline (repo contract)
+Trace structural invariants before changing shared code; one bundle = one concern, surface unrelated issues instead of folding them in; verify visually (screenshot) before calling UI work done; append durable new lessons to `docs/memory/MEMORY.md` (+ index) at the end.
+
 **Your role (orchestrator): plan, dispatch, review, gate. Write no code yourself.** Dispatch each bundle below as a **Sonnet 5 sub-agent** (Task tool, `model: sonnet`). Bundles 1–5 touch disjoint files and may run in parallel; the file ownership listed per bundle is a hard boundary — a sub-agent must not edit files outside its list (this is how the last round broke things). Instruct every sub-agent to think through the failure mechanism before editing, keep diffs minimal, and extend the existing test files rather than restructuring them.
 
 **Acceptance gate, applied by you per bundle:** read the returned diff against the finding; reject and re-dispatch with feedback if the fix is shallow (e.g. patches the symptom in the view instead of the named mechanism). Sprint-wide gate: `xcodebuild -project apple/Stello/Stello.xcodeproj -scheme Stello -destination 'platform=macOS' test` green, iOS Simulator build green, all pre-existing 138 tests still passing plus new regression tests per bundle.
@@ -46,8 +62,8 @@ Files: `Views/CardSubcards.swift` only.
 **Accept target shrank to bare text; destructive ✕ 4pt away, no undo (CONFIRMED).** On main the whole capsule was the accept Button; now padding/background sit on a non-interactive HStack, both buttons are glyph-bounds only (far under 44pt), and dismiss permanently deletes with no confirmation (CardSubcards.swift:275–299). Fix: restore the full-capsule accept hit area (`.contentShape` on a padded label), give the ✕ its own comfortably padded target with clear visual separation (or move dismiss behind a long-press/context menu), and ensure both meet platform hit-target guidance. Do not change EnrichmentService semantics (Bundle 2 owns that file). Screenshot the chip row on macOS + iOS after.
 
 ### Wrap-up (you, the orchestrator; optionally a Haiku 4.5 sub-agent for the docs)
-- Re-run the full gate (macOS tests + iOS build). Report per-bundle: accepted/rejected rounds, final diff summary, test count before/after.
-- Update `apple/README.md` handoff log (newest at top) noting this was a Sonnet 5 fix round against the PR #30 review findings.
+- Re-run the full gate (macOS tests + iOS build, commands above). Report per-bundle: accepted/rejected rounds, final diff summary, test count before/after.
+- Update `apple/README.md` handoff log (newest at top) noting this was a Sonnet 5 fix round against the PR #30 review findings, and append any durable new lessons to `docs/memory/project_native_apple_app.md` (+ MEMORY.md index).
 - Push to `cursor/native-quick-wins` (updates PR #30). Do not merge.
 
 ## Deferred (not in this round)
