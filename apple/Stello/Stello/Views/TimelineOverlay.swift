@@ -1,12 +1,23 @@
 import SwiftUI
 
 enum TimelineMetrics {
-    static let interactionStripWidth: CGFloat = 44
     static let barWidth: CGFloat = 3
+    /// Hover/active thickness on the bar's cross-axis (these are vertical bars —
+    /// thin width, variable height — so "thicker" means wider, not taller).
+    static let barHoverWidth: CGFloat = barWidth + 2
     static let barCornerRadius: CGFloat = barWidth / 2
     static let barMinHeight: CGFloat = 6
     static let barGap: CGFloat = 4
     static let scrollSpyThreshold: CGFloat = 16
+    /// The strip only needs to cover the bar itself plus the gap from the bar's
+    /// trailing edge to the card's leading edge — not the full 44pt overreach the
+    /// old fixed constant used. Bars sit centered in the `StelloLayout.windowInset`
+    /// gutter via a `(windowInset - barWidth) / 2` leading padding applied where
+    /// `TimelineOverlay` is placed (`MasonryGridView.gridWithTimeline`), and cards
+    /// start at `windowInset` from that same origin. So, in `TimelineOverlay`'s own
+    /// coordinate space, the card edge sits at `(windowInset + barWidth) / 2` —
+    /// exactly where the strip should end.
+    static let interactionStripWidth: CGFloat = (StelloLayout.windowInset + barWidth) / 2
 }
 
 struct WeekBarLayout {
@@ -75,11 +86,19 @@ struct TimelineOverlay: View {
         }()
 
         let barHeight = max(TimelineMetrics.barMinHeight, layout.height)
+        // Hover feedback for the narrower strip: the nearest/active line thickens
+        // by +2pt on its width (its cross-axis). Center-anchored via a compensating
+        // negative x-offset so the extra width grows outward symmetrically instead
+        // of shifting the bar's leading edge (and the strip/gutter it sits in).
+        let barThickness = isInteraction ? TimelineMetrics.barHoverWidth : TimelineMetrics.barWidth
+        let thicknessOffset = (TimelineMetrics.barWidth - barThickness) / 2
 
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: TimelineMetrics.barCornerRadius, style: .continuous)
                 .fill(color)
-                .frame(width: TimelineMetrics.barWidth, height: barHeight)
+                .frame(width: barThickness, height: barHeight)
+                .offset(x: thicknessOffset)
+                .animation(.easeOut(duration: 0.2), value: barThickness)
                 .animation(isInteraction || isSelected ? .easeOut(duration: 0.2) : nil, value: isHighlighted)
 
             if isInteraction {
