@@ -6,6 +6,7 @@ struct DetailView: View {
     var embedsInPanel: Bool = false
 
     @Environment(\.appTheme) private var theme
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         ScrollView {
@@ -14,6 +15,13 @@ struct DetailView: View {
         }
         .background(embedsInPanel ? Color.clear : theme.background)
         .task(id: item.persistentModelID) { StelloStore.recordOpen(for: item) }
+        // Covers push-navigation pop (this view unmounts). Sheet dismiss and panel
+        // close/switch are already covered by ContentView's `onChange(of: selectedItem)`;
+        // guarding on `needsReview` keeps this idempotent when both fire for the same item.
+        .onDisappear {
+            guard item.needsReview else { return }
+            try? AwaitingReviewFilter.markReviewed(for: item, context: context)
+        }
     }
 }
 

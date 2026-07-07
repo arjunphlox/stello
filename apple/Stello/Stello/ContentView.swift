@@ -55,6 +55,15 @@ struct ContentView: View {
         .onChange(of: allItems.count) { _, _ in
             applyScreenshotLaunchState()
         }
+        .onChange(of: selectedItem) { oldValue, _ in
+            // Viewing an item counts as reviewing it. This fires on every path that stops
+            // viewing `oldValue`: switching selection to another item, closing the panel
+            // (selectedItem → nil), opening a different tool panel while an item was open
+            // (togglePanel nils selectedItem), and the iPhone sheet being dismissed (SwiftUI
+            // nils the `.sheet(item:)` binding). Guarded on `needsReview` so already-reviewed
+            // items don't take a gratuitous `updatedAt` bump.
+            markPreviouslyViewedItemReviewed(oldValue)
+        }
         .onDrop(of: DropImportService.windowDropTypes, isTargeted: $isDropTargeted) { providers in
             DropImportService.importAsNewItem(
                 from: providers,
@@ -306,6 +315,14 @@ struct ContentView: View {
     private func closePanel() {
         panelContent = .none
         selectedItem = nil
+    }
+
+    /// Clears the review nag for an item the user just stopped viewing (see the
+    /// `onChange(of: selectedItem)` hook above). Idempotent — safe to call even when the
+    /// item was already reviewed or `nil`.
+    private func markPreviouslyViewedItemReviewed(_ item: Item?) {
+        guard let item, item.needsReview else { return }
+        try? AwaitingReviewFilter.markReviewed(for: item, context: context)
     }
 
     private var isMac: Bool {

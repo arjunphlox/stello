@@ -21,4 +21,14 @@ enum AwaitingReviewFilter {
         item.updatedAt = .now
         try context.save()
     }
+
+    /// Alias for `dismissReview` used at "user stopped viewing this item" call sites — panel
+    /// close, selection switch, sheet/push dismissal. Same mutation; named for readability at
+    /// those sites, which are clearing the nag state because viewing counts as reviewing, not
+    /// because the user explicitly dismissed a suggestion. Callers should guard on
+    /// `item.needsReview` first so already-reviewed items don't take a gratuitous `updatedAt`
+    /// bump (which would also invalidate the search-blob cache) on every panel close.
+    static func markReviewed(for item: Item, context: ModelContext) throws {
+        try dismissReview(for: item, context: context)
+    }
 }

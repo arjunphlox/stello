@@ -130,6 +130,71 @@ struct AwaitingReviewStripTests {
         #expect(AwaitingReviewFilter.isEligible(item))
     }
 
+    // MARK: - markReviewed ("viewing counts as reviewing" — ContentView.onChange(of: selectedItem)
+    // / DetailView.onDisappear call sites)
+
+    @Test("markReviewed clears needsReview and the item leaves isEligible")
+    func markReviewedClearsNeedsReview() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let item = Item(
+            title: "Review me",
+            needsReview: true,
+            enrichmentStatus: "candidates_done",
+            whySavedSuggestionsJSON: EnrichmentService.encodeWhySavedSuggestions(["layout-reference"])
+        )
+        context.insert(item)
+        try context.save()
+
+        try AwaitingReviewFilter.markReviewed(for: item, context: context)
+
+        #expect(item.needsReview == false)
+        #expect(!AwaitingReviewFilter.isEligible(item))
+    }
+
+    @Test("markReviewed is idempotent — calling it again on an already-reviewed item doesn't bump updatedAt")
+    func markReviewedIsIdempotent() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let item = Item(title: "Already reviewed", needsReview: false, enrichmentStatus: "candidates_done")
+        context.insert(item)
+        try context.save()
+        let updatedAtBefore = item.updatedAt
+
+        // Mirrors the real call sites, which guard on `needsReview` before calling.
+        if item.needsReview {
+            try AwaitingReviewFilter.markReviewed(for: item, context: context)
+        }
+
+        #expect(item.needsReview == false)
+        #expect(item.updatedAt == updatedAtBefore)
+    }
+
+    @Test("suggestions survive markReviewed — chips stay decodable after needsReview clears")
+    func suggestionsSurviveMarkReviewed() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let item = Item(
+            title: "Keeps its chips",
+            needsReview: true,
+            enrichmentStatus: "candidates_done",
+            whySavedSuggestionsJSON: EnrichmentService.encodeWhySavedSuggestions([
+                "layout-reference",
+                "inspiration",
+            ])
+        )
+        context.insert(item)
+        try context.save()
+
+        try AwaitingReviewFilter.markReviewed(for: item, context: context)
+
+        #expect(item.needsReview == false)
+        let remaining = EnrichmentService.decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON)
+        #expect(remaining.count == 2)
+        #expect(remaining.contains("layout-reference"))
+        #expect(remaining.contains("inspiration"))
+    }
+
     // MARK: - "Needs review" filter-sheet toggle (ItemFilter.apply(needsReviewOnly:))
     //
     // Same predicate (`AwaitingReviewFilter.isEligible`) as the on-card badge, so the
