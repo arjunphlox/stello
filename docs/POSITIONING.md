@@ -11,6 +11,7 @@ Decisions locked: built for Arjun + team first → **public v1 launch target: fa
 1. **"Stello doesn't store your references. It understands them, puts them to work, and teaches you what they mean."** — the three pillars in one sentence; long but complete.
 2. **"A reference library that thinks."** — short umbrella; each pillar becomes a sub-head.
 3. **"Save it once. Stello parses it, connects it, and brings it back when it matters."** — capability arc in user language.
+4. **"Wine has the sommelier. Film has the music supervisor. Fashion has the stylist. Design references have never had one — Stello is that."** — the trusted-selector gap, stated in one breath (see Personification section for the full reasoning).
 
 ## The problem
 
@@ -74,6 +75,71 @@ proactive surfacing ("this designer also made two things you saved in 2024") · 
 **Tension to resolve deliberately:** the educator reaches out to the internet; the trust story is
 on-device. The line to hold: *judgment stays on-device (taste, intent, tags); lookups are transparent,
 user-visible fetches of public facts.* Say this explicitly in the product and the pitch.
+
+## Personification — the trusted selector (decided 2026-07-07; reasoning preserved)
+
+We wanted a single personification for Stello's behavior. The search itself taught us the frame,
+so the full reasoning is kept here.
+
+### Why the obvious candidates fail
+Most personas nail one capability and die on the others. **Librarian/archivist**: retrieves what you
+ask for, organizes, waits — parser only; Stello's thesis is doing work you *didn't* ask for.
+**Curator**: knows why things matter but curates *for an audience*; Stello serves the maker mid-work.
+**Mentor/teacher**: educator only, and implies knowing more than you — wrong hierarchy.
+**Docent**: contextual guide in a collection (good educator shape) but doesn't help you make anything.
+**Research assistant**: parser + educator, but generic — and "assistant" has been ground into paste
+by AI products. **Atelier morgue-keeper** (the design-history-native role: studios kept "morgue files"
+of reference clippings, maintained by the sharp junior who pulled the right ones for the current
+commission — Norman Rockwell's studio ran on this): conceptually strong on all three pillars, but
+**rejected** — "morgue" reads as hospital morgue to a modern audience and can't headline anything.
+
+### The pattern with a name-shaped hole
+What survives is a recurring role across every serious taste discipline: **the trusted selector** —
+someone who (a) knows a deep collection intimately, (b) knows *your* taste, and (c) makes the pick
+for *this moment* while teaching you something in the process. (a) is the Parser, (b/c) is the
+Instrument, the teaching is the Educator. Every taste industry has this person. Design references
+never have. That absence *is* the market gap — which is why the multi-reference framing beats any
+single metaphor: the repetition across industries proves the role is real and missing.
+
+### The cross-industry canon
+
+| Role | Industry | What they do | Strongest pillar |
+|---|---|---|---|
+| **Sommelier** | Wine | Knows the cellar, pairs for tonight's table, tells the vineyard's story | All three — the anchor |
+| **Music supervisor** | Film/TV | Deep crate knowledge → the exact track for the exact scene; knows every credit | **Instrument** — literally brief-aware surfacing |
+| **Selector** | Sound-system / DJ culture | Reads the room, pulls from the crates in real time; the Jamaican tradition *names* the role | Instrument + culture credibility |
+| **Stylist** | Fashion | Knows the wardrobe/archive, dresses you for *this* occasion, teaches what works on you | Instrument, daily-use intimacy |
+| **Caddie** | Golf | Knows the course *and* your game, hands you the club for this one shot, explains the read | Purest "decision in the moment" |
+| **Record-store clerk / crate-digger** | Music retail | Hands you the record you didn't know you wanted, with the label lore | Educator + discovery |
+| **Indie bookseller** | Books | Reads you in two questions, pulls the right book, tells you why | Educator |
+| **Omakase chef** | Food | Composes for you from knowing your taste + today's catch | Trust + proactivity |
+| **Chef de cave** | Champagne | Blends across years of reserves to keep the house taste consistent for decades | Taste-over-time → the taste timeline |
+| **The "nose" (perfumer)** | Fragrance | Mental library of thousands of materials, composes against a brief | Parser depth |
+| **Art advisor** | Art | Knows the collection and the wall it's going on | Weakest — transactional vibe |
+
+### How to use it
+- **Anchor: the sommelier.** It's the only role where taste itself is the domain (Stello's thesis),
+  the daily decision is native to the job (a sommelier approaches the table; a keeper waits to be
+  asked), and it passes the travel test: "it's like a sommelier for your references" survives being
+  repeated by one designer to another in a single sentence.
+- **Headline canon (3–4, matched to pillars):** sommelier (taste, anchor) · music supervisor (the
+  Instrument pillar — designers know the role, and it's the closest professional analog to "rank my
+  archive against my brief") · stylist (daily-use intimacy) · caddie or selector as the fourth
+  (caddie explains decision-support to anyone; selector is the better *word* and culture fit).
+- **Reserve for essays, not launch pages:** omakase, chef de cave, the nose — lovely depth, too
+  exotic to headline.
+- **"Selector" is product vocabulary, not just metaphor:** the one candidate that works as a feature
+  name (e.g., the brief-aware strip = "the Selector"). Short, real, reverent in music culture,
+  self-explanatory. Hold it in reserve for naming.
+
+### The humility rule (bake into all copy)
+Every role above is a *human judgment* persona; Stello's judgment is algorithmic. The copy must hold
+the promise at **"knows the collection, makes the pull, tells you why"** — and never drift into
+"has taste better than yours." The sommelier serves the *diner's* palate; that deference is part of
+why the metaphor works, and it's also the honest description of the product: Stello studies and
+serves the designer's taste, it doesn't overrule it. Any feature or sentence that positions Stello's
+judgment above the user's breaks both the metaphor and the trust story (see also: private
+intelligence pillar — judgment stays on-device *because* the taste being modeled is yours).
 
 ## Supporting pillars (now evidence, not headlines)
 
