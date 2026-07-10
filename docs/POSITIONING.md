@@ -1,123 +1,140 @@
-# Stello — Positioning (draft v1, 2026-07-07)
+# Stello — Positioning (v2, 2026-07-07)
 
-Working draft for review. Sources: the shipped product (web + native), CLAUDE.md decisions log,
-`BOOKMARK_POSSIBILITIES.md`, and the 2026-07 sprint work. Iterate freely — nothing here is precious.
+Owner-confirmed frame: **three core capabilities — Parser · Instrument · Educator — lead everything.**
+Decisions locked: built for Arjun + team first → **public v1 launch target: fall 2026** → **subscription**
+(maintenance + service are part of the product). Iterating from here.
 
 ---
 
-## One-liner candidates
+## One-liner candidates (v2, built on the three capabilities)
 
-1. **"Stello remembers why you saved it."** — leads with the intent-capture differentiator.
-2. **"A reference library that reads your taste back to you."** — leads with the self-knowledge arc.
-3. **"Your design references, on your devices, with a memory of why."** — leads with local-first + intent.
+1. **"Stello doesn't store your references. It understands them, puts them to work, and teaches you what they mean."** — the three pillars in one sentence; long but complete.
+2. **"A reference library that thinks."** — short umbrella; each pillar becomes a sub-head.
+3. **"Save it once. Stello parses it, connects it, and brings it back when it matters."** — capability arc in user language.
 
-*(Pick one register: (1) is the sharpest functional hook; (2) is the emotional/aspirational one; (3) tries to do both and is weaker for it.)*
-
-## The problem (as the product actually attacks it)
+## The problem
 
 Designers save relentlessly and retrieve almost never. Every existing tool optimizes the **save**
-(one click, infinite pile) and abandons the **return**: you remember a vibe, not a keyword; you saved
-the page for one scroll animation, not the whole page; and eight months later the link is dead anyway.
-The pile becomes write-only. The designer's actual reference library lives in their head, decaying.
+(one click, infinite pile) and abandons everything after: the pile doesn't understand itself, can't
+be used mid-project, and teaches you nothing. The designer's real reference library stays in their
+head, decaying. Stello's bet: a reference is only valuable if the tool does work *on* it — at capture
+and forever after.
 
-Stello's bet: the moment of saving is the only moment the *reason* exists — so capture the reason,
-the structure, and the artifact right then, and every later act of finding becomes cheap.
+## The three capabilities
 
-## Category
+### 1 · PARSER — it understands what you saved
+*Not a static drop of files: every item is analyzed, structured, and connected the moment it arrives.*
 
-Not "bookmarks manager" (Raindrop's word, race to the bottom). Not "moodboard" (Pinterest/Cosmos —
-public, algorithmic, near-duplicate). Closest existing label is **"visual knowledge base"** (mymind's
-territory), but Stello can plausibly claim a narrower, sharper one:
+At capture, Stello classifies what kind of thing this is (a website, a person, a typeface, a foundry,
+a place), extracts its structure deterministically (socials, credits, locations — parsed, not
+hallucinated), reads it with on-device AI (weighted tags across color/style/mood/format…, quotable
+snippets, and *why you probably saved it*), and threads it into everything already in the library —
+related items by shared signal, entities cross-linked (a typeface knows its foundry; a website knows
+its typography credits).
 
-> **A taste archive for designers.** Personal, private, structured around *why* — with the ambition
-> of becoming the instrument a designer uses to see their own taste.
+**Shipped:** deterministic page classification · per-kind typed metadata · on-device enrichment
+(tags/snippets/why-saved) · weighted 8-category tags · related-items graph · full-text search over
+all of it · review flow (on-card badge + intent facet).
+**Next:** kind-dispatched enrichment (per-kind AI jobs) · typed highlights ("saved for *this* scroll
+animation, *this* palette") · visual-similarity embeddings.
 
-## Who it's for
+### 2 · INSTRUMENT — it puts the library to work on the project in front of you
+*Saved data becomes decision support: the archive answers questions mid-work instead of waiting to be browsed.*
 
-Primary: working visual designers (brand, product, type-adjacent) who already hoard references —
-the person with 40 open tabs, an unsorted screenshots folder, and an Are.na they stopped opening.
-The type-specific entity model (typefaces, foundries, studios, individuals) makes **typography-serious
-designers** the beachhead persona — no generic tool models a foundry.
+The library isn't a museum — it's tooling. Filter by intent ("everything saved for
+grid-system-reference"). Surface what's relevant to the brief you're working on. Use accumulated
+data to make concrete calls: a type scale that fits the active project's font, a palette drawn from
+what you actually return to, an export that lands in the deck. Revisit tracking (what you *return to*,
+not just what you grabbed) is the signal layer that makes recommendations honest.
 
-Secondary (later, deliberate): small studios needing shared references *with provenance* — who saved
-it and why they said they saved it (the thing Are.na deliberately strips).
+**Shipped:** intent facet + filters · search-over-everything · revisit tracking (signal accruing
+since Jul 2026) · related-items on open.
+**Next:** brief-aware surfacing (paste the project context, get your own archive ranked against it) ·
+decision tools per kind (type-scale/pairing from typeface data is the flagship example) · one-click
+export to deck/PDF · taste timeline & fading-reference grooming.
+**Honesty note:** this is the least-built pillar today — and the one that most differentiates a
+*tool* from a *pile*. It should headline the roadmap, not the current-state claims.
 
-## Positioning pillars — each one is shipped or in flight, not aspiration
+### 3 · EDUCATOR — it teaches you about what you saved
+*Deterministic extraction plus proactive context: open a typeface and know its designer, foundry,
+lineage; open a person and know their work, studio, where they are — connected to the wider world.*
 
-### 1. Intent is a first-class citizen (SHIPPED)
-At capture, on-device AI proposes *why you saved this* — kebab-case, craft-specific
-(`grid-system-reference`, `empty-state-pattern`) — and accepted reasons become a filter facet.
-Recall flips from "what was it called" to "what did I save it *for*." No competitor captures the
-reason at ingest; it's the single most defensible product idea in the repo.
+Every typed item carries its own dossier — not AI summary soup but structured facts (a typeface's
+designer, foundry, release year, classification; a person's studio, socials, notable work) shown
+contextually and proactively where you're already looking. Entities link to each other inside the
+library, and outward: Stello connects what you saved with what the internet knows about it, so one
+saved specimen becomes a doorway into a lineage, a foundry catalog, a person's whole practice.
 
-### 2. Private intelligence, not cloud intelligence (SHIPPED, verification in progress)
-Enrichment — vision tags, snippets, why-saved — runs **on-device via Apple Foundation Models**.
-The pitch writes itself against mymind's subscription-cloud AI: *your references, your taste
-profile, and your half-formed ideas never leave the machine.* Local-first SwiftData + private
-CloudKit; no backend; nothing to breach, nothing to train on.
+**Shipped:** per-kind detail dossiers (typeface/website/individual/studio/foundry sub-cards) ·
+entity cross-links (tappable refs when the target exists in the library) · deterministic extraction
+at capture.
+**Next:** internet-connected enrichment (pull the wider context for an entity, clearly sourced) ·
+proactive surfacing ("this designer also made two things you saved in 2024") · zeitgeist detection
+("you've saved 14 chromatic-aberration things this quarter — here's the cluster").
+**Tension to resolve deliberately:** the educator reaches out to the internet; the trust story is
+on-device. The line to hold: *judgment stays on-device (taste, intent, tags); lookups are transparent,
+user-visible fetches of public facts.* Say this explicitly in the product and the pitch.
 
-### 3. Structure no one else has (SHIPPED, capture-side deepening in flight)
-Weighted tags across 8 sensory/craft categories (color, style, mood, format…) plus **typed
-entities** — a typeface knows its foundry, a website knows its typography credits, a person knows
-their studio. That's a design-world knowledge graph, not a folder of cards. Deterministic page
-classification at capture (people, foundries) shipped this month; kind-dispatched AI enrichment and
-typed *highlights* ("saved for this scroll animation, this palette") are the committed next step.
+## Supporting pillars (now evidence, not headlines)
 
-### 4. The archive outlives the web (SHIPPED in direction, one gap)
-Items live locally with their images and text. When Dribbble delists or the portfolio dies, the
-reference survives. Full rendered-page archival is the remaining gap; the local-first architecture
-makes it a feature, not a rebuild. Against every cloud tool: *their* pile rots twice — once on the
-web, once when you cancel the subscription.
+- **Private intelligence** — enrichment and taste modeling run on-device (Apple Foundation Models);
+  local-first SwiftData + private CloudKit. Feeds trust in all three capabilities.
+- **The archive outlives the web** — items keep their images/text locally; link-rot doesn't erase
+  the library. (Rendered-page archive still a gap.)
+- **It reads your taste back to you** — the instrument pillar's emotional peak: taste timeline,
+  annual self-portrait. Every week of revisit data compounds this.
 
-### 5. It reads your taste back to you (DATA ACCRUING, views next)
-Revisit tracking shipped July 2026 — the archive now knows what you *return to*, not just what you
-grabbed. That signal plus weighted tags over time funds the roadmap's emotional peaks: the taste
-timeline, "you've saved 14 chromatic-aberration things this quarter," the annual taste self-portrait.
-This pillar is the moat-in-waiting: nobody can compete with a year of *your* accumulated signal.
+## Audience & go-to-market shape (owner-confirmed)
 
-## Competitive one-liners
+- **Now → fall:** Arjun + team are user zero — the studio-team use case (shared references *with
+  provenance*: who saved it, why they said so) gets proven internally before it's sold.
+- **Fall 2026:** public v1 for the target audience — working visual designers who already hoard
+  references; typography-serious designers as the sharpest beachhead (no other tool models a foundry).
+- **Model: subscription.** The service earns it: sync, model/enrichment updates, internet-connected
+  educator lookups, continued parsing improvements on the library you already built. Frame it as
+  *the library keeps getting smarter*, never as rent for access to your own files — local-first
+  ownership of your data stays the trust floor under the subscription.
+
+## Competitive one-liners (updated to the three capabilities)
 
 | Against | The line |
 |---|---|
-| **mymind** | Same privacy promise, but the AI runs on your device — and Stello knows what a foundry is. Depth over breadth. |
-| **Are.na** | Are.na is a social practice; Stello is a private instrument. And Stello remembers *why*, which Are.na strips even from teams. |
-| **Pinterest/Cosmos** | Their algorithm feeds you everyone's taste; Stello studies yours. "More like this" that returns adjacent, not duplicate. |
-| **Raindrop/bookmarks** | Bookmarks store URLs. Stello stores the reason, the artifact, and the structure — the URL is the least durable part. |
-| **Eagle / local asset managers** | Eagle organizes files; Stello understands references — intent, entities, taste over time. |
-| **Screenshots folder / Notes** | The honest competitor. Stello's answer: capture is just as fast (Share Extension, paste, drop), but it comes back out. |
+| **mymind** | mymind stores privately; Stello *parses* — it knows what a foundry is, why you saved that specimen, and what to do with it mid-project. |
+| **Are.na** | Are.na is a social practice; Stello is a working instrument. It remembers *why* — which Are.na strips even from teams. |
+| **Pinterest/Cosmos** | Their algorithm feeds you everyone's taste; Stello studies yours and puts it to work on your brief. |
+| **Raindrop/bookmarks** | Bookmarks store URLs — the least durable part. Stello keeps the reason, the artifact, the structure, and the lesson. |
+| **Eagle / DAMs** | Eagle organizes files; Stello understands references — and teaches you about them. |
+| **Screenshots folder / Notes** | The honest competitor. Capture is just as fast — but with Stello it comes back out, smarter than it went in. |
 
-## What Stello is NOT (say it out loud)
+## What Stello is NOT
 
-- Not social, no public boards, no follower graph — deliberately.
-- Not a read-later app; it's for *references*, not articles-to-finish.
-- Not a DAM/file manager; project files live elsewhere.
-- Not cross-platform-someday: Apple-native is the identity (local AI + CloudKit + Share Extension
-  *is* the product), not a limitation to apologize for.
+- Not social — no public boards, no follower graph. Team sharing is provenance-rich collaboration, not an audience.
+- Not a read-later app; references, not articles-to-finish.
+- Not a DAM; project files live elsewhere.
+- Not cross-platform-someday: Apple-native is identity (on-device AI + CloudKit + Share Extension *is* the product).
 
-## Proof points ledger (for any page/pitch — keep honest)
+## Proof points ledger (keep honest for any page/pitch)
 
-**Shipped:** capture (URL/paste/drop/Share Ext) · on-device enrichment (tags/snippets/why-saved) ·
-intent facet + review flow (on-card badge) · full-text search over everything incl. typed metadata ·
-weighted 8-category tags · typed entities + per-kind metadata · deterministic page classification ·
-revisit tracking · masonry/weeks/timeline/themes UI · local-first + CloudKit sync.
-**In verification:** live on-device AI on real hardware.
+**Shipped:** capture (URL/paste/drop/Share Ext) · classification + typed entities · on-device
+enrichment · intent facet + review badge flow · search-over-everything · weighted tags ·
+related items · revisit tracking · per-kind dossiers + cross-links · masonry/weeks/timeline/themes ·
+local-first + CloudKit sync.
+**In verification:** live on-device AI on real hardware (macOS in progress; iOS pending).
 **Committed next:** kind-dispatched enrichment + typed highlights · Supabase→native migration.
-**Roadmap (designed, unbuilt):** taste timeline · vibe search · brief-aware resurfacing · zeitgeist ·
-visual-similarity embeddings · exports (deck/PDF) · rendered-page archive.
+**Roadmap:** brief-aware surfacing · decision tools (type scale first) · internet-connected educator ·
+taste timeline · vibe search · embeddings · exports · rendered-page archive.
 
-## Open questions (answer these to lock v2)
+## Remaining open questions for v3
 
-1. **Is Stello a product or an instrument?** Everything above works as positioning for a shipped
-   product — but the repo history reads like a personal tool built with product-grade care. Are we
-   positioning for the App Store, for a small paid audience, for portfolio/story value, or for you?
-   The answer changes tone everywhere (e.g., "the moat" framing only matters if there are competitors
-   to moat against).
-2. **How central is typography?** The entity model (typefaces/foundries) suggests a type-nerd
-   beachhead; the tag system suggests all visual designers. Lead with type-world depth, or keep it
-   as supporting proof of "structure no one else has"?
-3. **Does the web app have a future in the story?** Currently coexisting, not sunset. If native is
-   the identity, the web version needs a role (companion? legacy? capture-anywhere?) or silence.
-4. **Price/model instinct, even rough:** one-time purchase reads "instrument you own" (fits pillars
-   2/4); subscription reads "service" (fights them). Free-personal changes the audience question.
-5. **The name's story:** is there one? (Stella/star? stellar?) A one-line name story is cheap equity
-   in a positioning page if it exists.
+1. **Fall v1 scope line:** which slice of each pillar must be true at launch? (Parser is nearly there;
+   instrument needs at least brief-aware surfacing or one decision tool; educator needs the internet
+   connection to earn its name. Proposed launch bar: all three pillars demonstrable, one deeply.)
+2. **Team features at launch or after?** Shared-with-provenance is the studio wedge but CloudKit
+   sharing is real work — v1 or fast-follow?
+3. **Typography centrality:** lead the marketing with the type-world depth (beachhead story) or keep
+   it as proof of parsing depth? (My lean: lead with it — sharpest possible "this was built for
+   people like me" signal, and the educator demos best on a typeface.)
+4. **Web app's role in the story:** companion capture surface, quiet legacy, or silence?
+5. **Subscription tiers:** one price, or free-local / paid-service split (sync + educator lookups +
+   model updates as the paid line)? The split maps suspiciously well onto the local-first architecture.
+6. **Name story:** worth one line on the site if it exists.
