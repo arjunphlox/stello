@@ -86,18 +86,16 @@ struct TimelineOverlay: View {
         }()
 
         let barHeight = max(TimelineMetrics.barMinHeight, layout.height)
-        // Hover feedback for the narrower strip: the nearest/active line thickens
-        // by +2pt on its width (its cross-axis). Center-anchored via a compensating
-        // negative x-offset so the extra width grows outward symmetrically instead
-        // of shifting the bar's leading edge (and the strip/gutter it sits in).
+        // Hover feedback for the narrower strip: the nearest/active line thickens by
+        // +2pt on its width. Leading edge stays anchored so the growth extends trailing
+        // into the bar→card gap (~4.5pt of in-overlay room) — a centering offset would
+        // push the left edge outside the overlay's frame, where it gets clipped.
         let barThickness = isInteraction ? TimelineMetrics.barHoverWidth : TimelineMetrics.barWidth
-        let thicknessOffset = (TimelineMetrics.barWidth - barThickness) / 2
 
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: TimelineMetrics.barCornerRadius, style: .continuous)
                 .fill(color)
                 .frame(width: barThickness, height: barHeight)
-                .offset(x: thicknessOffset)
                 .animation(.easeOut(duration: 0.2), value: barThickness)
                 .animation(isInteraction || isSelected ? .easeOut(duration: 0.2) : nil, value: isHighlighted)
 
