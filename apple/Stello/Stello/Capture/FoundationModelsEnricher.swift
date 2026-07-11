@@ -29,6 +29,15 @@ struct FoundationModelsEnricher: Enricher {
         }
     }
 
+    /// Human-readable reason when the system model is unavailable (nil when available) —
+    /// surfaced on the item so a forced Enrich never silently no-ops.
+    var unavailableReason: String? {
+        switch model.availability {
+        case .available: return nil
+        case .unavailable(let reason): return String(describing: reason)
+        }
+    }
+
     func enrich(
         title: String,
         summary: String?,
@@ -40,6 +49,9 @@ struct FoundationModelsEnricher: Enricher {
         var visionTags: [VisionTagSpec] = []
         var snippets: [String] = []
         var whySavedSuggestions: [String] = []
+        // Per-job failures are tolerated (partial results beat none), but collected so a
+        // TOTAL failure can throw with the reason instead of silently returning nothing.
+        var jobErrors: [String] = []
 
         if Self.imageAttachmentSupported,
            let coverImageData, let coverCGImage = Self.cgImage(from: coverImageData) {
@@ -47,7 +59,7 @@ struct FoundationModelsEnricher: Enricher {
                 let tags = try await EnrichmentRunner.enrichVision(cover: coverCGImage)
                 visionTags = Self.mapVisionTags(tags)
             } catch {
-                // Per-job failure: keep empty visionTags, continue with text jobs.
+                jobErrors.append("vision: \(error.localizedDescription)")
             }
         }
 
@@ -55,14 +67,22 @@ struct FoundationModelsEnricher: Enricher {
             do {
                 snippets = try await EnrichmentRunner.enrichSnippets(pageText: pageText)
             } catch {
-                // Per-job failure tolerated.
+                jobErrors.append("snippets: \(error.localizedDescription)")
             }
 
             do {
                 whySavedSuggestions = try await EnrichmentRunner.enrichWhySaved(pageText: pageText)
             } catch {
-                // Per-job failure tolerated.
+                jobErrors.append("why-saved: \(error.localizedDescription)")
             }
+        } else {
+            jobErrors.append("no page text: item has an empty title and summary")
+        }
+
+        if visionTags.isEmpty && snippets.isEmpty && whySavedSuggestions.isEmpty,
+           let first = jobErrors.first {
+            let suffix = jobErrors.count > 1 ? " (+\(jobErrors.count - 1) more)" : ""
+            throw EnricherError.allJobsFailed(first + suffix)
         }
 
         return EnrichmentResult(

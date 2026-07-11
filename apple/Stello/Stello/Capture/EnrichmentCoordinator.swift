@@ -27,6 +27,16 @@ final class EnrichmentCoordinator {
 
     func enrichItem(_ item: Item, context: ModelContext, force: Bool = false) async {
         await EnrichmentService.enrich(item: item, context: context, enricher: activeEnricher, force: force)
+        // A user-invoked Enrich must never silently no-op: when the system model reports
+        // unavailable, the rule fallback runs and produces nothing — record WHY on the
+        // item so the panel's error surface shows it (auto-enrichment stays quiet).
+        if force,
+           let foundationModels = primary as? FoundationModelsEnricher,
+           let reason = foundationModels.unavailableReason {
+            item.enrichmentError = "Apple Intelligence unavailable: \(reason)"
+            item.updatedAt = .now
+            try? context.save()
+        }
     }
 
     func enrichPendingItems(context: ModelContext) async {

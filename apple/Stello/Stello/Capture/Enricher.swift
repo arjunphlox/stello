@@ -16,8 +16,18 @@ struct EnrichmentResult: Sendable {
 
 // MARK: - Errors
 
-enum EnricherError: Error, Equatable {
+enum EnricherError: Error, Equatable, LocalizedError {
     case unavailable
+    /// Every AI job failed and produced nothing — carries the first job's error text so
+    /// the panel's error surface can show WHY instead of a silent no-op.
+    case allJobsFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable: return "Apple Intelligence model unavailable"
+        case .allJobsFailed(let detail): return detail
+        }
+    }
 }
 
 // MARK: - Protocol
