@@ -95,6 +95,12 @@ struct CardSubcards: View {
                 case .link:
                     EmptyView()
                 }
+
+                // AI enrichment surfaces (snippets / why-saved / tags / Enrich + its error
+                // line) apply to typed items too — without these, enriching an entity item
+                // persisted results the panel never displayed, and Enrich looked like a
+                // silent no-op (2026-07-11). Render-if-data keeps curated panels clean.
+                enrichmentSubCards()
             } else {
                 genericSubCards()
             }
@@ -205,6 +211,22 @@ struct CardSubcards: View {
         }
 
         snippetsSubCard
+        whySavedSubCard
+        tagsSubCard
+
+        if canEnrich {
+            enrichSubCard
+        }
+    }
+
+    /// AI enrichment sections for TYPED panels: strictly render-if-data (no empty states,
+    /// unlike the link-kind panel) so curated entity dossiers stay clean — except Actions,
+    /// which always renders so Enrich and its error line are reachable on every kind.
+    @ViewBuilder
+    private func enrichmentSubCards() -> some View {
+        if !sortedSnippets.isEmpty {
+            snippetsSubCard
+        }
         whySavedSubCard
         tagsSubCard
 
