@@ -74,6 +74,18 @@ struct SearchBlobTests {
         #expect(tagResult.map(\.title) == ["Unrelated"])
     }
 
+    @Test("Search hits by extractedText content")
+    func searchByExtractedText() {
+        let item = Item(
+            title: "Article Wrapper",
+            extractedText: "A deep dive into optical kerning and letterspacing rhythms."
+        )
+
+        let result = ItemFilter.apply([item], searchText: "letterspacing rhythms", selectedTagNames: [])
+        #expect(result.count == 1)
+        #expect(result.first?.title == "Article Wrapper")
+    }
+
     @Test("Search hits by body markdown text")
     func searchByBodyMarkdown() {
         let item = Item(

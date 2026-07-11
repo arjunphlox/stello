@@ -38,6 +38,7 @@ protocol Enricher {
         title: String,
         summary: String?,
         domain: String?,
-        coverImageData: Data?
+        coverImageData: Data?,
+        pageText: String?
     ) async throws -> EnrichmentResult
 }

@@ -10,7 +10,8 @@ struct RuleBasedFallbackEnricher: Enricher, Sendable {
         title: String,
         summary: String?,
         domain: String?,
-        coverImageData: Data?
+        coverImageData: Data?,
+        pageText: String? = nil
     ) async throws -> EnrichmentResult {
         EnrichmentResult(visionTags: [], snippets: [], whySavedSuggestions: [])
     }

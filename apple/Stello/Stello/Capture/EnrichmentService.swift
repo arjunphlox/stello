@@ -68,9 +68,39 @@ enum EnrichmentService {
             guard item.enrichmentStatus == "text_done" else { return }
         }
 
+        // Force (user-invoked) Enrich re-fetches the source page first: it backfills a
+        // missing cover image and refreshes `extractedText` so the AI jobs see richer text
+        // than the ~200-char summary captured at save time. Auto-enrichment (force=false)
+        // must not hit the network beyond what capture already did.
+        var refetchError: String? = nil
+        if force, let sourceURLString = item.sourceURL, let url = URL(string: sourceURLString) {
+            if let page = await CaptureService.fetchPage(url: url) {
+                if !item.hasRenderableCover,
+                   let imageURL = page.og.imageURL,
+                   let (data, w, h) = await CaptureService.downloadImage(url: imageURL) {
+                    let image = ItemImage(data: data, source: "og", isPrimary: true, width: w, height: h)
+                    context.insert(image)
+                    image.item = item
+                }
+                if let extracted = CaptureService.extractText(html: page.html), !extracted.isEmpty {
+                    item.extractedText = extracted
+                    item.updatedAt = .now
+                }
+            } else {
+                refetchError = "page re-fetch failed: unable to fetch page"
+            }
+        }
+
         do {
             guard enricher.isAvailable else {
                 try markTerminalWithoutAI(item: item, context: context)
+                // AI produced nothing (never ran) — surface the refetch failure instead of
+                // the silent nil error markTerminalWithoutAI just wrote.
+                if let refetchError {
+                    item.enrichmentError = refetchError
+                    item.updatedAt = .now
+                    try? context.save()
+                }
                 return
             }
 
@@ -81,13 +111,26 @@ enum EnrichmentService {
                 title: item.title,
                 summary: item.summary,
                 domain: item.domain,
-                coverImageData: coverData
+                coverImageData: coverData,
+                pageText: item.extractedText
             )
             try apply(result, to: item, context: context)
         } catch EnricherError.unavailable {
             try? markTerminalWithoutAI(item: item, context: context)
+            if let refetchError {
+                item.enrichmentError = refetchError
+                item.updatedAt = .now
+                try? context.save()
+            }
         } catch {
-            item.enrichmentError = error.localizedDescription
+            // AI jobs also produced nothing here — fold the refetch failure in rather than
+            // dropping it, but never let it clobber a successful run (that path is `apply`,
+            // which explicitly sets enrichmentError to nil and never reaches this catch).
+            var message = error.localizedDescription
+            if let refetchError {
+                message += " (\(refetchError))"
+            }
+            item.enrichmentError = message
             item.updatedAt = .now
             try? context.save()
         }

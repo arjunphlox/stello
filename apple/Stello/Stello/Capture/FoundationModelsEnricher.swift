@@ -42,7 +42,8 @@ struct FoundationModelsEnricher: Enricher {
         title: String,
         summary: String?,
         domain: String?,
-        coverImageData: Data?
+        coverImageData: Data?,
+        pageText: String? = nil
     ) async throws -> EnrichmentResult {
         guard isAvailable else { throw EnricherError.unavailable }
 
@@ -63,7 +64,7 @@ struct FoundationModelsEnricher: Enricher {
             }
         }
 
-        if let pageText = Self.pageText(title: title, summary: summary) {
+        if let pageText = Self.pageText(title: title, summary: summary, extractedText: pageText) {
             do {
                 snippets = try await EnrichmentRunner.enrichSnippets(pageText: pageText)
             } catch {
@@ -108,7 +109,14 @@ struct FoundationModelsEnricher: Enricher {
         return specs
     }
 
-    private static func pageText(title: String, summary: String?) -> String? {
+    /// Prefers the richer `extractedText` (readability-lite page text, capped for the
+    /// prompt) when present; falls back to the thin title+summary the model previously saw.
+    private static func pageText(title: String, summary: String?, extractedText: String?) -> String? {
+        if let extractedText {
+            let trimmed = extractedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return String(trimmed.prefix(3_000)) }
+        }
+
         let titleTrimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let summaryTrimmed = summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if titleTrimmed.isEmpty && summaryTrimmed.isEmpty { return nil }

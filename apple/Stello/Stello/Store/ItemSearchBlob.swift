@@ -25,6 +25,7 @@ enum ItemSearchBlob {
         appendOptional(item.author, to: &parts)
         appendOptional(item.domain, to: &parts)
         appendOptional(item.bodyMarkdown, to: &parts)
+        appendOptional(item.extractedText, to: &parts)
 
         if let tags = item.tags {
             parts.append(contentsOf: tags.map(\.name))

@@ -115,6 +115,7 @@ enum CaptureService {
         let title = og.title ?? url.host ?? url.absoluteString
         let summary = og.description.map { String($0.prefix(200)) }
         let dom = domain(from: url)
+        let extracted = extractText(html: html)
 
         var itemImage: ItemImage? = nil
         if let imgURL = og.imageURL, let (data, w, h) = await downloadImage(url: imgURL) {
@@ -134,7 +135,7 @@ enum CaptureService {
 
         let item = Item(
             slug: slug, title: title, sourceURL: normalized, domain: dom,
-            summary: summary, enrichmentStatus: "text_done",
+            summary: summary, extractedText: extracted, enrichmentStatus: "text_done",
             kind: classification.kind.rawValue
         )
         if let meta = classification.individualMeta {
@@ -264,6 +265,44 @@ enum CaptureService {
             result.title = String(html[r]).trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
+        return result
+    }
+
+    // MARK: - Plain-Text Extraction
+
+    /// Readability-lite plain-text extraction from raw page HTML: drops `<script>`/`<style>`
+    /// blocks and all remaining tags, decodes the common HTML entities, collapses whitespace,
+    /// and caps the result at ~4,000 characters — the on-device model's context is small, so
+    /// this is what AI enrichment (and search) sees instead of just title+summary.
+    static func extractText(html: String) -> String? {
+        guard !html.isEmpty else { return nil }
+        var text = html
+        text = text.replacingOccurrences(
+            of: #"<script[^>]*>[\s\S]*?</script>"#, with: " ", options: [.regularExpression, .caseInsensitive]
+        )
+        text = text.replacingOccurrences(
+            of: #"<style[^>]*>[\s\S]*?</style>"#, with: " ", options: [.regularExpression, .caseInsensitive]
+        )
+        text = text.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
+        text = decodeBasicEntities(text)
+        text = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        return String(text.prefix(4_000))
+    }
+
+    private static let basicEntities: [(String, String)] = [
+        ("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+        ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"),
+        ("&mdash;", "—"), ("&ndash;", "–"),
+        ("&rsquo;", "’"), ("&lsquo;", "‘"), ("&rdquo;", "”"), ("&ldquo;", "“"),
+    ]
+
+    private static func decodeBasicEntities(_ s: String) -> String {
+        var result = s
+        for (entity, replacement) in basicEntities {
+            result = result.replacingOccurrences(of: entity, with: replacement)
+        }
         return result
     }
 

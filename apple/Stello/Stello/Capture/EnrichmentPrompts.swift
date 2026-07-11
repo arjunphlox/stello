@@ -46,7 +46,9 @@ enum EnrichmentNormalize {
         raw.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Trim a snippet, strip wrapping quotes, drop ellipses, cap at 200 chars.
+    /// Trim a snippet, strip wrapping quotes, drop ellipses, cap at 200 chars, then reject
+    /// anything that reads as structure rather than prose (guided generation occasionally
+    /// schema-echoes — e.g. `{"type": "object", ...}` or a bare `{` — instead of real text).
     nonisolated static func snippet(_ raw: String) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if let first = s.first, let last = s.last,
@@ -57,7 +59,19 @@ enum EnrichmentNormalize {
              .replacingOccurrences(of: "...", with: "")
              .trimmingCharacters(in: .whitespacesAndNewlines)
         if s.count > 200 { s = String(s.prefix(200)).trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        guard !isSchemaEcho(s) else { return "" }
         return s
+    }
+
+    /// Detects JSON-schema-shaped output masquerading as a snippet.
+    nonisolated private static func isSchemaEcho(_ s: String) -> Bool {
+        if s.hasPrefix("{") || s.hasPrefix("[") { return true }
+        if s.contains(#""type""#) || s.contains(#""snippets""#) || s.contains(#""description":"#) { return true }
+        if s.count < 15 { return true }
+        let letterCount = s.filter { $0.isLetter }.count
+        if Double(letterCount) < Double(s.count) / 2 { return true }
+        return false
     }
 
     /// Lowercase kebab-case, alnum + single hyphens, ≤4 word-segments.

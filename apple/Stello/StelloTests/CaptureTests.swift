@@ -446,6 +446,60 @@ struct OGParsingTests {
     }
 }
 
+// MARK: - Plain-Text Extraction Tests
+
+@Suite("CaptureService: extractText")
+struct ExtractTextTests {
+
+    @Test("Strips script/style blocks, tags, and decodes entities")
+    func stripsAndDecodes() {
+        let html = #"""
+        <html><head>
+        <style>body { color: red; }</style>
+        <script>console.log("hi");</script>
+        </head>
+        <body>
+        <h1>Hello &amp; Welcome</h1>
+        <p>A paragraph with &quot;quotes&quot; and&nbsp;a non-breaking space.</p>
+        <script type="text/javascript">var x = 1;</script>
+        </body></html>
+        """#
+        let text = CaptureService.extractText(html: html)
+        #expect(text != nil)
+        #expect(text!.contains("Hello & Welcome"))
+        #expect(text!.contains("A paragraph with \"quotes\" and a non-breaking space."))
+        #expect(!text!.contains("console.log"))
+        #expect(!text!.contains("color: red"))
+        #expect(!text!.contains("<"))
+        #expect(!text!.contains(">"))
+    }
+
+    @Test("Collapses whitespace")
+    func collapsesWhitespace() {
+        let html = "<p>Line one</p>\n\n   <p>Line   two</p>"
+        let text = CaptureService.extractText(html: html)
+        #expect(text == "Line one Line two")
+    }
+
+    @Test("Caps at ~4,000 characters")
+    func capsLength() {
+        let html = "<p>" + String(repeating: "word ", count: 2_000) + "</p>"
+        let text = CaptureService.extractText(html: html)
+        #expect(text != nil)
+        #expect(text!.count <= 4_000)
+    }
+
+    @Test("Empty HTML returns nil")
+    func emptyReturnsNil() {
+        #expect(CaptureService.extractText(html: "") == nil)
+    }
+
+    @Test("Markup-only HTML with no text returns nil")
+    func markupOnlyReturnsNil() {
+        #expect(CaptureService.extractText(html: "<html><head></head><body>   </body></html>") == nil)
+    }
+}
+
 // MARK: - Slug Tests
 
 @Suite("CaptureService: slug generation")
