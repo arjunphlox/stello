@@ -156,14 +156,36 @@ struct TimelineOverlay: View {
 
     private func weekKey(at y: CGFloat) -> String? {
         guard !weekGroups.isEmpty else { return nil }
-        var best: (key: String, distance: CGFloat)?
-        for group in weekGroups {
-            guard let layout = weekBarLayouts[group.key] else { continue }
-            let distance = abs(layout.midY - y)
-            if best == nil || distance < best!.distance {
-                best = (group.key, distance)
+        let entries = weekGroups.compactMap { group -> (key: String, layout: WeekBarLayout)? in
+            guard let layout = weekBarLayouts[group.key] else { return nil }
+            return (group.key, layout)
+        }
+        return Self.weekKey(at: y, entries: entries) ?? weekGroups.first?.key
+    }
+
+    /// Maps a pointer Y to the bar whose vertical *band* it physically falls inside,
+    /// rather than the bar with the nearest center. Nearest-center hit-testing put the
+    /// boundary between two bars at their shared midpoint, which — for bars of unequal
+    /// height — could sit well outside the gap between them, so hovering just below a
+    /// short bar (but still above the true midpoint) resolved to the bar ABOVE instead
+    /// of the one physically under the pointer. Band boundaries are instead placed at
+    /// the midpoint of each inter-bar GAP (`bar.bottomY` ↔ `nextBar.topY`), so every
+    /// point inside a bar's rendered rect — and the gap immediately around it — resolves
+    /// to that bar. The first/last bars own everything above/below them (clamped, no
+    /// wraparound).
+    static func weekKey(at y: CGFloat, entries: [(key: String, layout: WeekBarLayout)]) -> String? {
+        let bars = entries.sorted { $0.layout.topY < $1.layout.topY }
+        guard !bars.isEmpty else { return nil }
+
+        for index in bars.indices {
+            let bar = bars[index]
+            guard index + 1 < bars.count else { return bar.key }
+            let next = bars[index + 1]
+            let boundary = (bar.layout.bottomY + next.layout.topY) / 2
+            if y < boundary {
+                return bar.key
             }
         }
-        return best?.key ?? weekGroups.first?.key
+        return bars.last?.key
     }
 }
