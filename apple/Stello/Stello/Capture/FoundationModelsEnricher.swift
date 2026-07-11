@@ -8,17 +8,15 @@ struct FoundationModelsEnricher: Enricher {
 
     /// Whether the OS's FoundationModels actually contains the image `Attachment` API.
     ///
-    /// HARD-DISABLED. The Xcode 27 beta SDK declares the API, but macOS 27.0 builds up to
-    /// 26A5378j ship a FoundationModels (2.0.59) where calling `Attachment(CGImage)` jumps
-    /// to address 0 → SIGSEGV (crashes 2026-07-11, EnrichmentPrompts.swift:261). A dlsym
-    /// probe of the type's metadata accessor was tried and is insufficient — the type
-    /// metadata resolves while the initializer symbol is still missing, so the gate passed
-    /// and the crash recurred. No reliable runtime probe exists for the specific
-    /// initializer's mangled name, so this stays `false` until a macOS build verifiably
-    /// ships the API (then flip to true and verify with a manual Enrich on a cover-bearing
-    /// item — BACKLOG: re-enable vision enrichment). Text jobs (snippets, why-saved) are
-    /// unaffected.
-    nonisolated static let imageAttachmentSupported = false
+    /// History (full story: docs/memory/project_native_apple_app.md, build-harness section):
+    /// building with the Xcode 27 BETA 2 SDK against macOS 27 beta 3 (26A5378j) bound the
+    /// vision call to an attachment spelling the OS doesn't export → weak-symbol call →
+    /// SIGSEGV at EnrichmentPrompts.swift:261. The OS *does* ship image attachments
+    /// (`Prompt.Attachment` + `ImageAttachmentContent` per dyld_info), so this is SDK/OS
+    /// beta skew, not a missing feature. True requires building with a matched toolchain
+    /// (Xcode beta 3+ on macOS beta 3+). If the crash ever recurs after a toolchain/OS
+    /// drift, set false — text jobs (snippets/why-saved) are unaffected by this flag.
+    nonisolated static let imageAttachmentSupported = true
 
     nonisolated init(model: SystemLanguageModel = .default) {
         self.model = model
