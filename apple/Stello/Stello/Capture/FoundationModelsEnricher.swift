@@ -1,5 +1,4 @@
 import CoreGraphics
-import Darwin
 import Foundation
 import ImageIO
 import FoundationModels
@@ -9,16 +8,17 @@ struct FoundationModelsEnricher: Enricher {
 
     /// Whether the OS's FoundationModels actually contains the image `Attachment` API.
     ///
-    /// The Xcode 27 beta SDK declares it, but macOS 27.0 builds up to 26A5378j ship a
-    /// FoundationModels (2.0.59) without the symbol. Because the framework is weak-linked,
-    /// calling the missing initializer jumps to address 0 → SIGSEGV (crash 2026-07-11,
-    /// EnrichmentPrompts.swift:261). A thrown-error catch can't intercept that, so probe the
-    /// type's metadata accessor at runtime and skip the vision job when absent — text jobs
-    /// (snippets, why-saved) are unaffected. Fails safe: if the mangled name ever drifts,
-    /// vision stays disabled rather than crashing.
-    nonisolated static let imageAttachmentSupported: Bool =
-        dlsym(UnsafeMutableRawPointer(bitPattern: -2) /* RTLD_DEFAULT */,
-              "$s16FoundationModels10AttachmentVMa") != nil
+    /// HARD-DISABLED. The Xcode 27 beta SDK declares the API, but macOS 27.0 builds up to
+    /// 26A5378j ship a FoundationModels (2.0.59) where calling `Attachment(CGImage)` jumps
+    /// to address 0 → SIGSEGV (crashes 2026-07-11, EnrichmentPrompts.swift:261). A dlsym
+    /// probe of the type's metadata accessor was tried and is insufficient — the type
+    /// metadata resolves while the initializer symbol is still missing, so the gate passed
+    /// and the crash recurred. No reliable runtime probe exists for the specific
+    /// initializer's mangled name, so this stays `false` until a macOS build verifiably
+    /// ships the API (then flip to true and verify with a manual Enrich on a cover-bearing
+    /// item — BACKLOG: re-enable vision enrichment). Text jobs (snippets, why-saved) are
+    /// unaffected.
+    nonisolated static let imageAttachmentSupported = false
 
     nonisolated init(model: SystemLanguageModel = .default) {
         self.model = model

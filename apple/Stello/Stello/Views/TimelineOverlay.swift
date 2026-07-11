@@ -100,14 +100,18 @@ struct TimelineOverlay: View {
                 .animation(isInteraction || isSelected ? .easeOut(duration: 0.2) : nil, value: isHighlighted)
 
             if isInteraction {
+                // Top-aligned with the bar (not vertically centered), accent-filled to read
+                // as one object with the hovered bar; the hairline outline keeps the pill
+                // legible when a card behind it shares the accent hue.
                 Text(group.label)
                     .font(.karst(size: 11, weight: .medium))
-                    .foregroundStyle(theme.textPrimary)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(theme.backgroundSubtle, in: Capsule())
+                    .background(theme.accentColor, in: Capsule())
+                    .overlay(Capsule().stroke(.white.opacity(0.45), lineWidth: 0.5))
                     .fixedSize()
-                    .offset(x: TimelineMetrics.barWidth + 6, y: max(0, layout.height / 2 - 12))
+                    .offset(x: TimelineMetrics.barWidth + 6, y: 0)
                     .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .move(edge: .leading)))
             }
