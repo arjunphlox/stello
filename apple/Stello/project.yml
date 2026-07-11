@@ -41,7 +41,11 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: Stello
         OTHER_LDFLAGS:
           - "$(inherited)"
-          - "-framework FoundationModels"
+          # weak_framework: FoundationModels symbols resolve lazily, so the app
+          # launches on systems where the framework/symbols are absent or older
+          # than the build SDK (beta OS skew) — the @available + model.availability
+          # guards then degrade to the rule fallback instead of a dyld abort.
+          - "-weak_framework FoundationModels"
         TARGETED_DEVICE_FAMILY: "1,2,7"
         PRODUCT_BUNDLE_IDENTIFIER: com.phloxpage.Stello
         PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]: com.phloxpage.Stello

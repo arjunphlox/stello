@@ -649,7 +649,7 @@
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
-					"-framework FoundationModels",
+					"-weak_framework FoundationModels",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.phloxpage.Stello;
@@ -933,7 +933,7 @@
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
-					"-framework FoundationModels",
+					"-weak_framework FoundationModels",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.phloxpage.Stello;
 				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.phloxpage.Stello;
