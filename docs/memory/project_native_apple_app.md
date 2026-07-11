@@ -20,6 +20,7 @@ Stello's native Apple app lives at `apple/Stello/` — a SwiftUI multiplatform t
 - **CLI test:** `xcodebuild -project apple/Stello/Stello.xcodeproj -scheme Stello -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` (99 tests, unsigned iOS 27 sim)
 - **Model routing:** Composer 2.5 executes building; Opus only orchestrates/reviews — Opus-as-builder caused UI drift
 - **macOS screenshots:** use `open -g` (non-foreground) to avoid focus-stealing during visual verification
+- **Beta SDK/OS symbol skew (2026-07-11):** Xcode 27 beta's FoundationModels SDK declares APIs (image `Attachment`) the installed macOS 27.0 (26A5378j, framework 2.0.59) doesn't ship. Strong `-framework` linking → dyld abort at launch (`__abort_with_payload`); after switching to `-weak_framework`, *calling* the missing symbol jumps to pc=0x0 (SIGSEGV — a `catch` cannot intercept this). Pattern: weak-link availability-gated frameworks in `OTHER_LDFLAGS` AND runtime-probe risky symbols via `dlsym(RTLD_DEFAULT, mangledName)` before calling (see `FoundationModelsEnricher.imageAttachmentSupported`). Vision enrichment is symbol-gated until an OS build ships the Attachment API; text jobs (snippets/why-saved) unaffected. Diagnose launch/dyld issues by running the binary directly: `<app>.app/Contents/MacOS/<name>` in Terminal prints the full dyld/crash reason.
 
 ## macOS header pattern (Sketch reference)
 
