@@ -75,9 +75,20 @@ enum EnrichmentService {
         var refetchError: String? = nil
         if force, let sourceURLString = item.sourceURL, let url = URL(string: sourceURLString) {
             if let page = await CaptureService.fetchPage(url: url) {
-                if !item.hasRenderableCover,
+                // A seed/placeholder gradient (source "generated") is renderable but not a
+                // REAL cover — treat it as upgradable, else refetch never fires for entity
+                // items that shipped with generated covers.
+                let hasRealCover = (item.images ?? []).contains {
+                    $0.hasRenderableCoverData && $0.source != "generated"
+                }
+                if !hasRealCover,
                    let imageURL = page.og.imageURL,
                    let (data, w, h) = await CaptureService.downloadImage(url: imageURL) {
+                    // Remove placeholder covers so the real one wins cover selection
+                    // outright (two isPrimary rows would make selection order-dependent).
+                    for placeholder in (item.images ?? []) where placeholder.source == "generated" {
+                        context.delete(placeholder)
+                    }
                     let image = ItemImage(data: data, source: "og", isPrimary: true, width: w, height: h)
                     context.insert(image)
                     image.item = item
