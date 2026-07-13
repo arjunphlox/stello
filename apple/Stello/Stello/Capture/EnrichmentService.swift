@@ -74,6 +74,7 @@ enum EnrichmentService {
         // must not hit the network beyond what capture already did.
         var refetchError: String? = nil
         if force, let sourceURLString = item.sourceURL, let url = URL(string: sourceURLString) {
+            print("[refetch] \(item.slug): fetching \(url.absoluteString)")
             if let page = await CaptureService.fetchPage(url: url) {
                 // A seed/placeholder gradient (source "generated") is renderable but not a
                 // REAL cover — treat it as upgradable, else refetch never fires for entity
@@ -81,25 +82,36 @@ enum EnrichmentService {
                 let hasRealCover = (item.images ?? []).contains {
                     $0.hasRenderableCoverData && $0.source != "generated"
                 }
-                if !hasRealCover,
-                   let imageURL = page.og.imageURL,
-                   let (data, w, h) = await CaptureService.downloadImage(url: imageURL) {
-                    // Remove placeholder covers so the real one wins cover selection
-                    // outright (two isPrimary rows would make selection order-dependent).
-                    for placeholder in (item.images ?? []) where placeholder.source == "generated" {
-                        context.delete(placeholder)
+                let imageSources = (item.images ?? []).map {
+                    "\($0.source)/primary:\($0.isPrimary)/renderable:\($0.hasRenderableCoverData)"
+                }
+                print("[refetch] \(item.slug): hasRealCover=\(hasRealCover) images=[\(imageSources.joined(separator: ", "))] ogImage=\(page.og.imageURL?.absoluteString ?? "nil")")
+                if !hasRealCover, let imageURL = page.og.imageURL {
+                    if let (data, w, h) = await CaptureService.downloadImage(url: imageURL) {
+                        print("[refetch] \(item.slug): downloaded \(data.count) bytes (\(w)x\(h)) — storing as cover")
+                        // Remove placeholder covers so the real one wins cover selection
+                        // outright (two isPrimary rows would make selection order-dependent).
+                        for placeholder in (item.images ?? []) where placeholder.source == "generated" {
+                            context.delete(placeholder)
+                        }
+                        let image = ItemImage(data: data, source: "og", isPrimary: true, width: w, height: h)
+                        context.insert(image)
+                        image.item = item
+                    } else {
+                        print("[refetch] \(item.slug): image download FAILED (nil or <500 bytes) for \(imageURL.absoluteString)")
                     }
-                    let image = ItemImage(data: data, source: "og", isPrimary: true, width: w, height: h)
-                    context.insert(image)
-                    image.item = item
                 }
                 if let extracted = CaptureService.extractText(html: page.html), !extracted.isEmpty {
+                    print("[refetch] \(item.slug): extractedText \(extracted.count) chars")
                     item.extractedText = extracted
                     item.updatedAt = .now
                 }
             } else {
+                print("[refetch] \(item.slug): page fetch FAILED")
                 refetchError = "page re-fetch failed: unable to fetch page"
             }
+        } else if force {
+            print("[refetch] \(item.slug): skipped — sourceURL=\(item.sourceURL ?? "nil")")
         }
 
         do {
