@@ -6,18 +6,38 @@ in a real failure: enriching a Spotify album link produced junk (shell-page inst
 as snippets, no cover art, irrelevant why-saved) because platform pages are bot-gated app
 shells with no prose — generic HTML fetching is structurally the wrong tool for them.
 
-## Ground truth (verified 2026-07-16)
+## Ground truth (verified 2026-07-16 against 10 real links: Spotify album, Apple Music
+## playlist/track×2/artist, youtu.be ×3, music.youtube ×2)
 
-- `open.spotify.com/album/<id>` served to a non-browser client: **6KB stub**, no og:image,
-  no JSON-LD. Scraping Spotify is a dead end.
-- `https://open.spotify.com/oembed?url=<page-url>`: **open, no auth, no bot-wall** → exact
-  `title`, `thumbnail_url` (300×300 album art on Spotify's CDN), embed `iframe_url`,
-  `provider_name`. This is the extraction backbone.
-- Other platforms: SoundCloud + YouTube have official oEmbed; Bandcamp and Apple Music serve
-  real og:/JSON-LD (`MusicAlbum`) to normal fetches. iTunes Search API
-  (`itunes.apple.com/search`, open, no auth) resolves artist+album → year, genre, label,
-  high-res artwork; MusicBrainz (open, rate-limited) adds tracklists/relationships. These
-  open APIs are the educator pillar's first real internet connections.
+**Platform extraction matrix:**
+
+| Platform | Direct page fetch | oEmbed | What each yields |
+|---|---|---|---|
+| **Apple Music** | ✅ full page, bot-friendly | n/a | `og:type` gives exact subtype (`music.playlist`/`music.song`/`music.musician`); 1200×630 artwork; JSON-LD: `MusicAlbum`, `MusicComposition` (composer), `MusicGroup` (artist), `MusicRecording`s (artist pages), `AudioObject` (30s preview URLs). Playlist pages carry curator ("Focus Zone **by Arjun Phlox**"). Track URLs encode album+track ids (`/album/<id>?i=<trackId>`). Region in path (`/in/`). |
+| **Spotify** | ❌ 6KB bot-gated stub | ✅ open | title, 300×300 art, embed iframe. Nothing deeper without the credentialed API — cross-look up via iTunes Search instead. |
+| **YouTube / YT Music** | ⚠️ unreliable for non-browser clients (consent/shell variants, no og) | ✅ open, covers music.youtube URLs too | title, channel (`author_name`), 480×360 thumb (`maxresdefault.jpg` predictable at `i.ytimg.com/vi/<id>/maxresdefault.jpg`), embed. YT Music artist = channel minus `" - Topic"` suffix (auto-generated artist channels). |
+
+**Backbone rule:** oEmbed for Spotify/YouTube; direct fetch + JSON-LD for Apple Music;
+iTunes Search API (open, no auth) as the cross-platform resolver (artist+title → year,
+genre, label, hi-res art); MusicBrainz later for tracklists/relationships.
+
+**The YouTube title problem — first legitimate kind-dispatched text-AI job:** raw titles are
+packed compounds: "Zara Larsson - How Deep Is Your Love (Calvin Harris, Disciples Cover)
+(Live) | Spotify Live Room", "Thassadiya - Video Song | Maa Inti Bangaaram | Samantha |
+Chinmayi | … | Santhosh Narayanan" (Indian film-music grammar: song | film | cast | singers |
+composer). Deterministic splitting gets ~70%; a small on-device @Generable job (raw title +
+channel → {artist, track, version/live/cover, film?}) normalizes the rest. This — not prose
+snippets — is what text AI is FOR on music items.
+
+**Classification nuance:** `music.youtube.com` → music, always. Plain `youtube.com`/
+`youtu.be` is music only on deterministic signals (channel ends `" - Topic"` or `"VEVO"`,
+title contains "Official Music Video"/"Video Song"/"Official Audio", `og:video:tag` music
+markers when the page cooperates); otherwise stay `link` — conservative, per the classifier
+rule.
+
+**Playlists are palate artifacts:** a saved playlist ("Focus Zone by Arjun Phlox" — the
+user's own) carries curator identity; own-playlists are first-party taste signal (ties to
+Axis 9.1 multiple-palates) and deserve `curator: EntityRef` + `isOwnPlaylist`.
 
 ## Classification (deterministic, capture-time)
 
@@ -50,6 +70,18 @@ Subtype from URL path (album/track/playlist/artist). Zero AI needed.
 **Music-specific why-saved vocabulary** (replaces the generic design suggestions):
 `focus-music`, `studio-playlist`, `reference-ambience`, `sleeve-design-reference`,
 `artist-reference`, `project-soundtrack`. Never `color-contrast-study` on an album.
+
+## Where the extraction line is drawn (the 70–80% principle)
+
+Stello is not a mirror of the platform page — the link exists for deep-dive; Stello holds the
+*vetted, connected* layer the web can't aggregate. In scope: identity (title/artist/subtype/
+edition), artwork, year, genre, label, duration, tracklist (albums), curator (playlists),
+film/context (film-music grammar), preview/embed URLs, mood mapping into the shared tag
+facet, artist EntityRefs. **Out of scope, deliberately:** play counts, comments, likes,
+lyrics (rights + bulk), the artist's full catalog, pricing/offers, recommendations, video
+files — that's the platform's live layer, one click away. The test for any field: does it
+make the item findable, connectable, or teachable inside Stello? If it's only impressive on
+the platform, it stays on the platform.
 
 ## What music items must NOT run
 
