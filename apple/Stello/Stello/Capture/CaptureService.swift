@@ -587,7 +587,12 @@ enum CaptureService {
             }
 
         case "youtube", "youtube-music":
-            let response = youTubeOEmbed ?? (await fetchOEmbed(youtubeOEmbedURL(for: sourceURL)))
+            // `??`'s right operand is an autoclosure, which can't contain `await` — expand
+            // the fallback into an explicit branch instead.
+            var response = youTubeOEmbed
+            if response == nil {
+                response = await fetchOEmbed(youtubeOEmbedURL(for: sourceURL))
+            }
             if let response {
                 rawTitle = response.title ?? rawTitle
                 meta.embedURL = embedURL(from: response)
@@ -812,7 +817,7 @@ enum CaptureService {
         return []
     }
 
-    private static func parseISO8601MusicDuration(_ s: String) -> Int? {
+    nonisolated private static func parseISO8601MusicDuration(_ s: String) -> Int? {
         guard s.hasPrefix("PT") else { return nil }
         var seconds = 0
         var buffer = ""
