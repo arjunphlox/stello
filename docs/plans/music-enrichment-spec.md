@@ -17,9 +17,26 @@ shells with no prose — generic HTML fetching is structurally the wrong tool fo
 | **Spotify** | ❌ 6KB bot-gated stub | ✅ open | title, 300×300 art, embed iframe. Nothing deeper without the credentialed API — cross-look up via iTunes Search instead. |
 | **YouTube / YT Music** | ⚠️ unreliable for non-browser clients (consent/shell variants, no og) | ✅ open, covers music.youtube URLs too | title, channel (`author_name`), 480×360 thumb (`maxresdefault.jpg` predictable at `i.ytimg.com/vi/<id>/maxresdefault.jpg`), embed. YT Music artist = channel minus `" - Topic"` suffix (auto-generated artist channels). |
 
-**Backbone rule:** oEmbed for Spotify/YouTube; direct fetch + JSON-LD for Apple Music;
-iTunes Search API (open, no auth) as the cross-platform resolver (artist+title → year,
-genre, label, hi-res art); MusicBrainz later for tracklists/relationships.
+**Second-wave probe (2026-07-16, scouted: Bandcamp, SoundCloud, Deezer, Tidal, Mixcloud,
+Amazon Music, Last.fm):**
+
+| Platform | Verdict |
+|---|---|
+| **Deezer** | ⭐ Best-in-class: full page fetch works (`og:type music.album`, 500px cover) AND a completely open JSON API (`api.deezer.com/album/<id>`, `/search?q=` — no auth) returning **UPC**, genres, tracklist, release date, artist, cover sizes. |
+| **Tidal** | Official oEmbed (`oembed.tidal.com/?url=`) works → embed + metadata. Embed-tier support. |
+| **Mixcloud** | Official oEmbed works fully (title, author, 600px image) — covers DJ mixes/radio shows, a distinct designer-relevant save type. |
+| **Bandcamp** | Bot-gated from datacenter IPs; known to serve rich og + JSON-LD `MusicAlbum` to residential/browser clients — expect the app's on-device fetch to work; verify on-device before promising. |
+| **SoundCloud** | Official oEmbed documented; probe from datacenter inconclusive — verify on-device. |
+| **Amazon Music** | ❌ Bot-walled shell (11KB), no open oEmbed → stays plain `link`, out of scope. |
+| **Last.fm** | Not a save target (og:type `website`, noisy titles); its API needs a key. Skip as platform; optional future resolver. |
+
+**Backbone rule (updated):** direct fetch + JSON-LD for Apple Music and Deezer; oEmbed for
+Spotify/YouTube/Tidal/Mixcloud (+ SoundCloud/Bandcamp pending on-device verification).
+**Cross-platform resolver: Deezer's open API first** (one call yields UPC — a true
+cross-platform album identifier — plus genres/tracklist/release date), iTunes Search as
+fallback; MusicBrainz later for deep relationships. A UPC on the item means the same album
+saved from Spotify and Apple Music can be recognized as ONE work — entity resolution across
+platforms, which no platform will ever do for you.
 
 **The YouTube title problem — first legitimate kind-dispatched text-AI job:** raw titles are
 packed compounds: "Zara Larsson - How Deep Is Your Love (Calvin Harris, Disciples Cover)
