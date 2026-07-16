@@ -220,7 +220,12 @@ enum CaptureService {
             forHTTPHeaderField: "User-Agent"
         )
         guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
-        let slice = data.prefix(50_000)
+        // Read the (nearly) whole document, not a 50KB head-slice: real pages put og:image
+        // deep — measured 2026-07-16: midday.ai at byte ~238k of 986k, fonts.google.com at
+        // ~196k of 198k — and a mid-tag truncation also leaves <style>/<script> blocks
+        // unterminated, which defeats extractText's stripping (CSS leaked into snippets).
+        // 2MB bounds memory; beyond that a page is not going to yield better metadata.
+        let slice = data.prefix(2_000_000)
         guard let html = String(data: slice, encoding: .utf8)
                       ?? String(data: slice, encoding: .isoLatin1) else { return nil }
         return PageFetchResult(html: html, og: parseOG(html: html, baseURL: url))
@@ -277,16 +282,35 @@ enum CaptureService {
     static func extractText(html: String) -> String? {
         guard !html.isEmpty else { return nil }
         var text = html
-        text = text.replacingOccurrences(
-            of: #"<script[^>]*>[\s\S]*?</script>"#, with: " ", options: [.regularExpression, .caseInsensitive]
-        )
-        text = text.replacingOccurrences(
-            of: #"<style[^>]*>[\s\S]*?</style>"#, with: " ", options: [.regularExpression, .caseInsensitive]
-        )
+        // Prefer body content: everything before <body> is metadata/CSS/JS, never prose.
+        if let bodyRange = text.range(of: "<body", options: .caseInsensitive) {
+            text = String(text[bodyRange.lowerBound...])
+        }
+        // Strip container blocks whose CONTENT is never prose. The trailing `|$` variant
+        // also swallows unterminated blocks (a truncated page once leaked raw Tailwind CSS
+        // into snippets because its </style> was cut off).
+        for tag in ["script", "style", "noscript", "svg", "template"] {
+            text = text.replacingOccurrences(
+                of: "<\(tag)[^>]*>[\\s\\S]*?(</\(tag)>|$)",
+                with: " ", options: [.regularExpression, .caseInsensitive]
+            )
+        }
+        text = text.replacingOccurrences(of: #"<!--[\s\S]*?-->"#, with: " ", options: .regularExpression)
         text = text.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
         text = decodeBasicEntities(text)
+        // Scrub CSS/JS residue that survives tag-stripping (custom properties, rule bodies).
+        text = text.replacingOccurrences(
+            of: #"--[A-Za-z0-9_-]+\s*:[^;{}]{0,120};?"#, with: " ", options: .regularExpression
+        )
         text = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Word-level prose filter: drop tokens that read as code (braces/semicolons/
+        // assignments) or as un-prose-like runs (very long unbroken identifiers/URLs).
+        let words = text.split(separator: " ").filter { word in
+            word.count <= 40 && !word.contains("{") && !word.contains("}")
+                && !word.contains(";") && !word.contains("=") && !word.hasPrefix("--")
+        }
+        text = words.joined(separator: " ")
         guard !text.isEmpty else { return nil }
         return String(text.prefix(4_000))
     }
