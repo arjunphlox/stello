@@ -92,6 +92,8 @@ struct CardSubcards: View {
                     if let meta = item.foundryMeta() { foundryCards(meta) }
                 case .place:
                     if let meta = item.placeMeta() { placeCards(meta) }
+                case .music:
+                    if let meta = item.musicMeta() { musicCards(meta) }
                 case .link:
                     EmptyView()
                 }
@@ -653,6 +655,58 @@ struct CardSubcards: View {
         ])
     }
 
+    // MARK: - Music
+
+    @ViewBuilder
+    private func musicCards(_ meta: MusicMeta) -> some View {
+        factsCard(title: "Music", rows: [
+            ("Type", meta.subtype?.capitalized),
+            ("Edition", meta.edition),
+            ("Year", meta.releaseYear),
+            ("Label", meta.label),
+            ("Film", meta.film),
+            ("Duration", musicDuration(meta.totalDurationSeconds)),
+        ])
+
+        refsCard(title: "Artists", refs: meta.artists)
+        if let curator = meta.curator {
+            refsCard(title: meta.isOwnPlaylist == true ? "Curated by (you)" : "Curated by", refs: [curator])
+        }
+        chipsCard(title: "Genres", chips: meta.genres)
+
+        if !meta.trackList.isEmpty {
+            SubCard(title: "Tracklist") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(meta.trackList.enumerated()), id: \.offset) { _, track in
+                        HStack {
+                            Text(track.name)
+                                .font(.karst(.callout))
+                                .foregroundStyle(theme.textPrimary)
+                            Spacer()
+                            if let duration = musicDuration(track.durationSeconds) {
+                                Text(duration)
+                                    .font(.karst(.caption))
+                                    .foregroundStyle(theme.textSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        factsCard(title: "Links", rows: [
+            ("Canonical", meta.canonicalURL),
+            ("Embed", meta.embedURL),
+        ])
+    }
+
+    private func musicDuration(_ seconds: Int?) -> String? {
+        guard let seconds, seconds > 0 else { return nil }
+        let minutes = seconds / 60
+        let remaining = seconds % 60
+        return String(format: "%d:%02d", minutes, remaining)
+    }
+
     // MARK: - Sub-card builders
 
     private func foundryDesignerRefs(from meta: TypefaceMeta) -> [EntityRef] {
@@ -1094,6 +1148,7 @@ extension Item {
         case .studio: return studioMeta() != nil
         case .foundry: return foundryMeta() != nil
         case .place: return placeMeta() != nil
+        case .music: return musicMeta() != nil
         case .link: return false
         }
     }

@@ -15,4 +15,8 @@ struct RuleBasedFallbackEnricher: Enricher, Sendable {
     ) async throws -> EnrichmentResult {
         EnrichmentResult(visionTags: [], snippets: [], whySavedSuggestions: [])
     }
+
+    nonisolated func enrichVisionOnly(coverImageData: Data?) async throws -> [VisionTagSpec] {
+        []
+    }
 }

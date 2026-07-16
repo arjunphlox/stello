@@ -378,4 +378,89 @@ nonisolated struct PageClassifier {
             || meta.mastodon != nil
             || meta.threads != nil
     }
+
+    // MARK: - Music (deterministic host / og:type rules only — extraction lives in CaptureService)
+
+    /// Known music-platform hosts → a stable platform label, matched against the already
+    /// www-stripped domain from `CaptureService.domain(from:)`. Bandcamp is a dot-suffix
+    /// match (`artist.bandcamp.com`); everything else is exact-or-subdomain, same convention
+    /// as `socialPlatform(for:)` above.
+    nonisolated static func musicPlatform(forHost host: String) -> String? {
+        let h = host.lowercased()
+        func matches(_ root: String) -> Bool { h == root || h.hasSuffix("." + root) }
+
+        if matches("open.spotify.com") { return "spotify" }
+        if matches("music.apple.com") { return "apple-music" }
+        if matches("bandcamp.com") { return "bandcamp" }
+        if matches("soundcloud.com") { return "soundcloud" }
+        if matches("music.youtube.com") { return "youtube-music" }
+        if matches("tidal.com") { return "tidal" }
+        if matches("mixcloud.com") { return "mixcloud" }
+        if matches("deezer.com") { return "deezer" }
+        return nil
+    }
+
+    /// Plain `youtube.com`/`youtu.be` — NOT `music.youtube.com`, matched above — is only a
+    /// music CANDIDATE. `isMusicYouTubeSignal` must confirm it via oEmbed author/title before
+    /// it counts; a generic vlog upload must stay `link`.
+    nonisolated static func isPlainYouTubeHost(_ host: String) -> Bool {
+        let h = host.lowercased()
+        return h == "youtube.com" || h.hasSuffix(".youtube.com") || h == "youtu.be"
+    }
+
+    nonisolated private static let musicOGTypes: Set<String> = [
+        "music.album", "music.song", "music.playlist", "music.musician",
+    ]
+
+    nonisolated static func isMusicOGType(_ ogType: String?) -> Bool {
+        guard let t = ogType?.lowercased() else { return false }
+        return musicOGTypes.contains(t)
+    }
+
+    /// Conservative promotion rule for plain YouTube: an auto-generated artist channel
+    /// (`"<Artist> - Topic"`), a VEVO channel, or a title explicitly marked as a music upload.
+    nonisolated static func isMusicYouTubeSignal(authorName: String?, title: String?) -> Bool {
+        if let authorName {
+            let a = authorName.lowercased()
+            if a.hasSuffix(" - topic") || a.contains("vevo") { return true }
+        }
+        if let title {
+            let t = title.lowercased()
+            if t.contains("official music video") || t.contains("official audio") || t.contains("video song") {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Subtype (album | track | playlist | artist | mix) from og:type first, then URL path
+    /// conventions. Falls back to "track" — the safest default for a single saved song.
+    nonisolated static func musicSubtype(url: URL, ogType: String?, platform: String?) -> String {
+        if platform == "mixcloud" { return "mix" }
+
+        if let t = ogType?.lowercased() {
+            switch t {
+            case "music.playlist": return "playlist"
+            case "music.musician": return "artist"
+            case "music.album": return "album"
+            case "music.song": return "track"
+            default: break
+            }
+        }
+
+        let path = url.path.lowercased()
+        let query = url.query?.lowercased() ?? ""
+
+        if path.contains("/playlist/") || path.contains("pl.u-") || path.contains("/sets/") { return "playlist" }
+        if path.contains("/artist/") { return "artist" }
+        if path.contains("/album/") { return query.contains("i=") ? "track" : "album" }
+        if path.contains("/track/") { return "track" }
+        return "track"
+    }
+
+    /// Exposes the deterministic JSON-LD node scan for kind-specific extractors (music) that
+    /// need typed nodes without duplicating the parsing regex — flattened type list per node.
+    nonisolated static func jsonLDNodes(from html: String) -> [(types: [String], dict: [String: Any])] {
+        jsonLDTypedNodes(from: html).map { (nodeTypes($0.dict), $0.dict) }
+    }
 }

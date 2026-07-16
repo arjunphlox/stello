@@ -199,6 +199,38 @@ struct WhySavedSet: Equatable, Sendable {
     }
 }
 
+// MARK: - 4. Music title parse (kind-dispatched — YouTube-sourced music only)
+
+@available(macOS 27.0, iOS 27.0, *)
+@Generable(description: "Parsed artist/track/version/film from a compound YouTube music upload title.")
+struct MusicTitleParse: Equatable, Sendable {
+
+    @Guide(description: """
+    The performing artist's name, ONLY when the title states one clearly in the Western \
+    "Artist - Track" convention. Leave nil for Indian film-music titles, which name cast, \
+    singers, and composer separately rather than a single "artist".
+    """)
+    var artist: String?
+
+    @Guide(description: """
+    The clean song/track title with descriptors stripped — drop suffixes like "Official \
+    Video", "Video Song", "Official Audio", "Lyrical Video".
+    """)
+    var track: String?
+
+    @Guide(description: """
+    The version/context the title marks, if any: live, cover, remaster, acoustic, remix. \
+    Nil when the title doesn't mark one.
+    """)
+    var version: String?
+
+    @Guide(description: """
+    The film/movie this song is from — ONLY when the title follows Indian film-music grammar \
+    ("song title | film | cast | singers | composer"). Nil for titles with no film context.
+    """)
+    var film: String?
+}
+
 // MARK: - Instruction strings (each carries ONE worked exemplar)
 
 @available(macOS 27.0, iOS 27.0, *)
@@ -266,6 +298,30 @@ enum EnrichmentInstructions {
     Note: each is hyphenated, lowercase, ≤4 words, and names something reusable a designer \
     would search for. Do the same for the provided text.
     """
+
+    static let musicTitleParse = """
+    You are Stello's music-title parser. YouTube uploads pack multiple facts into one title \
+    string; pull out the artist, clean track title, version, and (for Indian film music) the \
+    film.
+
+    Rules:
+    • "Artist - Track" is the Western convention: everything before " - " is the artist.
+    • Indian film-music titles follow "Track - Video Song | Film | Cast | Singers | Composer" \
+    — the pipe-separated segments are metadata, not an artist name; the first pipe segment \
+    is the film, and there is no single "artist" (cast/singers/composer are separate people).
+    • version is live/cover/remaster/acoustic/remix if the title marks one, else nil.
+    • Never invent a value — leave a field nil if the title doesn't support it.
+
+    Worked example — "Thassadiya - Video Song | Maa Inti Bangaaram | Samantha | Chinmayi | \
+    Punya | Santhosh Narayanan" you would return:
+      artist: nil
+      track: Thassadiya
+      version: nil
+      film: Maa Inti Bangaaram
+    Note: "Video Song" is a descriptor, not the track name or an artist; "Maa Inti Bangaaram" \
+    is the film, and the cast/singer/composer names are dropped (not modeled here). Parse the \
+    provided title the same way.
+    """
 }
 
 // MARK: - Runner — session factories + typed call sites
@@ -298,5 +354,13 @@ enum EnrichmentRunner {
             generating: WhySavedSet.self
         )
         return response.content.normalized().reasons
+    }
+
+    static func enrichMusicTitle(rawTitle: String, channel: String?) async throws -> MusicTitleParse {
+        let session = LanguageModelSession(instructions: EnrichmentInstructions.musicTitleParse)
+        var prompt = "Title: \(rawTitle)"
+        if let channel, !channel.isEmpty { prompt += "\nChannel: \(channel)" }
+        let response = try await session.respond(to: prompt, generating: MusicTitleParse.self)
+        return response.content
     }
 }

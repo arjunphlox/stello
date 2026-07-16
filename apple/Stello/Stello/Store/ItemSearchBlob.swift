@@ -60,6 +60,8 @@ enum ItemSearchBlob {
             return item.foundryMeta()?.searchTerms() ?? []
         case ItemKind.place.rawValue:
             return item.placeMeta()?.searchTerms() ?? []
+        case ItemKind.music.rawValue:
+            return item.musicMeta()?.searchTerms() ?? []
         default:
             return []
         }
@@ -258,6 +260,24 @@ extension PlaceMeta {
         var parts: [String] = []
         ItemSearchBlob.appendOptional(city, to: &parts)
         ItemSearchBlob.appendOptional(country, to: &parts)
+        return parts
+    }
+}
+
+extension MusicMeta {
+    func searchTerms() -> [String] {
+        var parts: [String] = []
+        ItemSearchBlob.appendOptional(cleanTitle, to: &parts)
+        ItemSearchBlob.appendOptional(edition, to: &parts)
+        ItemSearchBlob.appendEntityRefs(artists, to: &parts)
+        ItemSearchBlob.appendEntityRef(curator, to: &parts)
+        ItemSearchBlob.appendOptional(platform, to: &parts)
+        ItemSearchBlob.appendOptional(releaseYear, to: &parts)
+        ItemSearchBlob.appendOptional(label, to: &parts)
+        ItemSearchBlob.appendStrings(genres, to: &parts)
+        ItemSearchBlob.appendStrings(trackList.map(\.name), to: &parts)
+        ItemSearchBlob.appendOptional(upc, to: &parts)
+        ItemSearchBlob.appendOptional(film, to: &parts)
         return parts
     }
 }

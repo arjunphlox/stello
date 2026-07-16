@@ -41,4 +41,8 @@ protocol Enricher {
         coverImageData: Data?,
         pageText: String?
     ) async throws -> EnrichmentResult
+
+    /// Vision-only entry point for kind-dispatched enrichment (music covers) that must never
+    /// trigger the generic snippets/why-saved text jobs alongside it.
+    func enrichVisionOnly(coverImageData: Data?) async throws -> [VisionTagSpec]
 }

@@ -93,6 +93,24 @@ struct FoundationModelsEnricher: Enricher {
         )
     }
 
+    /// Vision-only pass — used by the music enrichment pipeline, which never runs the
+    /// generic snippets/why-saved jobs (there is no prose on a platform shell page).
+    func enrichVisionOnly(coverImageData: Data?) async throws -> [VisionTagSpec] {
+        guard isAvailable else { throw EnricherError.unavailable }
+        guard Self.imageAttachmentSupported,
+              let coverImageData, let coverCGImage = Self.cgImage(from: coverImageData) else {
+            return []
+        }
+        let tags = try await EnrichmentRunner.enrichVision(cover: coverCGImage)
+        return Self.mapVisionTags(tags)
+    }
+
+    /// Refines the rule-based YouTube title split for compound/film-music titles.
+    func enrichMusicTitle(rawTitle: String, channel: String?) async throws -> MusicTitleParse {
+        guard isAvailable else { throw EnricherError.unavailable }
+        return try await EnrichmentRunner.enrichMusicTitle(rawTitle: rawTitle, channel: channel)
+    }
+
     // MARK: - Mapping
 
     static func mapVisionTags(_ tags: VisionTags) -> [VisionTagSpec] {
