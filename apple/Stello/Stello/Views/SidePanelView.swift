@@ -7,6 +7,7 @@ struct SidePanelView: View {
     let selectedItem: Item?
     let allItems: [Item]
     @Binding var selectedTagNames: Set<String>
+    @Binding var needsReviewOnly: Bool
     var onClose: () -> Void
     var onSelectItem: ((Item) -> Void)? = nil
 
@@ -115,7 +116,7 @@ struct SidePanelView: View {
                     .foregroundStyle(theme.textSecondary)
             }
         case .filters:
-            TagFilterContent(allItems: allItems, selectedTagNames: $selectedTagNames)
+            TagFilterContent(allItems: allItems, selectedTagNames: $selectedTagNames, needsReviewOnly: $needsReviewOnly)
         case .import:
             CaptureContent(onComplete: onClose)
         case .settings:

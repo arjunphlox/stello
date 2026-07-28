@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var selectedItem: Item?
     @State private var panelContent: SidePanelContent = .none
     @State private var selectedTagNames: Set<String> = []
+    @State private var needsReviewOnly = false
     @State private var scrollOffset: CGFloat = 0
     @State private var isResizingPanel = false
     @State private var isDropTargeted = false
@@ -53,6 +54,15 @@ struct ContentView: View {
         }
         .onChange(of: allItems.count) { _, _ in
             applyScreenshotLaunchState()
+        }
+        .onChange(of: selectedItem) { oldValue, _ in
+            // Viewing an item counts as reviewing it. This fires on every path that stops
+            // viewing `oldValue`: switching selection to another item, closing the panel
+            // (selectedItem → nil), opening a different tool panel while an item was open
+            // (togglePanel nils selectedItem), and the iPhone sheet being dismissed (SwiftUI
+            // nils the `.sheet(item:)` binding). Guarded on `needsReview` so already-reviewed
+            // items don't take a gratuitous `updatedAt` bump.
+            markPreviouslyViewedItemReviewed(oldValue)
         }
         .onDrop(of: DropImportService.windowDropTypes, isTargeted: $isDropTargeted) { providers in
             DropImportService.importAsNewItem(
@@ -191,6 +201,7 @@ struct ContentView: View {
                         scrollOffset: $scrollOffset,
                         catalogItems: allItems,
                         selectedTagNames: $selectedTagNames,
+                        needsReviewOnly: $needsReviewOnly,
                         selectedItem: selectedItem,
                         panelContent: panelContent,
                         onCardTap: handleCardTap,
@@ -220,6 +231,7 @@ struct ContentView: View {
                         selectedItem: selectedItem,
                         allItems: allItems,
                         selectedTagNames: $selectedTagNames,
+                        needsReviewOnly: $needsReviewOnly,
                         onClose: closePanel,
                         onSelectItem: { item in
                             selectedItem = item
@@ -261,6 +273,7 @@ struct ContentView: View {
             MasonryGridView(
                 catalogItems: allItems,
                 selectedTagNames: $selectedTagNames,
+                needsReviewOnly: $needsReviewOnly,
                 onCardTap: { selectedItem = $0 },
                 isDropTargeted: isDropTargeted
             )
@@ -302,6 +315,14 @@ struct ContentView: View {
     private func closePanel() {
         panelContent = .none
         selectedItem = nil
+    }
+
+    /// Clears the review nag for an item the user just stopped viewing (see the
+    /// `onChange(of: selectedItem)` hook above). Idempotent — safe to call even when the
+    /// item was already reviewed or `nil`.
+    private func markPreviouslyViewedItemReviewed(_ item: Item?) {
+        guard let item, item.needsReview else { return }
+        try? AwaitingReviewFilter.markReviewed(for: item, context: context)
     }
 
     private var isMac: Bool {

@@ -1,10 +1,8 @@
 import Foundation
 import SwiftData
 
-/// Items eligible for the horizontal "Awaiting review" strip above the grid.
+/// Items eligible for review: drives the on-card review badge (`ItemCardView.reviewBadge`).
 enum AwaitingReviewFilter {
-    static let maxVisibleCount = 8
-
     /// Enrichment has started (`enrichmentStatus` is not `pending`) and the item still needs review.
     /// Once enrichment has reached a suggestion-producing state, an empty suggestion list means
     /// there's nothing left to review, so the item is excluded even if `needsReview` wasn't cleared.
@@ -14,26 +12,23 @@ enum AwaitingReviewFilter {
         return suggestionCount(for: item) > 0
     }
 
-    /// Newest first, capped at `maxVisibleCount`.
-    static func items(from all: [Item]) -> [Item] {
-        all.filter { isEligible($0) }
-            .sorted { $0.addedAt > $1.addedAt }
-            .prefix(maxVisibleCount)
-            .map { $0 }
-    }
-
     static func suggestionCount(for item: Item) -> Int {
         EnrichmentService.decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON).count
-    }
-
-    static func suggestionsLabel(for item: Item) -> String {
-        let count = suggestionCount(for: item)
-        return count == 1 ? "1 suggestion" : "\(count) suggestions"
     }
 
     static func dismissReview(for item: Item, context: ModelContext) throws {
         item.needsReview = false
         item.updatedAt = .now
         try context.save()
+    }
+
+    /// Alias for `dismissReview` used at "user stopped viewing this item" call sites — panel
+    /// close, selection switch, sheet/push dismissal. Same mutation; named for readability at
+    /// those sites, which are clearing the nag state because viewing counts as reviewing, not
+    /// because the user explicitly dismissed a suggestion. Callers should guard on
+    /// `item.needsReview` first so already-reviewed items don't take a gratuitous `updatedAt`
+    /// bump (which would also invalidate the search-blob cache) on every panel close.
+    static func markReviewed(for item: Item, context: ModelContext) throws {
+        try dismissReview(for: item, context: context)
     }
 }

@@ -1,5 +1,17 @@
 # Stello — Blue-Sky Possibilities for Designer Bookmarks
 
+## Status — 2026-07-06 (native-app era)
+
+Written for the web stack; since then the **native Apple app** (`apple/Stello`, SwiftUI iOS/iPadOS/macOS 27, local-first SwiftData + CloudKit, on-device Foundation Models enrichment) shipped its foundations and is now the primary implementation surface for most of this doc. Three facts change the feasibility math:
+
+1. **Local-first flips the cost of Axis 1/3/8.** Pure queries/aggregations over local data (revisit tracking, taste timeline, calendar resurfacing, palette view) need no API/migration/egress — they're SwiftData properties and in-process math.
+2. **On-device AI exists but is small and unverified.** `EnrichmentPrompts.swift` already runs vision tags + snippets + why-saved on-device (@Generable, ~3B model, small context window). Everything corpus-scale (vibe search 2.1, zeitgeist 3.3, synthesis 6.2) must be retrieval-then-rerank, and all AI-quality features are **gated on verifying live Apple Intelligence on a real device** (simulator can't — still pending).
+3. **The native app has a per-kind metadata schema this doc predates.** `Item.kind` (`typeface|website|individual|studio|foundry|place|link`) + `WebsiteMeta`/`IndividualMeta`/`FoundryMeta`… in `apple/Stello/Stello/Models/CardMetadata.swift` — structured fields for typography credits, socials, founders, location. Populated today only by the Optacos import; capture doesn't classify or fill it yet. Kind-specific capture (typed per-kind enrichment + typed "highlights" — the structured evolution of §2.3) is the planned direction; see `docs/plans/native-quick-wins-sprint.md`.
+
+Per-item status (native): **1.1 why-saved** — SHIPPED (PR #30): accept chips → intent tags @0.9, "Why saved" facet first in the filter sheet. **1.3 revisit tracking** — SHIPPED (PR #30): `lastOpenedAt`/`openCount`, session-debounced, identity-keyed so panel item-swaps count. **1.5 review strip** — SHIPPED (PR #30): needsReview-gated strip above the grid, self-clearing on full review. Plus (beyond this doc): full-text search over snippets/why-saved/per-kind metadata/bodyMarkdown, and deterministic kind classification + social/metadata extraction at capture (`PageClassifier`). **7.1 screenshot-native capture** — image paste/drop/Share-Extension capture shipped; source inference not. **7.3 artifact preservation** — local-first storage + "Download Full Item" zip shipped; rendered-page archive not. Everything else: not started.
+
+Also stale below (kept for the record): web code paths moved `api/*` → `src/routes/*` + `src/lib/*` in the Cloudflare migration, and enrichment now takes **one 1440×900 screenshot**, not three breakpoints (2026-05-20 decision).
+
 ## Context
 
 Stello already captures more signal than it surfaces. At ingest it harvests: weighted tags across 8 categories (format, domain, style, subject, tool, location, mood, color), vision-derived palettes, "why saved" reason candidates, snippet candidates, full-page screenshots at 3 breakpoints, and the raw HTML. Per item it also stores `added_at`, `analyzed_at`, `updated_at`, a transient `enrichment_candidates` bag, and a `needs_review` flag. What it does *not* do: track view/revisit behavior, compute cross-project overlaps, reason about time, or do anything with accumulated taste.
@@ -153,6 +165,59 @@ Full-screen one item, keyboard hjkl to navigate, instant tag/reason edits. Mymin
 
 ---
 
+## Axis 9 — What the sommelier frame reveals (added 2026-07-07)
+
+Derived from the positioning work (`docs/POSITIONING.md`, "trusted selector" personification): walking
+Stello through what a working sommelier/selector actually *does*, behavior by behavior, and keeping
+only what no axis above or BACKLOG item covers. Four consequential, eight supporting.
+
+### 9.1 Multiple palates — my taste vs. the client's (structural, do early)
+A sommelier never confuses their palate with the guest's. Stello has exactly one taste model: every
+save feeds the same aggregation. Agency reality breaks this — a week of pastel-corporate saves *for
+a client's brand world* pollutes your taste timeline and future self-portrait. Fix: project/client-
+scoped palates + "guest references" (corkage — items scoped to one project that never count toward
+the personal profile). Also quietly the best team feature (studio project-palette vs. each member's
+own). Retrofitting gets more expensive every month of accumulated data.
+
+### 9.2 The committed pick + rationale-always (service posture, constrains all Instrument features)
+Every planned surfacing returns a set (top-12 strip, cluster, grid). The sommelier's defining act is
+committing to ONE bottle with a stated reason. Stello has the data ("this one — returned to 4×, and
+the brief reads editorial like your saved reason"). Deeper: **every recommendation carries its
+reason, always** — the humility rule made mechanical (a stated rationale can be judged and overruled)
+and a real differentiator vs. black-box feeds. Candidate for a standalone service-conduct spec
+before fall (one pick · stated reason · prepared for use · defers to your palate).
+
+### 9.3 Served history — usage provenance (cellar book)
+Revisit tracking knows what you looked at; the cellar book knows what was *poured, when, for whom*.
+Record "served" events (project + date, hooked on export/copy/use actions) → most-served references,
+"served 3×, retire?", per-project provenance for teams, and the data feeding 9.1.
+
+### 9.4 Decanting — serve references in usable form
+Plans stop at showing the card. A served reference should arrive prepared: palette swatches ready to
+copy, identified font names, the highlight crop, the why-saved caption. Distinct from exports (5.1,
+end-of-research); this is at-the-moment-of-serving. The difference between a bookmark and an
+instrument.
+
+### 9.5–9.12 Supporting
+- **9.5 Tasting flights** — ritualized comparative viewing with a question attached: verticals (one
+  foundry/designer across your saves) and horizontals (project-priming set before starting).
+- **9.6 Drink-now vs. cellar** — aging by *nature*, not neglect: trend-bound vs. timeless saves;
+  changes recommendation copy ("use before everyone does" vs. "permanent library"). Complements 3.4.
+- **9.7 The working shelf** — by-the-glass list: a deliberately SMALL rotating "drawing from this
+  week" surface (revisits + active brief), menu-bar/widget candidate. All planned surfaces are
+  archive-sized.
+- **9.8 Taste vocabulary teaching** — the educator names your taste in words ("this is
+  'neo-grotesque'; you own twelve"); micro-glossary generated from your own corpus.
+- **9.9 Spaced repetition for taste** — blind-tasting mode: the archive quizzes you on itself (crop →
+  whose work? saved why?). Retrieval practice is how references move into a designer's head; nobody
+  has treated a library as something you train on.
+- **9.10 Collection gap analysis** — the somm buys for gaps: "deep on editorial, thin on motion —
+  and your pitches trend motion." Everything else analyzes what's there; this advises what's missing.
+- **9.11 Taste-stretching service** — "you always order the same thing; try this": occasional
+  off-center pour from your own never-revisited saves. 6.1 is a view you drive; this is served.
+- **9.12 Capture-time commentary** — intake tasting: "unusual for you — first brutalist-pastel in
+  your library." Enrichment describes the item; this describes the item *relative to you*.
+
 ## High-value highlights across all axes
 
 Picked on *behavioral impact* — how much each one changes the way a designer actually uses their own bookmarks — not on implementation size. Small-but-transformative features are called out alongside bigger ones.
@@ -233,12 +298,18 @@ Everything else fans out from these three.
 
 ## Critical files (for when any of this becomes a real plan)
 
-- Schema / columns to add: `scripts/schema.sql:35-65`
-- Tag generation (already shaped for reuse): `api/_lib/supabase.js:241-278`, `api/_lib/enrich-rules.js:12-150`
-- Vision enrichment (extendable to embeddings/crops): `api/enrich.js:59-120`, 313-398
-- Related-items graph (foundation for co-occurrence view): `app.js:401-432`
-- Panel curation UI (extend for annotation, walks, exports): `app.js:754-924`, `api/item-update.js:24-265`
-- Filter drawer (extend for reason facet, vibe search): `app.js:440-499`
+Native app (primary surface now):
+- Schema / models to extend: `apple/Stello/Stello/Models/Item.swift`, `Tag.swift`, `CardMetadata.swift` (per-kind metadata)
+- On-device enrichment (extendable to new @Generable jobs): `apple/Stello/Stello/Capture/EnrichmentPrompts.swift`, `EnrichmentService.swift`
+- Capture pipeline (kind classification, deterministic extraction): `apple/Stello/Stello/Capture/CaptureService.swift`, `RuleTagger.swift`
+- Search / filters (extend for facets, vibe search recall): `apple/Stello/Stello/Store/ItemFilter.swift`, `Views/TagFilterSheet.swift`
+- Detail/review UI (chips, highlights, review strip): `apple/Stello/Stello/Views/CardSubcards.swift`, `SidePanelContent.swift`, `MasonryGridView.swift`
+- Constants source of truth: `apple/BUILD_SPEC.md`
+
+Web app (post-Cloudflare-migration paths; the `api/*` refs above are historical):
+- Schema / columns to add: `scripts/schema.sql`
+- Tag generation: `src/lib/supabase.js`, enrichment: `src/routes/enrich.js`
+- Related-items graph: `app.js` (`relatedIndex`); panel curation: `app.js` + `src/routes/item-update.js`; filter drawer: `app.js`
 
 ## Verification (when any one of these lands)
 

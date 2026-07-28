@@ -11,6 +11,9 @@ final class Item {
     var author: String?
     var summary: String?
     var bodyMarkdown: String?
+    /// Readability-lite page text captured for AI enrichment + search — distinct from
+    /// `bodyMarkdown`, which is user-authored content rendered as a "Notes" card.
+    var extractedText: String?
     var status: String = "active"
     var needsReview: Bool = true
     var addedAt: Date = Date.now
@@ -48,6 +51,7 @@ final class Item {
         author: String? = nil,
         summary: String? = nil,
         bodyMarkdown: String? = nil,
+        extractedText: String? = nil,
         status: String = "active",
         needsReview: Bool = true,
         addedAt: Date = .now,
@@ -67,6 +71,7 @@ final class Item {
         self.author = author
         self.summary = summary
         self.bodyMarkdown = bodyMarkdown
+        self.extractedText = extractedText
         self.status = status
         self.needsReview = needsReview
         self.addedAt = addedAt

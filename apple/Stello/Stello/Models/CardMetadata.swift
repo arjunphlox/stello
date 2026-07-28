@@ -175,6 +175,37 @@ nonisolated struct PlaceMeta: Codable, Sendable {
     var country: String?
 }
 
+// MARK: - Music
+
+nonisolated struct MusicTrackEntry: Codable, Hashable, Sendable {
+    var name: String
+    var durationSeconds: Int?
+}
+
+nonisolated struct MusicMeta: Codable, Sendable {
+    /// album | track | playlist | artist | mix
+    var subtype: String?
+    /// The clean track/song/album title, descriptors stripped (e.g. "Official Video").
+    var cleanTitle: String?
+    /// A "(Remastered 2004)"-style suffix split off the raw title.
+    var edition: String?
+    var artists: [EntityRef] = []
+    var curator: EntityRef?
+    var isOwnPlaylist: Bool?
+    var platform: String?
+    var canonicalURL: String?
+    var embedURL: String?
+    var releaseYear: String?
+    var label: String?
+    var genres: [String] = []
+    var trackList: [MusicTrackEntry] = []
+    var totalDurationSeconds: Int?
+    var upc: String?
+    /// The film this song is from — Indian film-music grammar titles only.
+    var film: String?
+    var previewAudioURL: String?
+}
+
 // MARK: - Item metadata helpers
 
 extension Item {
@@ -219,10 +250,15 @@ extension Item {
         guard kind == ItemKind.place.rawValue else { return nil }
         return decodeMetadata(PlaceMeta.self)
     }
+
+    func musicMeta() -> MusicMeta? {
+        guard kind == ItemKind.music.rawValue else { return nil }
+        return decodeMetadata(MusicMeta.self)
+    }
 }
 
 enum ItemKind: String, Sendable {
-    case typeface, website, individual, studio, foundry, place, link
+    case typeface, website, individual, studio, foundry, place, music, link
 }
 
 enum ItemImageRole: String, Sendable {

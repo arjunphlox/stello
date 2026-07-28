@@ -147,6 +147,24 @@ struct EnrichmentNormalizeTests {
         #expect(s == "A complete thought")
     }
 
+    @Test("snippet rejects a full JSON schema-echo")
+    func snippetRejectsSchemaEcho() {
+        let raw = #"{"type": "object", "description": "The most quotable, self-contained…", "snippets": []}"#
+        #expect(EnrichmentNormalize.snippet(raw) == "")
+    }
+
+    @Test("snippet rejects a bare brace schema-echo")
+    func snippetRejectsBareBrace() {
+        #expect(EnrichmentNormalize.snippet("{") == "")
+    }
+
+    @Test("snippet keeps a legit 8px-grid style quote")
+    func snippetKeepsLegitQuote() {
+        let raw = "An 8px grid isn't about pixels, it's about removing a hundred tiny decisions " +
+            "so the team argues about the right things."
+        #expect(EnrichmentNormalize.snippet(raw) == raw)
+    }
+
     @Test("reason kebab-cases and caps segments")
     func reasonNormalize() {
         #expect(EnrichmentNormalize.reason("Layout Reference!") == "layout-reference")

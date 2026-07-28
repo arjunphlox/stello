@@ -20,6 +20,7 @@ Stello's native Apple app lives at `apple/Stello/` — a SwiftUI multiplatform t
 - **CLI test:** `xcodebuild -project apple/Stello/Stello.xcodeproj -scheme Stello -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` (99 tests, unsigned iOS 27 sim)
 - **Model routing:** Composer 2.5 executes building; Opus only orchestrates/reviews — Opus-as-builder caused UI drift
 - **macOS screenshots:** use `open -g` (non-foreground) to avoid focus-stealing during visual verification
+- **Beta SDK/OS symbol skew (2026-07-11):** Xcode 27 beta's FoundationModels SDK declares APIs (image `Attachment`) the installed macOS 27.0 (26A5378j, framework 2.0.59) doesn't ship. Strong `-framework` linking → dyld abort at launch (`__abort_with_payload`); after switching to `-weak_framework`, *calling* the missing symbol jumps to pc=0x0 (SIGSEGV — a `catch` cannot intercept this). Pattern: weak-link availability-gated frameworks in `OTHER_LDFLAGS`; note a `dlsym` probe of the TYPE's metadata accessor is NOT sufficient — the type can resolve while a specific initializer is still missing (probe passed, crash recurred), and initializer manglings aren't guessable, so `FoundationModelsEnricher.imageAttachmentSupported` is hard-`false` until an OS build verifiably ships the API. Vision enrichment disabled until then; text jobs (snippets/why-saved) unaffected. Diagnose launch/dyld issues by running the binary directly: `<app>.app/Contents/MacOS/<name>` in Terminal prints the full dyld/crash reason.
 
 ## macOS header pattern (Sketch reference)
 
@@ -77,7 +78,7 @@ Shipped A–E (117→138 macOS tests). Timeline nudge session same day **reverte
 | A Revisit tracking | `Item.lastOpenedAt`, `Item.openCount`; `StelloStore.recordOpen(for:)` + session debounce; `DetailView.onAppear` |
 | B Why-saved intent | Tappable chips → intent tag @0.9; dismiss; `TagFilterSheet` "Why saved" first |
 | C Search blob | `ItemSearchBlob.swift`; extended `ItemFilter` full-text match |
-| D Awaiting review strip | `AwaitingReviewFilter.swift`, `AwaitingReviewStripView.swift`, masonry integration + seed `-screenshotAwaitingReview` |
+| D Awaiting review strip | `AwaitingReviewFilter.swift`, `AwaitingReviewStripView.swift`, masonry integration + seed `-screenshotAwaitingReview` (2026-07-06: strip view replaced by an on-card review badge in `ItemCardView.swift` — see Handoff log; `AwaitingReviewFilter.isEligible`/`dismissReview` lifecycle unchanged; 2026-07-06 also added a "Needs review" toggle in `TagFilterSheet` — `ItemFilter.apply(needsReviewOnly:)`, same `isEligible` predicate as the badge, wired through `ContentView`/`MasonryGridView`/`SidePanelView` bindings + `hasActiveFilters`/`filterPillsRow`) |
 | E Page classification | `PageClassifier.swift` in capture path; `PageClassifierTests.swift`; Share target includes `PageClassifier.swift` + `CardMetadata.swift` via `project.yml` |
 
 ### PR #30 fix round lessons (2026-07-06, Sonnet 5 sub-agent round)

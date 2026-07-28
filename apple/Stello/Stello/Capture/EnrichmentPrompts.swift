@@ -46,7 +46,9 @@ enum EnrichmentNormalize {
         raw.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Trim a snippet, strip wrapping quotes, drop ellipses, cap at 200 chars.
+    /// Trim a snippet, strip wrapping quotes, drop ellipses, cap at 200 chars, then reject
+    /// anything that reads as structure rather than prose (guided generation occasionally
+    /// schema-echoes — e.g. `{"type": "object", ...}` or a bare `{` — instead of real text).
     nonisolated static func snippet(_ raw: String) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if let first = s.first, let last = s.last,
@@ -57,7 +59,24 @@ enum EnrichmentNormalize {
              .replacingOccurrences(of: "...", with: "")
              .trimmingCharacters(in: .whitespacesAndNewlines)
         if s.count > 200 { s = String(s.prefix(200)).trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        guard !isSchemaEcho(s) else { return "" }
         return s
+    }
+
+    /// Detects JSON-schema-shaped or code-shaped output masquerading as a snippet.
+    nonisolated private static func isSchemaEcho(_ s: String) -> Bool {
+        if s.hasPrefix("{") || s.hasPrefix("[") { return true }
+        if s.contains(#""type""#) || s.contains(#""snippets""#) || s.contains(#""description":"#) { return true }
+        if s.count < 15 { return true }
+        let letterCount = s.filter { $0.isLetter }.count
+        if Double(letterCount) < Double(s.count) / 2 { return true }
+        // Prose has words: a real quote is ≥4 of them. Kills CSS/code tokens the model
+        // quoted verbatim from page text (e.g. "--tw-border-spacing-x:0;--tw-border-spacing-y:0;").
+        if s.split(separator: " ").count < 4 { return true }
+        // CSS declarations: custom-property or `prop: value;` runs without sentence shape.
+        if s.contains("--") && s.contains(":") && s.contains(";") { return true }
+        return false
     }
 
     /// Lowercase kebab-case, alnum + single hyphens, ≤4 word-segments.
@@ -180,6 +199,38 @@ struct WhySavedSet: Equatable, Sendable {
     }
 }
 
+// MARK: - 4. Music title parse (kind-dispatched — YouTube-sourced music only)
+
+@available(macOS 27.0, iOS 27.0, *)
+@Generable(description: "Parsed artist/track/version/film from a compound YouTube music upload title.")
+struct MusicTitleParse: Equatable, Sendable {
+
+    @Guide(description: """
+    The performing artist's name, ONLY when the title states one clearly in the Western \
+    "Artist - Track" convention. Leave nil for Indian film-music titles, which name cast, \
+    singers, and composer separately rather than a single "artist".
+    """)
+    var artist: String?
+
+    @Guide(description: """
+    The clean song/track title with descriptors stripped — drop suffixes like "Official \
+    Video", "Video Song", "Official Audio", "Lyrical Video".
+    """)
+    var track: String?
+
+    @Guide(description: """
+    The version/context the title marks, if any: live, cover, remaster, acoustic, remix. \
+    Nil when the title doesn't mark one.
+    """)
+    var version: String?
+
+    @Guide(description: """
+    The film/movie this song is from — ONLY when the title follows Indian film-music grammar \
+    ("song title | film | cast | singers | composer"). Nil for titles with no film context.
+    """)
+    var film: String?
+}
+
 // MARK: - Instruction strings (each carries ONE worked exemplar)
 
 @available(macOS 27.0, iOS 27.0, *)
@@ -247,6 +298,30 @@ enum EnrichmentInstructions {
     Note: each is hyphenated, lowercase, ≤4 words, and names something reusable a designer \
     would search for. Do the same for the provided text.
     """
+
+    static let musicTitleParse = """
+    You are Stello's music-title parser. YouTube uploads pack multiple facts into one title \
+    string; pull out the artist, clean track title, version, and (for Indian film music) the \
+    film.
+
+    Rules:
+    • "Artist - Track" is the Western convention: everything before " - " is the artist.
+    • Indian film-music titles follow "Track - Video Song | Film | Cast | Singers | Composer" \
+    — the pipe-separated segments are metadata, not an artist name; the first pipe segment \
+    is the film, and there is no single "artist" (cast/singers/composer are separate people).
+    • version is live/cover/remaster/acoustic/remix if the title marks one, else nil.
+    • Never invent a value — leave a field nil if the title doesn't support it.
+
+    Worked example — "Thassadiya - Video Song | Maa Inti Bangaaram | Samantha | Chinmayi | \
+    Punya | Santhosh Narayanan" you would return:
+      artist: nil
+      track: Thassadiya
+      version: nil
+      film: Maa Inti Bangaaram
+    Note: "Video Song" is a descriptor, not the track name or an artist; "Maa Inti Bangaaram" \
+    is the film, and the cast/singer/composer names are dropped (not modeled here). Parse the \
+    provided title the same way.
+    """
 }
 
 // MARK: - Runner — session factories + typed call sites
@@ -279,5 +354,13 @@ enum EnrichmentRunner {
             generating: WhySavedSet.self
         )
         return response.content.normalized().reasons
+    }
+
+    static func enrichMusicTitle(rawTitle: String, channel: String?) async throws -> MusicTitleParse {
+        let session = LanguageModelSession(instructions: EnrichmentInstructions.musicTitleParse)
+        var prompt = "Title: \(rawTitle)"
+        if let channel, !channel.isEmpty { prompt += "\nChannel: \(channel)" }
+        let response = try await session.respond(to: prompt, generating: MusicTitleParse.self)
+        return response.content
     }
 }

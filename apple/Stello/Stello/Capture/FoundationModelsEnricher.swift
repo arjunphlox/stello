@@ -6,6 +6,18 @@ import FoundationModels
 struct FoundationModelsEnricher: Enricher {
     private let model: SystemLanguageModel
 
+    /// Whether the OS's FoundationModels actually contains the image `Attachment` API.
+    ///
+    /// History (full story: docs/memory/project_native_apple_app.md, build-harness section):
+    /// building with the Xcode 27 BETA 2 SDK against macOS 27 beta 3 (26A5378j) bound the
+    /// vision call to an attachment spelling the OS doesn't export → weak-symbol call →
+    /// SIGSEGV at EnrichmentPrompts.swift:261. The OS *does* ship image attachments
+    /// (`Prompt.Attachment` + `ImageAttachmentContent` per dyld_info), so this is SDK/OS
+    /// beta skew, not a missing feature. True requires building with a matched toolchain
+    /// (Xcode beta 3+ on macOS beta 3+). If the crash ever recurs after a toolchain/OS
+    /// drift, set false — text jobs (snippets/why-saved) are unaffected by this flag.
+    nonisolated static let imageAttachmentSupported = true
+
     nonisolated init(model: SystemLanguageModel = .default) {
         self.model = model
     }
@@ -17,39 +29,61 @@ struct FoundationModelsEnricher: Enricher {
         }
     }
 
+    /// Human-readable reason when the system model is unavailable (nil when available) —
+    /// surfaced on the item so a forced Enrich never silently no-ops.
+    var unavailableReason: String? {
+        switch model.availability {
+        case .available: return nil
+        case .unavailable(let reason): return String(describing: reason)
+        }
+    }
+
     func enrich(
         title: String,
         summary: String?,
         domain: String?,
-        coverImageData: Data?
+        coverImageData: Data?,
+        pageText: String? = nil
     ) async throws -> EnrichmentResult {
         guard isAvailable else { throw EnricherError.unavailable }
 
         var visionTags: [VisionTagSpec] = []
         var snippets: [String] = []
         var whySavedSuggestions: [String] = []
+        // Per-job failures are tolerated (partial results beat none), but collected so a
+        // TOTAL failure can throw with the reason instead of silently returning nothing.
+        var jobErrors: [String] = []
 
-        if let coverImageData, let coverCGImage = Self.cgImage(from: coverImageData) {
+        if Self.imageAttachmentSupported,
+           let coverImageData, let coverCGImage = Self.cgImage(from: coverImageData) {
             do {
                 let tags = try await EnrichmentRunner.enrichVision(cover: coverCGImage)
                 visionTags = Self.mapVisionTags(tags)
             } catch {
-                // Per-job failure: keep empty visionTags, continue with text jobs.
+                jobErrors.append("vision: \(error.localizedDescription)")
             }
         }
 
-        if let pageText = Self.pageText(title: title, summary: summary) {
+        if let pageText = Self.pageText(title: title, summary: summary, extractedText: pageText) {
             do {
                 snippets = try await EnrichmentRunner.enrichSnippets(pageText: pageText)
             } catch {
-                // Per-job failure tolerated.
+                jobErrors.append("snippets: \(error.localizedDescription)")
             }
 
             do {
                 whySavedSuggestions = try await EnrichmentRunner.enrichWhySaved(pageText: pageText)
             } catch {
-                // Per-job failure tolerated.
+                jobErrors.append("why-saved: \(error.localizedDescription)")
             }
+        } else {
+            jobErrors.append("no page text: item has an empty title and summary")
+        }
+
+        if visionTags.isEmpty && snippets.isEmpty && whySavedSuggestions.isEmpty,
+           let first = jobErrors.first {
+            let suffix = jobErrors.count > 1 ? " (+\(jobErrors.count - 1) more)" : ""
+            throw EnricherError.allJobsFailed(first + suffix)
         }
 
         return EnrichmentResult(
@@ -57,6 +91,24 @@ struct FoundationModelsEnricher: Enricher {
             snippets: snippets,
             whySavedSuggestions: whySavedSuggestions
         )
+    }
+
+    /// Vision-only pass — used by the music enrichment pipeline, which never runs the
+    /// generic snippets/why-saved jobs (there is no prose on a platform shell page).
+    func enrichVisionOnly(coverImageData: Data?) async throws -> [VisionTagSpec] {
+        guard isAvailable else { throw EnricherError.unavailable }
+        guard Self.imageAttachmentSupported,
+              let coverImageData, let coverCGImage = Self.cgImage(from: coverImageData) else {
+            return []
+        }
+        let tags = try await EnrichmentRunner.enrichVision(cover: coverCGImage)
+        return Self.mapVisionTags(tags)
+    }
+
+    /// Refines the rule-based YouTube title split for compound/film-music titles.
+    func enrichMusicTitle(rawTitle: String, channel: String?) async throws -> MusicTitleParse {
+        guard isAvailable else { throw EnricherError.unavailable }
+        return try await EnrichmentRunner.enrichMusicTitle(rawTitle: rawTitle, channel: channel)
     }
 
     // MARK: - Mapping
@@ -75,7 +127,14 @@ struct FoundationModelsEnricher: Enricher {
         return specs
     }
 
-    private static func pageText(title: String, summary: String?) -> String? {
+    /// Prefers the richer `extractedText` (readability-lite page text, capped for the
+    /// prompt) when present; falls back to the thin title+summary the model previously saw.
+    private static func pageText(title: String, summary: String?, extractedText: String?) -> String? {
+        if let extractedText {
+            let trimmed = extractedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return String(trimmed.prefix(3_000)) }
+        }
+
         let titleTrimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let summaryTrimmed = summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if titleTrimmed.isEmpty && summaryTrimmed.isEmpty { return nil }

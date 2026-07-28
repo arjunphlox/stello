@@ -55,8 +55,10 @@ struct CardSubcards: View {
         EnrichmentService.decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON)
     }
 
+    // User-invoked Enrich may re-run terminal states (candidates_done/error) — see
+    // EnrichmentService.enrich(force:); only an in-flight capture is off-limits.
     private var canEnrich: Bool {
-        item.enrichmentStatus == "text_done"
+        item.enrichmentStatus != "pending"
     }
 
     /// Panel footer label "Wnn YYYY" per BUILD_SPEC.
@@ -90,9 +92,17 @@ struct CardSubcards: View {
                     if let meta = item.foundryMeta() { foundryCards(meta) }
                 case .place:
                     if let meta = item.placeMeta() { placeCards(meta) }
+                case .music:
+                    if let meta = item.musicMeta() { musicCards(meta) }
                 case .link:
                     EmptyView()
                 }
+
+                // AI enrichment surfaces (snippets / why-saved / tags / Enrich + its error
+                // line) apply to typed items too — without these, enriching an entity item
+                // persisted results the panel never displayed, and Enrich looked like a
+                // silent no-op (2026-07-11). Render-if-data keeps curated panels clean.
+                enrichmentSubCards()
             } else {
                 genericSubCards()
             }
@@ -203,6 +213,22 @@ struct CardSubcards: View {
         }
 
         snippetsSubCard
+        whySavedSubCard
+        tagsSubCard
+
+        if canEnrich {
+            enrichSubCard
+        }
+    }
+
+    /// AI enrichment sections for TYPED panels: strictly render-if-data (no empty states,
+    /// unlike the link-kind panel) so curated entity dossiers stay clean — except Actions,
+    /// which always renders so Enrich and its error line are reachable on every kind.
+    @ViewBuilder
+    private func enrichmentSubCards() -> some View {
+        if !sortedSnippets.isEmpty {
+            snippetsSubCard
+        }
         whySavedSubCard
         tagsSubCard
 
@@ -353,18 +379,28 @@ struct CardSubcards: View {
 
     private var enrichSubCard: some View {
         SubCard(title: "Actions") {
-            Button {
-                enrichmentCoordinator.scheduleEnrichment(for: item, context: context)
-            } label: {
-                Label("Enrich", systemImage: "sparkles")
-                    .font(.karst(.callout, weight: .semibold))
-                    .foregroundStyle(theme.accentContrast)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(theme.accentColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    enrichmentCoordinator.scheduleEnrichment(for: item, context: context, force: true)
+                } label: {
+                    Label("Enrich", systemImage: "sparkles")
+                        .font(.karst(.callout, weight: .semibold))
+                        .foregroundStyle(theme.accentContrast)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(theme.accentColor)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
+                // Surfaced so AI failures are diagnosable in-app — the web app's PR #17
+                // lesson: a swallowed enrichment error makes no-result items a forensics job.
+                if let error = item.enrichmentError, !error.isEmpty {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.karst(.footnote))
+                        .foregroundStyle(theme.textSecondary)
+                }
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -617,6 +653,58 @@ struct CardSubcards: View {
             ("City", meta.city),
             ("Country", meta.country),
         ])
+    }
+
+    // MARK: - Music
+
+    @ViewBuilder
+    private func musicCards(_ meta: MusicMeta) -> some View {
+        factsCard(title: "Music", rows: [
+            ("Type", meta.subtype?.capitalized),
+            ("Edition", meta.edition),
+            ("Year", meta.releaseYear),
+            ("Label", meta.label),
+            ("Film", meta.film),
+            ("Duration", musicDuration(meta.totalDurationSeconds)),
+        ])
+
+        refsCard(title: "Artists", refs: meta.artists)
+        if let curator = meta.curator {
+            refsCard(title: meta.isOwnPlaylist == true ? "Curated by (you)" : "Curated by", refs: [curator])
+        }
+        chipsCard(title: "Genres", chips: meta.genres)
+
+        if !meta.trackList.isEmpty {
+            SubCard(title: "Tracklist") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(meta.trackList.enumerated()), id: \.offset) { _, track in
+                        HStack {
+                            Text(track.name)
+                                .font(.karst(.callout))
+                                .foregroundStyle(theme.textPrimary)
+                            Spacer()
+                            if let duration = musicDuration(track.durationSeconds) {
+                                Text(duration)
+                                    .font(.karst(.caption))
+                                    .foregroundStyle(theme.textSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        factsCard(title: "Links", rows: [
+            ("Canonical", meta.canonicalURL),
+            ("Embed", meta.embedURL),
+        ])
+    }
+
+    private func musicDuration(_ seconds: Int?) -> String? {
+        guard let seconds, seconds > 0 else { return nil }
+        let minutes = seconds / 60
+        let remaining = seconds % 60
+        return String(format: "%d:%02d", minutes, remaining)
     }
 
     // MARK: - Sub-card builders
@@ -1060,6 +1148,7 @@ extension Item {
         case .studio: return studioMeta() != nil
         case .foundry: return foundryMeta() != nil
         case .place: return placeMeta() != nil
+        case .music: return musicMeta() != nil
         case .link: return false
         }
     }

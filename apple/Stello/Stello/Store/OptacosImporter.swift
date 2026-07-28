@@ -389,6 +389,8 @@ enum OptacosImporter {
             appendFoundryTags(from: row, tagCatalog: tagCatalog, into: &tags)
         case .place:
             item.setMetadata(buildPlaceMeta(row: row))
+        case .music:
+            break
         case .link:
             break
         }

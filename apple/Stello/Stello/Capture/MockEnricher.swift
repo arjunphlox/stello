@@ -37,10 +37,17 @@ struct MockEnricher: Enricher, Sendable {
         title: String,
         summary: String?,
         domain: String?,
-        coverImageData: Data?
+        coverImageData: Data?,
+        pageText: String? = nil
     ) async throws -> EnrichmentResult {
         if let error { throw error }
         guard isAvailable else { throw EnricherError.unavailable }
         return result
+    }
+
+    nonisolated func enrichVisionOnly(coverImageData: Data?) async throws -> [VisionTagSpec] {
+        if let error { throw error }
+        guard isAvailable else { throw EnricherError.unavailable }
+        return result.visionTags
     }
 }
