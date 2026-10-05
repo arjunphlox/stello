@@ -1,0 +1,12 @@
+{
+  "source": "arjunphlox/arjun-ai-gems",
+  "sha": "f55362f",
+  "manifest": "harness/sync.json",
+  "repo": "arjunphlox/stello",
+  "paths": [
+    ".claude/commands/delegate.md",
+    ".claude/commands/handoff.md",
+    ".claude/commands/wrap.md",
+    ".claude/skills/brief-style/SKILL.md"
+  ]
+}
