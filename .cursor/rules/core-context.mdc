@@ -10,7 +10,7 @@ Read at session start — the durable contract for this repo:
 
 ## Session discipline
 
-- Claude Code is the primary harness; Fable 5.1 plans/orchestrates, Opus 5.5 / Sonnet 5 / Haiku 4.5 sub-agents execute by task shape; Cursor runs Grok 4.7 only on closed-scope briefs. Standing Working contract (ask before gaps bite · delegate by task shape · echo exact model ids): see CLAUDE.md.
+- Claude Code is the primary harness; Fable 5.1 plans/orchestrates, Opus 5.5 / Sonnet 5.5 / Haiku 4.5 sub-agents execute by task shape; Cursor runs Grok 4.7 only on closed-scope briefs. Standing Working contract (ask before gaps bite · delegate by task shape · echo exact model ids): see CLAUDE.md.
 - Branch prefixes: `claude/*`, `cursor/*`, `feature/*`, `fix/*`. One session = one task; atomic commits.
 - When you learn something durable and project-scoped, append it to `docs/memory/MEMORY.md` and update its index.
 

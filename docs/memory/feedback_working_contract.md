@@ -7,7 +7,7 @@ type: feedback
 # Working contract (standing — never needs repeating in a prompt)
 
 - **Ask before gaps bite.** If anything needed for the task to succeed is missing or ambiguous, ask (1–3 sharp questions, multiple-choice where possible) before acting. Never assume silently; state every assumption openly in the reply.
-- **Delegate execution by task shape.** The parent session plans, orchestrates, and reviews. Execution goes to the right sub-agent: **Opus 5.5** for layout/cascade, multi-file, risky or judgement-heavy work · **Sonnet 5** for scoped components, copy application, measurement passes, docs · **Haiku 4.5** for mechanical reverts and lookups · **Grok 4.7 (Cursor)** only for closed-scope literal edits via a paste-ready brief, to free Claude usage. Routing detail + Grok brief rules: [execution-model-routing](https://github.com/huegrid-studio/huegrid-site/blob/main/docs/workflow/execution-model-routing.md).
+- **Delegate execution by task shape.** The parent session plans, orchestrates, and reviews. Execution goes to the right sub-agent: **Opus 5.5** for layout/cascade, multi-file, risky or judgement-heavy work · **Sonnet 5.5** for scoped components, copy application, measurement passes, docs · **Haiku 4.5** for mechanical reverts and lookups · **Grok 4.7 (Cursor)** only for closed-scope literal edits via a paste-ready brief, to free Claude usage. Routing detail + Grok brief rules: [execution-model-routing](https://github.com/huegrid-studio/huegrid-site/blob/main/docs/workflow/execution-model-routing.md).
 - **Echo exact model ids** the owner names; never substitute.
 
 ## Grok 4.7 lane (summary)
