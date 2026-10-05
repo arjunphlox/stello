@@ -1,0 +1,14 @@
+{
+  "extraKnownMarketplaces": {
+    "arjun-gems": {
+      "source": {
+        "source": "github",
+        "repo": "arjunphlox/arjun-ai-gems",
+        "ref": "main"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "gems@arjun-gems": true
+  }
+}
