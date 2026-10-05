@@ -1,6 +1,9 @@
 .DS_Store
 Icon?
-.claude/
+.claude/*
+!.claude/commands/
+!.claude/skills/
+!.claude/.gems-sync.json
 .conductor/
 __pycache__/
 *.pyc
