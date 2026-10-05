@@ -4,20 +4,13 @@ Personal knowledge base — a rich item analysis and discovery tool with weighte
 
 ## AI Coding Workflow
 
-This repo follows Arjun's AI coding workflow. See the full spec: https://github.com/arjunphlox/arjun-ai-gems/blob/main/workflows/ai-workflow-orchestration.md
+**Claude Code is the primary harness** (since 2026-09-23). **Fable 5.1** plans, orchestrates, and reviews; execution goes to sub-agents routed by task shape — **Opus 5.5** (risky / layout / multi-file), **Sonnet 5** (scoped, measurement, docs), **Haiku 4.5** (mechanical) — and to **Grok 4.7 in Cursor** only through a closed-scope paste-ready brief. Fan-out of many independent units → a Dynamic Workflow. Branch prefixes: `claude/*`, `cursor/*`, `feature/*` / `fix/*`. Full spec: arjun-ai-gems [`knowledge/workflows/ai-workflow-orchestration.md`](https://github.com/arjunphlox/arjun-ai-gems/blob/main/knowledge/workflows/ai-workflow-orchestration.md).
 
-**Cursor Agentic Desktop is the primary harness.** Opus 4.8 *in Cursor* is the planning/thinking/orchestration brain; Composer 2.5 *in Cursor* executes (single sessions, multi-sessions, sub-agents). For small-to-medium, high-clarity tasks, Composer plans *and* executes directly (no Opus hop).
+### Working contract (standing — never needs repeating in a prompt)
 
-**Claude Code is occasional** — only for primitives that live only there: fan-out Dynamic Workflows (Agent Spawns) and mobile capture (iOS / Remote Control). It is not the default tool or brain.
-
-**Model routing (delegate by task type — parent plans/orchestrates, sub-agents execute):**
-- **Composer 2.5** — default coding: well-specified edits, boilerplate, mechanical refactors, codemods, fast iterative builds. Cheapest + most token-efficient.
-- **Sonnet 5** — mid-complexity: multi-file features, non-trivial refactors, code review, test authoring, moderate debugging, agentic tool-use where Composer is too shallow. Balanced quality/cost.
-- **Opus 4.8** — hard/risky: architecture, ambiguous or high-blast-radius changes, deep debugging, planning + orchestration, and all non-coding latent work. Highest accuracy/thinking; reserve.
-- **GPT-5.5** — gated: 1M-token single-doc reasoning or native Codex/ChatGPT computer-use.
-- **Fan-out/swarm** — parallel-safe, many-independent-unit work → hand off a paste-ready **Claude Code Dynamic Workflow** prompt; parent only plans + coordinates.
-
-For any non-trivial task, delegate execution to the right-tier sub-agent (Task tool) rather than doing everything inline; escalate a tier on stalls/growing blast radius, de-escalate when it turns mechanical. See gems memory [`subagent-model-routing`](https://github.com/arjunphlox/arjun-ai-gems/blob/main/docs/memory/subagent-model-routing.md).
+- **Ask before gaps bite.** If anything needed for the task to succeed is missing or ambiguous, ask (1–3 sharp questions, multiple-choice where possible) before acting. Never assume silently; state every assumption openly in the reply.
+- **Delegate execution by task shape.** The parent session plans, orchestrates, and reviews. Execution goes to the right sub-agent: **Opus 5.5** for layout/cascade, multi-file, risky or judgement-heavy work · **Sonnet 5** for scoped components, copy application, measurement passes, docs · **Haiku 4.5** for mechanical reverts and lookups · **Grok 4.7 (Cursor)** only for closed-scope literal edits via a paste-ready brief, to free Claude usage. Routing detail + Grok brief rules: [execution-model-routing](https://github.com/huegrid-studio/huegrid-site/blob/main/docs/workflow/execution-model-routing.md).
+- **Echo exact model ids** the owner names; never substitute.
 
 **Branch prefixes** (app-based, keeps parallel work from colliding):
 - `cursor/*` — Cursor sessions
