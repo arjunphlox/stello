@@ -1,9 +1,9 @@
 ---
 description: Fresh-session hand-off — emit ONE paste-ready prompt (≤6k chars) that lets a new session resume without re-briefing
 ---
-<!-- Synced from arjunphlox/arjun-ai-gems harness/commands/handoff.md @ 2102bd4. Edit it there; this copy is overwritten. -->
+<!-- Synced from arjunphlox/arjun-ai-gems harness/commands/handoff.md @ 77af9dc. Edit it there; this copy is overwritten. -->
 
-Use when the session limit is near or I ask for "a prompt for a fresh session". Output is a single fenced block I can paste as-is — no framing text around it.
+Use when the session limit is near or I ask for "a prompt for a fresh session". Output is ONE markdown FILE I can paste as-is — delivered with `SendUserFile` (display `attach`) in cloud sessions, or written to the repo/outputs folder locally. NEVER inline in chat: nested code fences break the outer block and I get broken text (memory: `docs/memory/feedback_handoff_deliver_as_file.md`).
 
 ## Steps
 
@@ -34,7 +34,7 @@ Use when the session limit is near or I ask for "a prompt for a fresh session". 
 
 5. **Size check.** `wc -c` the prompt; if over 6,000 chars, cut by linking (docs, PR bodies, reports) rather than inlining. Never drop sections 1, 4, 6 or 9 to fit.
 
-6. **Emit** the fenced block, then one line: char count + anything I must save before archiving (or "run `/wrap` first").
+6. **Emit** the file (`SendUserFile`, display `attach`; locally a `.md` in the repo or outputs folder). Commands inside the prompt are indented code (4 spaces), never fenced. Then one chat line: file name, char count, and anything I must save before archiving (or "run `/wrap` first"). Do not paste the prompt in chat.
 
 ## Rules
 
@@ -42,3 +42,4 @@ Use when the session limit is near or I ask for "a prompt for a fresh session". 
 - Facts only from step 2 — no remembered SHAs or PR states.
 - No "lessons from the last N sessions" sections; durable lessons belong in memory, linked from Read first.
 - Scratchpad paths don't survive archive — never point the next session at one; move the file into a repo first (or flag it).
+- Never emit the prompt inline in chat, and never nest fenced code inside it — see step 6.
