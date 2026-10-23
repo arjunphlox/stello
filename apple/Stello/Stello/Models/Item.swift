@@ -25,7 +25,7 @@ final class Item {
     var enrichmentStatus: String = "pending"
     var enrichmentError: String?
     /// Card type: `typeface`, `website`, `individual`, `studio`, `foundry`, `place`, `music`,
-    /// `product`, or `link` (default).
+    /// `product`, `post`, or `link` (default).
     var kind: String = "link"
     /// Codable per-kind metadata (`TypefaceMeta`, `WebsiteMeta`, …) encoded as JSON.
     var metadataJSON: String?

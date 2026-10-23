@@ -287,6 +287,41 @@ nonisolated struct ProductMeta: Codable, Sendable {
     ]
 }
 
+// MARK: - Post
+
+nonisolated struct PostMeta: Codable, Sendable {
+    /// `x` | `instagram` | `behance` | `dribbble` | `pinterest` (from the host).
+    var platform: String?
+    /// The posting account (display name); the bare handle lives in `authorHandle`.
+    var author: EntityRef?
+    /// Bare handle, no "@".
+    var authorHandle: String?
+    /// The tweet / caption / project description.
+    var text: String?
+    /// `image` | `video` | `gif` | `carousel`.
+    var mediaType: String?
+    var mediaCount: Int?
+    var postedAt: Date?
+    /// Set from collection labels / tags (midjourney, gen-ai, …) or Midjourney `--` params
+    /// in the text. Labels only flag AI art on items that are already a Post.
+    var isAIArt: Bool = false
+    /// "Midjourney", "Stable Diffusion", "DALL·E" — nil when the signal names no model.
+    var aiModel: String?
+    /// Rule-read from the text (`promptIsGuess == false`) or the on-device guess (`true`).
+    var prompt: String?
+    var promptIsGuess: Bool = false
+    var canonicalURL: String?
+    var embedURL: String?
+
+    /// One short line for the grid card: "@handle"; nil when there is no handle.
+    var cardKindLine: String? {
+        guard let handle = authorHandle?.trimmingCharacters(in: .whitespacesAndNewlines), !handle.isEmpty else {
+            return nil
+        }
+        return "@\(handle)"
+    }
+}
+
 // MARK: - Item metadata helpers
 
 extension Item {
@@ -341,10 +376,15 @@ extension Item {
         guard kind == ItemKind.product.rawValue else { return nil }
         return decodeMetadata(ProductMeta.self)
     }
+
+    func postMeta() -> PostMeta? {
+        guard kind == ItemKind.post.rawValue else { return nil }
+        return decodeMetadata(PostMeta.self)
+    }
 }
 
 enum ItemKind: String, Sendable {
-    case typeface, website, individual, studio, foundry, place, music, product, link
+    case typeface, website, individual, studio, foundry, place, music, product, post, link
 }
 
 enum ItemImageRole: String, Sendable {

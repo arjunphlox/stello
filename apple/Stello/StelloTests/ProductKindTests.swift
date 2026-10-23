@@ -122,8 +122,8 @@ struct ProductClassificationTests {
         let wishlisted = classify(post, labels: ["wishlist"])
         #expect(wishlisted.kind == .product)
         #expect(wishlisted.productSource == "instagram")
-        // Not wishlisted: a post stays what it is today, even if the page claims og:type product.
-        #expect(classify(post, ogType: "product").kind == .link)
+        // Not wishlisted: a post is a Post, even if the page claims og:type product.
+        #expect(classify(post, ogType: "product").kind == .post)
         // A profile isn't a single post.
         #expect(PageClassifier.socialPostHost(for: URL(string: "https://www.instagram.com/stuffcool/")!) == nil)
     }

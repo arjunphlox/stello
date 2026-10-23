@@ -203,6 +203,11 @@ struct ItemCardView: View {
                 reviewBadge.padding(10)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if showCardOverlays {
+                postBadges.padding(10)
+            }
+        }
         .overlay(alignment: .topLeading) {
             #if os(macOS)
             if showCardOverlays {
@@ -440,6 +445,58 @@ struct ItemCardView: View {
                 .scaleEffect(isReviewBadgeHovered ? 0.92 : 1)
                 .animation(.smooth(duration: 0.22), value: isReviewBadgeHovered)
         }
+    }
+
+    /// Post marks (top-right of an image card): play for a video, "GIF", a count for a
+    /// carousel (mediaCount > 1), and a small "AI" for AI art. The image is the headline —
+    /// these stay small and fade out under the macOS hover title.
+    @ViewBuilder private var postBadges: some View {
+        if let meta = item.postMeta() {
+            let count = meta.mediaCount ?? 0
+            let isVideo = meta.mediaType == "video"
+            let isGIF = meta.mediaType == "gif"
+            if isVideo || isGIF || count > 1 || meta.isAIArt {
+                HStack(spacing: 4) {
+                    if isVideo {
+                        cardBadge { Image(systemName: "play.fill") }
+                            .accessibilityLabel("Video")
+                    }
+                    if isGIF {
+                        cardBadge { Text("GIF") }
+                    }
+                    if count > 1 {
+                        cardBadge {
+                            HStack(spacing: 2) {
+                                Image(systemName: "square.on.square")
+                                Text("\(count)")
+                            }
+                        }
+                        .accessibilityLabel("\(count) media")
+                    }
+                    if meta.isAIArt {
+                        cardBadge { Text("AI") }
+                            .accessibilityLabel("AI art")
+                    }
+                }
+                #if os(macOS)
+                .opacity(isHovered ? 0 : 1)
+                .animation(.easeOut(duration: 0.18), value: isHovered)
+                #endif
+                .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private func cardBadge<Label: View>(@ViewBuilder _ label: () -> Label) -> some View {
+        label()
+            .font(.karst(size: scaledPillSize, weight: .semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.black.opacity(0.45))
+            .foregroundStyle(.white)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 0.5))
     }
 
     /// Bottom-left counterpart to `domainPill`: a static outlined circle for items awaiting

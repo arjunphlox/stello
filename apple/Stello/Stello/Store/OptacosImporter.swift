@@ -393,6 +393,8 @@ enum OptacosImporter {
             break
         case .product:
             break
+        case .post:
+            break
         case .link:
             break
         }

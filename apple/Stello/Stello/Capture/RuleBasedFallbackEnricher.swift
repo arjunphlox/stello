@@ -24,4 +24,9 @@ struct RuleBasedFallbackEnricher: Enricher, Sendable {
     nonisolated func guessProduct(caption: String?, filename: String?) async throws -> ProductGuess {
         ProductReader.ruleBasedGuess(caption: caption, filename: filename)
     }
+
+    /// Prompts are only rule-read (`PostReader.extractPrompt`) — there is nothing to guess.
+    nonisolated func guessPrompt(text: String?, aiModel: String?) async throws -> String? {
+        nil
+    }
 }

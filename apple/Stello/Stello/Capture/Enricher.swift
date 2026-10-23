@@ -49,4 +49,8 @@ protocol Enricher {
     /// Product name/brand guess for products with no structured data (Instagram caption,
     /// bare image filename). Results are stored as guesses (`ProductMeta.…IsGuess`).
     func guessProduct(caption: String?, filename: String?) async throws -> ProductGuess
+
+    /// Prompt guess for an AI-art post whose text has no rule-readable prompt. Nil = no
+    /// guess. Results are stored as guesses (`PostMeta.promptIsGuess`).
+    func guessPrompt(text: String?, aiModel: String?) async throws -> String?
 }

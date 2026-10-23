@@ -57,4 +57,11 @@ struct MockEnricher: Enricher, Sendable {
         guard isAvailable else { throw EnricherError.unavailable }
         return ProductReader.ruleBasedGuess(caption: caption, filename: filename)
     }
+
+    /// No deterministic stand-in for a prompt guess — nil, like the rule-based fallback.
+    nonisolated func guessPrompt(text: String?, aiModel: String?) async throws -> String? {
+        if let error { throw error }
+        guard isAvailable else { throw EnricherError.unavailable }
+        return nil
+    }
 }

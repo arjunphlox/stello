@@ -119,6 +119,14 @@ struct FoundationModelsEnricher: Enricher {
         return ProductGuess(productName: guess.productName, brand: guess.brand)
     }
 
+    /// On-device prompt guess for an AI-art post whose text has no readable prompt. The
+    /// caller stores it with `promptIsGuess == true`; a throw just leaves the prompt empty.
+    func guessPrompt(text: String?, aiModel: String?) async throws -> String? {
+        guard isAvailable else { throw EnricherError.unavailable }
+        let guess = try await EnrichmentRunner.guessPrompt(text: text, aiModel: aiModel)
+        return guess.prompt
+    }
+
     // MARK: - Mapping
 
     static func mapVisionTags(_ tags: VisionTags) -> [VisionTagSpec] {

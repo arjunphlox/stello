@@ -98,15 +98,28 @@ enum EnrichmentService {
                     item.status = "gone"
                     item.updatedAt = .now
                 }
-                // Product readers first: a link item may now classify as a product (its
-                // collection labels can decide), and a product refreshes its dossier.
-                let productSource = await refreshProductIfClassified(
+                // Post readers first (kind order: post → product), then product readers: a
+                // link item may now classify as either (collection labels can decide — a
+                // wishlisted post is a product), and a post/product refreshes its dossier.
+                let postPlatform = await refreshPostIfClassified(
                     item: item, context: context, url: url, page: page
                 )
+                var productSource: String? = nil
+                if postPlatform == nil {
+                    productSource = await refreshProductIfClassified(
+                        item: item, context: context, url: url, page: page
+                    )
+                }
                 await upgradeCoverIfNeeded(
                     item: item, context: context, primaryURL: page.og.imageURL, fallbackURL: nil, source: "og"
                 )
-                if productSource == nil || productSource == "page" {
+                if postPlatform != nil {
+                    // Social shell pages have no prose — the post text is it.
+                    if let text = item.postMeta()?.text {
+                        item.extractedText = text
+                        item.updatedAt = .now
+                    }
+                } else if productSource == nil || productSource == "page" {
                     if let extracted = CaptureService.extractText(html: page.html), !extracted.isEmpty {
                         print("[refetch] \(item.slug): extractedText \(extracted.count) chars")
                         item.extractedText = extracted
@@ -129,6 +142,11 @@ enum EnrichmentService {
         // (on-device model, rule-based fallback) before the generic AI jobs run.
         if item.kind == ItemKind.product.rawValue {
             await applyProductGuessIfNeeded(item: item, enricher: enricher)
+        }
+        // Posts: AI-art flag from collection labels / tags / Midjourney params, then the
+        // prompt (rule-read, else the on-device guess).
+        if item.kind == ItemKind.post.rawValue {
+            await applyPostAIArtIfNeeded(item: item, enricher: enricher)
         }
 
         do {
@@ -521,6 +539,106 @@ enum EnrichmentService {
         if let previousName, item.title == previousName, let newName = meta.productName {
             item.title = newName
         }
+        item.updatedAt = .now
+    }
+
+    // MARK: - Post enrichment
+
+    /// Force-Enrich hook: when a `link` or `post` item's refetched URL is a single social
+    /// post (and not wishlisted — that's a product), (re)runs the post readers and stores the
+    /// dossier. A refetch that reads less (bot wall, tombstone) never erases what capture
+    /// read, and the AI-art fields are left to `applyPostAIArtIfNeeded`. The title rule only
+    /// replaces a generic platform title or the title this rule wrote before — a title the
+    /// user edited is kept. Returns the platform, or nil when the item isn't (or can't
+    /// become) a post. Curated kinds (typeface, website, product, …) are never flipped.
+    @discardableResult
+    static func refreshPostIfClassified(
+        item: Item,
+        context: ModelContext,
+        url: URL,
+        page: PageFetchResult
+    ) async -> String? {
+        guard item.kind == ItemKind.link.rawValue || item.kind == ItemKind.post.rawValue else { return nil }
+        guard let platform = PageClassifier.postPlatform(
+            url: url, collectionLabels: collectionLabels(for: item)
+        ) else { return nil }
+
+        let extraction = await CaptureService.extractPost(sourceURL: url, page: page, platform: platform)
+        var meta = extraction.meta
+        let previous = item.postMeta()
+        if let previous {
+            if meta.text == nil { meta.text = previous.text }
+            if meta.author == nil { meta.author = previous.author }
+            if meta.authorHandle == nil { meta.authorHandle = previous.authorHandle }
+            if meta.postedAt == nil { meta.postedAt = previous.postedAt }
+            if meta.mediaType == nil {
+                meta.mediaType = previous.mediaType
+                meta.mediaCount = previous.mediaCount
+            }
+            if meta.embedURL == nil { meta.embedURL = previous.embedURL }
+            meta.isAIArt = previous.isAIArt
+            meta.aiModel = previous.aiModel
+            meta.prompt = previous.prompt
+            meta.promptIsGuess = previous.promptIsGuess
+        }
+
+        // The title this rule would have written from the old dossier — if the item still
+        // carries it, the user hasn't edited it and it may follow the new reading.
+        let previousRuleTitle = previous.flatMap {
+            PostReader.postTitle(currentTitle: nil, handle: $0.authorHandle, authorName: $0.author?.name, text: $0.text)
+        }
+        let titleIsOurs = PostReader.isGenericPostTitle(item.title) || item.title == previousRuleTitle
+        if titleIsOurs, let newTitle = PostReader.postTitle(
+            currentTitle: nil, handle: meta.authorHandle, authorName: meta.author?.name, text: meta.text
+        ) {
+            item.title = newTitle
+        }
+
+        if extraction.isGone, item.status != "gone" {
+            item.status = "gone"
+        }
+        item.kind = ItemKind.post.rawValue
+        item.setMetadata(meta)
+
+        await upgradeCoverIfNeeded(
+            item: item, context: context,
+            primaryURL: extraction.imageURLs.first, fallbackURL: nil, source: "post"
+        )
+        let hasGallery = (item.images ?? []).contains { $0.role == ItemImageRole.gallery.rawValue }
+        if !hasGallery {
+            let downloads = await CaptureService.downloadImages(Array(extraction.imageURLs.dropFirst()))
+            for (data, w, h) in downloads.compactMap({ $0 }) {
+                let image = ItemImage(
+                    data: data, source: "post", isPrimary: false, width: w, height: h,
+                    role: ItemImageRole.gallery.rawValue
+                )
+                context.insert(image)
+                image.item = item
+            }
+        }
+        item.updatedAt = .now
+        return platform
+    }
+
+    /// Posts: recompute the AI-art flag + model from collection labels, tags and Midjourney
+    /// params in the text, then fill the prompt — rule-read first (`promptIsGuess == false`),
+    /// else the on-device guess (`promptIsGuess == true`; the Mock / rule-based fallbacks
+    /// return nil). Labels only ever flag items that are already Post.
+    static func applyPostAIArtIfNeeded(item: Item, enricher: Enricher) async {
+        guard var meta = item.postMeta() else { return }
+        let labels = collectionLabels(for: item)
+        let tags = (item.tags ?? []).filter { $0.category != "collection" }.map(\.name)
+        PostReader.applyAIArt(to: &meta, labels: labels, tags: tags)
+
+        if meta.isAIArt, meta.prompt == nil, meta.text != nil {
+            if let guess = try? await enricher.guessPrompt(text: meta.text, aiModel: meta.aiModel),
+               let prompt = PostReader.cleanPrompt(guess) {
+                meta.prompt = prompt
+                meta.promptIsGuess = true
+            }
+        }
+
+        item.setMetadata(meta)
         item.updatedAt = .now
     }
 }

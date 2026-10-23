@@ -64,6 +64,8 @@ enum ItemSearchBlob {
             return item.musicMeta()?.searchTerms() ?? []
         case ItemKind.product.rawValue:
             return item.productMeta()?.searchTerms() ?? []
+        case ItemKind.post.rawValue:
+            return item.postMeta()?.searchTerms() ?? []
         default:
             return []
         }
@@ -293,6 +295,20 @@ extension ProductMeta {
         ItemSearchBlob.appendOptional(category, to: &parts)
         ItemSearchBlob.appendEntityRef(creator, to: &parts)
         ItemSearchBlob.appendOptional(creatorHandle, to: &parts)
+        return parts
+    }
+}
+
+extension PostMeta {
+    func searchTerms() -> [String] {
+        var parts: [String] = []
+        ItemSearchBlob.appendEntityRef(author, to: &parts)
+        ItemSearchBlob.appendOptional(authorHandle, to: &parts)
+        ItemSearchBlob.appendOptional(authorHandle.map { "@\($0)" }, to: &parts)
+        ItemSearchBlob.appendOptional(text, to: &parts)
+        ItemSearchBlob.appendOptional(prompt, to: &parts)
+        ItemSearchBlob.appendOptional(aiModel, to: &parts)
+        ItemSearchBlob.appendOptional(platform, to: &parts)
         return parts
     }
 }

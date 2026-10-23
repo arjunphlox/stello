@@ -16,6 +16,8 @@ nonisolated struct InstagramPostInfo: Sendable, Equatable {
     var handle: String?
     var displayName: String?
     var caption: String?
+    /// The "on March 3, 2025" date from og:description (UTC midnight), when it parses.
+    var postedAt: Date? = nil
 }
 
 /// Result of the deterministic product readers: metadata, the gallery image URLs (cover
@@ -305,6 +307,7 @@ nonisolated enum ProductReader {
         if let description, let regex = instagramDescriptionRegex,
            let match = regex.firstMatch(in: description, range: NSRange(description.startIndex..., in: description)) {
             if let r = Range(match.range(at: 1), in: description) { info.handle = String(description[r]) }
+            if let r = Range(match.range(at: 2), in: description) { info.postedAt = instagramDate(String(description[r])) }
             if let r = Range(match.range(at: 3), in: description) { info.caption = cleanCaption(String(description[r])) }
         }
 
@@ -328,6 +331,15 @@ nonisolated enum ProductReader {
         }
 
         return info
+    }
+
+    /// "March 3, 2025" → that day at 00:00 UTC; nil for anything else.
+    static func instagramDate(_ raw: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "MMMM d, yyyy"
+        return formatter.date(from: raw.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// Strips Instagram's wrapping quotes and trailing ". " from a caption.

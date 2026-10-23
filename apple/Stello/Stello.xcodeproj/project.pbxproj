@@ -17,6 +17,9 @@
 		A1B2C3D4E5F60718293A4B5D /* ProductReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* ProductReader.swift */; };
 		A1B2C3D4E5F60718293A4B5E /* ProductReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* ProductReader.swift */; };
 		A1B2C3D4E5F60718293A4B60 /* ProductKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5F /* ProductKindTests.swift */; };
+		B1C2D3E4F5A60718293A4B62 /* PostReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A60718293A4B61 /* PostReader.swift */; };
+		B1C2D3E4F5A60718293A4B63 /* PostReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A60718293A4B61 /* PostReader.swift */; };
+		B1C2D3E4F5A60718293A4B65 /* PostKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A60718293A4B64 /* PostKindTests.swift */; };
 		0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA340D3CF1CBA31162EB51C /* Tag.swift */; };
 		145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
 		1AFDFF2A1AA22AE8F6806246 /* UserPreferencesContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8C21E2EC36E821776F7C3B /* UserPreferencesContent.swift */; };
@@ -182,6 +185,8 @@
 		9D6A6E1C0894A01440EA1F10 /* PageClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageClassifier.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5C /* ProductReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductReader.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5F /* ProductKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductKindTests.swift; sourceTree = "<group>"; };
+		B1C2D3E4F5A60718293A4B61 /* PostReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostReader.swift; sourceTree = "<group>"; };
+		B1C2D3E4F5A60718293A4B64 /* PostKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostKindTests.swift; sourceTree = "<group>"; };
 		A00AB84A8DD5556B8493537D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloTests.swift; sourceTree = "<group>"; };
 		A3CA34AF62B2777DF5A05B12 /* DetailImageStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailImageStrip.swift; sourceTree = "<group>"; };
@@ -331,6 +336,7 @@
 				FF67B06512E411ACB7989DC9 /* ItemBundleExportTests.swift */,
 				FBCA04FFD515FAA636671FEE /* MasonryLayoutTests.swift */,
 				8A94C84E55A7560D0AA8CB96 /* PageClassifierTests.swift */,
+				B1C2D3E4F5A60718293A4B64 /* PostKindTests.swift */,
 				A1B2C3D4E5F60718293A4B5F /* ProductKindTests.swift */,
 				0FC5FD48A7467207C87B5C65 /* RevisitTrackingTests.swift */,
 				0453F0AB948BB5BF90BAEA72 /* SearchBlobTests.swift */,
@@ -389,6 +395,7 @@
 				23876ECEF543E378B833D11F /* FoundationModelsEnricher.swift */,
 				28073A97E7A248FEF415DD89 /* MockEnricher.swift */,
 				9D6A6E1C0894A01440EA1F10 /* PageClassifier.swift */,
+				B1C2D3E4F5A60718293A4B61 /* PostReader.swift */,
 				A1B2C3D4E5F60718293A4B5C /* ProductReader.swift */,
 				74EE305B0353EE75E12D3652 /* RuleBasedFallbackEnricher.swift */,
 				937DE9FDF9111BED793134C5 /* RuleTagger.swift */,
@@ -550,6 +557,7 @@
 				9554CC3CBEB01A3F738AA507 /* MockEnricher.swift in Sources */,
 				C7BCB19D5A840F5CFC7D8C07 /* OptacosImporter.swift in Sources */,
 				0DFE4D9A3172EA017AADA9EF /* PageClassifier.swift in Sources */,
+				B1C2D3E4F5A60718293A4B62 /* PostReader.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5D /* ProductReader.swift in Sources */,
 				0BFD342E6D18B4F386806AE0 /* RuleBasedFallbackEnricher.swift in Sources */,
 				6BBAFD4311A5F8D30F0DC008 /* RuleTagger.swift in Sources */,
@@ -586,6 +594,7 @@
 				CF7CCB3D7C59218547FC8D3F /* ItemBundleExportTests.swift in Sources */,
 				394817DF2A59D53E4857BDBC /* MasonryLayoutTests.swift in Sources */,
 				FA26C003A7AAE86532C38F94 /* PageClassifierTests.swift in Sources */,
+				B1C2D3E4F5A60718293A4B65 /* PostKindTests.swift in Sources */,
 				A1B2C3D4E5F60718293A4B60 /* ProductKindTests.swift in Sources */,
 				63C35E662A488DEC58122522 /* RevisitTrackingTests.swift in Sources */,
 				E4640DF5326283AB44DB4C89 /* SearchBlobTests.swift in Sources */,
@@ -604,6 +613,7 @@
 				E1FE78336EED97EC3B2B5614 /* ItemImage.swift in Sources */,
 				75ED53896ACD9059FFB1F0EE /* LocalAttachment.swift in Sources */,
 				B5820BA34E0BDC5164803634 /* PageClassifier.swift in Sources */,
+				B1C2D3E4F5A60718293A4B63 /* PostReader.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5E /* ProductReader.swift in Sources */,
 				EF4080454C7313AD6493D38E /* RuleTagger.swift in Sources */,
 				369DB62EAD24041FBD1F5E28 /* ShareView.swift in Sources */,
