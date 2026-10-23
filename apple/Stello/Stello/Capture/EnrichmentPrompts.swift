@@ -71,9 +71,9 @@ enum EnrichmentNormalize {
         if s.count < 15 { return true }
         let letterCount = s.filter { $0.isLetter }.count
         if Double(letterCount) < Double(s.count) / 2 { return true }
-        // Prose has words: a real quote is ≥4 of them. Kills CSS/code tokens the model
+        // Prose has words: a real quote is ≥3 of them. Kills CSS/code tokens the model
         // quoted verbatim from page text (e.g. "--tw-border-spacing-x:0;--tw-border-spacing-y:0;").
-        if s.split(separator: " ").count < 4 { return true }
+        if s.split(separator: " ").count < 3 { return true }
         // CSS declarations: custom-property or `prop: value;` runs without sentence shape.
         if s.contains("--") && s.contains(":") && s.contains(";") { return true }
         return false

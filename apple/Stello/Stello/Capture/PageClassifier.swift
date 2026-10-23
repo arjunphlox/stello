@@ -405,7 +405,7 @@ nonisolated struct PageClassifier {
     /// it counts; a generic vlog upload must stay `link`.
     nonisolated static func isPlainYouTubeHost(_ host: String) -> Bool {
         let h = host.lowercased()
-        return h == "youtube.com" || h.hasSuffix(".youtube.com") || h == "youtu.be"
+        return h == "youtube.com" || (h.hasSuffix(".youtube.com") && h != "music.youtube.com") || h == "youtu.be"
     }
 
     nonisolated private static let musicOGTypes: Set<String> = [
