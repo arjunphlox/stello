@@ -20,6 +20,9 @@
 		B1C2D3E4F5A60718293A4B62 /* PostReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A60718293A4B61 /* PostReader.swift */; };
 		B1C2D3E4F5A60718293A4B63 /* PostReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A60718293A4B61 /* PostReader.swift */; };
 		B1C2D3E4F5A60718293A4B65 /* PostKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A60718293A4B64 /* PostKindTests.swift */; };
+		C1D2E3F4A5B60718293A4B67 /* ToolReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B60718293A4B66 /* ToolReader.swift */; };
+		C1D2E3F4A5B60718293A4B68 /* ToolReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B60718293A4B66 /* ToolReader.swift */; };
+		C1D2E3F4A5B60718293A4B6A /* ToolKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B60718293A4B69 /* ToolKindTests.swift */; };
 		0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA340D3CF1CBA31162EB51C /* Tag.swift */; };
 		145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
 		1AFDFF2A1AA22AE8F6806246 /* UserPreferencesContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8C21E2EC36E821776F7C3B /* UserPreferencesContent.swift */; };
@@ -187,6 +190,8 @@
 		A1B2C3D4E5F60718293A4B5F /* ProductKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductKindTests.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A60718293A4B61 /* PostReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostReader.swift; sourceTree = "<group>"; };
 		B1C2D3E4F5A60718293A4B64 /* PostKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostKindTests.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B60718293A4B66 /* ToolReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolReader.swift; sourceTree = "<group>"; };
+		C1D2E3F4A5B60718293A4B69 /* ToolKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolKindTests.swift; sourceTree = "<group>"; };
 		A00AB84A8DD5556B8493537D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloTests.swift; sourceTree = "<group>"; };
 		A3CA34AF62B2777DF5A05B12 /* DetailImageStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailImageStrip.swift; sourceTree = "<group>"; };
@@ -341,6 +346,7 @@
 				0FC5FD48A7467207C87B5C65 /* RevisitTrackingTests.swift */,
 				0453F0AB948BB5BF90BAEA72 /* SearchBlobTests.swift */,
 				A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */,
+				C1D2E3F4A5B60718293A4B69 /* ToolKindTests.swift */,
 				4326DA37BA12D5555CA5FA7B /* WhySavedIntentTests.swift */,
 			);
 			path = StelloTests;
@@ -399,6 +405,7 @@
 				A1B2C3D4E5F60718293A4B5C /* ProductReader.swift */,
 				74EE305B0353EE75E12D3652 /* RuleBasedFallbackEnricher.swift */,
 				937DE9FDF9111BED793134C5 /* RuleTagger.swift */,
+				C1D2E3F4A5B60718293A4B66 /* ToolReader.swift */,
 			);
 			path = Capture;
 			sourceTree = "<group>";
@@ -561,6 +568,7 @@
 				A1B2C3D4E5F60718293A4B5D /* ProductReader.swift in Sources */,
 				0BFD342E6D18B4F386806AE0 /* RuleBasedFallbackEnricher.swift in Sources */,
 				6BBAFD4311A5F8D30F0DC008 /* RuleTagger.swift in Sources */,
+				C1D2E3F4A5B60718293A4B67 /* ToolReader.swift in Sources */,
 				B5B19D7002BA4C85F361D285 /* SampleCoverGenerator.swift in Sources */,
 				0B06BB149A3084F452AE49D9 /* SeedData.swift in Sources */,
 				D42C96BA4F1424193B6248F6 /* SettingsView.swift in Sources */,
@@ -599,6 +607,7 @@
 				63C35E662A488DEC58122522 /* RevisitTrackingTests.swift in Sources */,
 				E4640DF5326283AB44DB4C89 /* SearchBlobTests.swift in Sources */,
 				1BA6DD6CFC0DEB0DAF398922 /* StelloTests.swift in Sources */,
+				C1D2E3F4A5B60718293A4B6A /* ToolKindTests.swift in Sources */,
 				D960E7426247525ACFA850A9 /* WhySavedIntentTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -621,6 +630,7 @@
 				B588DA16ECA48EE61C9DE7F8 /* Snippet.swift in Sources */,
 				5D7D4FA7CB4C57AE9607A27C /* StelloStore.swift in Sources */,
 				5C38E5380ED85E12CD92E4A6 /* Tag.swift in Sources */,
+				C1D2E3F4A5B60718293A4B68 /* ToolReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

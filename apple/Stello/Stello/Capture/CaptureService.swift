@@ -156,6 +156,13 @@ enum CaptureService {
             productResult = await extractProduct(sourceURL: url, page: page, source: source)
         }
 
+        // Tool (after post and product): SoftwareApplication JSON-LD, og tags, and — for a
+        // GitHub repo — the public REST API (skipped silently when rate-limited).
+        var toolResult: ToolExtraction? = nil
+        if kind == .tool {
+            toolResult = await extractTool(sourceURL: url, page: page)
+        }
+
         // Music classification: deterministic host/og:type match (no extra network beyond
         // the page fetch above), or — for plain youtube.com/youtu.be — a confirmed oEmbed
         // signal. Only attempted when the generic classifier left the page as `link`.
@@ -174,6 +181,9 @@ enum CaptureService {
         } else if let productTitle = productResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !productTitle.isEmpty {
             title = productTitle
+        } else if let toolTitle = toolResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !toolTitle.isEmpty {
+            title = toolTitle
         } else if let raw = musicResult?.rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
             title = raw
         } else {
@@ -233,8 +243,16 @@ enum CaptureService {
         let slug = makeSlug(from: title, context: context)
         let tagSpecs = RuleTagger.generateTags(title: title, description: summary, domain: dom)
 
-        // Products show the domain they landed on after redirects (`sourceURL` untouched).
-        let displayDomain = productResult != nil ? (page?.finalURL.flatMap(domain(from:)) ?? dom) : dom
+        // Products show the domain they landed on after redirects; tools show their canonical
+        // host when a redirect changed it (`sourceURL` untouched).
+        let displayDomain: String?
+        if productResult != nil {
+            displayDomain = page?.finalURL.flatMap(domain(from:)) ?? dom
+        } else if let canonical = toolResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
+            displayDomain = domain(from: canonical) ?? dom
+        } else {
+            displayDomain = dom
+        }
 
         let item = Item(
             slug: slug, title: title, sourceURL: normalized, domain: displayDomain,
@@ -254,6 +272,9 @@ enum CaptureService {
         }
         if let postResult {
             item.setMetadata(postResult.meta)
+        }
+        if let toolResult {
+            item.setMetadata(toolResult.meta)
         }
         context.insert(item)
 
@@ -551,6 +572,36 @@ enum CaptureService {
             syndication: syndication,
             oembed: oembed
         )
+    }
+
+    // MARK: - Tool Extraction
+
+    /// Tool readers for a page already classified as a tool. The only extra network call is
+    /// GitHub's REST `repos/<owner>/<repo>` (repo URLs only; 60 calls/hour unauthenticated —
+    /// a 403/429 or any failure just skips it). Everything else comes from the capture-time
+    /// page fetch.
+    static func extractTool(sourceURL: URL, page: PageFetchResult?) async -> ToolExtraction {
+        var github: ToolReader.GitHubRepo? = nil
+        if let endpoint = ToolReader.githubAPIURL(for: sourceURL)
+            ?? page?.finalURL.flatMap({ ToolReader.githubAPIURL(for: $0) }) {
+            github = await fetchGitHubRepo(endpoint)
+        }
+        return ToolReader.build(
+            sourceURL: sourceURL,
+            finalURL: page?.finalURL,
+            html: page?.html ?? "",
+            ogDescription: page?.og.description,
+            github: github
+        )
+    }
+
+    private static func fetchGitHubRepo(_ endpoint: URL) async -> ToolReader.GitHubRepo? {
+        var request = URLRequest(url: endpoint, timeoutInterval: 10)
+        request.setValue("Stello/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else { return nil }
+        return ToolReader.parseGitHubRepo(data: data, statusCode: (response as? HTTPURLResponse)?.statusCode)
     }
 
     private static func fetchSyndication(_ endpoint: URL) async -> PostReader.SyndicationOutcome {

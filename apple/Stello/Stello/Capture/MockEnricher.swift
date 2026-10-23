@@ -64,4 +64,12 @@ struct MockEnricher: Enricher, Sendable {
         guard isAvailable else { throw EnricherError.unavailable }
         return nil
     }
+
+    /// No deterministic stand-in for the tool-facts guess — nil (the caller then tries the
+    /// rule-based keyword pass).
+    nonisolated func guessToolFacts(text: String?) async throws -> ToolFacts? {
+        if let error { throw error }
+        guard isAvailable else { throw EnricherError.unavailable }
+        return nil
+    }
 }

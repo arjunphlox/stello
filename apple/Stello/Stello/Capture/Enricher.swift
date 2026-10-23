@@ -53,4 +53,8 @@ protocol Enricher {
     /// Prompt guess for an AI-art post whose text has no rule-readable prompt. Nil = no
     /// guess. Results are stored as guesses (`PostMeta.promptIsGuess`).
     func guessPrompt(text: String?, aiModel: String?) async throws -> String?
+
+    /// Platforms + pricing guess for a tool whose page gave neither (no JSON-LD, no store
+    /// data). Nil = no guess. Results are stored as guesses (`ToolMeta.…IsGuess`).
+    func guessToolFacts(text: String?) async throws -> ToolFacts?
 }

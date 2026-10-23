@@ -179,6 +179,8 @@ struct ItemCardView: View {
             imageCard(img)
         } else if isVideoCard {
             videoCard
+        } else if let toolMeta = item.toolMeta() {
+            toolTile(toolMeta)
         } else if hasText {
             textCard
         } else {
@@ -247,6 +249,54 @@ struct ItemCardView: View {
                 macTitleBadge
             }
             #endif
+        }
+    }
+
+    /// Imageless tool: an accent tile with a type glyph and the tool's name. (No favicon is
+    /// stored per item yet, so the glyph stands in for the site icon.)
+    private func toolTile(_ meta: ToolMeta) -> some View {
+        hoverDim(
+            ZStack {
+                theme.accentColor
+                VStack(spacing: 8) {
+                    Image(systemName: Self.toolGlyph(meta.subtype))
+                        .font(.system(size: 26, weight: .regular))
+                    Text(meta.name ?? item.title)
+                        .font(.karst(.subheadline, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+                .foregroundStyle(theme.accentContrast)
+                .padding(.horizontal, 12)
+            }
+            .frame(maxWidth: .infinity, minHeight: 140)
+        )
+        .overlay(alignment: .bottomTrailing) {
+            if showCardOverlays {
+                domainPill.padding(10)
+            }
+        }
+        .overlay(alignment: .bottomLeading) {
+            if showCardOverlays {
+                reviewBadge.padding(10)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            #if os(macOS)
+            if showCardOverlays {
+                macTitleBadge
+            }
+            #endif
+        }
+    }
+
+    private static func toolGlyph(_ subtype: String?) -> String {
+        switch subtype {
+        case "library": return "chevron.left.forwardslash.chevron.right"
+        case "extension": return "puzzlepiece.extension"
+        case "AI model": return "cpu"
+        case "app": return "app"
+        default: return "globe"
         }
     }
 
