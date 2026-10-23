@@ -575,14 +575,21 @@ nonisolated struct PageClassifier {
     /// Collection labels that make a page a tool (unless it is an article).
     nonisolated static let toolLabels: Set<String> = ["digital-tools", "digital-productivity", "gen-ai"]
 
-    /// "Gen AI" / "gen_ai" / "GEN-AI" → "gen-ai".
+    /// Collection labels that mark AI art (an image), never a tool — they veto the tool
+    /// labels, so a `gen-ai` + `midjourney` gallery page isn't filed as a tool.
+    nonisolated static let aiArtOnlyLabels: Set<String> = [
+        "midjourney", "nijijourney", "ai-art", "stable-diffusion", "dall-e",
+    ]
+
+    /// "Gen AI" / "gen_ai" / "GEN-AI" → "gen-ai". False when an AI-art label is also present.
     nonisolated static func hasToolLabel(_ labels: [String]) -> Bool {
-        labels.contains { label in
-            let key = label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let keys = labels.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 .replacingOccurrences(of: " ", with: "-")
                 .replacingOccurrences(of: "_", with: "-")
-            return toolLabels.contains(key)
         }
+        guard !keys.contains(where: aiArtOnlyLabels.contains) else { return false }
+        return keys.contains(where: toolLabels.contains)
     }
 
     /// Whether the page is a tool. Runs after the post and product rules (kind order:
