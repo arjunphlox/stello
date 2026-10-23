@@ -531,8 +531,14 @@ nonisolated struct PageClassifier {
             nodeTypes($0.dict).contains(where: isArticleType)
         }
 
-        if !isArticle {
-            if nodes.contains(where: { nodeTypes($0.dict).contains(where: isProductType) }) {
+        // SaaS landing pages often mark themselves up as a Product; only a Product with an
+        // offer, on a page that doesn't also declare itself software, counts.
+        let isSoftware = nodes.contains { nodeTypes($0.dict).contains(where: isSoftwareType) }
+
+        if !isArticle && !isSoftware {
+            if nodes.contains(where: {
+                nodeTypes($0.dict).contains(where: isProductType) && $0.dict["offers"] != nil
+            }) {
                 return "page"
             }
             if isShopifyProductURL(url) && (html.isEmpty || hasShopifyMarker(html) || isMyShopifyHost(url)) {
@@ -558,6 +564,12 @@ nonisolated struct PageClassifier {
         type.caseInsensitiveCompare("Product") == .orderedSame
             || type.caseInsensitiveCompare("ProductGroup") == .orderedSame
             || type.caseInsensitiveCompare("IndividualProduct") == .orderedSame
+    }
+
+    nonisolated private static func isSoftwareType(_ type: String) -> Bool {
+        ["SoftwareApplication", "WebApplication", "MobileApplication"].contains {
+            type.caseInsensitiveCompare($0) == .orderedSame
+        }
     }
 
     nonisolated private static func isArticleType(_ type: String) -> Bool {

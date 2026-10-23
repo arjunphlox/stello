@@ -54,12 +54,31 @@ struct ProductClassificationTests {
     func productJSONLD() {
         let html = """
         <html><head><script type="application/ld+json">
-        {"@context":"https://schema.org","@type":"Product","name":"Mag Dock","brand":"Stuffcool"}
+        {"@context":"https://schema.org","@type":"Product","name":"Mag Dock","brand":"Stuffcool",
+         "offers":{"@type":"Offer","price":"2699","priceCurrency":"INR"}}
         </script></head><body></body></html>
         """
         let result = classify("https://stuffcool.com/item/mag-dock", html: html)
         #expect(result.kind == .product)
         #expect(result.productSource == "page")
+    }
+
+    @Test("SaaS Product JSON-LD without an offer, or next to SoftwareApplication, stays non-product")
+    func saasProductJSONLDStaysNonProduct() {
+        let noOffer = """
+        <html><head><script type="application/ld+json">
+        {"@context":"https://schema.org","@type":"Product","name":"Acme Analytics"}
+        </script></head><body></body></html>
+        """
+        #expect(classify("https://acme.io/", html: noOffer).kind != .product)
+
+        let software = """
+        <html><head><script type="application/ld+json">
+        [{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Acme","operatingSystem":"macOS"},
+         {"@context":"https://schema.org","@type":"Product","name":"Acme","offers":{"@type":"Offer","price":"0"}}]
+        </script></head><body></body></html>
+        """
+        #expect(classify("https://acme.io/", html: software).kind != .product)
     }
 
     @Test("Shopify /products/ path with a storefront marker → product, incl. under /collections/")
