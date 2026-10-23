@@ -50,4 +50,11 @@ struct MockEnricher: Enricher, Sendable {
         guard isAvailable else { throw EnricherError.unavailable }
         return result.visionTags
     }
+
+    /// Deterministic stand-in for the on-device guess: the rule-based filename reading.
+    nonisolated func guessProduct(caption: String?, filename: String?) async throws -> ProductGuess {
+        if let error { throw error }
+        guard isAvailable else { throw EnricherError.unavailable }
+        return ProductReader.ruleBasedGuess(caption: caption, filename: filename)
+    }
 }

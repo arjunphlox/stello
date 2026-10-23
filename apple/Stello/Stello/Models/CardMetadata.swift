@@ -206,6 +206,87 @@ nonisolated struct MusicMeta: Codable, Sendable {
     var previewAudioURL: String?
 }
 
+// MARK: - Product
+
+nonisolated struct ProductMeta: Codable, Sendable {
+    /// Shopify `title`, JSON-LD `name`, og:title — or an on-device / filename guess
+    /// (`productNameIsGuess == true`), which the panel marks as a guess.
+    var productName: String?
+    var productNameIsGuess: Bool?
+    /// Shopify `vendor` or JSON-LD `brand` (string or `{name}`); may be a guess (`brandIsGuess`).
+    var brand: EntityRef?
+    var brandIsGuess: Bool?
+    /// Decimal-as-string with grouping stripped (e.g. "2699.00"). Snapshot at capture.
+    var price: String?
+    /// Set only when variants / an AggregateOffer span a range.
+    var priceMin: String?
+    var priceMax: String?
+    /// ISO 4217 code (e.g. "INR"). og tags may lack it — JSON-LD is preferred.
+    var currency: String?
+    /// When `price` was read — the capture date ("Price when saved").
+    var pricedAt: Date?
+    /// Human label from schema.org availability: "in stock", "out of stock", "pre-order"…
+    var availability: String?
+    /// og:site_name, else the host.
+    var shop: String?
+    /// Shopify `product_type`.
+    var category: String?
+    /// `page` | `instagram` | `image`.
+    var source: String?
+    /// Instagram posting account (display name); the bare handle lives in `creatorHandle`.
+    var creator: EntityRef?
+    var creatorHandle: String?
+    /// Instagram caption — input to the on-device name/brand guess (Instagram has no price).
+    var caption: String?
+    var buyURL: String?
+    /// Final URL after redirects.
+    var canonicalURL: String?
+    /// The Instagram (or other) post the product was saved from.
+    var originalPostURL: String?
+
+    /// One short line for the grid card: "₹2,699 · Stuffcool", or "via @handle" for an
+    /// Instagram product; nil when there is nothing to say.
+    var cardKindLine: String? {
+        let priceText = ProductMeta.formattedPrice(price, currency: currency)
+        let brandText = brand?.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = [priceText, brandText].compactMap { $0 }.filter { !$0.isEmpty }
+        if !parts.isEmpty { return parts.joined(separator: " · ") }
+        if let handle = creatorHandle?.trimmingCharacters(in: .whitespacesAndNewlines), !handle.isEmpty {
+            return "via @\(handle)"
+        }
+        return nil
+    }
+
+    /// Display price: ("2699.00", "INR") → "₹2,699"; ("19.5", "USD") → "$19.50".
+    /// Fixed en_US grouping so it reads the same on every device locale.
+    static func formattedPrice(_ price: String?, currency: String?) -> String? {
+        guard let raw = price?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        let cleaned = raw.replacingOccurrences(of: ",", with: "")
+        guard let value = Decimal(string: cleaned) else { return raw }
+
+        let fraction = cleaned.split(separator: ".", maxSplits: 1).dropFirst().first ?? ""
+        let isWhole = fraction.allSatisfy { $0 == "0" }
+
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = isWhole ? 0 : 2
+        formatter.maximumFractionDigits = isWhole ? 0 : 2
+        guard let number = formatter.string(from: value as NSDecimalNumber) else { return raw }
+
+        guard let code = currency?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+              !code.isEmpty else { return number }
+        if let symbol = currencySymbols[code] { return symbol + number }
+        return "\(code) \(number)"
+    }
+
+    private static let currencySymbols: [String: String] = [
+        "INR": "₹", "USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥", "CNY": "¥",
+        "KRW": "₩", "AUD": "A$", "CAD": "CA$", "SGD": "S$", "NZD": "NZ$", "HKD": "HK$",
+    ]
+}
+
 // MARK: - Item metadata helpers
 
 extension Item {
@@ -255,10 +336,15 @@ extension Item {
         guard kind == ItemKind.music.rawValue else { return nil }
         return decodeMetadata(MusicMeta.self)
     }
+
+    func productMeta() -> ProductMeta? {
+        guard kind == ItemKind.product.rawValue else { return nil }
+        return decodeMetadata(ProductMeta.self)
+    }
 }
 
 enum ItemKind: String, Sendable {
-    case typeface, website, individual, studio, foundry, place, music, link
+    case typeface, website, individual, studio, foundry, place, music, product, link
 }
 
 enum ItemImageRole: String, Sendable {

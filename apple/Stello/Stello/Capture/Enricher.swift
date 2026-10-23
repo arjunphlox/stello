@@ -45,4 +45,8 @@ protocol Enricher {
     /// Vision-only entry point for kind-dispatched enrichment (music covers) that must never
     /// trigger the generic snippets/why-saved text jobs alongside it.
     func enrichVisionOnly(coverImageData: Data?) async throws -> [VisionTagSpec]
+
+    /// Product name/brand guess for products with no structured data (Instagram caption,
+    /// bare image filename). Results are stored as guesses (`ProductMeta.…IsGuess`).
+    func guessProduct(caption: String?, filename: String?) async throws -> ProductGuess
 }

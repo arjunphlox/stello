@@ -111,6 +111,14 @@ struct FoundationModelsEnricher: Enricher {
         return try await EnrichmentRunner.enrichMusicTitle(rawTitle: rawTitle, channel: channel)
     }
 
+    /// On-device product name/brand guess from an Instagram caption or an image filename.
+    /// The caller falls back to `ProductReader.ruleBasedGuess` when this throws.
+    func guessProduct(caption: String?, filename: String?) async throws -> ProductGuess {
+        guard isAvailable else { throw EnricherError.unavailable }
+        let guess = try await EnrichmentRunner.guessProduct(caption: caption, filename: filename)
+        return ProductGuess(productName: guess.productName, brand: guess.brand)
+    }
+
     // MARK: - Mapping
 
     static func mapVisionTags(_ tags: VisionTags) -> [VisionTagSpec] {

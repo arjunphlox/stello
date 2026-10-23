@@ -94,12 +94,27 @@ enum EnrichmentService {
                     "\($0.source)/primary:\($0.isPrimary)/renderable:\($0.hasRenderableCoverData)"
                 }
                 print("[refetch] \(item.slug): images=[\(imageSources.joined(separator: ", "))] ogImage=\(page.og.imageURL?.absoluteString ?? "nil")")
+                if page.isGone, item.status != "gone" {
+                    item.status = "gone"
+                    item.updatedAt = .now
+                }
+                // Product readers first: a link item may now classify as a product (its
+                // collection labels can decide), and a product refreshes its dossier.
+                let productSource = await refreshProductIfClassified(
+                    item: item, context: context, url: url, page: page
+                )
                 await upgradeCoverIfNeeded(
                     item: item, context: context, primaryURL: page.og.imageURL, fallbackURL: nil, source: "og"
                 )
-                if let extracted = CaptureService.extractText(html: page.html), !extracted.isEmpty {
-                    print("[refetch] \(item.slug): extractedText \(extracted.count) chars")
-                    item.extractedText = extracted
+                if productSource == nil || productSource == "page" {
+                    if let extracted = CaptureService.extractText(html: page.html), !extracted.isEmpty {
+                        print("[refetch] \(item.slug): extractedText \(extracted.count) chars")
+                        item.extractedText = extracted
+                        item.updatedAt = .now
+                    }
+                } else if let caption = item.productMeta()?.caption {
+                    // Instagram shell pages / image bytes have no prose — the caption is it.
+                    item.extractedText = caption
                     item.updatedAt = .now
                 }
             } else {
@@ -108,6 +123,12 @@ enum EnrichmentService {
             }
         } else if force {
             print("[refetch] \(item.slug): skipped — sourceURL=\(item.sourceURL ?? "nil")")
+        }
+
+        // Instagram / bare-image products have no structured name or brand — guess them
+        // (on-device model, rule-based fallback) before the generic AI jobs run.
+        if item.kind == ItemKind.product.rawValue {
+            await applyProductGuessIfNeeded(item: item, enricher: enricher)
         }
 
         do {
@@ -392,5 +413,114 @@ enum EnrichmentService {
         item.updatedAt = .now
         try? context.save()
         return true
+    }
+
+    // MARK: - Product enrichment
+
+    /// Collection labels (`category == "collection"` tags: wishlist, digital-tools, …) —
+    /// hints that break classification ties; imported items carry them, fresh captures don't.
+    static func collectionLabels(for item: Item) -> [String] {
+        (item.tags ?? []).filter { $0.category == "collection" }.map(\.name)
+    }
+
+    /// Force-Enrich hook: when a `link` or `product` item's refetched page classifies as a
+    /// product, (re)runs the product readers and stores the dossier. "Price when saved" is a
+    /// snapshot — an existing price/date is never rewritten — and a read (non-guess)
+    /// name/brand is never replaced by a guess. Returns the product source, or nil when the
+    /// item isn't (or can't become) a product. Curated kinds (typeface, website, …) are
+    /// never flipped.
+    @discardableResult
+    static func refreshProductIfClassified(
+        item: Item,
+        context: ModelContext,
+        url: URL,
+        page: PageFetchResult
+    ) async -> String? {
+        guard item.kind == ItemKind.link.rawValue || item.kind == ItemKind.product.rawValue else { return nil }
+        guard let source = PageClassifier.productSource(
+            url: url, ogType: page.og.ogType, html: page.html, collectionLabels: collectionLabels(for: item)
+        ) else { return nil }
+
+        let extraction = await CaptureService.extractProduct(sourceURL: url, page: page, source: source)
+        var meta = extraction.meta
+        if let previous = item.productMeta() {
+            if previous.price != nil {
+                meta.price = previous.price
+                meta.priceMin = previous.priceMin
+                meta.priceMax = previous.priceMax
+                meta.currency = previous.currency
+                meta.pricedAt = previous.pricedAt
+            }
+            if previous.productName != nil, meta.productName == nil || meta.productNameIsGuess == true {
+                meta.productName = previous.productName
+                meta.productNameIsGuess = previous.productNameIsGuess
+            }
+            if previous.brand != nil, meta.brand == nil || meta.brandIsGuess == true {
+                meta.brand = previous.brand
+                meta.brandIsGuess = previous.brandIsGuess
+            }
+        }
+
+        item.kind = ItemKind.product.rawValue
+        item.setMetadata(meta)
+        if let finalURL = page.finalURL, let landed = CaptureService.domain(from: finalURL) {
+            item.domain = landed
+        }
+
+        await upgradeCoverIfNeeded(
+            item: item, context: context,
+            primaryURL: extraction.imageURLs.first, fallbackURL: nil, source: "product"
+        )
+        let hasGallery = (item.images ?? []).contains { $0.role == ItemImageRole.gallery.rawValue }
+        if !hasGallery {
+            let downloads = await CaptureService.downloadImages(Array(extraction.imageURLs.dropFirst()))
+            for (data, w, h) in downloads.compactMap({ $0 }) {
+                let image = ItemImage(
+                    data: data, source: "product", isPrimary: false, width: w, height: h,
+                    role: ItemImageRole.gallery.rawValue
+                )
+                context.insert(image)
+                image.item = item
+            }
+        }
+        item.updatedAt = .now
+        return source
+    }
+
+    /// Instagram / bare-image products: guess name + brand from the caption or filename
+    /// (on-device model; the rule-based filename reading when the model is unavailable,
+    /// fails, or returns nothing). Stored with the `…IsGuess` flags; read values win.
+    static func applyProductGuessIfNeeded(item: Item, enricher: Enricher) async {
+        guard var meta = item.productMeta(),
+              meta.source == "instagram" || meta.source == "image" else { return }
+        let needsName = meta.productName == nil || meta.productNameIsGuess == true
+        let needsBrand = meta.brand == nil || meta.brandIsGuess == true
+        guard needsName || needsBrand else { return }
+
+        let filename: String? = meta.source == "image"
+            ? item.sourceURL.flatMap { URL(string: $0) }?.lastPathComponent
+            : nil
+        let caption = meta.caption
+        guard caption != nil || filename != nil else { return }
+
+        let ruleGuess = ProductReader.ruleBasedGuess(caption: caption, filename: filename)
+        var guess: ProductGuess
+        do {
+            guess = try await enricher.guessProduct(caption: caption, filename: filename)
+        } catch {
+            guess = ruleGuess
+        }
+        if guess.productName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+            guess.productName = ruleGuess.productName
+        }
+
+        let previousName = meta.productName
+        ProductReader.applyGuess(guess, to: &meta)
+        item.setMetadata(meta)
+        // A title that was itself the old guess follows the new one.
+        if let previousName, item.title == previousName, let newName = meta.productName {
+            item.title = newName
+        }
+        item.updatedAt = .now
     }
 }

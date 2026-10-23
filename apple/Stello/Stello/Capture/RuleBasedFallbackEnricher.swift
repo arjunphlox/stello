@@ -19,4 +19,9 @@ struct RuleBasedFallbackEnricher: Enricher, Sendable {
     nonisolated func enrichVisionOnly(coverImageData: Data?) async throws -> [VisionTagSpec] {
         []
     }
+
+    /// Filename slug → sentence-case name, no brand (captions aren't parsed by rule).
+    nonisolated func guessProduct(caption: String?, filename: String?) async throws -> ProductGuess {
+        ProductReader.ruleBasedGuess(caption: caption, filename: filename)
+    }
 }
