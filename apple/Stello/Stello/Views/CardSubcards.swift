@@ -96,6 +96,8 @@ struct CardSubcards: View {
                     if let meta = item.musicMeta() { musicCards(meta) }
                 case .product:
                     if let meta = item.productMeta() { productCards(meta) }
+                case .post:
+                    if let meta = item.postMeta() { postCards(meta) }
                 case .link:
                     EmptyView()
                 }
@@ -742,6 +744,115 @@ struct CardSubcards: View {
         return "\(price) · \(date.formatted(date: .abbreviated, time: .omitted))"
     }
 
+    // MARK: - Post
+
+    @ViewBuilder
+    private func postCards(_ meta: PostMeta) -> some View {
+        // The post media (cover + up to 7 `gallery` images, capped at capture) renders in the
+        // top images sub-card via `typedTopMediaRoles`.
+        if let text = meta.text?.nilIfEmpty {
+            SubCard(title: "Post") {
+                HStack(alignment: .top, spacing: 8) {
+                    Rectangle()
+                        .fill(theme.accentColor)
+                        .frame(width: 2)
+                    Text(text)
+                        .font(.karst(.callout))
+                        .foregroundStyle(theme.textPrimary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+
+        factsCard(title: "Details", rows: [
+            ("Platform", Self.postPlatformLabel(meta.platform)),
+            ("Author", postAuthorLine(meta)),
+            ("Posted", meta.postedAt?.formatted(date: .abbreviated, time: .omitted)),
+            ("Media", postMediaLine(meta)),
+        ])
+
+        if meta.isAIArt {
+            SubCard(title: "AI art") {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let model = meta.aiModel?.nilIfEmpty {
+                        factRow(label: "Model", value: model)
+                    }
+                    if let prompt = meta.prompt?.nilIfEmpty {
+                        HStack(alignment: .top, spacing: 8) {
+                            factRow(label: meta.promptIsGuess ? "Prompt (guess)" : "Prompt", value: prompt)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Button {
+                                copyToPasteboard(prompt)
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(theme.textSecondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Copy prompt")
+                            .help("Copy prompt")
+                        }
+                    }
+                    if meta.aiModel?.nilIfEmpty == nil, meta.prompt?.nilIfEmpty == nil {
+                        Text("Flagged as AI art.")
+                            .font(.karst(.caption))
+                            .foregroundStyle(theme.textSecondary)
+                    }
+                }
+            }
+        }
+
+        factsCard(title: "Links", rows: [
+            ("Original post", meta.canonicalURL ?? item.sourceURL),
+            ("Embed", meta.embedURL),
+        ])
+    }
+
+    private static func postPlatformLabel(_ platform: String?) -> String? {
+        switch platform {
+        case "x": return "X"
+        case "instagram": return "Instagram"
+        case "behance": return "Behance"
+        case "dribbble": return "Dribbble"
+        case "pinterest": return "Pinterest"
+        default: return platform?.capitalized
+        }
+    }
+
+    /// "Jane Doe (@jane)", or whichever of the two is known.
+    private func postAuthorLine(_ meta: PostMeta) -> String? {
+        let name = meta.author?.name.nilIfEmpty
+        let handle = meta.authorHandle?.nilIfEmpty.map { "@\($0)" }
+        switch (name, handle) {
+        case let (name?, handle?): return name == handle ? name : "\(name) (\(handle))"
+        case let (name?, nil): return name
+        case let (nil, handle?): return handle
+        default: return nil
+        }
+    }
+
+    /// "4 items" for a carousel, else "Video" / "GIF" / "Image".
+    private func postMediaLine(_ meta: PostMeta) -> String? {
+        switch meta.mediaType {
+        case "carousel": return "\(meta.mediaCount ?? 2) items"
+        case "video": return "Video"
+        case "gif": return "GIF"
+        case "image": return "Image"
+        default: return nil
+        }
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
+        #endif
+    }
+
     private func musicDuration(_ seconds: Int?) -> String? {
         guard let seconds, seconds > 0 else { return nil }
         let minutes = seconds / 60
@@ -1192,6 +1303,7 @@ extension Item {
         case .place: return placeMeta() != nil
         case .music: return musicMeta() != nil
         case .product: return productMeta() != nil
+        case .post: return postMeta() != nil
         case .link: return false
         }
     }
@@ -1200,6 +1312,7 @@ extension Item {
     var cardKindLine: String? {
         switch ItemKind(rawValue: kind) ?? .link {
         case .product: return productMeta()?.cardKindLine
+        case .post: return postMeta()?.cardKindLine
         default: return nil
         }
     }
@@ -1208,7 +1321,7 @@ extension Item {
         switch ItemKind(rawValue: kind) ?? .link {
         case .typeface:
             return [ItemImageRole.specimen.rawValue, ItemImageRole.cover.rawValue]
-        case .website, .product:
+        case .website, .product, .post:
             return [ItemImageRole.cover.rawValue, ItemImageRole.gallery.rawValue]
         default:
             return [ItemImageRole.cover.rawValue]

@@ -251,6 +251,21 @@ struct ProductNameGuess: Equatable, Sendable {
     var brand: String?
 }
 
+// MARK: - 6. AI-art prompt guess (kind-dispatched — AI-art posts with no readable prompt)
+
+@available(macOS 27.0, iOS 27.0, *)
+@Generable(description: "A best guess at the text-to-image prompt behind a saved AI-art post.")
+struct PostPromptGuess: Equatable, Sendable {
+
+    @Guide(description: """
+    The prompt as the artist would have typed it into the image model: comma-separated \
+    subject, style, medium and lighting phrases, plus any parameters the post shows \
+    (e.g. --ar 3:2). No hashtags, no emoji, no "link in bio". Nil when the post text says \
+    too little about the image to guess.
+    """)
+    var prompt: String?
+}
+
 // MARK: - Instruction strings (each carries ONE worked exemplar)
 
 @available(macOS 27.0, iOS 27.0, *)
@@ -363,6 +378,25 @@ enum EnrichmentInstructions {
     Note: the emoji, hashtag and "Link in bio" are dropped; @stuffcool is the maker, so it \
     is the brand. Read the provided text the same way.
     """
+
+    static let postPromptGuess = """
+    You are Stello's prompt reader. The user saved an AI-generated image post (Midjourney, \
+    Stable Diffusion and similar) whose text doesn't spell out the prompt. Guess the prompt \
+    the artist most likely used.
+
+    Rules:
+    • Write it the way image prompts are written: short comma-separated phrases for the \
+    subject, style, medium, lighting and palette.
+    • Use only what the post text says or clearly implies; keep any parameters it mentions.
+    • No hashtags, emoji, @mentions or calls to action.
+    • Never invent a value — return nil if the text says too little about the image.
+
+    Worked example — Model: Midjourney. Post text: "Brutalist library at dusk, made with \
+    #midjourney v6 🔥 #aiart #architecture" you would return:
+      prompt: brutalist library at dusk, concrete architecture, soft dusk light, cinematic
+    Note: the hashtags and emoji are dropped and the visible subject becomes prompt \
+    phrases. Read the provided post the same way.
+    """
 }
 
 // MARK: - Runner — session factories + typed call sites
@@ -411,6 +445,15 @@ enum EnrichmentRunner {
         if let caption, !caption.isEmpty { lines.append("Caption: \(String(caption.prefix(1_500)))") }
         if let filename, !filename.isEmpty { lines.append("Filename: \(filename)") }
         let response = try await session.respond(to: lines.joined(separator: "\n"), generating: ProductNameGuess.self)
+        return response.content
+    }
+
+    static func guessPrompt(text: String?, aiModel: String?) async throws -> PostPromptGuess {
+        let session = LanguageModelSession(instructions: EnrichmentInstructions.postPromptGuess)
+        var lines: [String] = []
+        if let aiModel, !aiModel.isEmpty { lines.append("Model: \(aiModel)") }
+        if let text, !text.isEmpty { lines.append("Post text: \(String(text.prefix(1_500)))") }
+        let response = try await session.respond(to: lines.joined(separator: "\n"), generating: PostPromptGuess.self)
         return response.content
     }
 }

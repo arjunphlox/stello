@@ -7,6 +7,8 @@ struct PageClassificationResult: Sendable {
     var individualMeta: IndividualMeta?
     /// Set only when `kind == .product`: `page` | `instagram` | `image`.
     var productSource: String? = nil
+    /// Set only when `kind == .post`: `x` | `instagram` | `behance` | `dribbble` | `pinterest`.
+    var postPlatform: String? = nil
 }
 
 // MARK: - PageClassifier
@@ -61,10 +63,12 @@ nonisolated struct PageClassifier {
         let nodes = jsonLDTypedNodes(from: html)
 
         // Shared kind order (product-spec): gone (status, set by the caller) → post → product →
-        // tool → the existing individual/foundry rules. A single post on a social host is
-        // decided inside `productSource`: wishlist-labelled → product, otherwise it stays
-        // whatever it is today (Post kind is not built yet) and never reaches the product
-        // page rules.
+        // tool → the existing individual/foundry rules. A single post on a social host is a
+        // Post, unless it carries the wishlist label — then `productSource` claims it as a
+        // product (a post never reaches the product page rules either way).
+        if let platform = postPlatform(url: baseURL, collectionLabels: collectionLabels) {
+            return PageClassificationResult(kind: .post, individualMeta: nil, postPlatform: platform)
+        }
         if let source = productSource(
             url: baseURL, ogType: ogType, nodes: nodes, html: html, collectionLabels: collectionLabels
         ) {
@@ -476,6 +480,16 @@ nonisolated struct PageClassifier {
     /// need typed nodes without duplicating the parsing regex — flattened type list per node.
     nonisolated static func jsonLDNodes(from html: String) -> [(types: [String], dict: [String: Any])] {
         jsonLDTypedNodes(from: html).map { (nodeTypes($0.dict), $0.dict) }
+    }
+
+    // MARK: - Post (deterministic rules only — extraction lives in PostReader)
+
+    /// The post platform when the URL is a single post on a social host (`socialPostHost`)
+    /// and the item is NOT wishlist-labelled (a wishlisted post is a product); else nil.
+    /// Content labels (gen-ai, midjourney, …) never decide the kind.
+    nonisolated static func postPlatform(url: URL, collectionLabels: [String]) -> String? {
+        guard !hasWishlistLabel(collectionLabels) else { return nil }
+        return socialPostHost(for: url)
     }
 
     // MARK: - Product (deterministic rules only — extraction lives in ProductReader)

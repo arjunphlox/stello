@@ -138,9 +138,19 @@ enum CaptureService {
             collectionLabels: []
         )
 
+        // Post (a single social post, classified first): X syndication JSON / og tags; the
+        // media is downloaded below. Content labels (gen-ai, midjourney, …) arrive later via
+        // imports / force-Enrich, so capture flags AI art from Midjourney params only.
+        var kind = classification.kind
+        var postResult: PostExtraction? = nil
+        if kind == .post, let platform = classification.postPlatform {
+            var result = await extractPost(sourceURL: url, page: page, platform: platform)
+            PostReader.applyAIArt(to: &result.meta, labels: [], tags: [])
+            postResult = result
+        }
+
         // Product (classified ahead of music/individual/foundry): read Shopify `.json`,
         // Product JSON-LD and og price tags; the gallery is downloaded below.
-        var kind = classification.kind
         var productResult: ProductExtraction? = nil
         if kind == .product, let source = classification.productSource {
             productResult = await extractProduct(sourceURL: url, page: page, source: source)
@@ -158,7 +168,10 @@ enum CaptureService {
         }
 
         let title: String
-        if let productTitle = productResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let postTitle = postResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !postTitle.isEmpty {
+            title = postTitle
+        } else if let productTitle = productResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !productTitle.isEmpty {
             title = productTitle
         } else if let raw = musicResult?.rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
@@ -168,8 +181,11 @@ enum CaptureService {
         }
         // Music items never carry page prose — no snippets/why-saved job has one to work from.
         // Products: an image file has no prose, an Instagram post's prose is its caption.
+        // Posts: social shell pages carry no prose — the post text is it.
         let extracted: String?
-        if musicResult != nil {
+        if let postResult {
+            extracted = postResult.meta.text
+        } else if musicResult != nil {
             extracted = nil
         } else if let productResult, productResult.meta.source != "page" {
             extracted = productResult.meta.caption
@@ -179,19 +195,23 @@ enum CaptureService {
 
         var itemImage: ItemImage? = nil
         var galleryImages: [ItemImage] = []
-        if let productResult {
-            let downloads = await downloadImages(productResult.imageURLs)
+        // Product gallery / post media: first = cover, the rest `gallery`. Instagram and X
+        // media URLs are signed / expiring, so the bytes are copied now.
+        let gallery: (urls: [URL], source: String)? = productResult.map { (urls: $0.imageURLs, source: "product") }
+            ?? postResult.map { (urls: $0.imageURLs, source: "post") }
+        if let gallery {
+            let downloads = await downloadImages(gallery.urls)
             for (data, w, h) in downloads.compactMap({ $0 }) {
                 if itemImage == nil {
-                    itemImage = ItemImage(data: data, source: "product", isPrimary: true, width: w, height: h)
+                    itemImage = ItemImage(data: data, source: gallery.source, isPrimary: true, width: w, height: h)
                 } else {
                     galleryImages.append(ItemImage(
-                        data: data, source: "product", isPrimary: false, width: w, height: h,
+                        data: data, source: gallery.source, isPrimary: false, width: w, height: h,
                         role: ItemImageRole.gallery.rawValue
                     ))
                 }
             }
-            // Shop images all failed (signed/expired CDN, hotlink block) → og:image.
+            // Shop / post images all failed (signed/expired CDN, hotlink block) → og:image.
             if itemImage == nil, let imgURL = og.imageURL, let (data, w, h) = await downloadImage(url: imgURL) {
                 itemImage = ItemImage(data: data, source: "og", isPrimary: true, width: w, height: h)
             }
@@ -219,7 +239,7 @@ enum CaptureService {
         let item = Item(
             slug: slug, title: title, sourceURL: normalized, domain: displayDomain,
             summary: summary, extractedText: extracted,
-            status: (page?.isGone ?? false) ? "gone" : "active",
+            status: ((page?.isGone ?? false) || (postResult?.isGone ?? false)) ? "gone" : "active",
             enrichmentStatus: "text_done",
             kind: kind.rawValue
         )
@@ -231,6 +251,9 @@ enum CaptureService {
         }
         if let productResult {
             item.setMetadata(productResult.meta)
+        }
+        if let postResult {
+            item.setMetadata(postResult.meta)
         }
         context.insert(item)
 
@@ -487,6 +510,61 @@ enum CaptureService {
         )
     }
 
+    // MARK: - Post Extraction
+
+    /// Post readers for a URL already classified as a single social post. Extra network:
+    /// X's public syndication endpoint (`cdn.syndication.twimg.com/tweet-result`) and
+    /// Behance's oEmbed; Instagram / Dribbble / Pinterest read only the capture-time page.
+    /// These hosts often block or wall servers — whatever comes back is parsed and the
+    /// capture never fails on it.
+    static func extractPost(sourceURL: URL, page: PageFetchResult?, platform: String) async -> PostExtraction {
+        var syndication: PostReader.SyndicationOutcome? = nil
+        var oembed: PostOEmbedInfo? = nil
+        switch platform {
+        case "x":
+            let id = PostReader.tweetID(from: sourceURL) ?? page?.finalURL.flatMap { PostReader.tweetID(from: $0) }
+            if let id, let endpoint = PostReader.syndicationURL(forTweetID: id) {
+                syndication = await fetchSyndication(endpoint)
+            }
+        case "behance":
+            if let endpoint = PostReader.behanceOEmbedURL(for: sourceURL),
+               let response = await fetchOEmbed(endpoint) {
+                oembed = PostOEmbedInfo(
+                    title: response.title,
+                    authorName: response.authorName,
+                    authorURL: response.authorURL,
+                    thumbnailURL: response.thumbnailURL
+                )
+            }
+        default:
+            break
+        }
+        return PostReader.build(
+            sourceURL: sourceURL,
+            finalURL: page?.finalURL,
+            platform: platform,
+            html: page?.html ?? "",
+            ogTitle: page?.og.title,
+            ogDescription: page?.og.description,
+            ogImageURL: page?.og.imageURL,
+            ogType: page?.og.ogType,
+            syndication: syndication,
+            oembed: oembed
+        )
+    }
+
+    private static func fetchSyndication(_ endpoint: URL) async -> PostReader.SyndicationOutcome {
+        var request = URLRequest(url: endpoint, timeoutInterval: 15)
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            forHTTPHeaderField: "User-Agent"
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else { return .unavailable }
+        return PostReader.parseSyndication(data: data, statusCode: (response as? HTTPURLResponse)?.statusCode)
+    }
+
     private static func fetchShopifyProduct(_ endpoint: URL) async -> ProductReader.ShopifyProduct? {
         var request = URLRequest(url: endpoint, timeoutInterval: 15)
         request.setValue(
@@ -574,6 +652,7 @@ enum CaptureService {
     struct OEmbedResponse: Decodable {
         var title: String?
         var authorName: String?
+        var authorURL: String?
         var thumbnailURL: String?
         var html: String?
         var iframeURL: String?
@@ -583,6 +662,7 @@ enum CaptureService {
         enum CodingKeys: String, CodingKey {
             case title, html
             case authorName = "author_name"
+            case authorURL = "author_url"
             case thumbnailURL = "thumbnail_url"
             case iframeURL = "iframe_url"
         }
