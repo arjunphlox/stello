@@ -100,7 +100,7 @@ async function enrichItem(env, client, item, apiKey, userId) {
       const imageB64 = imgBuffer.toString('base64');
 
       const contextTags = existingTags
-        .filter(t => t.category === 'domain' || t.category === 'subject')
+        .filter(t => t.category === 'collection' || t.category === 'domain' || t.category === 'subject')
         .map(t => t.tag)
         .slice(0, 6);
       let contextStr = `Item titled "${item.title}"`;

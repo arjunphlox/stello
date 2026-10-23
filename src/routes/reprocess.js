@@ -42,7 +42,9 @@ async function reprocessItem(env, client, item, userId) {
   const existingTags = typeof item.tags === 'string'
     ? JSON.parse(item.tags) : (item.tags || []);
 
-  const PRESERVED_CATS = new Set(['intent', 'color', 'style', 'mood']);
+  // `collection` holds the user's own grouping (e.g. wishlist, digital-tools) —
+  // it can't be regenerated from page metadata, so it must survive a rebuild.
+  const PRESERVED_CATS = new Set(['intent', 'color', 'style', 'mood', 'collection']);
   const preserved = existingTags.filter(t => PRESERVED_CATS.has(t.category));
 
   const cleanedTitle = decodeHtmlEntities(item.title || '');

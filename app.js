@@ -32,6 +32,7 @@
   // --- Category colors (for pills) ---
   const CAT_CLASS = {
     format: 'tag-format',
+    collection: 'tag-domain',
     domain: 'tag-domain',
     style: 'tag-style',
     subject: 'tag-subject',
@@ -654,12 +655,12 @@
     return map;
   }
 
-  // Default: only the first category (domain) is expanded; everything else collapsed.
-  let expandedCategories = new Set(['domain']);
+  // Default: only the first category (collection) is expanded; everything else collapsed.
+  let expandedCategories = new Set(['collection']);
   let tagSearchQuery = '';
 
   const CATEGORY_LABELS = {
-    domain: 'Domains', subject: 'Subjects', format: 'Formats',
+    collection: 'Collections', domain: 'Domains', subject: 'Subjects', format: 'Formats',
     tool: 'Tools', style: 'Styles', mood: 'Moods',
     location: 'Locations', color: 'Colors',
   };
@@ -668,7 +669,7 @@
     const el = $drawer();
     if (!el) return;
     const map = collectTags();
-    const order = ['domain', 'subject', 'format', 'tool', 'style', 'mood', 'location', 'color'];
+    const order = ['collection', 'domain', 'subject', 'format', 'tool', 'style', 'mood', 'location', 'color'];
     const categories = order.filter(c => map[c]);
     Object.keys(map).forEach(c => { if (!categories.includes(c)) categories.push(c); });
 

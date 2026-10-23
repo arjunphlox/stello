@@ -54,7 +54,7 @@ module.exports = async function handler(req, res) {
 
       const existingTags = typeof item.tags === 'string' ? JSON.parse(item.tags) : (item.tags || []);
       const visionAndIntent = existingTags.filter(t =>
-        ['color', 'style', 'mood', 'intent'].includes(t.category)
+        ['color', 'style', 'mood', 'intent', 'collection'].includes(t.category)
       );
       const freshTags = generateTagsFromMetadata({
         title: updates.title || item.title,
