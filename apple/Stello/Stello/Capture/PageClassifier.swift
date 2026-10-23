@@ -5,6 +5,8 @@ import Foundation
 struct PageClassificationResult: Sendable {
     var kind: ItemKind
     var individualMeta: IndividualMeta?
+    /// Set only when `kind == .product`: `page` | `instagram` | `image`.
+    var productSource: String? = nil
 }
 
 // MARK: - PageClassifier
@@ -52,10 +54,22 @@ nonisolated struct PageClassifier {
         domain: String?,
         title: String?,
         ogDescription: String?,
-        ogType: String? = nil
+        ogType: String? = nil,
+        collectionLabels: [String] = []
     ) -> PageClassificationResult {
         // Parse JSON-LD once and pass the nodes down.
         let nodes = jsonLDTypedNodes(from: html)
+
+        // Shared kind order (product-spec): gone (status, set by the caller) → post → product →
+        // tool → the existing individual/foundry rules. A single post on a social host is
+        // decided inside `productSource`: wishlist-labelled → product, otherwise it stays
+        // whatever it is today (Post kind is not built yet) and never reaches the product
+        // page rules.
+        if let source = productSource(
+            url: baseURL, ogType: ogType, nodes: nodes, html: html, collectionLabels: collectionLabels
+        ) {
+            return PageClassificationResult(kind: .product, individualMeta: nil, productSource: source)
+        }
 
         let isIndividual = hasIndividualSignals(nodes: nodes, ogType: ogType)
         let isFoundry = hasFoundrySignals(nodes: nodes, domain: domain, title: title)
@@ -462,5 +476,198 @@ nonisolated struct PageClassifier {
     /// need typed nodes without duplicating the parsing regex — flattened type list per node.
     nonisolated static func jsonLDNodes(from html: String) -> [(types: [String], dict: [String: Any])] {
         jsonLDTypedNodes(from: html).map { (nodeTypes($0.dict), $0.dict) }
+    }
+
+    // MARK: - Product (deterministic rules only — extraction lives in ProductReader)
+
+    /// The collection label that turns a social post or a bare image file into a product.
+    nonisolated static let wishlistLabel = "wishlist"
+
+    nonisolated static func hasWishlistLabel(_ labels: [String]) -> Bool {
+        labels.contains { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == wishlistLabel }
+    }
+
+    /// Product source (`page` | `instagram` | `image`) when the page classifies as a product,
+    /// else nil. Order (first match wins, per product-spec):
+    /// 1. single post on a social host → product ONLY with the wishlist label (source
+    ///    `instagram` for Instagram, else `page`); without it → nil, and the page rules below
+    ///    are skipped (a post is a post, even if it happens to carry og:type product);
+    /// 2. og:type product; 3. a Product JSON-LD subject; 4. a Shopify `/products/<handle>`
+    ///    page; 5. an Amazon product / Kickstarter project page; 6. a bare image file URL
+    ///    carrying the wishlist label → `image`.
+    /// An article (og:type article) never classifies from JSON-LD/path alone — review
+    /// roundups embed Products.
+    nonisolated static func productSource(
+        url: URL,
+        ogType: String?,
+        html: String,
+        collectionLabels: [String]
+    ) -> String? {
+        productSource(
+            url: url, ogType: ogType, nodes: jsonLDTypedNodes(from: html), html: html,
+            collectionLabels: collectionLabels
+        )
+    }
+
+    nonisolated private static func productSource(
+        url: URL,
+        ogType: String?,
+        nodes: [TypedNode],
+        html: String,
+        collectionLabels: [String]
+    ) -> String? {
+        let wishlisted = hasWishlistLabel(collectionLabels)
+
+        if let postHost = socialPostHost(for: url) {
+            guard wishlisted else { return nil }
+            return postHost == "instagram" ? "instagram" : "page"
+        }
+
+        let type = ogType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if isProductOGType(type) { return "page" }
+
+        // Any Article node counts (Yoast puts it in @graph, i.e. not top-level).
+        let isArticle = type == "article" || nodes.contains {
+            nodeTypes($0.dict).contains(where: isArticleType)
+        }
+
+        if !isArticle {
+            if nodes.contains(where: { nodeTypes($0.dict).contains(where: isProductType) }) {
+                return "page"
+            }
+            if isShopifyProductURL(url) && (html.isEmpty || hasShopifyMarker(html) || isMyShopifyHost(url)) {
+                return "page"
+            }
+        }
+
+        if isAmazonProductURL(url) || isKickstarterProjectURL(url) { return "page" }
+
+        if wishlisted && isBareImageURL(url) { return "image" }
+
+        return nil
+    }
+
+    nonisolated static func isProductOGType(_ ogType: String?) -> Bool {
+        guard let t = ogType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !t.isEmpty else {
+            return false
+        }
+        return t == "product" || t == "og:product" || t.hasPrefix("product.")
+    }
+
+    nonisolated private static func isProductType(_ type: String) -> Bool {
+        type.caseInsensitiveCompare("Product") == .orderedSame
+            || type.caseInsensitiveCompare("ProductGroup") == .orderedSame
+            || type.caseInsensitiveCompare("IndividualProduct") == .orderedSame
+    }
+
+    nonisolated private static func isArticleType(_ type: String) -> Bool {
+        ["Article", "BlogPosting", "NewsArticle"].contains {
+            type.caseInsensitiveCompare($0) == .orderedSame
+        }
+    }
+
+    // MARK: Product — host / path rules
+
+    /// Lowercased host with a leading `www.` removed.
+    nonisolated private static func bareHost(_ url: URL) -> String? {
+        guard var host = url.host?.lowercased(), !host.isEmpty else { return nil }
+        if host.hasPrefix("www.") { host = String(host.dropFirst(4)) }
+        return host
+    }
+
+    /// `brand.tld` / `brand.co.tld` / `sub.brand.tld` — the brand must be the registrable
+    /// label, so `amazon.com.evil.net` and `notamazon.com` don't match.
+    nonisolated private static func hostIsBrand(_ host: String, brand: String) -> Bool {
+        let labels = host.split(separator: ".").map(String.init)
+        guard let index = labels.lastIndex(of: brand) else { return false }
+        let suffix = labels[(index + 1)...]
+        return (1...2).contains(suffix.count) && suffix.allSatisfy { (2...3).contains($0.count) }
+    }
+
+    /// `instagram` | `x` | `behance` | `dribbble` | `pinterest` when the URL is a SINGLE post
+    /// on that host (not a profile, feed or board); else nil.
+    nonisolated static func socialPostHost(for url: URL) -> String? {
+        guard let host = bareHost(url) else { return nil }
+        func matches(_ root: String) -> Bool { host == root || host.hasSuffix("." + root) }
+        let parts = url.path.lowercased().split(separator: "/").map(String.init)
+
+        if matches("instagram.com") {
+            // /p/<code>, /reel/<code>, /reels/<code>, /tv/<code>, and /<user>/p/<code>
+            let markers: Set<String> = ["p", "reel", "reels", "tv"]
+            if let i = parts.firstIndex(where: { markers.contains($0) }), i + 1 < parts.count { return "instagram" }
+            return nil
+        }
+        if matches("x.com") || matches("twitter.com") {
+            if let i = parts.firstIndex(of: "status"), i + 1 < parts.count { return "x" }
+            return nil
+        }
+        if matches("behance.net") {
+            if let i = parts.firstIndex(of: "gallery"), i + 1 < parts.count { return "behance" }
+            return nil
+        }
+        if matches("dribbble.com") {
+            if let i = parts.firstIndex(of: "shots"), i + 1 < parts.count { return "dribbble" }
+            return nil
+        }
+        if hostIsBrand(host, brand: "pinterest") || host == "pin.it" {
+            if host == "pin.it" { return parts.isEmpty ? nil : "pinterest" }
+            if let i = parts.firstIndex(of: "pin"), i + 1 < parts.count { return "pinterest" }
+            return nil
+        }
+        return nil
+    }
+
+    /// `/products/<handle>` — also under `/collections/<x>/products/<handle>`.
+    nonisolated static func isShopifyProductURL(_ url: URL) -> Bool {
+        shopifyHandle(from: url) != nil
+    }
+
+    /// The product handle from a Shopify-style path (without any `.json`/`.js` suffix).
+    nonisolated static func shopifyHandle(from url: URL) -> String? {
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard let i = parts.lastIndex(where: { $0.lowercased() == "products" }), i + 1 < parts.count else {
+            return nil
+        }
+        var handle = parts[i + 1]
+        for ext in [".json", ".js", ".oembed", ".xml"] where handle.lowercased().hasSuffix(ext) {
+            handle = String(handle.dropLast(ext.count))
+        }
+        return handle.isEmpty ? nil : handle
+    }
+
+    nonisolated private static func isMyShopifyHost(_ url: URL) -> Bool {
+        guard let host = bareHost(url) else { return false }
+        return host == "myshopify.com" || host.hasSuffix(".myshopify.com")
+    }
+
+    /// A `/products/` path alone is ambiguous (SaaS sites use it for feature pages), so the
+    /// page must also show it's a Shopify storefront.
+    nonisolated private static func hasShopifyMarker(_ html: String) -> Bool {
+        html.contains("cdn.shopify.com") || html.contains("/cdn/shop/")
+            || html.contains("Shopify.shop") || html.contains("shopify-digital-wallet")
+    }
+
+    nonisolated static func isAmazonProductURL(_ url: URL) -> Bool {
+        guard let host = bareHost(url) else { return false }
+        // Short links only ever point at a product.
+        if host == "amzn.to" || host == "amzn.in" || host == "amzn.eu" || host == "a.co" { return true }
+        guard hostIsBrand(host, brand: "amazon") else { return false }
+        let path = url.path.lowercased()
+        return path.contains("/dp/") || path.contains("/gp/product/") || path.contains("/gp/aw/d/")
+    }
+
+    nonisolated static func isKickstarterProjectURL(_ url: URL) -> Bool {
+        guard let host = bareHost(url), host == "kickstarter.com" || host.hasSuffix(".kickstarter.com") else {
+            return false
+        }
+        let parts = url.path.lowercased().split(separator: "/")
+        // /projects/<creator>/<project>
+        return parts.first == "projects" && parts.count >= 3
+    }
+
+    nonisolated static let bareImageExtensions: Set<String> = ["jpg", "jpeg", "png", "webp", "gif", "avif"]
+
+    nonisolated static func isBareImageURL(_ url: URL) -> Bool {
+        bareImageExtensions.contains(url.pathExtension.lowercased())
     }
 }

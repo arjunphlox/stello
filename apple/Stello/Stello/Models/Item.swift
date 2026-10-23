@@ -14,6 +14,7 @@ final class Item {
     /// Readability-lite page text captured for AI enrichment + search — distinct from
     /// `bodyMarkdown`, which is user-authored content rendered as a "Notes" card.
     var extractedText: String?
+    /// `active`, or `gone` when the source page answered 404/410 (item + saved image kept).
     var status: String = "active"
     var needsReview: Bool = true
     var addedAt: Date = Date.now
@@ -23,7 +24,8 @@ final class Item {
     var openCount: Int = 0
     var enrichmentStatus: String = "pending"
     var enrichmentError: String?
-    /// Card type: `typeface`, `website`, `individual`, `studio`, `foundry`, `place`, or `link` (default).
+    /// Card type: `typeface`, `website`, `individual`, `studio`, `foundry`, `place`, `music`,
+    /// `product`, or `link` (default).
     var kind: String = "link"
     /// Codable per-kind metadata (`TypefaceMeta`, `WebsiteMeta`, …) encoded as JSON.
     var metadataJSON: String?

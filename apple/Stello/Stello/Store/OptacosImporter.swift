@@ -391,6 +391,8 @@ enum OptacosImporter {
             item.setMetadata(buildPlaceMeta(row: row))
         case .music:
             break
+        case .product:
+            break
         case .link:
             break
         }

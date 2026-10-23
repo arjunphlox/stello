@@ -95,6 +95,7 @@ targets:
           - RuleTagger.swift
           - CaptureService.swift
           - PageClassifier.swift
+          - ProductReader.swift
       - path: Stello/Store
         includes:
           - StelloStore.swift

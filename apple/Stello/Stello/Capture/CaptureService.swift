@@ -20,6 +20,17 @@ struct OGResult {
 struct PageFetchResult {
     var html: String
     var og: OGResult
+    /// HTTP status of the final response (nil for non-HTTP responses).
+    var statusCode: Int? = nil
+    /// URL after redirects — the product `canonicalURL`; `sourceURL` stays untouched.
+    var finalURL: URL? = nil
+
+    /// 404 / 410: the page is gone. The item is kept (with any saved image) and still
+    /// classified from its URL, but carries `status = "gone"`. Never-clearing bot walls
+    /// are not detected yet.
+    var isGone: Bool {
+        statusCode == 404 || statusCode == 410
+    }
 }
 
 // MARK: - CaptureService
@@ -63,7 +74,7 @@ enum CaptureService {
     }
 
     /// Parses all `<meta ...>` tags in `html` into per-tag attribute dictionaries. Shared with PageClassifier.
-    static func metaTagAttributes(in html: String) -> [[String: String]] {
+    nonisolated static func metaTagAttributes(in html: String) -> [[String: String]] {
         guard let metaRegex = metaTagRegex else { return [] }
         let nsHTML = html as NSString
         return metaRegex.matches(in: html, range: NSRange(location: 0, length: nsHTML.length)).compactMap { match in
@@ -122,13 +133,22 @@ enum CaptureService {
             domain: dom,
             title: ogTitle,
             ogDescription: og.description,
-            ogType: og.ogType
+            ogType: og.ogType,
+            // Fresh captures carry no collection labels; imports / force-Enrich pass them.
+            collectionLabels: []
         )
+
+        // Product (classified ahead of music/individual/foundry): read Shopify `.json`,
+        // Product JSON-LD and og price tags; the gallery is downloaded below.
+        var kind = classification.kind
+        var productResult: ProductExtraction? = nil
+        if kind == .product, let source = classification.productSource {
+            productResult = await extractProduct(sourceURL: url, page: page, source: source)
+        }
 
         // Music classification: deterministic host/og:type match (no extra network beyond
         // the page fetch above), or — for plain youtube.com/youtu.be — a confirmed oEmbed
         // signal. Only attempted when the generic classifier left the page as `link`.
-        var kind = classification.kind
         var musicResult: MusicExtractionResult? = nil
         if kind == .link {
             musicResult = await classifyAndExtractMusic(
@@ -138,16 +158,44 @@ enum CaptureService {
         }
 
         let title: String
-        if let raw = musicResult?.rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+        if let productTitle = productResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !productTitle.isEmpty {
+            title = productTitle
+        } else if let raw = musicResult?.rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
             title = raw
         } else {
             title = ogTitle
         }
         // Music items never carry page prose — no snippets/why-saved job has one to work from.
-        let extracted = musicResult != nil ? nil : extractText(html: html)
+        // Products: an image file has no prose, an Instagram post's prose is its caption.
+        let extracted: String?
+        if musicResult != nil {
+            extracted = nil
+        } else if let productResult, productResult.meta.source != "page" {
+            extracted = productResult.meta.caption
+        } else {
+            extracted = extractText(html: html)
+        }
 
         var itemImage: ItemImage? = nil
-        if let musicResult {
+        var galleryImages: [ItemImage] = []
+        if let productResult {
+            let downloads = await downloadImages(productResult.imageURLs)
+            for (data, w, h) in downloads.compactMap({ $0 }) {
+                if itemImage == nil {
+                    itemImage = ItemImage(data: data, source: "product", isPrimary: true, width: w, height: h)
+                } else {
+                    galleryImages.append(ItemImage(
+                        data: data, source: "product", isPrimary: false, width: w, height: h,
+                        role: ItemImageRole.gallery.rawValue
+                    ))
+                }
+            }
+            // Shop images all failed (signed/expired CDN, hotlink block) → og:image.
+            if itemImage == nil, let imgURL = og.imageURL, let (data, w, h) = await downloadImage(url: imgURL) {
+                itemImage = ItemImage(data: data, source: "og", isPrimary: true, width: w, height: h)
+            }
+        } else if let musicResult {
             var downloaded: (Data, Int, Int)? = nil
             if let coverURL = musicResult.coverImageURL {
                 downloaded = await downloadImage(url: coverURL)
@@ -165,9 +213,14 @@ enum CaptureService {
         let slug = makeSlug(from: title, context: context)
         let tagSpecs = RuleTagger.generateTags(title: title, description: summary, domain: dom)
 
+        // Products show the domain they landed on after redirects (`sourceURL` untouched).
+        let displayDomain = productResult != nil ? (page?.finalURL.flatMap(domain(from:)) ?? dom) : dom
+
         let item = Item(
-            slug: slug, title: title, sourceURL: normalized, domain: dom,
-            summary: summary, extractedText: extracted, enrichmentStatus: "text_done",
+            slug: slug, title: title, sourceURL: normalized, domain: displayDomain,
+            summary: summary, extractedText: extracted,
+            status: (page?.isGone ?? false) ? "gone" : "active",
+            enrichmentStatus: "text_done",
             kind: kind.rawValue
         )
         if let meta = classification.individualMeta {
@@ -176,9 +229,16 @@ enum CaptureService {
         if let musicResult {
             item.setMetadata(musicResult.meta)
         }
+        if let productResult {
+            item.setMetadata(productResult.meta)
+        }
         context.insert(item)
 
         if let img = itemImage {
+            context.insert(img)
+            img.item = item
+        }
+        for img in galleryImages {
             context.insert(img)
             img.item = item
         }
@@ -254,7 +314,7 @@ enum CaptureService {
             "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             forHTTPHeaderField: "User-Agent"
         )
-        guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else { return nil }
         // Read the (nearly) whole document, not a 50KB head-slice: real pages put og:image
         // deep — measured 2026-07-16: midday.ai at byte ~238k of 986k, fonts.google.com at
         // ~196k of 198k — and a mid-tag truncation also leaves <style>/<script> blocks
@@ -263,7 +323,12 @@ enum CaptureService {
         let slice = data.prefix(2_000_000)
         guard let html = String(data: slice, encoding: .utf8)
                       ?? String(data: slice, encoding: .isoLatin1) else { return nil }
-        return PageFetchResult(html: html, og: parseOG(html: html, baseURL: url))
+        return PageFetchResult(
+            html: html,
+            og: parseOG(html: html, baseURL: url),
+            statusCode: (response as? HTTPURLResponse)?.statusCode,
+            finalURL: response.url
+        )
     }
 
     static func fetchOG(url: URL) async -> OGResult {
@@ -379,6 +444,60 @@ enum CaptureService {
         let processed = downsizeIfNeeded(data: raw, maxDimension: 2000) ?? raw
         let (w, h) = imageDimensions(data: processed)
         return (processed, w, h)
+    }
+
+    /// Concurrent `downloadImage` over `urls`, results in input order (nil = failed).
+    static func downloadImages(_ urls: [URL]) async -> [(Data, Int, Int)?] {
+        guard !urls.isEmpty else { return [] }
+        return await withTaskGroup(of: (Int, (Data, Int, Int)?).self) { group in
+            for (index, url) in urls.enumerated() {
+                group.addTask { (index, await downloadImage(url: url)) }
+            }
+            var results = [(Data, Int, Int)?](repeating: nil, count: urls.count)
+            for await (index, result) in group {
+                results[index] = result
+            }
+            return results
+        }
+    }
+
+    // MARK: - Product Extraction
+
+    /// Product readers for a page already classified as a product. The only extra network
+    /// call is Shopify's `/products/<handle>.json` (page source, `/products/` URL only);
+    /// everything else comes from the capture-time page fetch. Instagram's og image is a
+    /// signed, expiring CDN URL — the caller downloads the bytes right away.
+    static func extractProduct(sourceURL: URL, page: PageFetchResult?, source: String) async -> ProductExtraction {
+        var shopify: ProductReader.ShopifyProduct? = nil
+        if source == "page" {
+            let landing = page?.finalURL ?? sourceURL
+            if let jsonURL = ProductReader.shopifyJSONURL(for: landing) ?? ProductReader.shopifyJSONURL(for: sourceURL) {
+                shopify = await fetchShopifyProduct(jsonURL)
+            }
+        }
+        return ProductReader.build(
+            sourceURL: sourceURL,
+            finalURL: page?.finalURL,
+            source: source,
+            html: page?.html ?? "",
+            ogTitle: page?.og.title,
+            ogDescription: page?.og.description,
+            ogImageURL: page?.og.imageURL,
+            shopify: shopify
+        )
+    }
+
+    private static func fetchShopifyProduct(_ endpoint: URL) async -> ProductReader.ShopifyProduct? {
+        var request = URLRequest(url: endpoint, timeoutInterval: 15)
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            forHTTPHeaderField: "User-Agent"
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              ((response as? HTTPURLResponse)?.statusCode ?? 200) == 200 else { return nil }
+        return ProductReader.parseShopifyProduct(data)
     }
 
     // MARK: - Slug

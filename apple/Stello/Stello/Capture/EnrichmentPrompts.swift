@@ -231,6 +231,26 @@ struct MusicTitleParse: Equatable, Sendable {
     var film: String?
 }
 
+// MARK: - 5. Product name/brand guess (kind-dispatched — Instagram / bare-image products only)
+
+@available(macOS 27.0, iOS 27.0, *)
+@Generable(description: "A best guess at the product name and brand behind a saved Instagram post or image file.")
+struct ProductNameGuess: Equatable, Sendable {
+
+    @Guide(description: """
+    The product's name as a shop would list it — short, no emoji, no hashtags, no price, \
+    no call to action ("link in bio", "shop now"). Nil when the text doesn't name a product.
+    """)
+    var productName: String?
+
+    @Guide(description: """
+    The brand or maker of the product, ONLY when the text names one (often an @mention or \
+    a capitalised name). Nil when unsure — never use the posting account as the brand \
+    unless the text says it makes the product.
+    """)
+    var brand: String?
+}
+
 // MARK: - Instruction strings (each carries ONE worked exemplar)
 
 @available(macOS 27.0, iOS 27.0, *)
@@ -322,6 +342,27 @@ enum EnrichmentInstructions {
     is the film, and the cast/singer/composer names are dropped (not modeled here). Parse the \
     provided title the same way.
     """
+
+    static let productGuess = """
+    You are Stello's product reader. The user saved a product from an Instagram post or a \
+    bare image file, so there is no shop data — only a caption and/or a filename. Guess the \
+    product's name and its brand.
+
+    Rules:
+    • productName is what a shop would list: short, plain words, no emoji, hashtags, prices \
+    or calls to action.
+    • brand only when the text names the maker; otherwise nil.
+    • A filename slug reads as words: hyphens and underscores are spaces, trailing numbers \
+    are image counters.
+    • Never invent a value — leave a field nil if the text doesn't support it.
+
+    Worked example — Caption: "Desk upgrade 🔥 the @stuffcool Mag Dock keeps every cable \
+    in place. Link in bio! #desksetup" you would return:
+      productName: Mag Dock
+      brand: Stuffcool
+    Note: the emoji, hashtag and "Link in bio" are dropped; @stuffcool is the maker, so it \
+    is the brand. Read the provided text the same way.
+    """
 }
 
 // MARK: - Runner — session factories + typed call sites
@@ -361,6 +402,15 @@ enum EnrichmentRunner {
         var prompt = "Title: \(rawTitle)"
         if let channel, !channel.isEmpty { prompt += "\nChannel: \(channel)" }
         let response = try await session.respond(to: prompt, generating: MusicTitleParse.self)
+        return response.content
+    }
+
+    static func guessProduct(caption: String?, filename: String?) async throws -> ProductNameGuess {
+        let session = LanguageModelSession(instructions: EnrichmentInstructions.productGuess)
+        var lines: [String] = []
+        if let caption, !caption.isEmpty { lines.append("Caption: \(String(caption.prefix(1_500)))") }
+        if let filename, !filename.isEmpty { lines.append("Filename: \(filename)") }
+        let response = try await session.respond(to: lines.joined(separator: "\n"), generating: ProductNameGuess.self)
         return response.content
     }
 }

@@ -369,12 +369,20 @@ struct ItemCardView: View {
             .allowsHitTesting(false)
 
             if !item.title.isEmpty {
-                Text(item.title)
-                    .font(.karst(.title3, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(3)
-                    .shadow(color: .black.opacity(0.4), radius: 2)
-                    .padding(10)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.title)
+                        .font(.karst(.title3, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(3)
+                    if let kindLine = item.cardKindLine {
+                        Text(kindLine)
+                            .font(.karst(.footnote, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .lineLimit(1)
+                    }
+                }
+                .shadow(color: .black.opacity(0.4), radius: 2)
+                .padding(10)
             }
         }
     }
@@ -383,18 +391,27 @@ struct ItemCardView: View {
     #if os(macOS)
     @ViewBuilder private var macTitleBadge: some View {
         if !item.title.isEmpty {
-            Text(item.title)
-                .font(.karst(size: scaledTitleSize, weight: .medium))
-                .foregroundStyle(theme.textPrimary)
-                .lineLimit(4)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .padding(.top, 12)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 40)
-                .opacity(isHovered ? 1 : 0)
-                .offset(y: isHovered ? 0 : -4)
-                .animation(.easeOut(duration: 0.18), value: isHovered)
-                .allowsHitTesting(false)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(.karst(size: scaledTitleSize, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+                    .lineLimit(4)
+                // Per-kind one-liner (product: "₹2,699 · Stuffcool" / "via @handle").
+                if let kindLine = item.cardKindLine {
+                    Text(kindLine)
+                        .font(.karst(size: scaledPillSize + 1, weight: .medium))
+                        .foregroundStyle(theme.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.top, 12)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 40)
+            .opacity(isHovered ? 1 : 0)
+            .offset(y: isHovered ? 0 : -4)
+            .animation(.easeOut(duration: 0.18), value: isHovered)
+            .allowsHitTesting(false)
         }
     }
     #endif

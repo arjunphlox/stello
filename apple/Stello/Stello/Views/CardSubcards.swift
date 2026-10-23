@@ -94,6 +94,8 @@ struct CardSubcards: View {
                     if let meta = item.placeMeta() { placeCards(meta) }
                 case .music:
                     if let meta = item.musicMeta() { musicCards(meta) }
+                case .product:
+                    if let meta = item.productMeta() { productCards(meta) }
                 case .link:
                     EmptyView()
                 }
@@ -700,6 +702,46 @@ struct CardSubcards: View {
         ])
     }
 
+    // MARK: - Product
+
+    @ViewBuilder
+    private func productCards(_ meta: ProductMeta) -> some View {
+        // The shop gallery (cover + up to 7 `gallery` images, capped at capture) renders in
+        // the top images sub-card via `typedTopMediaRoles`.
+        factsCard(title: "Product", rows: [
+            (meta.productNameIsGuess == true ? "Name (guess)" : "Name", meta.productName),
+            (meta.brandIsGuess == true ? "Brand (guess)" : "Brand", meta.brand?.name),
+            ("Price range", productPriceRange(meta)),
+            ("Price when saved", productPriceWhenSaved(meta)),
+            ("Availability", meta.availability?.capitalized),
+            ("Shop", meta.shop),
+            ("Category", meta.category),
+        ])
+
+        if let creator = meta.creator {
+            refsCard(title: "Posted by", refs: [creator])
+        }
+
+        factsCard(title: "Links", rows: [
+            ("Buy", meta.buyURL),
+            ("Original post", meta.originalPostURL),
+            ("Canonical", meta.canonicalURL == meta.buyURL ? nil : meta.canonicalURL),
+        ])
+    }
+
+    private func productPriceRange(_ meta: ProductMeta) -> String? {
+        guard let low = ProductMeta.formattedPrice(meta.priceMin, currency: meta.currency),
+              let high = ProductMeta.formattedPrice(meta.priceMax, currency: meta.currency) else { return nil }
+        return "\(low) – \(high)"
+    }
+
+    /// "₹2,699 · 23 Oct 2026" — the snapshot taken at capture.
+    private func productPriceWhenSaved(_ meta: ProductMeta) -> String? {
+        guard let price = ProductMeta.formattedPrice(meta.price, currency: meta.currency) else { return nil }
+        guard let date = meta.pricedAt else { return price }
+        return "\(price) · \(date.formatted(date: .abbreviated, time: .omitted))"
+    }
+
     private func musicDuration(_ seconds: Int?) -> String? {
         guard let seconds, seconds > 0 else { return nil }
         let minutes = seconds / 60
@@ -1149,7 +1191,16 @@ extension Item {
         case .foundry: return foundryMeta() != nil
         case .place: return placeMeta() != nil
         case .music: return musicMeta() != nil
+        case .product: return productMeta() != nil
         case .link: return false
+        }
+    }
+
+    /// The grid card's one-line kind summary under the hover title (nil = no line).
+    var cardKindLine: String? {
+        switch ItemKind(rawValue: kind) ?? .link {
+        case .product: return productMeta()?.cardKindLine
+        default: return nil
         }
     }
 
@@ -1157,7 +1208,7 @@ extension Item {
         switch ItemKind(rawValue: kind) ?? .link {
         case .typeface:
             return [ItemImageRole.specimen.rawValue, ItemImageRole.cover.rawValue]
-        case .website:
+        case .website, .product:
             return [ItemImageRole.cover.rawValue, ItemImageRole.gallery.rawValue]
         default:
             return [ItemImageRole.cover.rawValue]
