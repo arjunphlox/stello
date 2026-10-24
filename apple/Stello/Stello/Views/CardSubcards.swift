@@ -102,6 +102,8 @@ struct CardSubcards: View {
                     if let meta = item.toolMeta() { toolCards(meta) }
                 case .resource:
                     if let meta = item.resourceMeta() { resourceCards(meta) }
+                case .course:
+                    if let meta = item.courseMeta() { courseCards(meta) }
                 case .article:
                     if let meta = item.articleMeta() { articleCards(meta) }
                 case .link:
@@ -964,6 +966,34 @@ struct CardSubcards: View {
         return "Open in \(host)"
     }
 
+    // MARK: - Course
+
+    @ViewBuilder
+    private func courseCards(_ meta: CourseMeta) -> some View {
+        factsCard(title: "Facts", rows: [
+            ("Provider", meta.provider?.name),
+            ("Instructor", meta.instructor?.name),
+            (meta.formatIsGuess ? "Format (guess)" : "Format", meta.formatLabel),
+            (meta.durationIsGuess || meta.lessonsIsGuess ? "Length (guess)" : "Length", meta.lengthLine),
+            ("Level", meta.level),
+            ("Price", meta.priceLine),
+            ("Starts", Self.upcomingStart(meta.startsAt)),
+        ])
+
+        chipsCard(title: meta.topicsAreGuess ? "Teaches (guess)" : "Teaches", chips: meta.topics)
+
+        factsCard(title: "Links", rows: [
+            ("Course page", meta.canonicalURL ?? item.sourceURL),
+            ("Instructor page", meta.instructor?.url),
+        ])
+    }
+
+    /// The cohort start date while it is still ahead; nil once it has passed.
+    private static func upcomingStart(_ date: Date?) -> String? {
+        guard let date, date >= .now else { return nil }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
     // MARK: - Article
 
     @ViewBuilder
@@ -1450,6 +1480,7 @@ extension Item {
         case .post: return postMeta() != nil
         case .tool: return toolMeta() != nil
         case .resource: return resourceMeta() != nil
+        case .course: return courseMeta() != nil
         case .article: return articleMeta() != nil
         case .link: return false
         }
@@ -1462,6 +1493,7 @@ extension Item {
         case .post: return postMeta()?.cardKindLine
         case .tool: return toolMeta()?.cardKindLine
         case .resource: return resourceMeta()?.cardKindLine
+        case .course: return courseMeta()?.cardKindLine
         case .article: return articleMeta()?.cardKindLine
         default: return nil
         }

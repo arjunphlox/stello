@@ -63,7 +63,7 @@ nonisolated struct PageClassifier {
         let nodes = jsonLDTypedNodes(from: html)
 
         // Shared kind order (product-spec): gone (status, set by the caller) → post → resource →
-        // (book, later) → product → tool → (course, later) → article → the existing
+        // (book, later) → product → tool → course → article → the existing
         // individual/foundry rules. A single post
         // on a social host is a Post, unless it carries the wishlist label — then
         // `productSource` claims it as a product (a post never reaches the product page rules
@@ -83,7 +83,12 @@ nonisolated struct PageClassifier {
         if isTool(url: baseURL, ogType: ogType, nodes: nodes, collectionLabels: collectionLabels) {
             return PageClassificationResult(kind: .tool, individualMeta: nil)
         }
-        // Article after tool: an article page carrying tool labels is already kept out of
+        // Course after tool, before article: a course page that sets og:type article (Motion
+        // Design School, LABASAD) is a course; a GitHub repo of course material stays a tool.
+        if isCourse(url: baseURL, ogType: ogType, nodes: nodes, title: title, collectionLabels: collectionLabels) {
+            return PageClassificationResult(kind: .course, individualMeta: nil)
+        }
+        // Article after course: an article page carrying tool labels is already kept out of
         // Tool by Tool's article override (og:type article / Article JSON-LD), so it lands here.
         if isArticle(url: baseURL, ogType: ogType, nodes: nodes, html: html, collectionLabels: collectionLabels) {
             return PageClassificationResult(kind: .article, individualMeta: nil)
@@ -562,8 +567,11 @@ nonisolated struct PageClassifier {
         // SaaS landing pages often mark themselves up as a Product; only a Product with an
         // offer, on a page that doesn't also declare itself software, counts.
         let isSoftware = nodes.contains { nodeTypes($0.dict).contains(where: isSoftwareType) }
+        // Course sale pages (Teachable, Podia, …) often add a Product node with offers next to
+        // their Course node — the Course rule claims those.
+        let isCourse = nodes.contains { nodeTypes($0.dict).contains(where: isCourseType) }
 
-        if !isArticle && !isSoftware {
+        if !isArticle && !isSoftware && !isCourse {
             if nodes.contains(where: {
                 nodeTypes($0.dict).contains(where: isProductType) && $0.dict["offers"] != nil
             }) {
@@ -887,6 +895,203 @@ nonisolated struct PageClassifier {
         }
     }
 
+    // MARK: - Course (deterministic rules only — extraction lives in CourseReader)
+
+    /// Collection label that breaks the tie for a course page (label + a course word in the
+    /// title → course). The label alone never makes a course.
+    nonisolated static let educationLabel = "education"
+
+    /// Course hosts that also carry blogs, profiles and catalog pages: only a course path
+    /// (`/course/`, `/courses/`, `/learn/`, `/classes/` + a slug — or Maven's
+    /// `/<instructor>/<slug>`) counts. Webflow University also has lesson / blog pages.
+    nonisolated static let multiPurposeCourseHosts: Set<String> = [
+        "frontendmasters.com", "maven.com", "udemy.com", "coursera.org", "domestika.org",
+        "skillshare.com", "egghead.io", "university.webflow.com",
+    ]
+
+    /// Single-purpose course sites: any path that isn't a blog post counts (the home page is
+    /// the course's sales page).
+    nonisolated static let singlePurposeCourseHosts: Set<String> = [
+        "motiondesign.school", "superhi.com", "shiftnudge.com", "thebasics.dev", "designcourse.com",
+    ]
+
+    /// Path segments that, on a multi-purpose course host, mark one course when a slug follows.
+    nonisolated private static let courseHostPathSegments: Set<String> = ["course", "courses", "learn", "classes"]
+
+    /// First path segments on maven.com that are site pages, not an instructor.
+    nonisolated private static let mavenReservedSegments: Set<String> = [
+        "blog", "about", "pricing", "login", "signup", "sign-up", "search", "categories", "category",
+        "topics", "teach", "business", "for-business", "careers", "jobs", "terms", "privacy", "help",
+        "resources", "p", "u", "settings", "explore", "creators", "courses", "lightning-lessons",
+        "guides", "articles", "events",
+    ]
+
+    /// Path segments that mark a course page anywhere: followed by a slug, or as the last
+    /// segment with something before it (`/design/masterclass`).
+    nonisolated static let coursePathSegments: Set<String> = [
+        "course", "courses", "program", "programs", "masterclass", "bootcamp", "workshop",
+    ]
+
+    /// Whole words in a title that, with the `education` label, make a course.
+    nonisolated private static let courseTitleWords: Set<String> = [
+        "course", "courses", "masterclass", "masterclasses", "bootcamp", "bootcamps", "workshop",
+        "workshops", "academy", "learn", "master",
+    ]
+
+    nonisolated static func isCourseType(_ type: String) -> Bool {
+        type.caseInsensitiveCompare("Course") == .orderedSame
+    }
+
+    nonisolated static func isEducationEventType(_ type: String) -> Bool {
+        type.caseInsensitiveCompare("EducationEvent") == .orderedSame
+    }
+
+    /// Whether the page is a course. Runs after the tool rule and before the article rule
+    /// (kind order: gone → post → resource → (book) → product → tool → course → article →
+    /// existing). Course when ANY of: a Course JSON-LD node (anywhere, @graph included); an
+    /// EducationEvent node on a course-ish page (course host, course path or a course word in
+    /// the title); a known course host (`isCourseHostURL`); a `course(s)` / `program(s)` /
+    /// `masterclass` / `bootcamp` / `workshop` path segment (`hasCoursePathSegment`, never
+    /// on a blog / dated URL); the `education` label together with a course word in the title
+    /// ("course", "masterclass", "bootcamp", "workshop", "academy", "learn", "master" — whole
+    /// words) on a page with no strong article signal. A course page that sets og:type article
+    /// (Motion Design School, LABASAD) is a course; a blog / dated URL with Article JSON-LD and
+    /// no course signal stays an article. A bare image file is never a course.
+    nonisolated static func isCourse(
+        url: URL,
+        ogType: String?,
+        html: String,
+        title: String?,
+        collectionLabels: [String]
+    ) -> Bool {
+        isCourse(
+            url: url, ogType: ogType, nodes: jsonLDTypedNodes(from: html), title: title,
+            collectionLabels: collectionLabels
+        )
+    }
+
+    nonisolated private static func isCourse(
+        url: URL,
+        ogType: String?,
+        nodes: [TypedNode],
+        title: String?,
+        collectionLabels: [String]
+    ) -> Bool {
+        guard !isBareImageURL(url) else { return false }
+
+        if nodes.contains(where: { nodeTypes($0.dict).contains(where: isCourseType) }) { return true }
+
+        if isCourseHostURL(url) || hasCoursePathSegment(url) { return true }
+
+        let titleWord = titleHasCourseWord(title)
+        let educationLabelled = hasLabel(educationLabel, in: collectionLabels)
+        if titleWord || educationLabelled,
+           nodes.contains(where: { nodeTypes($0.dict).contains(where: isEducationEventType) }) {
+            return true
+        }
+
+        // The label is only a tie-breaker: never alone, never over a strong article signal.
+        if educationLabelled, titleWord, !hasStrongArticleSignal(url: url, nodes: nodes) {
+            return true
+        }
+        return false
+    }
+
+    /// Whether the page has a Course JSON-LD node (anywhere, @graph included).
+    nonisolated static func hasCourseNode(html: String) -> Bool {
+        jsonLDTypedNodes(from: html).contains { nodeTypes($0.dict).contains(where: isCourseType) }
+    }
+
+    /// Article signals that a course rule must not override: Article-family JSON-LD, a dated
+    /// path, a blog-style slug, a Medium / Substack post or a dated Codrops URL.
+    nonisolated private static func hasStrongArticleSignal(url: URL, nodes: [TypedNode]) -> Bool {
+        nodes.contains(where: { nodeTypes($0.dict).contains(where: isArticleType) })
+            || isArticleShapedURL(url)
+    }
+
+    /// A dated path, a `/blog/<slug>`-style path, a Medium / Substack post or a Codrops article.
+    nonisolated static func isArticleShapedURL(_ url: URL) -> Bool {
+        urlPathDate(url) != nil || hasArticlePathSlug(url)
+            || isMediumPost(url) || isSubstackPost(url) || isCodropsArticle(url)
+    }
+
+    /// The known course host the URL is on (exact host or a subdomain of it), else nil.
+    nonisolated static func courseHost(for url: URL) -> String? {
+        guard let host = bareHost(url) else { return nil }
+        func matches(_ root: String) -> Bool { host == root || host.hasSuffix("." + root) }
+        // university.webflow.com is listed, webflow.com itself is not a course host.
+        for root in multiPurposeCourseHosts.union(singlePurposeCourseHosts).union(["joshwcomeau.com"]).sorted()
+            where matches(root) {
+            return root
+        }
+        return nil
+    }
+
+    /// A course page on a known course host: on frontendmasters / maven / udemy / coursera /
+    /// domestika / skillshare / egghead / Webflow University, a course path (`/course/`,
+    /// `/courses/`, `/learn/`, `/classes/` + a slug, or maven `/<instructor>/<slug>`); on
+    /// joshwcomeau.com, a `/courses` path; on a single-purpose course site (Motion Design School,
+    /// SuperHi, Shift Nudge, The Basics, DesignCourse), any path that isn't a blog post.
+    nonisolated static func isCourseHostURL(_ url: URL) -> Bool {
+        guard let root = courseHost(for: url), let host = bareHost(url) else { return false }
+        let parts = url.path.lowercased().split(separator: "/").map(String.init)
+
+        if root == "joshwcomeau.com" { return parts.contains("courses") }
+
+        if singlePurposeCourseHosts.contains(root) {
+            if host.hasPrefix("blog.") { return false }
+            if parts.contains("blog") || isArticleShapedURL(url) { return false }
+            return true
+        }
+
+        // Multi-purpose hosts: a course path segment followed by a slug.
+        for (i, part) in parts.enumerated() where courseHostPathSegments.contains(part) && i + 1 < parts.count {
+            let slug = parts[i + 1]
+            if !slug.isEmpty, !articleListingSlugs.contains(slug) { return true }
+        }
+        if root == "maven.com", host == "maven.com", parts.count >= 2,
+           let first = parts.first, !mavenReservedSegments.contains(first) {
+            return true
+        }
+        return false
+    }
+
+    /// A `course(s)` / `program(s)` / `masterclass` / `bootcamp` / `workshop` path segment
+    /// followed by a slug (`/courses/motion-basics`), or as the last segment with something
+    /// before it (`/design/masterclass`). Never under a `/blog/` path or on a dated /
+    /// blog-style URL; listing slugs (`/courses/page/2`) don't count.
+    nonisolated static func hasCoursePathSegment(_ url: URL) -> Bool {
+        let parts = url.path.lowercased().split(separator: "/").map(String.init)
+        guard !parts.contains("blog"), !isArticleShapedURL(url) else { return false }
+        for (i, part) in parts.enumerated() where coursePathSegments.contains(part) {
+            if i + 1 < parts.count {
+                let slug = parts[i + 1]
+                if !slug.isEmpty, !articleListingSlugs.contains(slug) { return true }
+            } else if i > 0 {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// The format a course path names: `/program(s)/` → program, `/workshop/` → workshop.
+    nonisolated static func coursePathFormat(_ url: URL) -> String? {
+        guard hasCoursePathSegment(url) else { return nil }
+        let parts = url.path.lowercased().split(separator: "/").map(String.init)
+        if parts.contains("program") || parts.contains("programs") { return "program" }
+        if parts.contains("workshop") { return "workshop" }
+        return nil
+    }
+
+    /// A course word ("course", "masterclass", "bootcamp", "workshop", "academy", "learn",
+    /// "master") as a whole word in the title.
+    nonisolated static func titleHasCourseWord(_ title: String?) -> Bool {
+        guard let title else { return false }
+        return title.lowercased()
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .contains { courseTitleWords.contains(String($0)) }
+    }
+
     // MARK: - Article (deterministic rules only — extraction lives in ArticleReader)
 
     /// Collection label that breaks the og:type-article tie (label + og:type article → article).
@@ -912,7 +1117,7 @@ nonisolated struct PageClassifier {
     ]
 
     /// Whether the page is an article. Runs after the tool rule (kind order: gone → post →
-    /// resource → (book) → product → tool → (course) → article → existing). Article when ANY of:
+    /// resource → (book) → product → tool → course → article → existing). Article when ANY of:
     /// an Article / NewsArticle / BlogPosting / TechArticle / Report / ScholarlyArticle JSON-LD
     /// node; an `article:published_time` meta; a dated path (`/YYYY/MM/…`, `/YYYY/Mon/…`,
     /// `/YYYY/MM/DD/…`); a `blog` / `article(s)` / `post(s)` / `news` / `essays` / `writing`

@@ -29,6 +29,9 @@
 		E1F2A3B4C5D60718293A4B81 /* ArticleReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B80 /* ArticleReader.swift */; };
 		E1F2A3B4C5D60718293A4B82 /* ArticleReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B80 /* ArticleReader.swift */; };
 		E1F2A3B4C5D60718293A4B84 /* ArticleKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B83 /* ArticleKindTests.swift */; };
+		F1F2A3B4C5D60718293A4B91 /* CourseReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1F2A3B4C5D60718293A4B90 /* CourseReader.swift */; };
+		F1F2A3B4C5D60718293A4B92 /* CourseReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1F2A3B4C5D60718293A4B90 /* CourseReader.swift */; };
+		F1F2A3B4C5D60718293A4B94 /* CourseKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1F2A3B4C5D60718293A4B93 /* CourseKindTests.swift */; };
 		0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA340D3CF1CBA31162EB51C /* Tag.swift */; };
 		145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
 		1AFDFF2A1AA22AE8F6806246 /* UserPreferencesContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8C21E2EC36E821776F7C3B /* UserPreferencesContent.swift */; };
@@ -202,6 +205,8 @@
 		D1E2F3A4B5C60718293A4B73 /* ResourceKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceKindTests.swift; sourceTree = "<group>"; };
 		E1F2A3B4C5D60718293A4B80 /* ArticleReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleReader.swift; sourceTree = "<group>"; };
 		E1F2A3B4C5D60718293A4B83 /* ArticleKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleKindTests.swift; sourceTree = "<group>"; };
+		F1F2A3B4C5D60718293A4B90 /* CourseReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CourseReader.swift; sourceTree = "<group>"; };
+		F1F2A3B4C5D60718293A4B93 /* CourseKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CourseKindTests.swift; sourceTree = "<group>"; };
 		A00AB84A8DD5556B8493537D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloTests.swift; sourceTree = "<group>"; };
 		A3CA34AF62B2777DF5A05B12 /* DetailImageStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailImageStrip.swift; sourceTree = "<group>"; };
@@ -347,6 +352,7 @@
 				E1F2A3B4C5D60718293A4B83 /* ArticleKindTests.swift */,
 				EA47EDA90E882CD461879641 /* AwaitingReviewStripTests.swift */,
 				2FDE089AFD4A8D168D8E7002 /* CaptureTests.swift */,
+				F1F2A3B4C5D60718293A4B93 /* CourseKindTests.swift */,
 				73BCFEBCDCAAAD6466F619F2 /* DropImportTests.swift */,
 				4CE8D7C0BB274D97989FBD8F /* EnrichmentTests.swift */,
 				FF67B06512E411ACB7989DC9 /* ItemBundleExportTests.swift */,
@@ -406,6 +412,7 @@
 			children = (
 				E1F2A3B4C5D60718293A4B80 /* ArticleReader.swift */,
 				918DFF8962898B3139189A24 /* CaptureService.swift */,
+				F1F2A3B4C5D60718293A4B90 /* CourseReader.swift */,
 				541215E7DBC65AD295A805F3 /* DropImportService.swift */,
 				079399A5195A6EF8A1ADC6D8 /* Enricher.swift */,
 				DAFD9FC851DB71708B74829C /* EnrichmentCoordinator.swift */,
@@ -554,6 +561,7 @@
 				BFB82713E934B386E4735BB3 /* AwaitingReviewFilter.swift in Sources */,
 				145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */,
 				9879AD01CDECDA8225C1722B /* CaptureSheet.swift in Sources */,
+				F1F2A3B4C5D60718293A4B91 /* CourseReader.swift in Sources */,
 				3A289AC85AD5CB5F3A6D33E4 /* CardMetadata.swift in Sources */,
 				FD00EF4D4032F4C4D8DD2BA2 /* CardSubcards.swift in Sources */,
 				F4EDCB9DB68C204BB9CC1A1D /* ContentView.swift in Sources */,
@@ -614,6 +622,7 @@
 				E1F2A3B4C5D60718293A4B84 /* ArticleKindTests.swift in Sources */,
 				52713C48D2ABD46CDA6C90A2 /* AwaitingReviewStripTests.swift in Sources */,
 				E745441DDF2FAF4095B9DF12 /* CaptureTests.swift in Sources */,
+				F1F2A3B4C5D60718293A4B94 /* CourseKindTests.swift in Sources */,
 				7CC8BC877716030542FF5BC1 /* DropImportTests.swift in Sources */,
 				CFAE2BC8E67D5C9D97ADD849 /* EnrichmentTests.swift in Sources */,
 				CF7CCB3D7C59218547FC8D3F /* ItemBundleExportTests.swift in Sources */,
@@ -637,6 +646,7 @@
 				E1F2A3B4C5D60718293A4B82 /* ArticleReader.swift in Sources */,
 				B8B3C73F56F130F8CF483B7A /* CaptureService.swift in Sources */,
 				DC8E9560AC3A1BA30C0DB070 /* CardMetadata.swift in Sources */,
+				F1F2A3B4C5D60718293A4B92 /* CourseReader.swift in Sources */,
 				9498342EF3E4CBB327460667 /* Item.swift in Sources */,
 				E1FE78336EED97EC3B2B5614 /* ItemImage.swift in Sources */,
 				75ED53896ACD9059FFB1F0EE /* LocalAttachment.swift in Sources */,

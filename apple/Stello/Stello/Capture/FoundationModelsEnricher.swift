@@ -151,6 +151,19 @@ struct FoundationModelsEnricher: Enricher {
         return ArticleFacts(summary: summary, techStack: techStack)
     }
 
+    /// On-device format + duration + topics guess for a course whose page gave none. The
+    /// caller stores it with the `…IsGuess` flags; a throw falls back to the rule-based pass.
+    func guessCourseFacts(text: String?) async throws -> CourseFacts? {
+        guard isAvailable else { throw EnricherError.unavailable }
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let guess = try await EnrichmentRunner.guessCourseFacts(text: text)
+        let format = CourseReader.normalizeFormat(guess.format)
+        let durationText = CourseReader.cleanDurationText(guess.durationText)
+        let topics = CourseReader.cleanTopics(guess.topics, max: CourseReader.maxGuessedTopics)
+        guard format != nil || durationText != nil || !topics.isEmpty else { return nil }
+        return CourseFacts(format: format, durationText: durationText, topics: topics)
+    }
+
     // MARK: - Mapping
 
     static func mapVisionTags(_ tags: VisionTags) -> [VisionTagSpec] {
