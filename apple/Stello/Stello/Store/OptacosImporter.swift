@@ -395,6 +395,8 @@ enum OptacosImporter {
             break
         case .post:
             break
+        case .tool:
+            break
         case .link:
             break
         }

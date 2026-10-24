@@ -127,6 +127,17 @@ struct FoundationModelsEnricher: Enricher {
         return guess.prompt
     }
 
+    /// On-device platforms + pricing guess for a tool whose page gave neither. The caller
+    /// stores it with the `…IsGuess` flags; a throw falls back to the rule-based pass.
+    func guessToolFacts(text: String?) async throws -> ToolFacts? {
+        guard isAvailable else { throw EnricherError.unavailable }
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let guess = try await EnrichmentRunner.guessToolFacts(text: text)
+        let platforms = guess.platforms.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !platforms.isEmpty || guess.pricing != nil else { return nil }
+        return ToolFacts(platforms: platforms, pricing: guess.pricing)
+    }
+
     // MARK: - Mapping
 
     static func mapVisionTags(_ tags: VisionTags) -> [VisionTagSpec] {

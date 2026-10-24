@@ -266,6 +266,28 @@ struct PostPromptGuess: Equatable, Sendable {
     var prompt: String?
 }
 
+// MARK: - 7. Tool facts guess (kind-dispatched — tools with no platforms / pricing read)
+
+@available(macOS 27.0, iOS 27.0, *)
+@Generable(description: "A best guess at which platforms a saved software tool runs on and how it is priced.")
+struct ToolFactsGuess: Equatable, Sendable {
+
+    @Guide(description: """
+    The platforms the tool runs on, ONLY as the page states them, each one of: macOS, iOS, \
+    iPadOS, watchOS, visionOS, Windows, Linux, Android, Web. "Download for Mac" means macOS; \
+    "runs in your browser" or a sign-up-and-use web app means Web. Empty when the page doesn't \
+    say.
+    """, .count(0...6))
+    var platforms: [String]
+
+    @Guide(description: """
+    How the tool is priced, exactly one of: free, paid, freemium, open source. freemium = a \
+    free plan plus paid plans; open source = the code is published under an open licence. \
+    Nil when the page doesn't say.
+    """)
+    var pricing: String?
+}
+
 // MARK: - Instruction strings (each carries ONE worked exemplar)
 
 @available(macOS 27.0, iOS 27.0, *)
@@ -397,6 +419,27 @@ enum EnrichmentInstructions {
     Note: the hashtags and emoji are dropped and the visible subject becomes prompt \
     phrases. Read the provided post the same way.
     """
+
+    static let toolFactsGuess = """
+    You are Stello's tool reader. The user saved a software tool's web page that has no \
+    structured data. From the page text, say which platforms the tool runs on and how it is \
+    priced.
+
+    Rules:
+    • Platforms only from what the text states: download buttons, "available on", system \
+    requirements, "works in your browser". Use the names macOS, iOS, iPadOS, watchOS, visionOS, \
+    Windows, Linux, Android, Web.
+    • Pricing is one of free, paid, freemium, open source — only when the text says so \
+    (a pricing section, "free forever", "$8/month", "MIT licensed").
+    • Never invent a value — leave platforms empty and pricing nil if the text doesn't say.
+
+    Worked example — Page text: "Raycast — your shortcut to everything. Download for Mac. \
+    Free for personal use. Pro: $8/month for AI and cloud sync." you would return:
+      platforms: [macOS]
+      pricing: freemium
+    Note: "Download for Mac" gives macOS; a free tier plus a paid Pro plan is freemium. Read \
+    the provided text the same way.
+    """
 }
 
 // MARK: - Runner — session factories + typed call sites
@@ -454,6 +497,15 @@ enum EnrichmentRunner {
         if let aiModel, !aiModel.isEmpty { lines.append("Model: \(aiModel)") }
         if let text, !text.isEmpty { lines.append("Post text: \(String(text.prefix(1_500)))") }
         let response = try await session.respond(to: lines.joined(separator: "\n"), generating: PostPromptGuess.self)
+        return response.content
+    }
+
+    static func guessToolFacts(text: String) async throws -> ToolFactsGuess {
+        let session = LanguageModelSession(instructions: EnrichmentInstructions.toolFactsGuess)
+        let response = try await session.respond(
+            to: "Page text: \(String(text.prefix(1_500)))",
+            generating: ToolFactsGuess.self
+        )
         return response.content
     }
 }

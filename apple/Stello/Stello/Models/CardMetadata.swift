@@ -322,6 +322,98 @@ nonisolated struct PostMeta: Codable, Sendable {
     }
 }
 
+// MARK: - Tool
+
+nonisolated struct ToolMeta: Codable, Sendable {
+    /// `app` | `web app` | `library` | `extension` | `AI model`.
+    var subtype: String?
+    /// JSON-LD `name` or the GitHub repo's `owner/repo`.
+    var name: String?
+    /// og:description (else meta description); a GitHub repo's own description wins.
+    var tagline: String?
+    /// Normalised: macOS, iOS, iPadOS, watchOS, visionOS, tvOS, Windows, Linux, Android, Web.
+    var platforms: [String] = []
+    /// Set when `platforms` came from the on-device / rule-based guess.
+    var platformsAreGuess: Bool = false
+    /// JSON-LD `applicationCategory`, "Application" suffix stripped ("Developer").
+    var category: String?
+    /// `free` | `paid` | `freemium` | `open source`.
+    var pricing: String?
+    /// Lowest non-zero price, decimal-as-string ("4.99"); currency is ISO 4217.
+    var price: String?
+    var currency: String?
+    var pricingIsGuess: Bool = false
+    /// JSON-LD author / creator / publisher, og:site_name, or the GitHub owner.
+    var maker: EntityRef?
+    // GitHub (REST `repos/<owner>/<repo>`; unauthenticated, skipped when rate-limited).
+    var repoURL: String?
+    var stars: Int?
+    var language: String?
+    /// SPDX id ("MIT"), else the licence name.
+    var license: String?
+    var lastPushedAt: Date?
+    var topics: [String] = []
+    /// The repo's own `homepage`.
+    var homepageURL: String?
+    /// The URL itself when it is an App Store page, else the first apps.apple.com link on it.
+    var appStoreURL: String?
+    /// Final URL after redirects — set only when its host differs from the saved one.
+    var canonicalURL: String?
+
+    /// One short line for the grid card: "Mac · Free", "Web · Freemium", "Mac, iOS +1 · $4.99";
+    /// a repo: "Open source · ★ 12.4k"; nil when there is nothing to say.
+    var cardKindLine: String? {
+        if repoURL != nil {
+            var parts: [String] = []
+            if pricing == "open source" { parts.append("Open source") }
+            if let stars, stars > 0 { parts.append("★ \(ToolMeta.compactCount(stars))") }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        }
+        let parts = [platformsLine(maxShown: 2, short: true), priceLine].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "Mac, iOS +2" (short names, capped) or "macOS, iOS, Windows" (full).
+    func platformsLine(maxShown: Int? = nil, short: Bool = false) -> String? {
+        let names = platforms.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !names.isEmpty else { return nil }
+        let shown = maxShown.map { Array(names.prefix($0)) } ?? names
+        var line = shown.map { short ? ToolMeta.shortPlatformName($0) : $0 }.joined(separator: ", ")
+        if names.count > shown.count { line += " +\(names.count - shown.count)" }
+        return line
+    }
+
+    /// "$4.99" for a paid tool with a price, else "Free" / "Freemium" / "Paid" / "Open source".
+    var priceLine: String? {
+        if pricing == "paid" || (pricing == nil && price != nil),
+           let formatted = ProductMeta.formattedPrice(price, currency: currency) {
+            return formatted
+        }
+        switch pricing {
+        case "free": return "Free"
+        case "freemium": return "Freemium"
+        case "paid": return "Paid"
+        case "open source": return "Open source"
+        default: return nil
+        }
+    }
+
+    static func shortPlatformName(_ platform: String) -> String {
+        platform == "macOS" ? "Mac" : platform
+    }
+
+    /// 12_400 → "12.4k", 1_250_000 → "1.3M", 980 → "980".
+    static func compactCount(_ value: Int) -> String {
+        func trimmed(_ v: Double) -> String {
+            let s = String(format: "%.1f", v)
+            return s.hasSuffix(".0") ? String(s.dropLast(2)) : s
+        }
+        if value >= 1_000_000 { return trimmed(Double(value) / 1_000_000) + "M" }
+        if value >= 1_000 { return trimmed(Double(value) / 1_000) + "k" }
+        return String(value)
+    }
+}
+
 // MARK: - Item metadata helpers
 
 extension Item {
@@ -381,10 +473,15 @@ extension Item {
         guard kind == ItemKind.post.rawValue else { return nil }
         return decodeMetadata(PostMeta.self)
     }
+
+    func toolMeta() -> ToolMeta? {
+        guard kind == ItemKind.tool.rawValue else { return nil }
+        return decodeMetadata(ToolMeta.self)
+    }
 }
 
 enum ItemKind: String, Sendable {
-    case typeface, website, individual, studio, foundry, place, music, product, post, link
+    case typeface, website, individual, studio, foundry, place, music, product, post, tool, link
 }
 
 enum ItemImageRole: String, Sendable {

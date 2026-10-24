@@ -66,6 +66,8 @@ enum ItemSearchBlob {
             return item.productMeta()?.searchTerms() ?? []
         case ItemKind.post.rawValue:
             return item.postMeta()?.searchTerms() ?? []
+        case ItemKind.tool.rawValue:
+            return item.toolMeta()?.searchTerms() ?? []
         default:
             return []
         }
@@ -309,6 +311,21 @@ extension PostMeta {
         ItemSearchBlob.appendOptional(prompt, to: &parts)
         ItemSearchBlob.appendOptional(aiModel, to: &parts)
         ItemSearchBlob.appendOptional(platform, to: &parts)
+        return parts
+    }
+}
+
+extension ToolMeta {
+    func searchTerms() -> [String] {
+        var parts: [String] = []
+        ItemSearchBlob.appendOptional(name, to: &parts)
+        ItemSearchBlob.appendOptional(tagline, to: &parts)
+        ItemSearchBlob.appendEntityRef(maker, to: &parts)
+        ItemSearchBlob.appendStrings(platforms, to: &parts)
+        ItemSearchBlob.appendOptional(category, to: &parts)
+        ItemSearchBlob.appendOptional(subtype, to: &parts)
+        ItemSearchBlob.appendOptional(language, to: &parts)
+        ItemSearchBlob.appendStrings(topics, to: &parts)
         return parts
     }
 }

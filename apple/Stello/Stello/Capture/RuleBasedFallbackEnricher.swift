@@ -29,4 +29,10 @@ struct RuleBasedFallbackEnricher: Enricher, Sendable {
     nonisolated func guessPrompt(text: String?, aiModel: String?) async throws -> String? {
         nil
     }
+
+    /// Conservative keyword pass ("Download for Mac", "free plan … per month"); nil when the
+    /// text says nothing clear.
+    nonisolated func guessToolFacts(text: String?) async throws -> ToolFacts? {
+        ToolReader.ruleBasedFacts(text: text)
+    }
 }

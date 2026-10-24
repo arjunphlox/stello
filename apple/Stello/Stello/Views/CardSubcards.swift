@@ -98,6 +98,8 @@ struct CardSubcards: View {
                     if let meta = item.productMeta() { productCards(meta) }
                 case .post:
                     if let meta = item.postMeta() { postCards(meta) }
+                case .tool:
+                    if let meta = item.toolMeta() { toolCards(meta) }
                 case .link:
                     EmptyView()
                 }
@@ -203,6 +205,9 @@ struct CardSubcards: View {
                 ("Tagline", meta.tagline),
                 ("Description", meta.description),
             ]
+        case .tool:
+            guard let meta = item.toolMeta() else { return [] }
+            return [("Tagline", meta.tagline)]
         default:
             return []
         }
@@ -844,6 +849,87 @@ struct CardSubcards: View {
         }
     }
 
+    // MARK: - Tool
+
+    @ViewBuilder
+    private func toolCards(_ meta: ToolMeta) -> some View {
+        factsCard(title: "Facts", rows: [
+            ("Type", Self.toolSubtypeLabel(meta.subtype)),
+            (meta.platformsAreGuess ? "Platforms (guess)" : "Platforms", meta.platformsLine()),
+            ("Category", meta.category),
+            (meta.pricingIsGuess ? "Price (guess)" : "Price", toolPriceLine(meta)),
+            ("Maker", meta.maker?.name),
+        ])
+
+        let hasRepoData = meta.stars != nil || meta.language != nil || meta.license != nil
+            || meta.lastPushedAt != nil || !meta.topics.isEmpty
+        if meta.repoURL != nil, hasRepoData {
+            SubCard(title: "GitHub") {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let content = FactsSubCardContent(rows: [
+                        ("Stars", meta.stars.map { "★ \(ToolMeta.compactCount($0))" }),
+                        ("Language", meta.language),
+                        ("Licence", meta.license),
+                        ("Last update", meta.lastPushedAt?.formatted(date: .abbreviated, time: .omitted)),
+                    ]) {
+                        FactsSubCardBody(content: content)
+                    }
+                    if !meta.topics.isEmpty {
+                        ChipsSubCardBody(chips: meta.topics)
+                    }
+                }
+            }
+        }
+
+        factsCard(title: "Links", rows: [
+            ("Website", toolWebsiteURL(meta)),
+            ("App Store", meta.appStoreURL),
+            ("Repository", meta.repoURL),
+        ])
+    }
+
+    private static func toolSubtypeLabel(_ subtype: String?) -> String? {
+        switch subtype {
+        case "app": return "App"
+        case "web app": return "Web app"
+        case "library": return "Library"
+        case "extension": return "Extension"
+        case "AI model": return "AI model"
+        default: return subtype
+        }
+    }
+
+    /// "Paid · $4.99", "Freemium · from $8", "Free", "Open source".
+    private func toolPriceLine(_ meta: ToolMeta) -> String? {
+        let label: String?
+        switch meta.pricing {
+        case "free": label = "Free"
+        case "paid": label = "Paid"
+        case "freemium": label = "Freemium"
+        case "open source": label = "Open source"
+        default: label = nil
+        }
+        let price = ProductMeta.formattedPrice(meta.price, currency: meta.currency)
+        switch (label, price) {
+        case let (label?, price?): return meta.pricing == "freemium" ? "\(label) · from \(price)" : "\(label) · \(price)"
+        case let (label?, nil): return label
+        case let (nil, price?): return price
+        default: return nil
+        }
+    }
+
+    /// The tool's own site: the repo's homepage for a GitHub / App Store save, else the
+    /// canonical URL (after redirects), else the saved URL.
+    private func toolWebsiteURL(_ meta: ToolMeta) -> String? {
+        let savedFromAppStore = item.sourceURL
+            .flatMap { URL(string: $0) }
+            .map { PageClassifier.isAppStoreAppURL($0) } ?? false
+        if meta.repoURL != nil || savedFromAppStore {
+            return meta.homepageURL
+        }
+        return meta.canonicalURL ?? meta.homepageURL ?? item.sourceURL
+    }
+
     private func copyToPasteboard(_ text: String) {
         #if os(macOS)
         NSPasteboard.general.clearContents()
@@ -1304,6 +1390,7 @@ extension Item {
         case .music: return musicMeta() != nil
         case .product: return productMeta() != nil
         case .post: return postMeta() != nil
+        case .tool: return toolMeta() != nil
         case .link: return false
         }
     }
@@ -1313,6 +1400,7 @@ extension Item {
         switch ItemKind(rawValue: kind) ?? .link {
         case .product: return productMeta()?.cardKindLine
         case .post: return postMeta()?.cardKindLine
+        case .tool: return toolMeta()?.cardKindLine
         default: return nil
         }
     }

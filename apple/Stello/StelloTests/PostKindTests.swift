@@ -151,7 +151,10 @@ struct PostClassificationTests {
     @Test("A post beats og:type product; AI-art labels never decide the kind")
     func postOrderAndLabels() {
         #expect(classify("https://www.instagram.com/p/C1a2B3c4D5e/", ogType: "product").kind == .post)
+        // Not a post. Since the Tool kind, a gen-ai label on a non-article page makes it a tool.
+        // An AI-art label vetoes the gen-ai tool label: a Midjourney gallery page isn't a tool.
         #expect(classify("https://example.com/gallery/neon-koi", labels: ["gen-ai", "midjourney"]).kind == .link)
+        #expect(classify("https://example.com/gallery/neon-koi", labels: ["gen-ai"]).kind == .tool)
         #expect(classify("https://x.com/janedoe/status/1", labels: ["gen-ai"]).kind == .post)
     }
 }

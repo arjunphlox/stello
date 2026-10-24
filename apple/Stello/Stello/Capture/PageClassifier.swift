@@ -74,6 +74,9 @@ nonisolated struct PageClassifier {
         ) {
             return PageClassificationResult(kind: .product, individualMeta: nil, productSource: source)
         }
+        if isTool(url: baseURL, ogType: ogType, nodes: nodes, collectionLabels: collectionLabels) {
+            return PageClassificationResult(kind: .tool, individualMeta: nil)
+        }
 
         let isIndividual = hasIndividualSignals(nodes: nodes, ogType: ogType)
         let isFoundry = hasFoundrySignals(nodes: nodes, domain: domain, title: title)
@@ -565,6 +568,104 @@ nonisolated struct PageClassifier {
         if wishlisted && isBareImageURL(url) { return "image" }
 
         return nil
+    }
+
+    // MARK: - Tool (deterministic rules only — extraction lives in ToolReader)
+
+    /// Collection labels that make a page a tool (unless it is an article).
+    nonisolated static let toolLabels: Set<String> = ["digital-tools", "digital-productivity", "gen-ai"]
+
+    /// Collection labels that mark AI art (an image), never a tool — they veto the tool
+    /// labels, so a `gen-ai` + `midjourney` gallery page isn't filed as a tool.
+    nonisolated static let aiArtOnlyLabels: Set<String> = [
+        "midjourney", "nijijourney", "ai-art", "stable-diffusion", "dall-e",
+    ]
+
+    /// "Gen AI" / "gen_ai" / "GEN-AI" → "gen-ai". False when an AI-art label is also present.
+    nonisolated static func hasToolLabel(_ labels: [String]) -> Bool {
+        let keys = labels.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                .replacingOccurrences(of: " ", with: "-")
+                .replacingOccurrences(of: "_", with: "-")
+        }
+        guard !keys.contains(where: aiArtOnlyLabels.contains) else { return false }
+        return keys.contains(where: toolLabels.contains)
+    }
+
+    /// Whether the page is a tool. Runs after the post and product rules (kind order:
+    /// gone → post → product → tool). Tool when ANY of: a GitHub repo URL; an App Store app
+    /// URL; a SoftwareApplication / WebApplication / MobileApplication JSON-LD node; a
+    /// `digital-tools` / `digital-productivity` / `gen-ai` collection label. An article
+    /// (Article / NewsArticle / BlogPosting JSON-LD, or og:type article) is never a tool —
+    /// except a GitHub repo or an App Store URL, which always is (GitHub sets og:type object,
+    /// and a stray article node must not override a repo). A bare image file is never a tool.
+    nonisolated static func isTool(url: URL, ogType: String?, html: String, collectionLabels: [String]) -> Bool {
+        isTool(url: url, ogType: ogType, nodes: jsonLDTypedNodes(from: html), collectionLabels: collectionLabels)
+    }
+
+    nonisolated private static func isTool(
+        url: URL,
+        ogType: String?,
+        nodes: [TypedNode],
+        collectionLabels: [String]
+    ) -> Bool {
+        if githubRepo(from: url) != nil || isAppStoreAppURL(url) { return true }
+
+        let type = ogType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let isArticle = type == "article" || nodes.contains {
+            nodeTypes($0.dict).contains(where: isArticleType)
+        }
+        if isArticle { return false }
+
+        if nodes.contains(where: { nodeTypes($0.dict).contains(where: isSoftwareType) }) { return true }
+        if hasToolLabel(collectionLabels), !isBareImageURL(url) { return true }
+        return false
+    }
+
+    /// First path segments on github.com that are site pages, not `<owner>/<repo>`.
+    nonisolated private static let githubReservedOwners: Set<String> = [
+        "orgs", "topics", "features", "marketplace", "settings", "about", "pricing", "collections",
+        "sponsors", "explore", "trending", "login", "logout", "join", "signup", "search", "new",
+        "notifications", "issues", "pulls", "dashboard", "organizations", "enterprise", "enterprises",
+        "security", "site", "team", "customer-stories", "readme", "apps", "codespaces", "users",
+        "events", "contact", "home", "nonprofit", "premium-support", "resources", "solutions",
+        "sitemap", "watching", "stars", "account", "copilot", "mobile", "education", "partners",
+        "github-copilot", "community", "discussions", "advisories", "blog", "changelog",
+    ]
+
+    /// `(owner, repo)` for `github.com/<owner>/<repo>[/…]`; nil for gist.github.com, site pages
+    /// (`/orgs`, `/topics`, `/features`, `/marketplace`, …) and owner-only profile URLs.
+    nonisolated static func githubRepo(from url: URL) -> (owner: String, repo: String)? {
+        guard let host = bareHost(url), host == "github.com" else { return nil }
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard parts.count >= 2 else { return nil }
+        let owner = parts[0]
+        var repo = parts[1]
+        if repo.lowercased().hasSuffix(".git") { repo = String(repo.dropLast(4)) }
+        guard !githubReservedOwners.contains(owner.lowercased()), !owner.isEmpty, !repo.isEmpty else { return nil }
+        let allowed: (Character) -> Bool = { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) }
+        guard owner.allSatisfy(allowed), repo.allSatisfy(allowed) else { return nil }
+        return (owner, repo)
+    }
+
+    /// An App Store app page: `apps.apple.com/<cc>/app/<name>/id<n>`, `itunes.apple.com/…/app/…`,
+    /// or a `macappstore://` / `itms-apps://` link.
+    nonisolated static func isAppStoreAppURL(_ url: URL) -> Bool {
+        if let scheme = url.scheme?.lowercased(), ["macappstore", "itms-apps", "itms-appss"].contains(scheme) {
+            return true
+        }
+        guard let host = bareHost(url), host == "apps.apple.com" || host == "itunes.apple.com" else { return false }
+        let parts = url.path.lowercased().split(separator: "/")
+        guard let i = parts.firstIndex(of: "app") else { return false }
+        return i + 1 < parts.count
+    }
+
+    /// A Mac App Store link: the `macappstore://` scheme or an App Store URL carrying `mt=12`.
+    nonisolated static func isMacAppStoreURL(_ url: URL) -> Bool {
+        if url.scheme?.lowercased() == "macappstore" { return true }
+        guard isAppStoreAppURL(url) else { return false }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        return items.contains { $0.name == "mt" && $0.value == "12" }
     }
 
     nonisolated static func isProductOGType(_ ogType: String?) -> Bool {

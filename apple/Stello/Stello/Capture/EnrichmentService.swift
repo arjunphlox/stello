@@ -110,6 +110,10 @@ enum EnrichmentService {
                         item: item, context: context, url: url, page: page
                     )
                 }
+                // Tool readers last (kind order: post → product → tool).
+                if postPlatform == nil, productSource == nil {
+                    await refreshToolIfClassified(item: item, context: context, url: url, page: page)
+                }
                 await upgradeCoverIfNeeded(
                     item: item, context: context, primaryURL: page.og.imageURL, fallbackURL: nil, source: "og"
                 )
@@ -142,6 +146,11 @@ enum EnrichmentService {
         // (on-device model, rule-based fallback) before the generic AI jobs run.
         if item.kind == ItemKind.product.rawValue {
             await applyProductGuessIfNeeded(item: item, enricher: enricher)
+        }
+        // Tools with no platforms / pricing read: guess them from the page text (on-device
+        // model, then the conservative rule-based keyword pass).
+        if item.kind == ItemKind.tool.rawValue {
+            await applyToolGuessIfNeeded(item: item, enricher: enricher)
         }
         // Posts: AI-art flag from collection labels / tags / Midjourney params, then the
         // prompt (rule-read, else the on-device guess).
@@ -638,6 +647,56 @@ enum EnrichmentService {
             }
         }
 
+        item.setMetadata(meta)
+        item.updatedAt = .now
+    }
+
+    // MARK: - Tool enrichment
+
+    /// Force-Enrich hook: when a `link` or `tool` item's refetched page classifies as a tool
+    /// (after post and product — the caller only runs this when neither claimed it), (re)runs
+    /// the tool readers and stores the dossier. A refetch that reads less (rate-limited
+    /// GitHub, bot wall) never erases what capture read, and an earlier guess survives until
+    /// something is read in its place. Returns whether the item is a tool. Curated kinds
+    /// (typeface, website, product, post, …) are never flipped.
+    @discardableResult
+    static func refreshToolIfClassified(
+        item: Item,
+        context: ModelContext,
+        url: URL,
+        page: PageFetchResult
+    ) async -> Bool {
+        let wasTool = item.kind == ItemKind.tool.rawValue
+        guard wasTool || item.kind == ItemKind.link.rawValue else { return false }
+        guard wasTool || PageClassifier.isTool(
+            url: url, ogType: page.og.ogType, html: page.html, collectionLabels: collectionLabels(for: item)
+        ) else { return false }
+
+        let extraction = await CaptureService.extractTool(sourceURL: url, page: page)
+        let meta = ToolReader.merge(fresh: extraction.meta, previous: item.toolMeta())
+
+        item.kind = ItemKind.tool.rawValue
+        item.setMetadata(meta)
+        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
+           let host = CaptureService.domain(from: canonical) {
+            item.domain = host
+        }
+        item.updatedAt = .now
+        return true
+    }
+
+    /// Tools: when the readers left platforms or pricing empty, guess them from the page text
+    /// (on-device model; the rule-based keyword pass when the model is unavailable, fails or
+    /// returns nothing). Stored with the `…IsGuess` flags; read values win.
+    static func applyToolGuessIfNeeded(item: Item, enricher: Enricher) async {
+        guard var meta = item.toolMeta(), ToolReader.needsGuess(meta) else { return }
+        guard let text = item.extractedText ?? item.summary ?? meta.tagline,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        let modelGuess: ToolFacts? = try? await enricher.guessToolFacts(text: text)
+        guard let guess = modelGuess ?? ToolReader.ruleBasedFacts(text: text) else { return }
+
+        ToolReader.applyGuess(guess, to: &meta)
         item.setMetadata(meta)
         item.updatedAt = .now
     }

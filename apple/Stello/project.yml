@@ -97,6 +97,7 @@ targets:
           - PageClassifier.swift
           - PostReader.swift
           - ProductReader.swift
+          - ToolReader.swift
       - path: Stello/Store
         includes:
           - StelloStore.swift
