@@ -118,13 +118,20 @@ enum EnrichmentService {
                         item: item, context: context, url: url, page: page
                     )
                 }
-                // Tool readers next (kind order: post → resource → product → tool → article).
+                // Tool readers next (kind order: post → resource → product → tool → course →
+                // article).
                 var isTool = false
                 if postPlatform == nil, !isResource, productSource == nil {
                     isTool = await refreshToolIfClassified(item: item, context: context, url: url, page: page)
                 }
-                // Article readers last.
+                // Course readers next — ahead of article, since course pages often set
+                // og:type article.
+                var isCourse = false
                 if postPlatform == nil, !isResource, productSource == nil, !isTool {
+                    isCourse = await refreshCourseIfClassified(item: item, context: context, url: url, page: page)
+                }
+                // Article readers last.
+                if postPlatform == nil, !isResource, productSource == nil, !isTool, !isCourse {
                     await refreshArticleIfClassified(item: item, context: context, url: url, page: page)
                 }
                 await upgradeCoverIfNeeded(
@@ -164,6 +171,11 @@ enum EnrichmentService {
         // model, then the conservative rule-based keyword pass).
         if item.kind == ItemKind.tool.rawValue {
             await applyToolGuessIfNeeded(item: item, enricher: enricher)
+        }
+        // Courses with no format / length / topics read: guess them from the page text
+        // (on-device model, then the conservative rule-based keyword pass).
+        if item.kind == ItemKind.course.rawValue {
+            await applyCourseGuessIfNeeded(item: item, enricher: enricher)
         }
         // Articles with no summary yet: on-device summary (+ tech stack for tutorials; the
         // rule-based names when the model gives none).
@@ -744,6 +756,70 @@ enum EnrichmentService {
         }
         item.updatedAt = .now
         return true
+    }
+
+    // MARK: - Course enrichment
+
+    /// Force-Enrich hook: when a `link` or `course` item's refetched page classifies as a
+    /// course (after post, resource, product and tool — the caller only runs this when none
+    /// claimed it), (re)runs the course readers and stores the dossier. A refetch that reads
+    /// less never erases what capture read, and earlier guesses survive until a value is read.
+    /// Returns whether the item is a course.
+    ///
+    /// One earlier-build migration is also allowed: an `article` item whose URL is a course
+    /// page on a known course host (`PageClassifier.isCourseHostURL`) or whose page carries a
+    /// Course JSON-LD node — builds before the Course kind filed those as articles (Motion
+    /// Design School course pages set og:type article with an author). An article that is a
+    /// course only by the `education` label + title tie-breaker (LABASAD) is not migrated:
+    /// the label alone shouldn't move an article. Every other curated kind (typeface, website,
+    /// product, post, tool, resource, …) is never flipped.
+    @discardableResult
+    static func refreshCourseIfClassified(
+        item: Item,
+        context: ModelContext,
+        url: URL,
+        page: PageFetchResult
+    ) async -> Bool {
+        let wasCourse = item.kind == ItemKind.course.rawValue
+        let isFlippable = item.kind == ItemKind.link.rawValue
+            || (item.kind == ItemKind.article.rawValue
+                && (PageClassifier.isCourseHostURL(url) || PageClassifier.hasCourseNode(html: page.html)))
+        guard wasCourse || isFlippable else { return false }
+        guard wasCourse || PageClassifier.isCourse(
+            url: url, ogType: page.og.ogType, html: page.html, title: page.og.title,
+            collectionLabels: collectionLabels(for: item)
+        ) else { return false }
+
+        let extraction = CaptureService.extractCourse(sourceURL: url, page: page)
+        let meta = CourseReader.merge(fresh: extraction.meta, previous: item.courseMeta())
+
+        item.kind = ItemKind.course.rawValue
+        item.setMetadata(meta)
+        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
+           let host = CaptureService.domain(from: canonical) {
+            item.domain = host
+        }
+        item.updatedAt = .now
+        return true
+    }
+
+    /// Courses: when the readers left the format, length or topics empty, guess them from the
+    /// page text (on-device model; the rule-based keyword pass when the model is unavailable,
+    /// fails or returns nothing — its lesson count also fills an empty `lessons`). Stored with
+    /// the `…IsGuess` flags; read values win.
+    static func applyCourseGuessIfNeeded(item: Item, enricher: Enricher) async {
+        guard var meta = item.courseMeta(), CourseReader.needsGuess(meta) else { return }
+        guard let text = item.extractedText ?? item.summary,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        let ruleFacts = CourseReader.ruleBasedFacts(text: text)
+        let modelGuess: CourseFacts? = try? await enricher.guessCourseFacts(text: text)
+        guard var guess = modelGuess ?? ruleFacts else { return }
+        if guess.lessons == nil { guess.lessons = ruleFacts?.lessons }
+
+        CourseReader.applyGuess(guess, to: &meta)
+        item.setMetadata(meta)
+        item.updatedAt = .now
     }
 
     // MARK: - Article enrichment

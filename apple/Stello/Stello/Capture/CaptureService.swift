@@ -170,7 +170,14 @@ enum CaptureService {
             toolResult = await extractTool(sourceURL: url, page: page)
         }
 
-        // Article (after tool): Article JSON-LD, meta tags, the URL date and reading time —
+        // Course (after tool, before article): Course / EducationEvent JSON-LD, og tags and the
+        // URL — no extra network. Format / length / topics gaps are guessed during enrichment.
+        var courseResult: CourseExtraction? = nil
+        if kind == .course {
+            courseResult = extractCourse(sourceURL: url, page: page)
+        }
+
+        // Article (after course): Article JSON-LD, meta tags, the URL date and reading time —
         // no extra network. The page title is kept; the summary comes from the on-device job.
         var articleResult: ArticleMeta? = nil
         if kind == .article {
@@ -201,6 +208,9 @@ enum CaptureService {
         } else if let toolTitle = toolResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !toolTitle.isEmpty {
             title = toolTitle
+        } else if let courseTitle = courseResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !courseTitle.isEmpty {
+            title = courseTitle
         } else if let raw = musicResult?.rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
             title = raw
         } else {
@@ -260,14 +270,16 @@ enum CaptureService {
         let slug = makeSlug(from: title, context: context)
         let tagSpecs = RuleTagger.generateTags(title: title, description: summary, domain: dom)
 
-        // Products show the domain they landed on after redirects; tools, resources and articles show
-        // their canonical host when a redirect changed it (`sourceURL` untouched).
+        // Products show the domain they landed on after redirects; tools, resources, courses and
+        // articles show their canonical host when a redirect changed it (`sourceURL` untouched).
         let displayDomain: String?
         if productResult != nil {
             displayDomain = page?.finalURL.flatMap(domain(from:)) ?? dom
         } else if let canonical = toolResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
             displayDomain = domain(from: canonical) ?? dom
         } else if let canonical = resourceResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
+            displayDomain = domain(from: canonical) ?? dom
+        } else if let canonical = courseResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
             displayDomain = domain(from: canonical) ?? dom
         } else if let canonical = articleResult?.canonicalURL.flatMap({ URL(string: $0) }) {
             displayDomain = domain(from: canonical) ?? dom
@@ -299,6 +311,9 @@ enum CaptureService {
         }
         if let resourceResult {
             item.setMetadata(resourceResult.meta)
+        }
+        if let courseResult {
+            item.setMetadata(courseResult.meta)
         }
         if let articleResult {
             item.setMetadata(articleResult)
@@ -619,6 +634,19 @@ enum CaptureService {
             html: page?.html ?? "",
             ogTitle: page?.og.title,
             collectionLabels: collectionLabels
+        )
+    }
+
+    // MARK: - Course Extraction
+
+    /// Course readers for a page already classified as a course. No extra network:
+    /// everything comes from the capture-time page fetch.
+    static func extractCourse(sourceURL: URL, page: PageFetchResult?) -> CourseExtraction {
+        CourseReader.build(
+            sourceURL: sourceURL,
+            finalURL: page?.finalURL,
+            html: page?.html ?? "",
+            ogTitle: page?.og.title
         )
     }
 

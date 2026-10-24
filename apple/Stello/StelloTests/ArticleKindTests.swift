@@ -210,10 +210,10 @@ struct ArticleClassificationTests {
         #expect(classify(url, html: html, ogType: "article").kind == .resource)
     }
 
-    @Test("A course-like page with og:type article only is not an article")
+    @Test("A course page with og:type article is a course, not an article")
     func coursePage() {
-        #expect(classify("https://www.domestika.org/en/courses/1234-motion-design-basics", ogType: "article").kind != .article)
-        #expect(classify("https://www.skillshare.com/en/classes/branding-101/123456", ogType: "article").kind != .article)
+        #expect(classify("https://www.domestika.org/en/courses/1234-motion-design-basics", ogType: "article").kind == .course)
+        #expect(classify("https://www.skillshare.com/en/classes/branding-101/123456", ogType: "article").kind == .course)
     }
 
     @Test("A gen-ai-labelled blog post → article, not tool")

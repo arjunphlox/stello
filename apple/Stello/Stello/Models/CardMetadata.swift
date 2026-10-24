@@ -520,6 +520,96 @@ nonisolated struct ArticleMeta: Codable, Sendable {
     }
 }
 
+// MARK: - Course
+
+nonisolated struct CourseMeta: Codable, Sendable {
+    /// JSON-LD `name`, else og:title with the provider suffix (" | Frontend Masters",
+    /// " - Shift Nudge") stripped.
+    var name: String?
+    /// JSON-LD `provider` (string / object / array → first), else og:site_name, else a
+    /// friendly name for a known course host, else the host without `www.`.
+    var provider: EntityRef?
+    /// JSON-LD `instructor` / `author` / `creator` (string / object / array → first; also
+    /// `hasCourseInstance.instructor`), else meta `author`. Never the provider itself.
+    var instructor: EntityRef?
+    /// `self-paced` | `cohort` | `program` | `video series` | `workshop` — from `courseMode`
+    /// words, an EducationEvent node (cohort) or the URL path (`/program/`, `/workshop/`);
+    /// else the on-device / rule-based guess (`formatIsGuess`).
+    var format: String?
+    var formatIsGuess: Bool = false
+    /// JSON-LD `numberOfLessons`, else the count of lesson-typed `hasPart` items; may be a
+    /// rule-based guess ("24 lessons" in the page text — `lessonsIsGuess`).
+    var lessons: Int?
+    var lessonsIsGuess: Bool = false
+    /// `timeRequired` (or `hasCourseInstance.courseWorkload`) when it is hours / minutes
+    /// (ISO 8601 `PT5H30M` → 330).
+    var durationMinutes: Int?
+    /// Display text when the duration isn't hours / minutes ("2 weeks", "3 days") or comes
+    /// from the guess ("5 hours" — `durationIsGuess`).
+    var durationText: String?
+    var durationIsGuess: Bool = false
+    /// JSON-LD `educationalLevel` (string or DefinedTerm `name`), first letter capitalised.
+    var level: String?
+    /// `isAccessibleForFree`, else the offers (a price of 0 → free, a positive price → paid).
+    var isFree: Bool?
+    /// Lowest non-zero offer price, decimal-as-string ("39"); currency is ISO 4217.
+    var price: String?
+    var currency: String?
+    /// JSON-LD `teaches`, `keywords` (comma string or array) and `about` names; else the
+    /// on-device guess (`topicsAreGuess`). At most 8.
+    var topics: [String] = []
+    var topicsAreGuess: Bool = false
+    /// The next cohort's start: EducationEvent `startDate` or `hasCourseInstance.startDate`
+    /// (the earliest one not yet past at capture).
+    var startsAt: Date?
+    /// Final URL after redirects — set whenever it differs from the saved URL.
+    var canonicalURL: String?
+
+    /// One short line for the grid card: "<provider> · <format, else length, else price>" —
+    /// "Maven · Cohort", "Frontend Masters · 5 h", "Shift Nudge · Free"; either part alone;
+    /// nil when there is neither.
+    var cardKindLine: String? {
+        let detail = formatLabel ?? durationLine ?? priceLine
+        let parts = [ResourceMeta.nonBlank(provider?.name), detail].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "Self-paced", "Cohort", "Program", "Video series", "Workshop"; nil without a format.
+    var formatLabel: String? {
+        guard let format = ResourceMeta.nonBlank(format) else { return nil }
+        return format.prefix(1).uppercased() + String(format.dropFirst())
+    }
+
+    /// "5 h", "5 h 30 min", "45 min" from the minutes; else the duration text ("2 weeks").
+    var durationLine: String? {
+        if let minutes = durationMinutes, minutes > 0 {
+            let hours = minutes / 60
+            let rest = minutes % 60
+            switch (hours, rest) {
+            case (0, _): return "\(rest) min"
+            case (_, 0): return "\(hours) h"
+            default: return "\(hours) h \(rest) min"
+            }
+        }
+        return ResourceMeta.nonBlank(durationText)
+    }
+
+    /// "24 lessons · 5 h 30 min", or either part alone; nil when there is neither.
+    var lengthLine: String? {
+        var lessonsText: String? = nil
+        if let lessons, lessons > 0 { lessonsText = lessons == 1 ? "1 lesson" : "\(lessons) lessons" }
+        let parts = [lessonsText, durationLine].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "Free", "$39", or "Paid" (not free, no price read); nil when nothing is known.
+    var priceLine: String? {
+        if isFree == true { return "Free" }
+        if let formatted = ProductMeta.formattedPrice(price, currency: currency) { return formatted }
+        return isFree == false ? "Paid" : nil
+    }
+}
+
 // MARK: - Item metadata helpers
 
 extension Item {
@@ -594,10 +684,15 @@ extension Item {
         guard kind == ItemKind.article.rawValue else { return nil }
         return decodeMetadata(ArticleMeta.self)
     }
+
+    func courseMeta() -> CourseMeta? {
+        guard kind == ItemKind.course.rawValue else { return nil }
+        return decodeMetadata(CourseMeta.self)
+    }
 }
 
 enum ItemKind: String, Sendable {
-    case typeface, website, individual, studio, foundry, place, music, product, post, tool, resource, article, link
+    case typeface, website, individual, studio, foundry, place, music, product, post, tool, resource, course, article, link
 }
 
 enum ItemImageRole: String, Sendable {

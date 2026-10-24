@@ -62,4 +62,9 @@ protocol Enricher {
     /// then tries the rule-based tech stack for tutorials). The summary is stored as a guess
     /// (`ArticleMeta.summaryIsGuess`).
     func summarizeArticle(text: String?) async throws -> ArticleFacts?
+
+    /// Format + duration + topics guess for a course whose page gave none of them (no Course
+    /// JSON-LD, or a sparse one). Nil = no guess. Results are stored as guesses
+    /// (`CourseMeta.…IsGuess`).
+    func guessCourseFacts(text: String?) async throws -> CourseFacts?
 }

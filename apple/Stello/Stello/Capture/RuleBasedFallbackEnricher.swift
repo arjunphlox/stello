@@ -41,4 +41,10 @@ struct RuleBasedFallbackEnricher: Enricher, Sendable {
     nonisolated func summarizeArticle(text: String?) async throws -> ArticleFacts? {
         nil
     }
+
+    /// Conservative keyword pass ("cohort" / "self-paced", "24 lessons", "5 hours of
+    /// video"); nil when the text says nothing clear. Topics need the model.
+    nonisolated func guessCourseFacts(text: String?) async throws -> CourseFacts? {
+        CourseReader.ruleBasedFacts(text: text)
+    }
 }

@@ -309,6 +309,33 @@ struct ArticleDigest: Equatable, Sendable {
     var techStack: [String]
 }
 
+// MARK: - 9. Course facts guess (kind-dispatched — courses with no format / length / topics read)
+
+@available(macOS 27.0, iOS 27.0, *)
+@Generable(description: "A best guess at how a saved online course is run, how long it is and what it teaches.")
+struct CourseFactsGuess: Equatable, Sendable {
+
+    @Guide(description: """
+    How the course is run, exactly one of: self-paced, cohort, program, video series, \
+    workshop. cohort = a group starts together with live sessions on set dates; self-paced = \
+    recorded lessons you take any time; program = a multi-course track or certificate; \
+    workshop = a single live session or short hands-on event. Nil when the page doesn't say.
+    """)
+    var format: String?
+
+    @Guide(description: """
+    The course length as the page states it, short: "5 hours", "6 weeks", "3 days". Nil when \
+    the page doesn't say — never estimate it.
+    """)
+    var durationText: String?
+
+    @Guide(description: """
+    The skills or subjects the course teaches, as short names (Figma, Auto layout, \
+    Typography, React, Motion design). At most 5, most central first.
+    """, .count(0...5))
+    var topics: [String]
+}
+
 // MARK: - Instruction strings (each carries ONE worked exemplar)
 
 @available(macOS 27.0, iOS 27.0, *)
@@ -483,6 +510,29 @@ enum EnrichmentInstructions {
     Note: the summary says what you end up with and how; techStack names only what the \
     tutorial uses. Read the provided text the same way.
     """
+
+    static let courseFactsGuess = """
+    You are Stello's course reader. The user saved an online course's page. From its text, \
+    say how the course is run, how long it is and what it teaches.
+
+    Rules:
+    • format is one of self-paced, cohort, program, video series, workshop — only when the \
+    text says so (cohort dates, "live sessions", "learn at your own pace", "a 3-course \
+    certificate", "a 2-hour workshop").
+    • durationText only as the text states it ("5 hours of video", "6 weeks"); never estimate.
+    • topics are the skills or subjects taught, as short names, at most 5.
+    • Ignore navigation, testimonials, FAQs about refunds and instructor bios.
+    • Never invent a value — leave format and durationText nil if the text doesn't say.
+
+    Worked example — Page text: "Design Systems in Figma. Join the next cohort on March 3 — \
+    six weeks of live sessions covering variables, components and auto layout." you would \
+    return:
+      format: cohort
+      durationText: 6 weeks
+      topics: [Design systems, Figma, Variables, Components, Auto layout]
+    Note: a start date plus live sessions is a cohort; the length is the six weeks the text \
+    states. Read the provided text the same way.
+    """
 }
 
 // MARK: - Runner — session factories + typed call sites
@@ -557,6 +607,15 @@ enum EnrichmentRunner {
         let response = try await session.respond(
             to: "Article text: \(String(text.prefix(3_000)))",
             generating: ArticleDigest.self
+        )
+        return response.content
+    }
+
+    static func guessCourseFacts(text: String) async throws -> CourseFactsGuess {
+        let session = LanguageModelSession(instructions: EnrichmentInstructions.courseFactsGuess)
+        let response = try await session.respond(
+            to: "Page text: \(String(text.prefix(2_000)))",
+            generating: CourseFactsGuess.self
         )
         return response.content
     }
