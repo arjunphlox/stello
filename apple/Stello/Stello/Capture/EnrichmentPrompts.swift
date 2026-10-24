@@ -288,6 +288,27 @@ struct ToolFactsGuess: Equatable, Sendable {
     var pricing: String?
 }
 
+// MARK: - 8. Article digest (kind-dispatched — articles with no summary yet)
+
+@available(macOS 27.0, iOS 27.0, *)
+@Generable(description: "A short summary of a saved article and, for a tutorial, the technologies it uses.")
+struct ArticleDigest: Equatable, Sendable {
+
+    @Guide(description: """
+    Two or three plain sentences saying what the article argues or teaches — its main point \
+    and the key takeaway, in your own words. No "This article…" opener, no marketing tone, \
+    no quotes, at most 400 characters.
+    """)
+    var summary: String
+
+    @Guide(description: """
+    For a tutorial or how-to only: the libraries, languages and tools it actually uses, as \
+    their usual names (three.js, GSAP, React, WebGL, GLSL, CSS, SwiftUI, Rive, Figma). At \
+    most 5, most central first. Empty for an essay, news story or opinion piece.
+    """, .count(0...5))
+    var techStack: [String]
+}
+
 // MARK: - Instruction strings (each carries ONE worked exemplar)
 
 @available(macOS 27.0, iOS 27.0, *)
@@ -440,6 +461,28 @@ enum EnrichmentInstructions {
     Note: "Download for Mac" gives macOS; a free tier plus a paid Pro plan is freemium. Read \
     the provided text the same way.
     """
+
+    static let articleDigest = """
+    You are Stello's article reader. The user saved an article, essay, news story or \
+    tutorial. From its text, write a short summary and — only for a tutorial — list the \
+    technologies it uses.
+
+    Rules:
+    • The summary is 2–3 plain sentences: the main point and the takeaway, in your own words.
+    • Ignore navigation, cookie notices, newsletter sign-ups, comments and author bios.
+    • techStack only names technologies the tutorial actually builds with; leave it empty \
+    for anything that isn't a tutorial or how-to.
+    • Never invent a value.
+
+    Worked example — Article text: "In this tutorial we build an infinite image slider with \
+    GSAP and a bit of CSS. We'll use GSAP's Observer plugin for drag and wheel input, then \
+    add a WebGL shader for the distortion…" you would return:
+      summary: Builds an infinite, draggable image slider, using GSAP's Observer plugin for \
+    drag and wheel input and a WebGL shader for a distortion effect on movement.
+      techStack: [GSAP, CSS, WebGL]
+    Note: the summary says what you end up with and how; techStack names only what the \
+    tutorial uses. Read the provided text the same way.
+    """
 }
 
 // MARK: - Runner — session factories + typed call sites
@@ -505,6 +548,15 @@ enum EnrichmentRunner {
         let response = try await session.respond(
             to: "Page text: \(String(text.prefix(1_500)))",
             generating: ToolFactsGuess.self
+        )
+        return response.content
+    }
+
+    static func summarizeArticle(text: String) async throws -> ArticleDigest {
+        let session = LanguageModelSession(instructions: EnrichmentInstructions.articleDigest)
+        let response = try await session.respond(
+            to: "Article text: \(String(text.prefix(3_000)))",
+            generating: ArticleDigest.self
         )
         return response.content
     }

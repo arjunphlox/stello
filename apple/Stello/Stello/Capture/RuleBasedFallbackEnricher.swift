@@ -35,4 +35,10 @@ struct RuleBasedFallbackEnricher: Enricher, Sendable {
     nonisolated func guessToolFacts(text: String?) async throws -> ToolFacts? {
         ToolReader.ruleBasedFacts(text: text)
     }
+
+    /// Summaries need the model — nil. (The caller fills a tutorial's tech stack from
+    /// `ArticleReader.ruleBasedTechStack`.)
+    nonisolated func summarizeArticle(text: String?) async throws -> ArticleFacts? {
+        nil
+    }
 }

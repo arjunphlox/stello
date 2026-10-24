@@ -175,7 +175,7 @@ struct PageClassifierTests {
 
     // MARK: - Negative fixtures (Finding 1)
 
-    @Test("Yoast @graph article with nested author Person stays link, not individual")
+    @Test("Yoast @graph article with nested author Person → article, not individual")
     func yoastArticleWithNestedAuthorPerson() {
         let html = """
         <html><head>
@@ -213,11 +213,12 @@ struct PageClassifierTests {
             ogDescription: "A roundup of type design advice."
         )
 
-        #expect(result.kind == .link)
+        // An Article JSON-LD node makes it an article (Article kind); never individual.
+        #expect(result.kind == .article)
         #expect(result.individualMeta == nil)
     }
 
-    @Test("Publisher article with 'fonts' substring in title + Organization node stays link, not foundry")
+    @Test("Publisher article with 'fonts' substring in title + Organization node → article, not foundry")
     func publisherArticleWithFontsSubstring() {
         let html = """
         <html><head>
@@ -248,7 +249,7 @@ struct PageClassifierTests {
             ogDescription: "A roundup of the best free fonts this year."
         )
 
-        #expect(result.kind == .link)
+        #expect(result.kind == .article)
         #expect(result.individualMeta == nil)
     }
 

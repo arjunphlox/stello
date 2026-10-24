@@ -118,9 +118,14 @@ enum EnrichmentService {
                         item: item, context: context, url: url, page: page
                     )
                 }
-                // Tool readers last (kind order: post → resource → product → tool).
+                // Tool readers next (kind order: post → resource → product → tool → article).
+                var isTool = false
                 if postPlatform == nil, !isResource, productSource == nil {
-                    await refreshToolIfClassified(item: item, context: context, url: url, page: page)
+                    isTool = await refreshToolIfClassified(item: item, context: context, url: url, page: page)
+                }
+                // Article readers last.
+                if postPlatform == nil, !isResource, productSource == nil, !isTool {
+                    await refreshArticleIfClassified(item: item, context: context, url: url, page: page)
                 }
                 await upgradeCoverIfNeeded(
                     item: item, context: context, primaryURL: page.og.imageURL, fallbackURL: nil, source: "og"
@@ -159,6 +164,11 @@ enum EnrichmentService {
         // model, then the conservative rule-based keyword pass).
         if item.kind == ItemKind.tool.rawValue {
             await applyToolGuessIfNeeded(item: item, enricher: enricher)
+        }
+        // Articles with no summary yet: on-device summary (+ tech stack for tutorials; the
+        // rule-based names when the model gives none).
+        if item.kind == ItemKind.article.rawValue {
+            await applyArticleDigestIfNeeded(item: item, enricher: enricher)
         }
         // Posts: AI-art flag from collection labels / tags / Midjourney params, then the
         // prompt (rule-read, else the on-device guess).
@@ -734,6 +744,58 @@ enum EnrichmentService {
         }
         item.updatedAt = .now
         return true
+    }
+
+    // MARK: - Article enrichment
+
+    /// Force-Enrich hook: when a `link` or `article` item's refetched page classifies as an
+    /// article (after post, resource, product and tool — the caller only runs this when none
+    /// claimed it), (re)runs the article readers and stores the dossier. A refetch that reads
+    /// less never erases what capture read, and the on-device summary / tech stack are kept.
+    /// Returns whether the item is an article. Curated kinds (typeface, website, product,
+    /// post, tool, resource, …) are never flipped.
+    @discardableResult
+    static func refreshArticleIfClassified(
+        item: Item,
+        context: ModelContext,
+        url: URL,
+        page: PageFetchResult
+    ) async -> Bool {
+        let wasArticle = item.kind == ItemKind.article.rawValue
+        guard wasArticle || item.kind == ItemKind.link.rawValue else { return false }
+        guard wasArticle || PageClassifier.isArticle(
+            url: url, ogType: page.og.ogType, html: page.html, collectionLabels: collectionLabels(for: item)
+        ) else { return false }
+
+        let fresh = CaptureService.extractArticle(sourceURL: url, page: page)
+        let meta = ArticleReader.merge(fresh: fresh, previous: item.articleMeta())
+
+        item.kind = ItemKind.article.rawValue
+        item.setMetadata(meta)
+        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
+           let host = CaptureService.domain(from: canonical) {
+            item.domain = host
+        }
+        item.updatedAt = .now
+        return true
+    }
+
+    /// Articles: when the summary is still empty (or a tutorial has no tech stack), run the
+    /// on-device digest over the page text. The summary is stored with `summaryIsGuess`; a
+    /// tutorial the model gives no stack for (unavailable, failed, nil — Mock / rule-based)
+    /// gets the conservative rule-based names. Stored values are never replaced.
+    static func applyArticleDigestIfNeeded(item: Item, enricher: Enricher) async {
+        guard var meta = item.articleMeta(), ArticleReader.needsDigest(meta) else { return }
+        guard let text = item.extractedText,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        var facts: ArticleFacts? = nil
+        if meta.summary == nil {
+            facts = try? await enricher.summarizeArticle(text: text)
+        }
+        ArticleReader.applyDigest(facts, text: text, to: &meta)
+        item.setMetadata(meta)
+        item.updatedAt = .now
     }
 
     /// Tools: when the readers left platforms or pricing empty, guess them from the page text

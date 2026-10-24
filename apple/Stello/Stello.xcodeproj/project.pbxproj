@@ -26,6 +26,9 @@
 		D1E2F3A4B5C60718293A4B71 /* ResourceReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C60718293A4B70 /* ResourceReader.swift */; };
 		D1E2F3A4B5C60718293A4B72 /* ResourceReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C60718293A4B70 /* ResourceReader.swift */; };
 		D1E2F3A4B5C60718293A4B74 /* ResourceKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C60718293A4B73 /* ResourceKindTests.swift */; };
+		E1F2A3B4C5D60718293A4B81 /* ArticleReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B80 /* ArticleReader.swift */; };
+		E1F2A3B4C5D60718293A4B82 /* ArticleReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B80 /* ArticleReader.swift */; };
+		E1F2A3B4C5D60718293A4B84 /* ArticleKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B83 /* ArticleKindTests.swift */; };
 		0E6EBD64358657A0A0FB80CE /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA340D3CF1CBA31162EB51C /* Tag.swift */; };
 		145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 918DFF8962898B3139189A24 /* CaptureService.swift */; };
 		1AFDFF2A1AA22AE8F6806246 /* UserPreferencesContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA8C21E2EC36E821776F7C3B /* UserPreferencesContent.swift */; };
@@ -197,6 +200,8 @@
 		C1D2E3F4A5B60718293A4B69 /* ToolKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolKindTests.swift; sourceTree = "<group>"; };
 		D1E2F3A4B5C60718293A4B70 /* ResourceReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceReader.swift; sourceTree = "<group>"; };
 		D1E2F3A4B5C60718293A4B73 /* ResourceKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceKindTests.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D60718293A4B80 /* ArticleReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleReader.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D60718293A4B83 /* ArticleKindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleKindTests.swift; sourceTree = "<group>"; };
 		A00AB84A8DD5556B8493537D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A29268FF3429EEAEB7D5AA68 /* StelloTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StelloTests.swift; sourceTree = "<group>"; };
 		A3CA34AF62B2777DF5A05B12 /* DetailImageStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailImageStrip.swift; sourceTree = "<group>"; };
@@ -339,6 +344,7 @@
 		ABCABC81606F2C425CE58AE0 /* StelloTests */ = {
 			isa = PBXGroup;
 			children = (
+				E1F2A3B4C5D60718293A4B83 /* ArticleKindTests.swift */,
 				EA47EDA90E882CD461879641 /* AwaitingReviewStripTests.swift */,
 				2FDE089AFD4A8D168D8E7002 /* CaptureTests.swift */,
 				73BCFEBCDCAAAD6466F619F2 /* DropImportTests.swift */,
@@ -398,6 +404,7 @@
 		E9D2CEC499D89E3E75079D31 /* Capture */ = {
 			isa = PBXGroup;
 			children = (
+				E1F2A3B4C5D60718293A4B80 /* ArticleReader.swift */,
 				918DFF8962898B3139189A24 /* CaptureService.swift */,
 				541215E7DBC65AD295A805F3 /* DropImportService.swift */,
 				079399A5195A6EF8A1ADC6D8 /* Enricher.swift */,
@@ -543,6 +550,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E1F2A3B4C5D60718293A4B81 /* ArticleReader.swift in Sources */,
 				BFB82713E934B386E4735BB3 /* AwaitingReviewFilter.swift in Sources */,
 				145ABF51867A69EC44BDE2A1 /* CaptureService.swift in Sources */,
 				9879AD01CDECDA8225C1722B /* CaptureSheet.swift in Sources */,
@@ -603,6 +611,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E1F2A3B4C5D60718293A4B84 /* ArticleKindTests.swift in Sources */,
 				52713C48D2ABD46CDA6C90A2 /* AwaitingReviewStripTests.swift in Sources */,
 				E745441DDF2FAF4095B9DF12 /* CaptureTests.swift in Sources */,
 				7CC8BC877716030542FF5BC1 /* DropImportTests.swift in Sources */,
@@ -625,6 +634,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E1F2A3B4C5D60718293A4B82 /* ArticleReader.swift in Sources */,
 				B8B3C73F56F130F8CF483B7A /* CaptureService.swift in Sources */,
 				DC8E9560AC3A1BA30C0DB070 /* CardMetadata.swift in Sources */,
 				9498342EF3E4CBB327460667 /* Item.swift in Sources */,

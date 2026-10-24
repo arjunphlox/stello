@@ -63,7 +63,8 @@ nonisolated struct PageClassifier {
         let nodes = jsonLDTypedNodes(from: html)
 
         // Shared kind order (product-spec): gone (status, set by the caller) → post → resource →
-        // (book, later) → product → tool → the existing individual/foundry rules. A single post
+        // (book, later) → product → tool → (course, later) → article → the existing
+        // individual/foundry rules. A single post
         // on a social host is a Post, unless it carries the wishlist label — then
         // `productSource` claims it as a product (a post never reaches the product page rules
         // either way). Resource runs ahead of product (Framer Marketplace pages carry a
@@ -81,6 +82,11 @@ nonisolated struct PageClassifier {
         }
         if isTool(url: baseURL, ogType: ogType, nodes: nodes, collectionLabels: collectionLabels) {
             return PageClassificationResult(kind: .tool, individualMeta: nil)
+        }
+        // Article after tool: an article page carrying tool labels is already kept out of
+        // Tool by Tool's article override (og:type article / Article JSON-LD), so it lands here.
+        if isArticle(url: baseURL, ogType: ogType, nodes: nodes, html: html, collectionLabels: collectionLabels) {
+            return PageClassificationResult(kind: .article, individualMeta: nil)
         }
 
         let isIndividual = hasIndividualSignals(nodes: nodes, ogType: ogType)
@@ -796,7 +802,11 @@ nonisolated struct PageClassifier {
         if isArticle { return false }
 
         if nodes.contains(where: { nodeTypes($0.dict).contains(where: isSoftwareType) }) { return true }
-        if hasToolLabel(collectionLabels), !isBareImageURL(url) { return true }
+        // A tool label never wins over an article-shaped URL (dated path, /blog/<slug>, Medium,
+        // Substack, Codrops): the gen-ai label was wrong 3 of 4 times on such pages.
+        let articleURL = urlPathDate(url) != nil || hasArticlePathSlug(url)
+            || isMediumPost(url) || isSubstackPost(url) || isCodropsArticle(url)
+        if hasToolLabel(collectionLabels), !isBareImageURL(url), !articleURL { return true }
         return false
     }
 
@@ -865,10 +875,179 @@ nonisolated struct PageClassifier {
         }
     }
 
-    nonisolated private static func isArticleType(_ type: String) -> Bool {
-        ["Article", "BlogPosting", "NewsArticle"].contains {
+    /// Article-like schema.org types. Shared by the article rule and the article overrides in
+    /// the product / resource / tool rules (so a TechArticle review never becomes a tool).
+    nonisolated static let articleTypeNames: [String] = [
+        "Article", "BlogPosting", "NewsArticle", "TechArticle", "Report", "ScholarlyArticle",
+    ]
+
+    nonisolated static func isArticleType(_ type: String) -> Bool {
+        articleTypeNames.contains {
             type.caseInsensitiveCompare($0) == .orderedSame
         }
+    }
+
+    // MARK: - Article (deterministic rules only — extraction lives in ArticleReader)
+
+    /// Collection label that breaks the og:type-article tie (label + og:type article → article).
+    /// The `education` label never makes an article on its own.
+    nonisolated static let newsLabel = "news"
+
+    /// Path segments that, FOLLOWED by a slug segment, mark a single post (`/blog/<slug>`);
+    /// the index (`/blog/`) alone is not an article.
+    nonisolated static let articlePathSegments: Set<String> = [
+        "blog", "article", "articles", "post", "posts", "news", "essays", "writing",
+    ]
+
+    /// Segments after an article path segment that are listing pages, not a post slug.
+    nonisolated private static let articleListingSlugs: Set<String> = [
+        "page", "tag", "tags", "category", "categories", "author", "authors", "archive", "archives",
+        "feed", "rss", "atom", "search", "topic", "topics",
+    ]
+
+    /// First path segments on medium.com that are site pages, not a profile / publication.
+    nonisolated private static let mediumReservedSegments: Set<String> = [
+        "tag", "tags", "topic", "topics", "me", "m", "search", "membership", "about", "plans",
+        "creators", "policy", "jobs", "signin", "login", "new-story", "followers", "following",
+    ]
+
+    /// Whether the page is an article. Runs after the tool rule (kind order: gone → post →
+    /// resource → (book) → product → tool → (course) → article → existing). Article when ANY of:
+    /// an Article / NewsArticle / BlogPosting / TechArticle / Report / ScholarlyArticle JSON-LD
+    /// node; an `article:published_time` meta; a dated path (`/YYYY/MM/…`, `/YYYY/Mon/…`,
+    /// `/YYYY/MM/DD/…`); a `blog` / `article(s)` / `post(s)` / `news` / `essays` / `writing`
+    /// segment followed by a slug; a Medium post (beyond the profile), a Substack `/p/<slug>`
+    /// or a dated Codrops URL; og:type article together with an author or date signal — or
+    /// with the `news` label. og:type article alone is NOT enough (course and template pages
+    /// set it). A bare image file is never an article.
+    nonisolated static func isArticle(url: URL, ogType: String?, html: String, collectionLabels: [String]) -> Bool {
+        isArticle(
+            url: url, ogType: ogType, nodes: jsonLDTypedNodes(from: html), html: html,
+            collectionLabels: collectionLabels
+        )
+    }
+
+    nonisolated private static func isArticle(
+        url: URL,
+        ogType: String?,
+        nodes: [TypedNode],
+        html: String,
+        collectionLabels: [String]
+    ) -> Bool {
+        guard !isBareImageURL(url) else { return false }
+
+        if nodes.contains(where: { nodeTypes($0.dict).contains(where: isArticleType) }) { return true }
+
+        let metas = html.isEmpty ? [] : CaptureService.metaTagAttributes(in: html)
+        func metaContent(_ key: String) -> String? {
+            for attrs in metas {
+                let name = (attrs["property"] ?? attrs["name"] ?? "").lowercased()
+                if name == key, let content = attrs["content"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !content.isEmpty {
+                    return content
+                }
+            }
+            return nil
+        }
+
+        if metaContent("article:published_time") != nil { return true }
+        if urlPathDate(url) != nil { return true }
+        if hasArticlePathSlug(url) || isMediumPost(url) || isSubstackPost(url) || isCodropsArticle(url) {
+            return true
+        }
+
+        let type = ogType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard type == "article" else { return false }
+
+        if hasLabel(newsLabel, in: collectionLabels) { return true }
+
+        let hasAuthor = metaContent("author") != nil
+            || metaContent("article:author") != nil
+            || metaContent("twitter:label1")?.lowercased() == "written by"
+            || nodes.contains { $0.dict["author"] != nil }
+        let hasDate = metaContent("article:modified_time") != nil
+            || nodes.contains { $0.dict["datePublished"] != nil }
+        return hasAuthor || hasDate
+    }
+
+    nonisolated private static let monthAbbreviations = [
+        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+    ]
+
+    /// The date a dated path names — `/YYYY/MM/<slug>`, `/YYYY/Mon/<slug>` (`/2025/Mar/11/x`)
+    /// or `/YYYY/MM/DD/<slug>`, with a 19xx / 20xx year — as (year, month, day?). A slug
+    /// segment must follow the date, so an archive listing (`/2025/03/`) doesn't count.
+    nonisolated static func urlPathDate(_ url: URL) -> (year: Int, month: Int, day: Int?)? {
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard parts.count >= 3 else { return nil }
+        for i in 0..<(parts.count - 2) {
+            guard let year = pathYear(parts[i]), let month = pathMonth(parts[i + 1]) else { continue }
+            var day: Int? = nil
+            var next = i + 2
+            if let d = Int(parts[next]), parts[next].count <= 2, parts[next].allSatisfy(\.isNumber), (1...31).contains(d) {
+                day = d
+                next += 1
+            }
+            guard next < parts.count, !parts[next].isEmpty else { continue }
+            return (year, month, day)
+        }
+        return nil
+    }
+
+    /// "2025" → 2025 for a 19xx / 20xx year; nil otherwise.
+    nonisolated private static func pathYear(_ segment: String) -> Int? {
+        guard segment.count == 4, segment.allSatisfy({ $0.isASCII && $0.isNumber }),
+              segment.hasPrefix("19") || segment.hasPrefix("20") else { return nil }
+        return Int(segment)
+    }
+
+    /// "03" / "3" / "Mar" / "mar" → 3; nil otherwise.
+    nonisolated private static func pathMonth(_ segment: String) -> Int? {
+        if (1...2).contains(segment.count), segment.allSatisfy({ $0.isASCII && $0.isNumber }) {
+            guard let m = Int(segment), (1...12).contains(m) else { return nil }
+            return m
+        }
+        if segment.count == 3, let index = monthAbbreviations.firstIndex(of: segment.lowercased()) {
+            return index + 1
+        }
+        return nil
+    }
+
+    /// `…/blog/<slug>` (also article(s), post(s), news, essays, writing) — the index alone,
+    /// pagination, tag / category / author listings and feeds don't count.
+    nonisolated static func hasArticlePathSlug(_ url: URL) -> Bool {
+        let parts = url.path.lowercased().split(separator: "/").map(String.init)
+        for (i, part) in parts.enumerated() where articlePathSegments.contains(part) && i + 1 < parts.count {
+            let slug = parts[i + 1]
+            if slug.isEmpty || articleListingSlugs.contains(slug) || slug.hasSuffix(".xml") { continue }
+            return true
+        }
+        return false
+    }
+
+    /// medium.com/@user/<slug> or medium.com/<publication>/<slug>; <user>.medium.com/<slug>.
+    /// A profile (`medium.com/@user`, `user.medium.com`) and site pages are not posts.
+    nonisolated static func isMediumPost(_ url: URL) -> Bool {
+        guard let host = bareHost(url) else { return false }
+        let parts = url.path.split(separator: "/").map { $0.lowercased() }
+        guard let first = parts.first, !mediumReservedSegments.contains(first) else { return false }
+        if host == "medium.com" { return parts.count >= 2 }
+        if host.hasSuffix(".medium.com") { return !parts.isEmpty && !first.hasPrefix("@") }
+        return false
+    }
+
+    /// `<name>.substack.com/p/<slug>`.
+    nonisolated static func isSubstackPost(_ url: URL) -> Bool {
+        guard let host = bareHost(url), host.hasSuffix(".substack.com") else { return false }
+        let parts = url.path.split(separator: "/").map(String.init)
+        return parts.count >= 2 && parts[0].lowercased() == "p" && !parts[1].isEmpty
+    }
+
+    /// `tympanus.net/codrops/<YYYY>/…` — a dated Codrops article or tutorial.
+    nonisolated static func isCodropsArticle(_ url: URL) -> Bool {
+        guard bareHost(url) == "tympanus.net" else { return false }
+        let parts = url.path.lowercased().split(separator: "/").map(String.init)
+        return parts.count >= 3 && parts[0] == "codrops" && pathYear(parts[1]) != nil
     }
 
     // MARK: Product — host / path rules

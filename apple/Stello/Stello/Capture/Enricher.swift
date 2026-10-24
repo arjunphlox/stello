@@ -57,4 +57,9 @@ protocol Enricher {
     /// Platforms + pricing guess for a tool whose page gave neither (no JSON-LD, no store
     /// data). Nil = no guess. Results are stored as guesses (`ToolMeta.…IsGuess`).
     func guessToolFacts(text: String?) async throws -> ToolFacts?
+
+    /// Summary + tech stack for an article from its page text. Nil = no digest (the caller
+    /// then tries the rule-based tech stack for tutorials). The summary is stored as a guess
+    /// (`ArticleMeta.summaryIsGuess`).
+    func summarizeArticle(text: String?) async throws -> ArticleFacts?
 }

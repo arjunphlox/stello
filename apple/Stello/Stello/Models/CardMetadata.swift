@@ -483,6 +483,43 @@ nonisolated struct ResourceMeta: Codable, Sendable {
     }
 }
 
+// MARK: - Article
+
+nonisolated struct ArticleMeta: Codable, Sendable {
+    /// og:site_name, else JSON-LD `publisher.name`, else the host without `www.`.
+    var publication: String?
+    /// JSON-LD `author` (string / object / array → first; an object keeps its `url`), else
+    /// meta `author`, `article:author` (when it isn't a URL), or `twitter:data1` labelled
+    /// "Written by".
+    var author: EntityRef?
+    /// JSON-LD `datePublished`, else `article:published_time`, else the date in the URL path.
+    var publishedAt: Date?
+    /// Words in the page text ÷ 230, rounded up (min 1); nil when there is no text.
+    var readingMinutes: Int?
+    /// On-device summary (`summaryIsGuess == true`). The page's own description is NOT a
+    /// summary — it stays the item's overview.
+    var summary: String?
+    var summaryIsGuess: Bool = false
+    /// Codrops, a `/tutorial(s)/` path segment, or a title starting "How to" / "Tutorial".
+    var isTutorial: Bool = false
+    /// Tutorials only: the libraries / languages / tools the tutorial uses (max 5).
+    var techStack: [String] = []
+    /// Final URL after redirects — set whenever it differs from the saved URL.
+    var canonicalURL: String?
+
+    /// One short line for the grid card: "simonwillison.net · 6 min", or either part alone;
+    /// nil when there is neither.
+    var cardKindLine: String? {
+        let parts = [ResourceMeta.nonBlank(publication), readingMinutes.map { "\($0) min" }].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "6 min read"; nil without a reading time.
+    var readingLine: String? {
+        readingMinutes.map { "\($0) min read" }
+    }
+}
+
 // MARK: - Item metadata helpers
 
 extension Item {
@@ -552,10 +589,15 @@ extension Item {
         guard kind == ItemKind.resource.rawValue else { return nil }
         return decodeMetadata(ResourceMeta.self)
     }
+
+    func articleMeta() -> ArticleMeta? {
+        guard kind == ItemKind.article.rawValue else { return nil }
+        return decodeMetadata(ArticleMeta.self)
+    }
 }
 
 enum ItemKind: String, Sendable {
-    case typeface, website, individual, studio, foundry, place, music, product, post, tool, resource, link
+    case typeface, website, individual, studio, foundry, place, music, product, post, tool, resource, article, link
 }
 
 enum ItemImageRole: String, Sendable {
