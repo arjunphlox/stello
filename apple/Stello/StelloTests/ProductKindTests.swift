@@ -138,7 +138,7 @@ struct ProductClassificationTests {
         #expect(PageClassifier.socialPostHost(for: URL(string: "https://www.behance.net/gallery/1/x")!) == "behance")
     }
 
-    @Test("An article that lists products stays non-product")
+    @Test("An article that lists products stays non-product (it is an article)")
     func articleStaysNonProduct() {
         let roundup = """
         <html><head><script type="application/ld+json">
@@ -148,7 +148,7 @@ struct ProductClassificationTests {
            {"@type":"ListItem","position":2,"item":{"@type":"Product","name":"Lamp B"}}]}}
         </script></head><body></body></html>
         """
-        #expect(classify("https://blog.example.com/best-desk-lamps", html: roundup).kind == .link)
+        #expect(classify("https://blog.example.com/best-desk-lamps", html: roundup).kind == .article)
 
         let yoast = """
         <html><head><script type="application/ld+json">
@@ -157,9 +157,9 @@ struct ProductClassificationTests {
           {"@type":"Product","name":"Lamp A"}]}
         </script></head><body></body></html>
         """
-        #expect(classify("https://blog.example.com/lamp-a-review", html: yoast, ogType: "article").kind == .link)
+        #expect(classify("https://blog.example.com/lamp-a-review", html: yoast, ogType: "article").kind == .article)
         // A wishlist label on a non-product page is only a hint — the page decides.
-        #expect(classify("https://blog.example.com/lamp-a-review", html: yoast, labels: ["wishlist"]).kind == .link)
+        #expect(classify("https://blog.example.com/lamp-a-review", html: yoast, labels: ["wishlist"]).kind == .article)
     }
 }
 

@@ -170,6 +170,13 @@ enum CaptureService {
             toolResult = await extractTool(sourceURL: url, page: page)
         }
 
+        // Article (after tool): Article JSON-LD, meta tags, the URL date and reading time —
+        // no extra network. The page title is kept; the summary comes from the on-device job.
+        var articleResult: ArticleMeta? = nil
+        if kind == .article {
+            articleResult = extractArticle(sourceURL: url, page: page)
+        }
+
         // Music classification: deterministic host/og:type match (no extra network beyond
         // the page fetch above), or — for plain youtube.com/youtu.be — a confirmed oEmbed
         // signal. Only attempted when the generic classifier left the page as `link`.
@@ -253,7 +260,7 @@ enum CaptureService {
         let slug = makeSlug(from: title, context: context)
         let tagSpecs = RuleTagger.generateTags(title: title, description: summary, domain: dom)
 
-        // Products show the domain they landed on after redirects; tools and resources show
+        // Products show the domain they landed on after redirects; tools, resources and articles show
         // their canonical host when a redirect changed it (`sourceURL` untouched).
         let displayDomain: String?
         if productResult != nil {
@@ -261,6 +268,8 @@ enum CaptureService {
         } else if let canonical = toolResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
             displayDomain = domain(from: canonical) ?? dom
         } else if let canonical = resourceResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
+            displayDomain = domain(from: canonical) ?? dom
+        } else if let canonical = articleResult?.canonicalURL.flatMap({ URL(string: $0) }) {
             displayDomain = domain(from: canonical) ?? dom
         } else {
             displayDomain = dom
@@ -290,6 +299,9 @@ enum CaptureService {
         }
         if let resourceResult {
             item.setMetadata(resourceResult.meta)
+        }
+        if let articleResult {
+            item.setMetadata(articleResult)
         }
         context.insert(item)
 
@@ -438,7 +450,8 @@ enum CaptureService {
     /// blocks and all remaining tags, decodes the common HTML entities, collapses whitespace,
     /// and caps the result at ~4,000 characters — the on-device model's context is small, so
     /// this is what AI enrichment (and search) sees instead of just title+summary.
-    static func extractText(html: String) -> String? {
+    /// `limit: nil` returns the whole text (article reading time counts every word).
+    static func extractText(html: String, limit: Int? = 4_000) -> String? {
         guard !html.isEmpty else { return nil }
         var text = html
         // Prefer body content: everything before <body> is metadata/CSS/JS, never prose.
@@ -471,7 +484,8 @@ enum CaptureService {
         }
         text = words.joined(separator: " ")
         guard !text.isEmpty else { return nil }
-        return String(text.prefix(4_000))
+        guard let limit else { return text }
+        return String(text.prefix(limit))
     }
 
     private static let basicEntities: [(String, String)] = [
@@ -605,6 +619,22 @@ enum CaptureService {
             html: page?.html ?? "",
             ogTitle: page?.og.title,
             collectionLabels: collectionLabels
+        )
+    }
+
+    // MARK: - Article Extraction
+
+    /// Article readers for a page already classified as an article. No extra network:
+    /// everything comes from the capture-time page fetch. Reading time counts the whole
+    /// page text (not the 4,000-character slice the AI jobs see).
+    static func extractArticle(sourceURL: URL, page: PageFetchResult?) -> ArticleMeta {
+        let html = page?.html ?? ""
+        return ArticleReader.build(
+            sourceURL: sourceURL,
+            finalURL: page?.finalURL,
+            html: html,
+            ogTitle: page?.og.title,
+            pageText: extractText(html: html, limit: nil)
         )
     }
 

@@ -138,6 +138,19 @@ struct FoundationModelsEnricher: Enricher {
         return ToolFacts(platforms: platforms, pricing: guess.pricing)
     }
 
+    /// On-device article summary + tech stack. The caller stores the summary with
+    /// `summaryIsGuess == true` and keeps the stack only for tutorials; a throw falls back to
+    /// the rule-based tech stack.
+    func summarizeArticle(text: String?) async throws -> ArticleFacts? {
+        guard isAvailable else { throw EnricherError.unavailable }
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let digest = try await EnrichmentRunner.summarizeArticle(text: text)
+        let summary = ArticleReader.cleanSummary(digest.summary)
+        let techStack = ArticleReader.cleanTechStack(digest.techStack)
+        guard summary != nil || !techStack.isEmpty else { return nil }
+        return ArticleFacts(summary: summary, techStack: techStack)
+    }
+
     // MARK: - Mapping
 
     static func mapVisionTags(_ tags: VisionTags) -> [VisionTagSpec] {

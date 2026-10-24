@@ -72,4 +72,12 @@ struct MockEnricher: Enricher, Sendable {
         guard isAvailable else { throw EnricherError.unavailable }
         return nil
     }
+
+    /// No deterministic stand-in for an article summary — nil (the caller then tries the
+    /// rule-based tech stack for tutorials).
+    nonisolated func summarizeArticle(text: String?) async throws -> ArticleFacts? {
+        if let error { throw error }
+        guard isAvailable else { throw EnricherError.unavailable }
+        return nil
+    }
 }

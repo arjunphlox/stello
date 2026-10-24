@@ -102,6 +102,8 @@ struct CardSubcards: View {
                     if let meta = item.toolMeta() { toolCards(meta) }
                 case .resource:
                     if let meta = item.resourceMeta() { resourceCards(meta) }
+                case .article:
+                    if let meta = item.articleMeta() { articleCards(meta) }
                 case .link:
                     EmptyView()
                 }
@@ -962,6 +964,30 @@ struct CardSubcards: View {
         return "Open in \(host)"
     }
 
+    // MARK: - Article
+
+    @ViewBuilder
+    private func articleCards(_ meta: ArticleMeta) -> some View {
+        // The on-device summary leads; it is marked as AI-written when it is a guess.
+        textCard(title: meta.summaryIsGuess ? "AI summary" : "Summary", text: meta.summary)
+
+        factsCard(title: "Facts", rows: [
+            ("Publication", meta.publication),
+            ("Author", meta.author?.name),
+            ("Published", meta.publishedAt?.formatted(date: .abbreviated, time: .omitted)),
+            ("Reading time", meta.readingLine),
+        ])
+
+        if meta.isTutorial {
+            chipsCard(title: "Tech stack", chips: meta.techStack)
+        }
+
+        factsCard(title: "Links", rows: [
+            ("Read article", meta.canonicalURL ?? item.sourceURL),
+            ("Author's page", meta.author?.url),
+        ])
+    }
+
     private func copyToPasteboard(_ text: String) {
         #if os(macOS)
         NSPasteboard.general.clearContents()
@@ -1424,6 +1450,7 @@ extension Item {
         case .post: return postMeta() != nil
         case .tool: return toolMeta() != nil
         case .resource: return resourceMeta() != nil
+        case .article: return articleMeta() != nil
         case .link: return false
         }
     }
@@ -1435,6 +1462,7 @@ extension Item {
         case .post: return postMeta()?.cardKindLine
         case .tool: return toolMeta()?.cardKindLine
         case .resource: return resourceMeta()?.cardKindLine
+        case .article: return articleMeta()?.cardKindLine
         default: return nil
         }
     }

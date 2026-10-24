@@ -70,6 +70,8 @@ enum ItemSearchBlob {
             return item.toolMeta()?.searchTerms() ?? []
         case ItemKind.resource.rawValue:
             return item.resourceMeta()?.searchTerms() ?? []
+        case ItemKind.article.rawValue:
+            return item.articleMeta()?.searchTerms() ?? []
         default:
             return []
         }
@@ -339,6 +341,17 @@ extension ResourceMeta {
         ItemSearchBlob.appendEntityRef(maker, to: &parts)
         ItemSearchBlob.appendOptional(subtype, to: &parts)
         ItemSearchBlob.appendStrings(worksWith, to: &parts)
+        return parts
+    }
+}
+
+extension ArticleMeta {
+    func searchTerms() -> [String] {
+        var parts: [String] = []
+        ItemSearchBlob.appendOptional(publication, to: &parts)
+        ItemSearchBlob.appendEntityRef(author, to: &parts)
+        ItemSearchBlob.appendOptional(summary, to: &parts)
+        ItemSearchBlob.appendStrings(techStack, to: &parts)
         return parts
     }
 }

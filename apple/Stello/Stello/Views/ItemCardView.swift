@@ -469,7 +469,8 @@ struct ItemCardView: View {
                     .font(.karst(size: scaledTitleSize, weight: .medium))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(4)
-                // Per-kind one-liner (product: "₹2,699 · Stuffcool" / "via @handle").
+                // Per-kind one-liner (product: "₹2,699 · Stuffcool" / "via @handle";
+                // article: "simonwillison.net · 6 min").
                 if let kindLine = item.cardKindLine {
                     Text(kindLine)
                         .font(.karst(size: scaledPillSize + 1, weight: .medium))
