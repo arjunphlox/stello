@@ -336,6 +336,26 @@ struct CourseFactsGuess: Equatable, Sendable {
     var topics: [String]
 }
 
+// MARK: - 10. Book facts guess (kind-dispatched — books with no author read)
+
+@available(macOS 27.0, iOS 27.0, *)
+@Generable(description: "A best guess at who wrote a saved book and when it was published.")
+struct BookFactsGuess: Equatable, Sendable {
+
+    @Guide(description: """
+    The book's author or authors as the page names them, full names ("Thomas H. Cormen", \
+    "Ursula K. Le Guin"). Never the publisher, translator, illustrator, reviewer or the \
+    store. At most 4, in the order the page lists them; empty when the page doesn't say.
+    """, .count(0...4))
+    var authors: [String]
+
+    @Guide(description: """
+    The year the book (this edition) was published, as the page states it, e.g. 2009. Nil \
+    when the page doesn't say — never estimate it.
+    """)
+    var year: Int?
+}
+
 // MARK: - Instruction strings (each carries ONE worked exemplar)
 
 @available(macOS 27.0, iOS 27.0, *)
@@ -533,6 +553,28 @@ enum EnrichmentInstructions {
     Note: a start date plus live sessions is a cohort; the length is the six weeks the text \
     states. Read the provided text the same way.
     """
+
+    static let bookFactsGuess = """
+    You are Stello's book reader. The user saved a page about one book (a store, catalogue \
+    or publisher page). From its text, say who wrote the book and the year it was published.
+
+    Rules:
+    • authors are the people who wrote the book, as the page names them — never the \
+    publisher, translator, illustrator, foreword writer, reviewer or the store.
+    • year only as the text states it (a publication date or "first published 2009"); never \
+    estimate it, and never use a review or copyright-notice date for another book.
+    • Ignore navigation, recommendations ("customers also bought"), reviews and ads.
+    • Never invent a value — leave authors empty and year nil if the text doesn't say.
+
+    Worked example — Page text: "Introduction to Algorithms, third edition. By Thomas H. \
+    Cormen, Charles E. Leiserson, Ronald L. Rivest and Clifford Stein. The MIT Press, \
+    July 2009. 1312 pages. Customers also bought: Clean Code by Robert C. Martin." you \
+    would return:
+      authors: [Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, Clifford Stein]
+      year: 2009
+    Note: the four names after "By" are the authors; Robert C. Martin is a recommendation, \
+    not an author. Read the provided text the same way.
+    """
 }
 
 // MARK: - Runner — session factories + typed call sites
@@ -616,6 +658,15 @@ enum EnrichmentRunner {
         let response = try await session.respond(
             to: "Page text: \(String(text.prefix(2_000)))",
             generating: CourseFactsGuess.self
+        )
+        return response.content
+    }
+
+    static func guessBookFacts(text: String) async throws -> BookFactsGuess {
+        let session = LanguageModelSession(instructions: EnrichmentInstructions.bookFactsGuess)
+        let response = try await session.respond(
+            to: "Page text: \(String(text.prefix(2_000)))",
+            generating: BookFactsGuess.self
         )
         return response.content
     }

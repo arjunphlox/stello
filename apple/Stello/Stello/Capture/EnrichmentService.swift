@@ -104,34 +104,40 @@ enum EnrichmentService {
                 let postPlatform = await refreshPostIfClassified(
                     item: item, context: context, url: url, page: page
                 )
-                // Resource readers next (kind order: post → resource → product → tool) — ahead
-                // of product, since Framer Marketplace pages carry Product JSON-LD with offers.
+                // Resource readers next (kind order: post → resource → book → product → tool) —
+                // ahead of product, since Framer Marketplace pages carry Product JSON-LD with
+                // offers.
                 var isResource = false
                 if postPlatform == nil {
                     isResource = await refreshResourceIfClassified(
                         item: item, context: context, url: url, page: page
                     )
                 }
-                var productSource: String? = nil
+                // Book readers next — ahead of product, since an Amazon ISBN page is a book.
+                var isBook = false
                 if postPlatform == nil, !isResource {
+                    isBook = await refreshBookIfClassified(item: item, context: context, url: url, page: page)
+                }
+                var productSource: String? = nil
+                if postPlatform == nil, !isResource, !isBook {
                     productSource = await refreshProductIfClassified(
                         item: item, context: context, url: url, page: page
                     )
                 }
-                // Tool readers next (kind order: post → resource → product → tool → course →
-                // article).
+                // Tool readers next (kind order: post → resource → book → product → tool →
+                // course → article).
                 var isTool = false
-                if postPlatform == nil, !isResource, productSource == nil {
+                if postPlatform == nil, !isResource, !isBook, productSource == nil {
                     isTool = await refreshToolIfClassified(item: item, context: context, url: url, page: page)
                 }
                 // Course readers next — ahead of article, since course pages often set
                 // og:type article.
                 var isCourse = false
-                if postPlatform == nil, !isResource, productSource == nil, !isTool {
+                if postPlatform == nil, !isResource, !isBook, productSource == nil, !isTool {
                     isCourse = await refreshCourseIfClassified(item: item, context: context, url: url, page: page)
                 }
                 // Article readers last.
-                if postPlatform == nil, !isResource, productSource == nil, !isTool, !isCourse {
+                if postPlatform == nil, !isResource, !isBook, productSource == nil, !isTool, !isCourse {
                     await refreshArticleIfClassified(item: item, context: context, url: url, page: page)
                 }
                 await upgradeCoverIfNeeded(
@@ -171,6 +177,11 @@ enum EnrichmentService {
         // model, then the conservative rule-based keyword pass).
         if item.kind == ItemKind.tool.rawValue {
             await applyToolGuessIfNeeded(item: item, enricher: enricher)
+        }
+        // Books with no author read: guess the authors (and an empty year) from the page text
+        // (on-device model only — nothing rule-based).
+        if item.kind == ItemKind.book.rawValue {
+            await applyBookGuessIfNeeded(item: item, enricher: enricher)
         }
         // Courses with no format / length / topics read: guess them from the page text
         // (on-device model, then the conservative rule-based keyword pass).
@@ -756,6 +767,66 @@ enum EnrichmentService {
         }
         item.updatedAt = .now
         return true
+    }
+
+    // MARK: - Book enrichment
+
+    /// Force-Enrich hook: when a `link` or `book` item's refetched page classifies as a book
+    /// (after post and resource — the caller only runs this when neither claimed it), (re)runs
+    /// the book readers + the Open Library lookup and stores the dossier. A refetch that reads
+    /// less never erases what capture read, and a guessed author list survives until one is
+    /// read. Backfills a missing cover (og:image, then the JSON-LD / Open Library cover).
+    /// Returns whether the item is a book. Curated kinds (product, typeface, website, post,
+    /// tool, resource, course, article, …) are never flipped.
+    @discardableResult
+    static func refreshBookIfClassified(
+        item: Item,
+        context: ModelContext,
+        url: URL,
+        page: PageFetchResult,
+        lookUpOpenLibrary: Bool = true
+    ) async -> Bool {
+        let wasBook = item.kind == ItemKind.book.rawValue
+        guard wasBook || item.kind == ItemKind.link.rawValue else { return false }
+        guard wasBook || PageClassifier.isBook(url: url, ogType: page.og.ogType, html: page.html) else { return false }
+
+        let extraction = await CaptureService.extractBook(
+            sourceURL: url, page: page, lookUpOpenLibrary: lookUpOpenLibrary
+        )
+        let meta = BookReader.merge(fresh: extraction.meta, previous: item.bookMeta())
+
+        item.kind = ItemKind.book.rawValue
+        item.setMetadata(meta)
+        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
+           let host = CaptureService.domain(from: canonical) {
+            item.domain = host
+        }
+        // og:image first (each call is a no-op once a real cover exists), then the book covers.
+        let fallbacks = extraction.coverFallbackURLs
+        await upgradeCoverIfNeeded(
+            item: item, context: context, primaryURL: page.og.imageURL, fallbackURL: nil, source: "og"
+        )
+        await upgradeCoverIfNeeded(
+            item: item, context: context,
+            primaryURL: fallbacks.first, fallbackURL: fallbacks.dropFirst().first, source: "book"
+        )
+        item.updatedAt = .now
+        return true
+    }
+
+    /// Books: when the readers (page, JSON-LD, Open Library) left no author, guess the authors
+    /// — and an empty year — from the page text (on-device model; Mock / rule-based give
+    /// nil). Stored with `authorsAreGuess`; read values win.
+    static func applyBookGuessIfNeeded(item: Item, enricher: Enricher) async {
+        guard var meta = item.bookMeta(), BookReader.needsGuess(meta) else { return }
+        guard let text = item.extractedText ?? item.summary,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        guard let guess = try? await enricher.guessBookFacts(text: text) else { return }
+
+        BookReader.applyGuess(guess, to: &meta)
+        item.setMetadata(meta)
+        item.updatedAt = .now
     }
 
     // MARK: - Course enrichment

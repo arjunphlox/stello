@@ -101,6 +101,7 @@ targets:
           - ResourceReader.swift
           - ArticleReader.swift
           - CourseReader.swift
+          - BookReader.swift
       - path: Stello/Store
         includes:
           - StelloStore.swift

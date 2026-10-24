@@ -164,6 +164,18 @@ struct FoundationModelsEnricher: Enricher {
         return CourseFacts(format: format, durationText: durationText, topics: topics)
     }
 
+    /// On-device authors + year guess for a book whose readers found no author. The caller
+    /// stores the authors with `authorsAreGuess`; a throw or nil leaves the book as it is.
+    func guessBookFacts(text: String?) async throws -> BookFacts? {
+        guard isAvailable else { throw EnricherError.unavailable }
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let guess = try await EnrichmentRunner.guessBookFacts(text: text)
+        let authors = BookReader.cleanAuthorNames(guess.authors, max: BookReader.maxGuessedAuthors)
+        let year = BookReader.plausibleYear(guess.year)
+        guard !authors.isEmpty || year != nil else { return nil }
+        return BookFacts(authors: authors, year: year)
+    }
+
     // MARK: - Mapping
 
     static func mapVisionTags(_ tags: VisionTags) -> [VisionTagSpec] {

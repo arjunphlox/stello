@@ -399,6 +399,8 @@ enum OptacosImporter {
             break
         case .resource:
             break
+        case .book:
+            break
         case .course:
             break
         case .article:

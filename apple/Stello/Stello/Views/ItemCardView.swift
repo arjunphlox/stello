@@ -71,6 +71,8 @@ struct ItemCardView: View {
         return "\(item.persistentModelID)-\(count)"
     }
 
+    /// The cover's own aspect ratio (a portrait book cover stays portrait); the OG default
+    /// only when the image carries no size.
     private var aspect: CGFloat {
         if let img = primaryImage, let w = img.width, let h = img.height, w > 0, h > 0 {
             return CGFloat(w) / CGFloat(h)
@@ -470,7 +472,8 @@ struct ItemCardView: View {
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(4)
                 // Per-kind one-liner (product: "₹2,699 · Stuffcool" / "via @handle";
-                // course: "Maven · Cohort"; article: "simonwillison.net · 6 min").
+                // book: "Thomas H. Cormen +3 · 2009"; course: "Maven · Cohort"; article:
+                // "simonwillison.net · 6 min").
                 if let kindLine = item.cardKindLine {
                     Text(kindLine)
                         .font(.karst(size: scaledPillSize + 1, weight: .medium))

@@ -88,4 +88,11 @@ struct MockEnricher: Enricher, Sendable {
         guard isAvailable else { throw EnricherError.unavailable }
         return nil
     }
+
+    /// No deterministic stand-in for the book-facts guess — nil (the book keeps no authors).
+    nonisolated func guessBookFacts(text: String?) async throws -> BookFacts? {
+        if let error { throw error }
+        guard isAvailable else { throw EnricherError.unavailable }
+        return nil
+    }
 }

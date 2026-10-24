@@ -102,6 +102,8 @@ struct CardSubcards: View {
                     if let meta = item.toolMeta() { toolCards(meta) }
                 case .resource:
                     if let meta = item.resourceMeta() { resourceCards(meta) }
+                case .book:
+                    if let meta = item.bookMeta() { bookCards(meta) }
                 case .course:
                     if let meta = item.courseMeta() { courseCards(meta) }
                 case .article:
@@ -966,6 +968,42 @@ struct CardSubcards: View {
         return "Open in \(host)"
     }
 
+    // MARK: - Book
+
+    @ViewBuilder
+    private func bookCards(_ meta: BookMeta) -> some View {
+        let authorLabel = meta.authors.count > 1 ? "Authors" : "Author"
+        factsCard(title: "Facts", rows: [
+            (meta.authorsAreGuess ? "\(authorLabel) (guess)" : authorLabel, meta.authorsLine),
+            ("Published", meta.publishedYear.map(String.init)),
+            ("Publisher", meta.publisher),
+            ("Pages", meta.pages.flatMap { $0 > 0 ? String($0) : nil }),
+            ("Format", meta.formatLabel),
+            ("ISBN", meta.isbnLine),
+            ("Language", meta.languageLabel),
+        ])
+
+        chipsCard(title: "Subjects", chips: meta.subjects)
+
+        factsCard(title: "Links", rows: [
+            ("Open Library", meta.openLibraryURL),
+            ("Goodreads", meta.goodreadsURL),
+            ("Amazon", meta.amazonURL),
+            ("Website", Self.bookWebsite(meta, sourceURL: item.sourceURL)),
+        ])
+    }
+
+    /// The canonical page (else the saved URL) unless it is already one of the book's
+    /// Open Library / Goodreads / Amazon links.
+    private static func bookWebsite(_ meta: BookMeta, sourceURL: String?) -> String? {
+        guard let website = meta.canonicalURL ?? sourceURL else { return nil }
+        let known = [meta.openLibraryURL, meta.goodreadsURL, meta.amazonURL].compactMap { $0 }
+        if known.contains(website) { return nil }
+        // The Amazon link is normalised to /dp/<isbn10>; the saved Amazon URL is the same page.
+        if meta.amazonURL != nil, let url = URL(string: website), BookReader.isAmazonURL(url) { return nil }
+        return website
+    }
+
     // MARK: - Course
 
     @ViewBuilder
@@ -1480,6 +1518,7 @@ extension Item {
         case .post: return postMeta() != nil
         case .tool: return toolMeta() != nil
         case .resource: return resourceMeta() != nil
+        case .book: return bookMeta() != nil
         case .course: return courseMeta() != nil
         case .article: return articleMeta() != nil
         case .link: return false
@@ -1493,6 +1532,7 @@ extension Item {
         case .post: return postMeta()?.cardKindLine
         case .tool: return toolMeta()?.cardKindLine
         case .resource: return resourceMeta()?.cardKindLine
+        case .book: return bookMeta()?.cardKindLine
         case .course: return courseMeta()?.cardKindLine
         case .article: return articleMeta()?.cardKindLine
         default: return nil

@@ -63,7 +63,7 @@ nonisolated struct PageClassifier {
         let nodes = jsonLDTypedNodes(from: html)
 
         // Shared kind order (product-spec): gone (status, set by the caller) → post → resource →
-        // (book, later) → product → tool → course → article → the existing
+        // book → product → tool → course → article → the existing
         // individual/foundry rules. A single post
         // on a social host is a Post, unless it carries the wishlist label — then
         // `productSource` claims it as a product (a post never reaches the product page rules
@@ -74,6 +74,11 @@ nonisolated struct PageClassifier {
         }
         if isResource(url: baseURL, ogType: ogType, nodes: nodes, html: html, collectionLabels: collectionLabels) {
             return PageClassificationResult(kind: .resource, individualMeta: nil)
+        }
+        // Book after resource (a `books`-labelled list page is a reading list), before product:
+        // an Amazon ISBN page is a book, even with the wishlist label.
+        if isBook(url: baseURL, ogType: ogType, nodes: nodes, html: html) {
+            return PageClassificationResult(kind: .book, individualMeta: nil)
         }
         if let source = productSource(
             url: baseURL, ogType: ogType, nodes: nodes, html: html, collectionLabels: collectionLabels
@@ -570,8 +575,11 @@ nonisolated struct PageClassifier {
         // Course sale pages (Teachable, Podia, …) often add a Product node with offers next to
         // their Course node — the Course rule claims those.
         let isCourse = nodes.contains { nodeTypes($0.dict).contains(where: isCourseType) }
+        // Bookshops add a Product node with offers next to the Book node — the Book rule
+        // claims those.
+        let isBook = nodes.contains { nodeTypes($0.dict).contains(where: isBookType) }
 
-        if !isArticle && !isSoftware && !isCourse {
+        if !isArticle && !isSoftware && !isCourse && !isBook {
             if nodes.contains(where: {
                 nodeTypes($0.dict).contains(where: isProductType) && $0.dict["offers"] != nil
             }) {
@@ -608,7 +616,7 @@ nonisolated struct PageClassifier {
     }
 
     /// Whether the page is a resource. Runs after the post rule and before product and tool
-    /// (kind order: gone → post → resource → (book) → product → tool). Resource when ANY of:
+    /// (kind order: gone → post → resource → book → product → tool). Resource when ANY of:
     /// a Figma Community plugin / widget / file; a Framer Marketplace item page; a CodePen pen;
     /// the `digital-resources` label on a page that is not an article (Article / NewsArticle /
     /// BlogPosting JSON-LD or og:type article) and not a bare image; the `books` label on a
@@ -647,7 +655,10 @@ nonisolated struct PageClassifier {
 
         if hasLabel(booksLabel, in: collectionLabels) {
             let isProductPage = isAmazonProductURL(url) || isKickstarterProjectURL(url) || isShopifyProductURL(url)
-            if !isProductPage && !isSingleBook(url: url, nodes: nodes, html: html) { return true }
+            if !isProductPage && !isSingleBook(url: url, nodes: nodes, html: html)
+                && !isBook(url: url, ogType: ogType, nodes: nodes, html: html) {
+                return true
+            }
         }
         return false
     }
@@ -703,12 +714,14 @@ nonisolated struct PageClassifier {
         return ["pen", "full", "details"].contains(parts[1]) && !parts[2].isEmpty
     }
 
-    // MARK: - Book (single-book detector — the Book kind will reuse it)
+    // MARK: - Book (single-book detector — the reading-list veto; the Book kind is `isBook`)
 
     /// Whether the page is ONE book (not a reading list): an Amazon `/dp/<isbn10>` (or
-    /// `/gp/product/<isbn10>`) URL, a `book:isbn` meta tag, a top-level / @graph Book JSON-LD
-    /// node, a StoryGraph `/books/<id>`, Goodreads `/book/show/<id>` or Open Library
-    /// `/books/<id>` / `/works/<id>` page.
+    /// `/gp/product/<isbn10>`) URL, a `book:isbn` / `books:isbn` meta tag, a top-level /
+    /// @graph Book JSON-LD node, a StoryGraph `/books/<id>`, Goodreads `/book/show/<id>`,
+    /// Open Library `/books/<id>` / `/works/<id>`, Google Books or Bookshop.org book page.
+    /// Looser than `isBook` (no ISBN checksum): it only keeps a page out of the reading-list
+    /// rule.
     nonisolated static func isSingleBook(url: URL, html: String) -> Bool {
         isSingleBook(url: url, nodes: jsonLDTypedNodes(from: html), html: html)
     }
@@ -736,15 +749,13 @@ nonisolated struct PageClassifier {
                 if parts.count >= 2, parts[0] == "books" || parts[0] == "works" { return true }
             }
         }
-        if nodes.contains(where: { node in
-            nodeTypes(node.dict).contains { $0.caseInsensitiveCompare("Book") == .orderedSame }
-        }) {
-            return true
-        }
+        // Google Books / Bookshop.org single-book pages (added with the Book kind).
+        if isKnownBookPageURL(url) { return true }
+        if hasSingleBookNode(nodes) { return true }
         if !html.isEmpty {
             for attrs in CaptureService.metaTagAttributes(in: html) {
                 let key = (attrs["property"] ?? attrs["name"] ?? "").lowercased()
-                if key == "book:isbn", let content = attrs["content"],
+                if key == "book:isbn" || key == "books:isbn", let content = attrs["content"],
                    !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     return true
                 }
@@ -760,6 +771,151 @@ nonisolated struct PageClassifier {
         guard chars.prefix(9).allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
         let last = chars[9]
         return (last.isASCII && last.isNumber) || last == "x" || last == "X"
+    }
+
+    // MARK: - Book (deterministic rules only — extraction lives in BookReader)
+
+    nonisolated static func isBookType(_ type: String) -> Bool {
+        type.caseInsensitiveCompare("Book") == .orderedSame
+            || type.caseInsensitiveCompare("Audiobook") == .orderedSame
+    }
+
+    /// og:type `book` / `books.book` (Goodreads, publishers).
+    nonisolated static func isBookOGType(_ ogType: String?) -> Bool {
+        guard let t = ogType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else { return false }
+        return t == "book" || t == "books.book"
+    }
+
+    /// Whether the page is one book. Runs after the resource rule and before product (kind
+    /// order: gone → post → resource → book → product → tool → course → article → existing).
+    /// Book when ANY of: a Book JSON-LD node (anywhere, @graph included — but not when the
+    /// page lists several different books); og:type `book` / `books.book`; a `book:isbn` /
+    /// `books:isbn` meta; an Amazon product URL whose ASIN is a checksum-valid ISBN-10
+    /// (`amazonBookISBN10`); a known single-book page (`isKnownBookPageURL`: Goodreads,
+    /// Open Library, Google Books, StoryGraph, Bookshop.org). Reading lists (Goodreads
+    /// `/list/`, `/shelf/`, Amazon lists, "best books" posts) match none of these, and a
+    /// `books`-labelled list page is already a resource. Collection labels never decide it:
+    /// a wishlisted Amazon ISBN page is still a book. A bare image file is never a book.
+    nonisolated static func isBook(url: URL, ogType: String?, html: String) -> Bool {
+        isBook(url: url, ogType: ogType, nodes: jsonLDTypedNodes(from: html), html: html)
+    }
+
+    nonisolated private static func isBook(url: URL, ogType: String?, nodes: [TypedNode], html: String) -> Bool {
+        guard !isBareImageURL(url) else { return false }
+
+        if hasSingleBookNode(nodes) { return true }
+
+        if isBookOGType(ogType) || hasBookISBNMeta(html: html) { return true }
+        if amazonBookISBN10(from: url) != nil { return true }
+        return isKnownBookPageURL(url)
+    }
+
+    /// Book JSON-LD node(s) naming one book. Several differently named Book nodes are a list
+    /// of books ("best books of 2025"), not one book.
+    nonisolated private static func hasSingleBookNode(_ nodes: [TypedNode]) -> Bool {
+        let names = nodes
+            .filter { nodeTypes($0.dict).contains(where: isBookType) }
+            .map { (($0.dict["name"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        return !names.isEmpty && Set(names.filter { !$0.isEmpty }).count <= 1
+    }
+
+    /// Whether the page has a Book JSON-LD node (anywhere, @graph included).
+    nonisolated static func hasBookNode(html: String) -> Bool {
+        jsonLDTypedNodes(from: html).contains { nodeTypes($0.dict).contains(where: isBookType) }
+    }
+
+    /// A non-empty `book:isbn` / `books:isbn` meta tag.
+    nonisolated static func hasBookISBNMeta(html: String) -> Bool {
+        guard !html.isEmpty else { return false }
+        return CaptureService.metaTagAttributes(in: html).contains { attrs in
+            let key = (attrs["property"] ?? attrs["name"] ?? "").lowercased()
+            guard key == "book:isbn" || key == "books:isbn" else { return false }
+            return !(attrs["content"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    /// The ASIN of an Amazon product URL (`amazon.<tld>` / `amzn.*`) after `/dp/`,
+    /// `/gp/product/`, `/gp/aw/d/` or `/o/ASIN/` when it is a checksum-valid ISBN-10
+    /// (upper-cased X); nil for a `B0…` ASIN, an invalid checksum or any other page.
+    nonisolated static func amazonBookISBN10(from url: URL) -> String? {
+        guard let host = bareHost(url), hostIsBrand(host, brand: "amazon") || hostIsBrand(host, brand: "amzn") else {
+            return nil
+        }
+        let parts = url.path.split(separator: "/").map(String.init)
+        let lower = parts.map { $0.lowercased() }
+        var candidates: [String] = []
+        for (i, part) in lower.enumerated() {
+            if part == "dp", i + 1 < parts.count { candidates.append(parts[i + 1]) }
+            if part == "gp", i + 2 < parts.count, lower[i + 1] == "product" { candidates.append(parts[i + 2]) }
+            if part == "gp", i + 3 < parts.count, lower[i + 1] == "aw", lower[i + 2] == "d" { candidates.append(parts[i + 3]) }
+            if part == "o", i + 2 < parts.count, lower[i + 1] == "asin" { candidates.append(parts[i + 2]) }
+        }
+        for candidate in candidates where isValidISBN10(candidate) {
+            return candidate.uppercased()
+        }
+        return nil
+    }
+
+    /// Nine digits then a digit or X, with a valid mod-11 checksum (`0262033844`).
+    nonisolated static func isValidISBN10(_ value: String) -> Bool {
+        guard isISBN10(value) else { return false }
+        var sum = 0
+        for (index, ch) in value.uppercased().enumerated() {
+            let digit = ch == "X" ? 10 : (ch.wholeNumberValue ?? 0)
+            sum += digit * (10 - index)
+        }
+        return sum % 11 == 0
+    }
+
+    /// Thirteen digits starting 978 / 979 with a valid mod-10 checksum (`9780262033848`).
+    nonisolated static func isValidISBN13(_ value: String) -> Bool {
+        let chars = Array(value)
+        guard chars.count == 13, chars.allSatisfy({ $0.isASCII && $0.isNumber }),
+              value.hasPrefix("978") || value.hasPrefix("979") else { return false }
+        var sum = 0
+        for (index, ch) in chars.enumerated() {
+            sum += (ch.wholeNumberValue ?? 0) * (index % 2 == 0 ? 1 : 3)
+        }
+        return sum % 10 == 0
+    }
+
+    /// A known single-book page: Goodreads `/book/show/<id>`; Open Library `/works/OL…W` or
+    /// `/books/OL…M`; Google Books (`books.google.<tld>`) with an `id=` query or a
+    /// `/books/edition/` path; StoryGraph `/books/<uuid>`; Bookshop.org `/p/books/<slug>`.
+    /// Publisher pages count only through JSON-LD / og (no host list).
+    nonisolated static func isKnownBookPageURL(_ url: URL) -> Bool {
+        guard let host = bareHost(url) else { return false }
+        func matches(_ root: String) -> Bool { host == root || host.hasSuffix("." + root) }
+        let parts = url.path.lowercased().split(separator: "/").map(String.init)
+
+        if matches("goodreads.com") {
+            return parts.count >= 3 && parts[0] == "book" && parts[1] == "show" && !parts[2].isEmpty
+        }
+        if matches("openlibrary.org") {
+            guard parts.count >= 2 else { return false }
+            let id = parts[1]
+            func isOLID(_ suffix: Character) -> Bool {
+                id.count > 3 && id.hasPrefix("ol") && id.last == suffix
+                    && id.dropFirst(2).dropLast().allSatisfy { $0.isASCII && $0.isNumber }
+            }
+            return (parts[0] == "works" && isOLID("w")) || (parts[0] == "books" && isOLID("m"))
+        }
+        if host.hasPrefix("books.google."), hostIsBrand(host, brand: "google") {
+            let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "id" })?.value ?? ""
+            if !id.isEmpty { return true }
+            if let i = parts.firstIndex(of: "books"), i + 2 < parts.count, parts[i + 1] == "edition" { return true }
+            return false
+        }
+        if matches("thestorygraph.com") {
+            guard parts.count >= 2, parts[0] == "books" else { return false }
+            let id = parts[1]
+            return id.count >= 8 && id.allSatisfy { $0 == "-" || $0.isHexDigit }
+        }
+        if matches("bookshop.org") {
+            return parts.count >= 3 && parts[0] == "p" && parts[1] == "books" && !parts[2].isEmpty
+        }
+        return false
     }
 
     // MARK: - Tool (deterministic rules only — extraction lives in ToolReader)
@@ -947,7 +1103,7 @@ nonisolated struct PageClassifier {
     }
 
     /// Whether the page is a course. Runs after the tool rule and before the article rule
-    /// (kind order: gone → post → resource → (book) → product → tool → course → article →
+    /// (kind order: gone → post → resource → book → product → tool → course → article →
     /// existing). Course when ANY of: a Course JSON-LD node (anywhere, @graph included); an
     /// EducationEvent node on a course-ish page (course host, course path or a course word in
     /// the title); a known course host (`isCourseHostURL`); a `course(s)` / `program(s)` /
@@ -1117,7 +1273,7 @@ nonisolated struct PageClassifier {
     ]
 
     /// Whether the page is an article. Runs after the tool rule (kind order: gone → post →
-    /// resource → (book) → product → tool → course → article → existing). Article when ANY of:
+    /// resource → book → product → tool → course → article → existing). Article when ANY of:
     /// an Article / NewsArticle / BlogPosting / TechArticle / Report / ScholarlyArticle JSON-LD
     /// node; an `article:published_time` meta; a dated path (`/YYYY/MM/…`, `/YYYY/Mon/…`,
     /// `/YYYY/MM/DD/…`); a `blog` / `article(s)` / `post(s)` / `news` / `essays` / `writing`

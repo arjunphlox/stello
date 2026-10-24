@@ -202,8 +202,8 @@ struct ResourceClassificationTests {
 
     @Test("books label on a single book is left to the existing rules")
     func booksSingleBook() {
-        // Amazon ISBN-10 page: product, as before.
-        #expect(classify("https://www.amazon.com/dp/0760383383", labels: ["books"]).kind == .product)
+        // Amazon ISBN-10 page (checksum-valid): a book since the Book kind (was product).
+        #expect(classify("https://www.amazon.com/dp/0760383383", labels: ["books"]).kind == .book)
         #expect(classify("https://www.amazon.in/Some-Title/dp/0760383383", labels: ["books"]).kind != .resource)
         // Goodreads / Open Library / StoryGraph / Book JSON-LD / book:isbn: not a reading list.
         #expect(classify("https://www.goodreads.com/book/show/40121378-atomic-habits", labels: ["books"]).kind != .resource)
