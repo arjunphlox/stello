@@ -802,7 +802,11 @@ nonisolated struct PageClassifier {
         if isArticle { return false }
 
         if nodes.contains(where: { nodeTypes($0.dict).contains(where: isSoftwareType) }) { return true }
-        if hasToolLabel(collectionLabels), !isBareImageURL(url) { return true }
+        // A tool label never wins over an article-shaped URL (dated path, /blog/<slug>, Medium,
+        // Substack, Codrops): the gen-ai label was wrong 3 of 4 times on such pages.
+        let articleURL = urlPathDate(url) != nil || hasArticlePathSlug(url)
+            || isMediumPost(url) || isSubstackPost(url) || isCodropsArticle(url)
+        if hasToolLabel(collectionLabels), !isBareImageURL(url), !articleURL { return true }
         return false
     }
 

@@ -224,6 +224,10 @@ struct ArticleClassificationTests {
         let blogPosting = jsonLD(#"{"@context":"https://schema.org","@type":"BlogPosting","headline":"LLM tools"}"#)
         #expect(classify("https://example.com/blog/llm-tools", html: blogPosting, labels: ["gen-ai"]).kind == .article)
         #expect(classify("https://example.com/notes/llm-tools", html: blogPosting, labels: ["digital-tools"]).kind == .article)
+        // URL signals alone (no markup) also beat a tool label.
+        #expect(classify("https://example.com/blog/llm-tools", labels: ["gen-ai"]).kind == .article)
+        #expect(classify("https://example.com/2025/03/llm-tools", labels: ["digital-tools"]).kind == .article)
+        #expect(classify("https://raycast.com/", labels: ["digital-tools"]).kind == .tool)
     }
 
     @Test("A tweet stays a post, even with article signals or the news label")
