@@ -62,12 +62,17 @@ nonisolated struct PageClassifier {
         // Parse JSON-LD once and pass the nodes down.
         let nodes = jsonLDTypedNodes(from: html)
 
-        // Shared kind order (product-spec): gone (status, set by the caller) → post → product →
-        // tool → the existing individual/foundry rules. A single post on a social host is a
-        // Post, unless it carries the wishlist label — then `productSource` claims it as a
-        // product (a post never reaches the product page rules either way).
+        // Shared kind order (product-spec): gone (status, set by the caller) → post → resource →
+        // (book, later) → product → tool → the existing individual/foundry rules. A single post
+        // on a social host is a Post, unless it carries the wishlist label — then
+        // `productSource` claims it as a product (a post never reaches the product page rules
+        // either way). Resource runs ahead of product (Framer Marketplace pages carry a
+        // Product JSON-LD node with offers) and ahead of tool (labels).
         if let platform = postPlatform(url: baseURL, collectionLabels: collectionLabels) {
             return PageClassificationResult(kind: .post, individualMeta: nil, postPlatform: platform)
+        }
+        if isResource(url: baseURL, ogType: ogType, nodes: nodes, html: html, collectionLabels: collectionLabels) {
+            return PageClassificationResult(kind: .resource, individualMeta: nil)
         }
         if let source = productSource(
             url: baseURL, ogType: ogType, nodes: nodes, html: html, collectionLabels: collectionLabels
@@ -568,6 +573,179 @@ nonisolated struct PageClassifier {
         if wishlisted && isBareImageURL(url) { return "image" }
 
         return nil
+    }
+
+    // MARK: - Resource (deterministic rules only — extraction lives in ResourceReader)
+
+    /// Collection label that makes a page a resource (unless it is an article or a bare image).
+    nonisolated static let digitalResourcesLabel = "digital-resources"
+    /// Collection label that makes a page a reading list (a resource) unless it is a single book.
+    nonisolated static let booksLabel = "books"
+
+    /// "Digital Resources" / "digital_resources" → "digital-resources".
+    nonisolated static func normalizedLabelKey(_ label: String) -> String {
+        label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .replacingOccurrences(of: "_", with: "-")
+    }
+
+    nonisolated static func hasLabel(_ key: String, in labels: [String]) -> Bool {
+        labels.contains { normalizedLabelKey($0) == key }
+    }
+
+    /// Whether the page is a resource. Runs after the post rule and before product and tool
+    /// (kind order: gone → post → resource → (book) → product → tool). Resource when ANY of:
+    /// a Figma Community plugin / widget / file; a Framer Marketplace item page; a CodePen pen;
+    /// the `digital-resources` label on a page that is not an article (Article / NewsArticle /
+    /// BlogPosting JSON-LD or og:type article) and not a bare image; the `books` label on a
+    /// page that is not a single book (a reading list). The two label rules never claim a
+    /// wishlisted item (that's a product), and the `books` rule never claims an Amazon /
+    /// Kickstarter / Shopify product page (one item, not a list).
+    nonisolated static func isResource(url: URL, ogType: String?, html: String, collectionLabels: [String]) -> Bool {
+        isResource(
+            url: url, ogType: ogType, nodes: jsonLDTypedNodes(from: html), html: html,
+            collectionLabels: collectionLabels
+        )
+    }
+
+    nonisolated private static func isResource(
+        url: URL,
+        ogType: String?,
+        nodes: [TypedNode],
+        html: String,
+        collectionLabels: [String]
+    ) -> Bool {
+        if figmaCommunityResourceType(from: url) != nil
+            || framerMarketplaceSegment(from: url) != nil
+            || isCodePenPenURL(url) {
+            return true
+        }
+
+        guard !hasWishlistLabel(collectionLabels), !isBareImageURL(url) else { return false }
+
+        if hasLabel(digitalResourcesLabel, in: collectionLabels) {
+            let type = ogType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let isArticle = type == "article" || nodes.contains {
+                nodeTypes($0.dict).contains(where: isArticleType)
+            }
+            if !isArticle { return true }
+        }
+
+        if hasLabel(booksLabel, in: collectionLabels) {
+            let isProductPage = isAmazonProductURL(url) || isKickstarterProjectURL(url) || isShopifyProductURL(url)
+            if !isProductPage && !isSingleBook(url: url, nodes: nodes, html: html) { return true }
+        }
+        return false
+    }
+
+    /// Path segments under `figma.com/community/` (or `figma.com/@user/`) that name one resource.
+    nonisolated private static let figmaResourceSegments: Set<String> = ["plugin", "widget", "file"]
+
+    /// `plugin` | `widget` | `file` for a Figma Community resource page —
+    /// `figma.com/community/<type>/<id>[/<slug>]`, or a `figma.com/@user/<type>/<id>…` path;
+    /// nil for the Community home, search, categories, profiles and every non-community page.
+    nonisolated static func figmaCommunityResourceType(from url: URL) -> String? {
+        guard let host = bareHost(url), host == "figma.com" else { return nil }
+        let parts = url.path.lowercased().split(separator: "/").map(String.init)
+        guard parts.count >= 3 else { return nil }
+        guard parts[0] == "community" || (parts[0].hasPrefix("@") && parts[0].count > 1) else { return nil }
+        let type = parts[1]
+        guard figmaResourceSegments.contains(type), !parts[2].isEmpty else { return nil }
+        return type
+    }
+
+    /// Second segments under `framer.com/marketplace/` that are site pages, not item types.
+    nonisolated private static let framerReservedSegments: Set<String> = [
+        "creators", "creator", "profile", "search", "category", "categories", "collections",
+        "sell", "submit", "become-a-creator", "blog", "about", "faq", "help",
+    ]
+
+    /// Third segments that are listing / filter pages under a type, not an item slug.
+    nonisolated private static let framerListingSlugs: Set<String> = [
+        "category", "categories", "search", "page", "tag", "tags", "free", "paid", "popular",
+        "new", "newest", "featured", "trending", "best", "all",
+    ]
+
+    /// The marketplace type segment (`templates`, `plugins`, `components`, `vectors`, …) for a
+    /// `framer.com/marketplace/<type>/<slug>` item page; nil for the marketplace home, a type
+    /// listing (`/marketplace/templates/`), a category page or a creator profile.
+    nonisolated static func framerMarketplaceSegment(from url: URL) -> String? {
+        guard let host = bareHost(url), host == "framer.com" else { return nil }
+        let parts = url.path.lowercased().split(separator: "/").map(String.init)
+        guard parts.count >= 3, parts[0] == "marketplace" else { return nil }
+        let type = parts[1]
+        let slug = parts[2]
+        guard !framerReservedSegments.contains(type), !framerListingSlugs.contains(slug), !slug.isEmpty else {
+            return nil
+        }
+        return type
+    }
+
+    /// A single pen: `codepen.io/<user>/pen/<id>` (also the `/full/` and `/details/` views).
+    nonisolated static func isCodePenPenURL(_ url: URL) -> Bool {
+        guard let host = bareHost(url), host == "codepen.io" else { return false }
+        let parts = url.path.split(separator: "/").map { $0.lowercased() }
+        guard parts.count >= 3 else { return false }
+        return ["pen", "full", "details"].contains(parts[1]) && !parts[2].isEmpty
+    }
+
+    // MARK: - Book (single-book detector — the Book kind will reuse it)
+
+    /// Whether the page is ONE book (not a reading list): an Amazon `/dp/<isbn10>` (or
+    /// `/gp/product/<isbn10>`) URL, a `book:isbn` meta tag, a top-level / @graph Book JSON-LD
+    /// node, a StoryGraph `/books/<id>`, Goodreads `/book/show/<id>` or Open Library
+    /// `/books/<id>` / `/works/<id>` page.
+    nonisolated static func isSingleBook(url: URL, html: String) -> Bool {
+        isSingleBook(url: url, nodes: jsonLDTypedNodes(from: html), html: html)
+    }
+
+    nonisolated private static func isSingleBook(url: URL, nodes: [TypedNode], html: String) -> Bool {
+        if let host = bareHost(url) {
+            let parts = url.path.lowercased().split(separator: "/").map(String.init)
+            func segment(after marker: String) -> String? {
+                guard let i = parts.firstIndex(of: marker), i + 1 < parts.count else { return nil }
+                return parts[i + 1]
+            }
+            if hostIsBrand(host, brand: "amazon") {
+                let id = segment(after: "dp") ?? (parts.firstIndex(of: "gp").flatMap { i in
+                    i + 2 < parts.count && parts[i + 1] == "product" ? parts[i + 2] : nil
+                })
+                if let id, isISBN10(id) { return true }
+            }
+            if host == "thestorygraph.com" || host.hasSuffix(".thestorygraph.com") {
+                if segment(after: "books") != nil { return true }
+            }
+            if host == "goodreads.com" || host.hasSuffix(".goodreads.com") {
+                if parts.count >= 3, parts[0] == "book", parts[1] == "show" { return true }
+            }
+            if host == "openlibrary.org" {
+                if parts.count >= 2, parts[0] == "books" || parts[0] == "works" { return true }
+            }
+        }
+        if nodes.contains(where: { node in
+            nodeTypes(node.dict).contains { $0.caseInsensitiveCompare("Book") == .orderedSame }
+        }) {
+            return true
+        }
+        if !html.isEmpty {
+            for attrs in CaptureService.metaTagAttributes(in: html) {
+                let key = (attrs["property"] ?? attrs["name"] ?? "").lowercased()
+                if key == "book:isbn", let content = attrs["content"],
+                   !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Ten characters: nine digits then a digit or `X` (case-insensitive).
+    nonisolated static func isISBN10(_ id: String) -> Bool {
+        let chars = Array(id)
+        guard chars.count == 10 else { return false }
+        guard chars.prefix(9).allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
+        let last = chars[9]
+        return (last.isASCII && last.isNumber) || last == "x" || last == "X"
     }
 
     // MARK: - Tool (deterministic rules only — extraction lives in ToolReader)

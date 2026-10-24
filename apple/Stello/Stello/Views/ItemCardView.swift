@@ -180,7 +180,9 @@ struct ItemCardView: View {
         } else if isVideoCard {
             videoCard
         } else if let toolMeta = item.toolMeta() {
-            toolTile(toolMeta)
+            glyphTile(glyph: Self.toolGlyph(toolMeta.subtype), name: toolMeta.name ?? item.title)
+        } else if let resourceMeta = item.resourceMeta() {
+            glyphTile(glyph: Self.resourceGlyph(resourceMeta.subtype), name: resourceMeta.name ?? item.title)
         } else if hasText {
             textCard
         } else {
@@ -252,16 +254,16 @@ struct ItemCardView: View {
         }
     }
 
-    /// Imageless tool: an accent tile with a type glyph and the tool's name. (No favicon is
-    /// stored per item yet, so the glyph stands in for the site icon.)
-    private func toolTile(_ meta: ToolMeta) -> some View {
+    /// Imageless tool / resource: an accent tile with a type glyph and the item's name. (No
+    /// favicon is stored per item yet, so the glyph stands in for the site icon.)
+    private func glyphTile(glyph: String, name: String) -> some View {
         hoverDim(
             ZStack {
                 theme.accentColor
                 VStack(spacing: 8) {
-                    Image(systemName: Self.toolGlyph(meta.subtype))
+                    Image(systemName: glyph)
                         .font(.system(size: 26, weight: .regular))
-                    Text(meta.name ?? item.title)
+                    Text(name)
                         .font(.karst(.subheadline, weight: .semibold))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -297,6 +299,22 @@ struct ItemCardView: View {
         case "AI model": return "cpu"
         case "app": return "app"
         default: return "globe"
+        }
+    }
+
+    private static func resourceGlyph(_ subtype: String?) -> String {
+        switch subtype {
+        case "plugin": return "puzzlepiece.extension"
+        case "widget": return "square.grid.2x2"
+        case "file": return "doc"
+        case "template": return "rectangle.3.group"
+        case "component": return "square.on.square"
+        case "pen": return "chevron.left.forwardslash.chevron.right"
+        case "mockup": return "photo"
+        case "icon set": return "star.square.on.square"
+        case "reading list": return "books.vertical"
+        case "library": return "shippingbox"
+        default: return "square.stack.3d.up"
         }
     }
 

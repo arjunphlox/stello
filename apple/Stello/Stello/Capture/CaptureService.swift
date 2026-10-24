@@ -156,6 +156,13 @@ enum CaptureService {
             productResult = await extractProduct(sourceURL: url, page: page, source: source)
         }
 
+        // Resource (after post, ahead of product and tool): CreativeWork / Product JSON-LD and
+        // og:title — no extra network.
+        var resourceResult: ResourceExtraction? = nil
+        if kind == .resource {
+            resourceResult = extractResource(sourceURL: url, page: page)
+        }
+
         // Tool (after post and product): SoftwareApplication JSON-LD, og tags, and — for a
         // GitHub repo — the public REST API (skipped silently when rate-limited).
         var toolResult: ToolExtraction? = nil
@@ -181,6 +188,9 @@ enum CaptureService {
         } else if let productTitle = productResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !productTitle.isEmpty {
             title = productTitle
+        } else if let resourceTitle = resourceResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !resourceTitle.isEmpty {
+            title = resourceTitle
         } else if let toolTitle = toolResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !toolTitle.isEmpty {
             title = toolTitle
@@ -243,12 +253,14 @@ enum CaptureService {
         let slug = makeSlug(from: title, context: context)
         let tagSpecs = RuleTagger.generateTags(title: title, description: summary, domain: dom)
 
-        // Products show the domain they landed on after redirects; tools show their canonical
-        // host when a redirect changed it (`sourceURL` untouched).
+        // Products show the domain they landed on after redirects; tools and resources show
+        // their canonical host when a redirect changed it (`sourceURL` untouched).
         let displayDomain: String?
         if productResult != nil {
             displayDomain = page?.finalURL.flatMap(domain(from:)) ?? dom
         } else if let canonical = toolResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
+            displayDomain = domain(from: canonical) ?? dom
+        } else if let canonical = resourceResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
             displayDomain = domain(from: canonical) ?? dom
         } else {
             displayDomain = dom
@@ -275,6 +287,9 @@ enum CaptureService {
         }
         if let toolResult {
             item.setMetadata(toolResult.meta)
+        }
+        if let resourceResult {
+            item.setMetadata(resourceResult.meta)
         }
         context.insert(item)
 
@@ -571,6 +586,25 @@ enum CaptureService {
             ogType: page?.og.ogType,
             syndication: syndication,
             oembed: oembed
+        )
+    }
+
+    // MARK: - Resource Extraction
+
+    /// Resource readers for a page already classified as a resource. No extra network:
+    /// everything comes from the capture-time page fetch. `collectionLabels` (imports /
+    /// force-Enrich only) decide the `reading list` subtype.
+    static func extractResource(
+        sourceURL: URL,
+        page: PageFetchResult?,
+        collectionLabels: [String] = []
+    ) -> ResourceExtraction {
+        ResourceReader.build(
+            sourceURL: sourceURL,
+            finalURL: page?.finalURL,
+            html: page?.html ?? "",
+            ogTitle: page?.og.title,
+            collectionLabels: collectionLabels
         )
     }
 
