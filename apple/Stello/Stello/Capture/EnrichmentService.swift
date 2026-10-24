@@ -104,14 +104,22 @@ enum EnrichmentService {
                 let postPlatform = await refreshPostIfClassified(
                     item: item, context: context, url: url, page: page
                 )
-                var productSource: String? = nil
+                // Resource readers next (kind order: post → resource → product → tool) — ahead
+                // of product, since Framer Marketplace pages carry Product JSON-LD with offers.
+                var isResource = false
                 if postPlatform == nil {
+                    isResource = await refreshResourceIfClassified(
+                        item: item, context: context, url: url, page: page
+                    )
+                }
+                var productSource: String? = nil
+                if postPlatform == nil, !isResource {
                     productSource = await refreshProductIfClassified(
                         item: item, context: context, url: url, page: page
                     )
                 }
-                // Tool readers last (kind order: post → product → tool).
-                if postPlatform == nil, productSource == nil {
+                // Tool readers last (kind order: post → resource → product → tool).
+                if postPlatform == nil, !isResource, productSource == nil {
                     await refreshToolIfClassified(item: item, context: context, url: url, page: page)
                 }
                 await upgradeCoverIfNeeded(
@@ -676,6 +684,49 @@ enum EnrichmentService {
         let meta = ToolReader.merge(fresh: extraction.meta, previous: item.toolMeta())
 
         item.kind = ItemKind.tool.rawValue
+        item.setMetadata(meta)
+        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
+           let host = CaptureService.domain(from: canonical) {
+            item.domain = host
+        }
+        item.updatedAt = .now
+        return true
+    }
+
+    // MARK: - Resource enrichment
+
+    /// Force-Enrich hook: when a `link` or `resource` item's refetched page classifies as a
+    /// resource (after post — the caller runs this before product and tool), (re)runs the
+    /// resource readers and stores the dossier. A refetch that reads less never erases what
+    /// capture read. Returns whether the item is a resource.
+    ///
+    /// Two earlier-build migrations are also allowed: a `product` item whose URL is a Framer
+    /// Marketplace item (those pages carry Product JSON-LD with offers, so builds before the
+    /// Resource kind filed them as products), and a `tool` item whose URL is a Figma Community
+    /// plugin / widget / file (filed as a tool by label or SoftwareApplication JSON-LD). Every
+    /// other curated kind (typeface, website, post, …) is never flipped. No on-device guess.
+    @discardableResult
+    static func refreshResourceIfClassified(
+        item: Item,
+        context: ModelContext,
+        url: URL,
+        page: PageFetchResult
+    ) async -> Bool {
+        let wasResource = item.kind == ItemKind.resource.rawValue
+        let isFlippable = item.kind == ItemKind.link.rawValue
+            || (item.kind == ItemKind.product.rawValue && PageClassifier.framerMarketplaceSegment(from: url) != nil)
+            || (item.kind == ItemKind.tool.rawValue && PageClassifier.figmaCommunityResourceType(from: url) != nil)
+        guard wasResource || isFlippable else { return false }
+
+        let labels = collectionLabels(for: item)
+        guard wasResource || PageClassifier.isResource(
+            url: url, ogType: page.og.ogType, html: page.html, collectionLabels: labels
+        ) else { return false }
+
+        let extraction = CaptureService.extractResource(sourceURL: url, page: page, collectionLabels: labels)
+        let meta = ResourceReader.merge(fresh: extraction.meta, previous: item.resourceMeta())
+
+        item.kind = ItemKind.resource.rawValue
         item.setMetadata(meta)
         if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
            let host = CaptureService.domain(from: canonical) {

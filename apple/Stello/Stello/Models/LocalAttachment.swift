@@ -28,12 +28,17 @@ final class LocalAttachment {
 }
 
 extension Item {
-    /// Domain pill / panel meta label — dropped items with no URL read "local". A tool whose
-    /// URL redirected to another host shows that canonical host (`sourceURL` is untouched).
+    /// Domain pill / panel meta label — dropped items with no URL read "local". A tool or
+    /// resource whose URL redirected shows the canonical host (`sourceURL` is untouched).
     var displayLink: String {
         guard sourceURL != nil else { return "local" }
-        if kind == ItemKind.tool.rawValue,
-           let canonical = toolMeta()?.canonicalURL.flatMap({ URL(string: $0) }),
+        let canonicalString: String?
+        switch kind {
+        case ItemKind.tool.rawValue: canonicalString = toolMeta()?.canonicalURL
+        case ItemKind.resource.rawValue: canonicalString = resourceMeta()?.canonicalURL
+        default: canonicalString = nil
+        }
+        if let canonical = canonicalString.flatMap({ URL(string: $0) }),
            var host = canonical.host?.lowercased(), !host.isEmpty {
             if host.hasPrefix("www.") { host = String(host.dropFirst(4)) }
             return host

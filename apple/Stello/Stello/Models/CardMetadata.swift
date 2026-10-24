@@ -7,6 +7,9 @@ struct EntityRef: Codable, Hashable, Sendable {
     var name: String
     var slug: String?
     var kind: String
+    /// External page for the entity (e.g. a resource maker's profile). Optional and last, so
+    /// older JSON decodes and every existing `EntityRef(name:slug:kind:)` call still compiles.
+    var url: String? = nil
 }
 
 struct FAQItem: Codable, Hashable, Sendable {
@@ -414,6 +417,72 @@ nonisolated struct ToolMeta: Codable, Sendable {
     }
 }
 
+// MARK: - Resource
+
+nonisolated struct ResourceMeta: Codable, Sendable {
+    /// `plugin` | `widget` | `file` | `template` | `component` | `pen` | `mockup` | `icon set` |
+    /// `library` | `reading list` (from the URL path, the `books` label, conservative title
+    /// words, or a site home page); nil when nothing says.
+    var subtype: String?
+    /// `Figma` | `FigJam` | `Framer` | `CodePen` — from the host.
+    var worksWith: [String] = []
+    /// JSON-LD `name`, else og:title with the platform suffix (" | Figma", " — … for Framer")
+    /// stripped.
+    var name: String?
+    /// JSON-LD `creator` (Figma) or `brand` (Framer); `maker.url` is the maker's page.
+    var maker: EntityRef?
+    /// `free` | `paid`.
+    var pricing: String?
+    /// Lowest non-zero price, decimal-as-string ("49"); currency is ISO 4217.
+    var price: String?
+    var currency: String?
+    /// Figma `interactionStatistic` UseAction / DownloadAction count.
+    var users: Int?
+    /// Figma `interactionStatistic` LikeAction count.
+    var likes: Int?
+    /// Final URL after redirects — set whenever it differs from the saved URL (Figma redirects
+    /// to a longer slug on the same host).
+    var canonicalURL: String?
+
+    /// One short line for the grid card: "Figma plugin · Free", "Framer template · $49",
+    /// "Figma plugin · 12.4k users" (no price known), "Reading list"; nil when there is no data.
+    var cardKindLine: String? {
+        let parts = [typeLine, priceLine ?? usersLine].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "Figma plugin", "Framer template", "CodePen pen", "Reading list", "Figma", "Template".
+    var typeLine: String? {
+        let sub = ResourceMeta.nonBlank(subtype)
+        if sub == "reading list" { return "Reading list" }
+        let host = ResourceMeta.nonBlank(worksWith.first)
+        switch (host, sub) {
+        case let (host?, sub?): return "\(host) \(sub)"
+        case let (host?, nil): return host
+        case let (nil, sub?): return sub.prefix(1).uppercased() + String(sub.dropFirst())
+        default: return nil
+        }
+    }
+
+    /// "Free", "$49", or "Paid" (paid with no price read); nil when pricing is unknown.
+    var priceLine: String? {
+        if pricing == "free" { return "Free" }
+        if let formatted = ProductMeta.formattedPrice(price, currency: currency) { return formatted }
+        return pricing == "paid" ? "Paid" : nil
+    }
+
+    /// "12.4k users"; nil when there is no positive count.
+    var usersLine: String? {
+        guard let users, users > 0 else { return nil }
+        return users == 1 ? "1 user" : "\(ToolMeta.compactCount(users)) users"
+    }
+
+    static func nonBlank(_ value: String?) -> String? {
+        guard let t = value?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+        return t
+    }
+}
+
 // MARK: - Item metadata helpers
 
 extension Item {
@@ -478,10 +547,15 @@ extension Item {
         guard kind == ItemKind.tool.rawValue else { return nil }
         return decodeMetadata(ToolMeta.self)
     }
+
+    func resourceMeta() -> ResourceMeta? {
+        guard kind == ItemKind.resource.rawValue else { return nil }
+        return decodeMetadata(ResourceMeta.self)
+    }
 }
 
 enum ItemKind: String, Sendable {
-    case typeface, website, individual, studio, foundry, place, music, product, post, tool, link
+    case typeface, website, individual, studio, foundry, place, music, product, post, tool, resource, link
 }
 
 enum ItemImageRole: String, Sendable {

@@ -100,6 +100,8 @@ struct CardSubcards: View {
                     if let meta = item.postMeta() { postCards(meta) }
                 case .tool:
                     if let meta = item.toolMeta() { toolCards(meta) }
+                case .resource:
+                    if let meta = item.resourceMeta() { resourceCards(meta) }
                 case .link:
                     EmptyView()
                 }
@@ -930,6 +932,36 @@ struct CardSubcards: View {
         return meta.canonicalURL ?? meta.homepageURL ?? item.sourceURL
     }
 
+    // MARK: - Resource
+
+    @ViewBuilder
+    private func resourceCards(_ meta: ResourceMeta) -> some View {
+        factsCard(title: "Facts", rows: [
+            ("Type", Self.resourceSubtypeLabel(meta.subtype)),
+            ("Works with", meta.worksWith.isEmpty ? nil : meta.worksWith.joined(separator: ", ")),
+            ("Maker", meta.maker?.name),
+            ("Price", meta.priceLine),
+            ("Users", meta.users.map { ToolMeta.compactCount($0) }),
+            ("Likes", meta.likes.map { ToolMeta.compactCount($0) }),
+        ])
+
+        factsCard(title: "Links", rows: [
+            (resourceOpenLabel(meta), meta.canonicalURL ?? item.sourceURL),
+            ("Maker's page", meta.maker?.url),
+        ])
+    }
+
+    private static func resourceSubtypeLabel(_ subtype: String?) -> String? {
+        guard let subtype = subtype?.nilIfEmpty else { return nil }
+        return subtype.prefix(1).uppercased() + String(subtype.dropFirst())
+    }
+
+    /// "Open in Figma" / "Open in Framer" / "Open in CodePen", else "Open".
+    private func resourceOpenLabel(_ meta: ResourceMeta) -> String {
+        guard let host = meta.worksWith.first?.nilIfEmpty else { return "Open" }
+        return "Open in \(host)"
+    }
+
     private func copyToPasteboard(_ text: String) {
         #if os(macOS)
         NSPasteboard.general.clearContents()
@@ -1391,6 +1423,7 @@ extension Item {
         case .product: return productMeta() != nil
         case .post: return postMeta() != nil
         case .tool: return toolMeta() != nil
+        case .resource: return resourceMeta() != nil
         case .link: return false
         }
     }
@@ -1401,6 +1434,7 @@ extension Item {
         case .product: return productMeta()?.cardKindLine
         case .post: return postMeta()?.cardKindLine
         case .tool: return toolMeta()?.cardKindLine
+        case .resource: return resourceMeta()?.cardKindLine
         default: return nil
         }
     }
