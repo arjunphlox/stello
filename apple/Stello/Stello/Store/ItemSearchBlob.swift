@@ -70,6 +70,8 @@ enum ItemSearchBlob {
             return item.toolMeta()?.searchTerms() ?? []
         case ItemKind.resource.rawValue:
             return item.resourceMeta()?.searchTerms() ?? []
+        case ItemKind.book.rawValue:
+            return item.bookMeta()?.searchTerms() ?? []
         case ItemKind.course.rawValue:
             return item.courseMeta()?.searchTerms() ?? []
         case ItemKind.article.rawValue:
@@ -367,6 +369,20 @@ extension CourseMeta {
         ItemSearchBlob.appendStrings(topics, to: &parts)
         ItemSearchBlob.appendOptional(format, to: &parts)
         ItemSearchBlob.appendOptional(level, to: &parts)
+        return parts
+    }
+}
+
+extension BookMeta {
+    func searchTerms() -> [String] {
+        var parts: [String] = []
+        ItemSearchBlob.appendOptional(title, to: &parts)
+        ItemSearchBlob.appendOptional(subtitle, to: &parts)
+        ItemSearchBlob.appendEntityRefs(authors, to: &parts)
+        ItemSearchBlob.appendOptional(publisher, to: &parts)
+        ItemSearchBlob.appendStrings(subjects, to: &parts)
+        ItemSearchBlob.appendOptional(isbn13, to: &parts)
+        ItemSearchBlob.appendOptional(isbn10, to: &parts)
         return parts
     }
 }

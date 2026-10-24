@@ -47,4 +47,9 @@ struct RuleBasedFallbackEnricher: Enricher, Sendable {
     nonisolated func guessCourseFacts(text: String?) async throws -> CourseFacts? {
         CourseReader.ruleBasedFacts(text: text)
     }
+
+    /// Book authors need the model — nil.
+    nonisolated func guessBookFacts(text: String?) async throws -> BookFacts? {
+        nil
+    }
 }

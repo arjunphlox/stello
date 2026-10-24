@@ -610,6 +610,98 @@ nonisolated struct CourseMeta: Codable, Sendable {
     }
 }
 
+// MARK: - Book
+
+nonisolated struct BookMeta: Codable, Sendable {
+    /// JSON-LD `name`, else og:title with a store / site suffix stripped, else Open Library.
+    var title: String?
+    /// Open Library `subtitle` (or a "Title: Subtitle" JSON-LD name split by the reader).
+    var subtitle: String?
+    /// JSON-LD `author` (string / object / array), `book:author` / `books:author` meta, else
+    /// Open Library `authors[].name`, else the on-device guess (`authorsAreGuess`).
+    var authors: [EntityRef] = []
+    /// JSON-LD `publisher` (string / object), else Open Library `publishers[0].name`.
+    var publisher: String?
+    /// The year from JSON-LD `datePublished` / `book:release_date`, else Open Library
+    /// `publish_date`; may come from the on-device guess when nothing was read.
+    var publishedYear: Int?
+    /// JSON-LD `numberOfPages`, else Open Library `number_of_pages`.
+    var pages: Int?
+    /// Checksum-valid, hyphen-free ISBNs; each is derived from the other when only one is read
+    /// (an ISBN-13 only converts back when it starts with 978).
+    var isbn10: String?
+    var isbn13: String?
+    /// JSON-LD `inLanguage` as given ("en", "English").
+    var language: String?
+    /// Open Library `subjects[].name` (or JSON-LD `genre` / `about`). At most 8.
+    var subjects: [String] = []
+    /// `hardcover` | `paperback` | `ebook` | `audiobook` — JSON-LD `bookFormat`.
+    var format: String?
+    /// JSON-LD `image` / og:image, else the Open Library cover (large, then medium).
+    var coverURL: String?
+    /// Open Library book page; set whenever the lookup found the ISBN (or the saved URL is
+    /// an Open Library page).
+    var openLibraryURL: String?
+    /// The saved URL when it is a Goodreads book page.
+    var goodreadsURL: String?
+    /// The saved URL when it is an Amazon book page (or `amazon.com/dp/<isbn10>` built from
+    /// the ISBN).
+    var amazonURL: String?
+    /// Final URL after redirects — set whenever it differs from the saved URL.
+    var canonicalURL: String?
+    /// True when `authors` came from the on-device guess, not a reader.
+    var authorsAreGuess: Bool = false
+
+    /// One short line for the grid card: "Author · Year" — the first author ("+N" when there
+    /// are more: "Thomas H. Cormen +3 · 2009"); either part alone; nil when there is neither.
+    var cardKindLine: String? {
+        let parts = [firstAuthorLine, publishedYear.map(String.init)].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "Thomas H. Cormen", "Thomas H. Cormen +3"; nil without an author.
+    var firstAuthorLine: String? {
+        let names = authors.compactMap { ResourceMeta.nonBlank($0.name) }
+        guard let first = names.first else { return nil }
+        return names.count > 1 ? "\(first) +\(names.count - 1)" : first
+    }
+
+    /// "Thomas H. Cormen, Charles E. Leiserson"; nil without an author.
+    var authorsLine: String? {
+        let names = authors.compactMap { ResourceMeta.nonBlank($0.name) }
+        return names.isEmpty ? nil : names.joined(separator: ", ")
+    }
+
+    /// The ISBN-13 when known, else the ISBN-10.
+    var isbnLine: String? {
+        ResourceMeta.nonBlank(isbn13) ?? ResourceMeta.nonBlank(isbn10)
+    }
+
+    /// "1312 pages" / "1 page"; nil without a positive count.
+    var pagesLine: String? {
+        guard let pages, pages > 0 else { return nil }
+        return pages == 1 ? "1 page" : "\(pages) pages"
+    }
+
+    /// "Hardcover", "Paperback", "Ebook", "Audiobook"; nil without a format.
+    var formatLabel: String? {
+        guard let format = ResourceMeta.nonBlank(format) else { return nil }
+        return format.prefix(1).uppercased() + String(format.dropFirst())
+    }
+
+    /// A language code ("en", "en-US", "eng") as its English name ("English"); any other text
+    /// as given.
+    var languageLabel: String? {
+        guard let language = ResourceMeta.nonBlank(language) else { return nil }
+        let code = language.split(separator: "-").first.map(String.init) ?? language
+        if code.count <= 3, code.allSatisfy(\.isLetter),
+           let name = Locale(identifier: "en").localizedString(forLanguageCode: code.lowercased()) {
+            return name
+        }
+        return language
+    }
+}
+
 // MARK: - Item metadata helpers
 
 extension Item {
@@ -689,10 +781,15 @@ extension Item {
         guard kind == ItemKind.course.rawValue else { return nil }
         return decodeMetadata(CourseMeta.self)
     }
+
+    func bookMeta() -> BookMeta? {
+        guard kind == ItemKind.book.rawValue else { return nil }
+        return decodeMetadata(BookMeta.self)
+    }
 }
 
 enum ItemKind: String, Sendable {
-    case typeface, website, individual, studio, foundry, place, music, product, post, tool, resource, course, article, link
+    case typeface, website, individual, studio, foundry, place, music, product, post, tool, resource, book, course, article, link
 }
 
 enum ItemImageRole: String, Sendable {

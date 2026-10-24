@@ -163,6 +163,14 @@ enum CaptureService {
             resourceResult = extractResource(sourceURL: url, page: page)
         }
 
+        // Book (after resource, before product): ISBN, Book JSON-LD and book meta tags, then
+        // Open Library's books API for the ISBN (any failure is skipped). An author gap is
+        // guessed during enrichment.
+        var bookResult: BookExtraction? = nil
+        if kind == .book {
+            bookResult = await extractBook(sourceURL: url, page: page)
+        }
+
         // Tool (after post and product): SoftwareApplication JSON-LD, og tags, and — for a
         // GitHub repo — the public REST API (skipped silently when rate-limited).
         var toolResult: ToolExtraction? = nil
@@ -205,6 +213,9 @@ enum CaptureService {
         } else if let resourceTitle = resourceResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !resourceTitle.isEmpty {
             title = resourceTitle
+        } else if let bookTitle = bookResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !bookTitle.isEmpty {
+            title = bookTitle
         } else if let toolTitle = toolResult?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !toolTitle.isEmpty {
             title = toolTitle
@@ -266,18 +277,28 @@ enum CaptureService {
         } else if let imgURL = og.imageURL, let (data, w, h) = await downloadImage(url: imgURL) {
             itemImage = ItemImage(data: data, source: "og", isPrimary: true, width: w, height: h)
         }
+        // Books with no usable og:image: the JSON-LD cover, then Open Library's.
+        if itemImage == nil, let fallbacks = bookResult?.coverFallbackURLs, !fallbacks.isEmpty {
+            let downloads = await downloadImages(fallbacks)
+            if let (data, w, h) = downloads.compactMap({ $0 }).first {
+                itemImage = ItemImage(data: data, source: "book", isPrimary: true, width: w, height: h)
+            }
+        }
 
         let slug = makeSlug(from: title, context: context)
         let tagSpecs = RuleTagger.generateTags(title: title, description: summary, domain: dom)
 
-        // Products show the domain they landed on after redirects; tools, resources, courses and
-        // articles show their canonical host when a redirect changed it (`sourceURL` untouched).
+        // Products show the domain they landed on after redirects; tools, resources, books,
+        // courses and articles show their canonical host when a redirect changed it
+        // (`sourceURL` untouched).
         let displayDomain: String?
         if productResult != nil {
             displayDomain = page?.finalURL.flatMap(domain(from:)) ?? dom
         } else if let canonical = toolResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
             displayDomain = domain(from: canonical) ?? dom
         } else if let canonical = resourceResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
+            displayDomain = domain(from: canonical) ?? dom
+        } else if let canonical = bookResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
             displayDomain = domain(from: canonical) ?? dom
         } else if let canonical = courseResult?.meta.canonicalURL.flatMap({ URL(string: $0) }) {
             displayDomain = domain(from: canonical) ?? dom
@@ -311,6 +332,9 @@ enum CaptureService {
         }
         if let resourceResult {
             item.setMetadata(resourceResult.meta)
+        }
+        if let bookResult {
+            item.setMetadata(bookResult.meta)
         }
         if let courseResult {
             item.setMetadata(courseResult.meta)
@@ -635,6 +659,44 @@ enum CaptureService {
             ogTitle: page?.og.title,
             collectionLabels: collectionLabels
         )
+    }
+
+    // MARK: - Book Extraction
+
+    /// Book readers for a page already classified as a book. The only extra network call is
+    /// Open Library's books API for the page's ISBN (`lookUpOpenLibrary`; no key) — a failure,
+    /// a non-200 or an unknown ISBN just skips it. Amazon walls servers but the app fetches on
+    /// device: whatever the page gave is parsed, and Open Library fills the rest.
+    static func extractBook(
+        sourceURL: URL,
+        page: PageFetchResult?,
+        lookUpOpenLibrary: Bool = true
+    ) async -> BookExtraction {
+        let html = page?.html ?? ""
+        var openLibrary: OpenLibraryBook? = nil
+        if lookUpOpenLibrary {
+            let isbns = BookReader.isbns(sourceURL: sourceURL, finalURL: page?.finalURL, html: html)
+            if let isbn = isbns.isbn13 ?? isbns.isbn10, let endpoint = BookReader.openLibraryLookupURL(isbn: isbn) {
+                openLibrary = await fetchOpenLibraryBook(endpoint, isbn: isbn)
+            }
+        }
+        return BookReader.build(
+            sourceURL: sourceURL,
+            finalURL: page?.finalURL,
+            html: html,
+            ogTitle: page?.og.title,
+            ogImageURL: page?.og.imageURL,
+            openLibrary: openLibrary
+        )
+    }
+
+    private static func fetchOpenLibraryBook(_ endpoint: URL, isbn: String) async -> OpenLibraryBook? {
+        var request = URLRequest(url: endpoint, timeoutInterval: 10)
+        request.setValue("Stello/1.0 (book lookup)", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              ((response as? HTTPURLResponse)?.statusCode ?? 200) == 200 else { return nil }
+        return BookReader.parseOpenLibrary(data: data, isbn: isbn)
     }
 
     // MARK: - Course Extraction

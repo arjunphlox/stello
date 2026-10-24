@@ -67,4 +67,9 @@ protocol Enricher {
     /// JSON-LD, or a sparse one). Nil = no guess. Results are stored as guesses
     /// (`CourseMeta.…IsGuess`).
     func guessCourseFacts(text: String?) async throws -> CourseFacts?
+
+    /// Authors + publication year guess for a book whose readers (page tags, JSON-LD, Open
+    /// Library) found no author. Nil = no guess. Authors are stored as a guess
+    /// (`BookMeta.authorsAreGuess`).
+    func guessBookFacts(text: String?) async throws -> BookFacts?
 }
