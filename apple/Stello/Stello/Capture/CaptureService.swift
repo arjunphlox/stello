@@ -645,8 +645,7 @@ enum CaptureService {
     // MARK: - Resource Extraction
 
     /// Resource readers for a page already classified as a resource. No extra network:
-    /// everything comes from the capture-time page fetch. `collectionLabels` (imports /
-    /// force-Enrich only) decide the `reading list` subtype.
+    /// everything comes from the capture-time page fetch.
     static func extractResource(
         sourceURL: URL,
         page: PageFetchResult?,

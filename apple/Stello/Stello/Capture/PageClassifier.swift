@@ -75,7 +75,7 @@ nonisolated struct PageClassifier {
         if isResource(url: baseURL, ogType: ogType, nodes: nodes, html: html, collectionLabels: collectionLabels) {
             return PageClassificationResult(kind: .resource, individualMeta: nil)
         }
-        // Book after resource (a `books`-labelled list page is a reading list), before product:
+        // Book after resource, before product:
         // an Amazon ISBN page is a book, even with the wishlist label.
         if isBook(url: baseURL, ogType: ogType, nodes: nodes, html: html) {
             return PageClassificationResult(kind: .book, individualMeta: nil)
@@ -601,7 +601,8 @@ nonisolated struct PageClassifier {
 
     /// Collection label that makes a page a resource (unless it is an article or a bare image).
     nonisolated static let digitalResourcesLabel = "digital-resources"
-    /// Collection label that makes a page a reading list (a resource) unless it is a single book.
+    /// The `books` collection label. It never decides a kind: a single book is a Book by its own
+    /// signals, and a reading list stays a plain website/link (Arjun's call, 2026-10-25).
     nonisolated static let booksLabel = "books"
 
     /// "Digital Resources" / "digital_resources" → "digital-resources".
@@ -619,10 +620,9 @@ nonisolated struct PageClassifier {
     /// (kind order: gone → post → resource → book → product → tool). Resource when ANY of:
     /// a Figma Community plugin / widget / file; a Framer Marketplace item page; a CodePen pen;
     /// the `digital-resources` label on a page that is not an article (Article / NewsArticle /
-    /// BlogPosting JSON-LD or og:type article) and not a bare image; the `books` label on a
-    /// page that is not a single book (a reading list). The two label rules never claim a
-    /// wishlisted item (that's a product), and the `books` rule never claims an Amazon /
-    /// Kickstarter / Shopify product page (one item, not a list).
+    /// BlogPosting JSON-LD or og:type article) and not a bare image. The label rule never
+    /// claims a wishlisted item (that's a product). The `books` label makes nothing a resource:
+    /// reading lists stay websites.
     nonisolated static func isResource(url: URL, ogType: String?, html: String, collectionLabels: [String]) -> Bool {
         isResource(
             url: url, ogType: ogType, nodes: jsonLDTypedNodes(from: html), html: html,
@@ -653,13 +653,6 @@ nonisolated struct PageClassifier {
             if !isArticle { return true }
         }
 
-        if hasLabel(booksLabel, in: collectionLabels) {
-            let isProductPage = isAmazonProductURL(url) || isKickstarterProjectURL(url) || isShopifyProductURL(url)
-            if !isProductPage && !isSingleBook(url: url, nodes: nodes, html: html)
-                && !isBook(url: url, ogType: ogType, nodes: nodes, html: html) {
-                return true
-            }
-        }
         return false
     }
 
