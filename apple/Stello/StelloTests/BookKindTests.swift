@@ -215,24 +215,19 @@ struct BookClassificationTests {
         #expect(classify("https://bookshop.org/lists/best-books-of-2025").kind != .book)
     }
 
-    @Test("Goodreads /list/ and /shelf/ are not books; with the books label a list is a reading list")
+    @Test("Goodreads /list/ and /shelf/ are not books; with the books label a list stays a website")
     func readingLists() {
         let list = "https://www.goodreads.com/list/show/1.Best_Books_Ever"
         #expect(classify(list).kind != .book)
         #expect(classify("https://www.goodreads.com/shelf/show/design").kind != .book)
-        #expect(classify(list, labels: ["books"]).kind == .resource)
-        let extraction = ResourceReader.build(
-            sourceURL: URL(string: list)!, finalURL: nil, html: "", ogTitle: "Best Books Ever",
-            collectionLabels: ["books"]
-        )
-        #expect(extraction.meta.subtype == "reading list")
+        #expect(classify(list, labels: ["books"]).kind == .link)
         // A "best books" post: two different Book nodes are a list, not a book.
         let roundup = jsonLD(#"""
         {"@context":"https://schema.org","@graph":[
          {"@type":"Book","name":"Atomic Habits"},{"@type":"Book","name":"Deep Work"}]}
         """#)
         #expect(classify("https://example.com/best-books-2025", html: roundup).kind != .book)
-        #expect(classify("https://example.com/best-books-2025", html: roundup, labels: ["books"]).kind == .resource)
+        #expect(classify("https://example.com/best-books-2025", html: roundup, labels: ["books"]).kind == .link)
     }
 
     @Test("A wishlisted Amazon ISBN link is still a book")

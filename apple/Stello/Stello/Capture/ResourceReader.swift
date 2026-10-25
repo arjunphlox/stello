@@ -248,13 +248,12 @@ nonisolated enum ResourceReader {
         return nil
     }
 
-    /// Path subtype (source URL, then the redirect target) → `reading list` for the `books`
-    /// label → title words → `library` for a site home page → nil.
+    /// Path subtype (source URL, then the redirect target) → title words → `library` for a site
+    /// home page → nil.
     static func subtype(sourceURL: URL, finalURL: URL?, title: String?, collectionLabels: [String]) -> String? {
         if let fromPath = pathSubtype(url: sourceURL) ?? finalURL.flatMap({ pathSubtype(url: $0) }) {
             return fromPath
         }
-        if PageClassifier.hasLabel(PageClassifier.booksLabel, in: collectionLabels) { return "reading list" }
         if let fromTitle = titleSubtype(title) { return fromTitle }
         let path = sourceURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if path.isEmpty, sourceURL.query == nil { return "library" }

@@ -188,16 +188,14 @@ struct ResourceClassificationTests {
         #expect(classify("https://lucide.dev/", labels: ["digital-resources", "digital-tools"]).kind == .resource)
     }
 
-    @Test("books label on a list page → resource (reading list)")
+    @Test("books label on a list page stays a website, not a resource")
     func booksReadingList() {
         let result = classify("https://fs.blog/reading-list/", labels: ["books"])
-        #expect(result.kind == .resource)
+        #expect(result.kind == .link)
         let extraction = buildResource(
             "https://fs.blog/reading-list/", ogTitle: "The Great Books Reading List", labels: ["books"]
         )
-        #expect(extraction.meta.subtype == "reading list")
-        #expect(extraction.meta.worksWith.isEmpty)
-        #expect(extraction.meta.cardKindLine == "Reading list")
+        #expect(extraction.meta.subtype != "reading list")
     }
 
     @Test("books label on a single book is left to the existing rules")
