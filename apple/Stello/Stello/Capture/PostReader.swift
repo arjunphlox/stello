@@ -455,7 +455,11 @@ nonisolated enum PostReader {
 
     /// Midjourney parameters (`--ar`, `--v `, `--style`, `--sref`, `--niji`, `--chaos`,
     /// `--stylize`); an em dash counts too (iOS smart punctuation turns `--` into `—`).
-    static let midjourneyParamPattern = #"(?i)(?:^|\s)(?:--|—)(?:ar|v|style|sref|niji|chaos|stylize)\b"#
+    /// A parameter only counts when a value follows it on the same line (`--ar 16:9`,
+    /// `--sref 123`, `--v 6`) or it ends the line / text (`--niji`) — never prose such as
+    /// "the --sref's" or "--sref,".
+    static let midjourneyParamPattern =
+        #"(?im)(?:^|\s)(?:--|—)(?:ar|v|style|sref|niji|chaos|stylize)(?=[ \t]+[^\s\-—]|[ \t]*$)"#
 
     /// "Gen AI" / "gen_ai" / "GEN-AI" → "gen-ai".
     static func normalizedLabel(_ label: String) -> String {
@@ -681,6 +685,9 @@ nonisolated enum PostReader {
             if let ogImageURL { imageStrings = [ogImageURL.absoluteString] }
         }
 
+        // og tags keep HTML entities (`&gt;`, `&amp;`); the syndication text is already decoded.
+        meta.text = meta.text.map(decodeEntities)
+
         var images: [URL] = []
         var seen = Set<String>()
         for raw in imageStrings {
@@ -710,16 +717,8 @@ nonisolated enum PostReader {
 
     // MARK: - Helpers
 
-    private static let entities: [(String, String)] = [
-        ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"),
-    ]
-
     static func decodeEntities(_ s: String) -> String {
-        var result = s
-        for (entity, replacement) in entities {
-            result = result.replacingOccurrences(of: entity, with: replacement)
-        }
-        return result
+        CaptureService.decodeBasicEntities(s)
     }
 
     static func clean(_ value: String?) -> String? {

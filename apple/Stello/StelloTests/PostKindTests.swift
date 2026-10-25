@@ -430,6 +430,30 @@ struct PostAIArtTests {
         #expect(PostReader.extractPrompt(from: nil) == nil)
     }
 
+    @Test("A param needs a value or the end of the line: prose like \"the --sref's\" is no prompt")
+    func proseParamIsNoPrompt() {
+        let tweet = "Made a free Midjourney Style Reference Tool\n\n>15k srefs\n>smart AI search\n"
+            + ">view prompt + parameters\n>search by color, hex code, vibe, subject\n\n"
+            + "I also curated 5 boards to visualize the --sref's against different styles\n\n"
+            + "Link below. It's free and very useful"
+        #expect(PostReader.hasMidjourneyParams(tweet) == false)
+        #expect(PostReader.extractPrompt(from: tweet) == nil)
+
+        // The label still flags AI art (label rule), but the prompt stays nil.
+        var meta = PostMeta()
+        meta.text = tweet
+        PostReader.applyAIArt(to: &meta, labels: ["midjourney"], tags: [])
+        #expect(meta.isAIArt)
+        #expect(meta.aiModel == "Midjourney")
+        #expect(meta.prompt == nil)
+
+        #expect(PostReader.hasMidjourneyParams("the --sref, again") == false)
+        #expect(PostReader.hasMidjourneyParams("koi pond --ar 16:9"))
+        #expect(PostReader.hasMidjourneyParams("--sref 123"))
+        #expect(PostReader.hasMidjourneyParams("tower --v 6"))
+        #expect(PostReader.hasMidjourneyParams("cat in rain --niji"))
+    }
+
     @Test("applyAIArt: rule-read prompt replaces a guess; no signal clears the flag")
     func applyAIArt() {
         var meta = PostMeta()
