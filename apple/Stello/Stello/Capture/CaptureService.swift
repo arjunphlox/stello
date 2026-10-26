@@ -124,7 +124,8 @@ enum CaptureService {
         let og = page?.og ?? OGResult()
         let html = page?.html ?? ""
         let ogTitle = og.title ?? url.host ?? url.absoluteString
-        let summary = og.description.map { String($0.prefix(200)) }
+        // Decoded so the panel never shows a raw `&gt;` from og:description.
+        let summary = og.description.map { String(decodeBasicEntities($0).prefix(200)) }
         let dom = domain(from: url)
 
         let classification = PageClassifier.classify(
@@ -527,14 +528,16 @@ enum CaptureService {
         return String(text.prefix(limit))
     }
 
-    private static let basicEntities: [(String, String)] = [
+    nonisolated private static let basicEntities: [(String, String)] = [
         ("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
         ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"),
         ("&mdash;", "—"), ("&ndash;", "–"),
         ("&rsquo;", "’"), ("&lsquo;", "‘"), ("&rdquo;", "”"), ("&ldquo;", "“"),
     ]
 
-    private static func decodeBasicEntities(_ s: String) -> String {
+    /// The common named / numeric HTML entities → characters. Shared with the panel's
+    /// `PanelDedupe.normalize` and the og description that becomes `item.summary`.
+    nonisolated static func decodeBasicEntities(_ s: String) -> String {
         var result = s
         for (entity, replacement) in basicEntities {
             result = result.replacingOccurrences(of: entity, with: replacement)
