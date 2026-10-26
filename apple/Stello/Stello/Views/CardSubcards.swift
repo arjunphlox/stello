@@ -33,15 +33,38 @@ private struct PanelHeader {
     /// A Post flagged as AI art with no model and no prompt: a small "AI art" badge line.
     var showsAIArtBadge: Bool = false
 
-    /// Every value the header shows — what the facts, chips and snippets are checked against.
+    /// Every value the header shows.
     var shownValues: [String] {
         [title, kindLine, mainText].compactMap { $0 } + extraTexts
     }
 
-    /// The texts snippets are checked against.
+    /// The texts snippets (and other prose) are checked against.
     var texts: [String] {
         [mainText].compactMap { $0 } + extraTexts
     }
+}
+
+/// What one section card after the Summary shows.
+private enum PanelSectionBody {
+    case facts([(String, String?)])
+    /// Chips with an optional caption ("12 weights").
+    case chips([String], caption: String?)
+    /// Chips that drop chips naming a value the panel already shows (Tech stack).
+    case dedupedChips([String])
+    case refs([EntityRef])
+    /// Prose; dropped when the header's texts already hold it.
+    case text(String)
+    case gallery([String])
+    case faqs([FAQItem])
+    /// Chips and rows in one card (typeface "Formats & tech").
+    case chipsAndFacts([String], [(String, String?)])
+}
+
+/// One section card of a dossier kind (typeface, website, individual, studio, foundry), in the
+/// order the panel had before the de-duplication pass.
+private struct PanelSection {
+    var title: String
+    var body: PanelSectionBody
 }
 
 /// What one kind contributes to the panel before de-duplication.
@@ -52,29 +75,37 @@ private struct KindPanelInput {
     var showsExtraTexts: Bool = false
     var mainIsAISummary: Bool = false
     var showsAIArtBadge: Bool = false
-    var factsTitle: String = "Facts"
+    /// The labelled row that says what the title is (Album, Name, Course…). It leads the
+    /// Summary and is never dropped for equalling the title.
+    var identityRow: (String, String?)?
     var facts: [(String, String?)] = []
-    /// The kind's facts already name an author / maker / instructor / creator.
-    var showsAuthor: Bool = false
+    /// Keep site rows that name the source host (music: which service it's on matters).
+    var keepsSiteRows: Bool = false
+    /// (Summary label, section label) pairs naming the same fact under two labels, so a section
+    /// row with the other label and the same value counts as a repeat.
+    var factAliases: [(String, String)] = []
     var links: [(String, String?)] = []
-    /// Chip groups that drop chips repeating the facts (Subjects / Teaches / Topics / Tech stack).
+    /// Section cards after the Summary (dossier kinds).
+    var sections: [PanelSection] = []
+    /// Chip groups that drop chips repeating the facts (Subjects / Teaches / Topics).
     var dedupedChips: [String: [String]] = [:]
     /// Chip groups shown as they are (still count as shown for the tags).
     var plainChips: [String: [String]] = [:]
-    /// Further shown values the tags are checked against (model, handle, maker…).
+    /// Further shown values (model, handle, artist names…): the tags and the Author row are
+    /// checked against them.
     var extraShown: [String] = []
-    /// The kind's canonical page (after redirects), else nil.
+    /// The kind's canonical page (after redirects), else nil: the Source row opens it.
     var canonicalURL: String?
 }
 
-/// The de-duplicated panel: header, facts (with Source and Added), links, chips, and the
-/// values the tags are filtered against.
+/// The de-duplicated panel: header, Summary (with Author, Source and Added), sections, links,
+/// chips, and the values the tags are filtered against.
 private struct PanelLayout {
     var header: PanelHeader
-    var factsTitle: String
     var facts: [(String, String?)]
     /// Fact label → URL it opens (the Source row).
     var factLinks: [String: String]
+    var sections: [PanelSection]
     var links: [(String, String?)]
     var chips: [String: [String]]
     var tagShown: [String]
@@ -149,19 +180,11 @@ struct CardSubcards: View {
             headerCard(layout.header)
                 .gridCellColumns(columns.count)
 
+            summaryCard(layout)
+
             switch panelKind {
-            case .typeface:
-                if let meta = item.typefaceMeta() { typefaceCards(meta, layout: layout) }
-            case .website:
-                if let meta = item.websiteMeta() { websiteCards(meta, layout: layout) }
-            case .individual:
-                if let meta = item.individualMeta() { individualCards(meta, layout: layout) }
-            case .studio:
-                if let meta = item.studioMeta() { studioCards(meta, layout: layout) }
-            case .foundry:
-                if let meta = item.foundryMeta() { foundryCards(meta, layout: layout) }
-            case .place:
-                factsCard(layout)
+            case .typeface, .website, .individual, .studio, .foundry, .place:
+                sectionCards(layout.sections)
             case .music:
                 if let meta = item.musicMeta() { musicCards(meta, layout: layout) }
             case .product:
@@ -171,11 +194,9 @@ struct CardSubcards: View {
             case .tool:
                 if let meta = item.toolMeta() { toolCards(meta, layout: layout) }
             case .resource, .book, .course, .article:
-                factsCard(layout)
                 kindChipsCards(layout)
                 linksCard(layout)
             case .link:
-                factsCard(layout)
                 if let md = item.bodyMarkdown, !md.isEmpty {
                     markdownSubCard(md)
                 }
@@ -207,18 +228,22 @@ struct CardSubcards: View {
 
     // MARK: - Layout (de-duplication)
 
+    /// Every value is shown once. Facts and rows drop only on an exact (normalised) repeat;
+    /// containment counts only for prose against prose (snippets, extra texts, Review) and for
+    /// tags / chips.
     private func panelLayout() -> PanelLayout {
         let input = kindPanelInput()
 
-        // Header: title once, kind line unless it repeats the title, main text once.
+        // Header: title once, kind line unless it equals the title, main text unless it
+        // equals the title.
         let title = decoded(input.titleOverride ?? item.title.nilIfEmpty ?? "Untitled")
         var kindLine = item.cardKindLine?.nilIfEmpty.map { decoded($0) }
-        if let line = kindLine, PanelDedupe.isRedundant(line, against: [title]) { kindLine = nil }
+        if let line = kindLine, PanelDedupe.isSameValue(line, against: [title]) { kindLine = nil }
         let texts = PanelDedupe.primaryAndRest(candidates: input.mainCandidates.map { $0.map { decoded($0) } })
         var main = texts.primary
-        if let text = main, PanelDedupe.isRedundant(text, against: [title]) { main = nil }
+        if let text = main, PanelDedupe.isSameValue(text, against: [title]) { main = nil }
         let extras = input.showsExtraTexts
-            ? texts.rest.filter { !PanelDedupe.isRedundant($0, against: [title]) }
+            ? texts.rest.filter { !PanelDedupe.isSameValue($0, against: [title]) }
             : []
         let firstCandidate = (input.mainCandidates.first ?? nil)?.nilIfEmpty.map { decoded($0) }
         let header = PanelHeader(
@@ -230,32 +255,120 @@ struct CardSubcards: View {
             showsAIArtBadge: input.showsAIArtBadge
         )
 
-        // Facts: drop repeats of the header and rows naming the source site; then the old
-        // Summary card's Author (unless the kind already names one), Source, and Added last.
         let host = item.displayLink
         let hasSource = !host.isEmpty && host != "local"
+        let sourcePage = input.canonicalURL?.nilIfEmpty ?? item.sourceURL?.nilIfEmpty
+        let sourceURLs = [item.sourceURL, sourcePage].compactMap { $0 }
+
+        // Summary: the identity row, then the kind's facts. A row drops only when its value
+        // equals the title (identity rows exempt), the kind line, the Source page, or a row
+        // already kept; site rows naming the source host drop too (unless the kind keeps them).
+        var shownKeys = Set<String>()
         var facts: [(String, String?)] = []
         var factValues: [String] = []
-        for (label, value) in input.facts {
+        var summaryRows = input.facts
+        if let identity = input.identityRow { summaryRows.insert(identity, at: 0) }
+        for (index, row) in summaryRows.enumerated() {
+            let (label, value) = row
             guard let v = value?.nilIfEmpty.map({ decoded($0) }) else { continue }
-            if PanelDedupe.isRedundant(v, against: header.shownValues) { continue }
-            if hasSource, Self.siteLabels.contains(label), PanelDedupe.namesSameSite(v, host: host) { continue }
-            if factValues.contains(where: { PanelDedupe.normalize($0) == PanelDedupe.normalize(v) }) { continue }
+            let isIdentity = input.identityRow != nil && index == 0
+            if !isIdentity, PanelDedupe.isSameValue(v, against: [title]) { continue }
+            if let kindLine, PanelDedupe.isSameValue(v, against: [kindLine]) { continue }
+            if sourceURLs.contains(where: { PanelDedupe.isSameURL($0, v) }) { continue }
+            if hasSource, !input.keepsSiteRows, Self.siteLabels.contains(label),
+               PanelDedupe.namesSameSite(v, host: host) { continue }
+            let key = PanelDedupe.factKey(label: label, value: v)
+            guard shownKeys.insert(key).inserted else { continue }
             facts.append((label, v))
             factValues.append(v)
         }
-        if !input.showsAuthor, let author = item.author?.nilIfEmpty.map({ decoded($0) }),
-           !PanelDedupe.isRedundant(author, against: header.shownValues + factValues) {
-            facts.append(("Author", author))
-            factValues.append(author)
+        for (summaryLabel, otherLabel) in input.factAliases {
+            for (label, value) in facts where label == summaryLabel {
+                if let value { shownKeys.insert(PanelDedupe.factKey(label: otherLabel, value: value)) }
+            }
         }
+
+        // Author (the old Summary row): for every kind, unless the same value already shows
+        // anywhere in the panel (a row, a ref, the title, the kind line).
+        if let author = item.author?.nilIfEmpty.map({ decoded($0) }) {
+            let elsewhere = [title] + [kindLine].compactMap { $0 } + factValues + input.extraShown
+                + Self.sectionValues(input.sections)
+            let key = PanelDedupe.factKey(label: "Author", value: author)
+            if !PanelDedupe.isSameValue(author, against: elsewhere), shownKeys.insert(key).inserted {
+                facts.append(("Author", author))
+                factValues.append(author)
+            }
+        }
+
+        // Source (tappable: the canonical page, else the saved URL) and Added last.
         var factLinks: [String: String] = [:]
-        let sourcePage = input.canonicalURL?.nilIfEmpty ?? item.sourceURL?.nilIfEmpty
         if hasSource {
             facts.append(("Source", host))
+            shownKeys.insert(PanelDedupe.factKey(label: "Source", value: host))
             if let sourcePage { factLinks["Source"] = sourcePage }
         }
         facts.append(("Added", weekFooter))
+        shownKeys.insert(PanelDedupe.factKey(label: "Added", value: weekFooter))
+
+        // Chips: Subjects / Teaches / Topics / Tech stack drop chips the facts already show.
+        let chipShown = [title, kindLine].compactMap { $0 } + extras + factValues
+
+        // Sections: each row drops only when its value exactly repeats something shown above
+        // (the header, the Summary, the Source page, an earlier section row).
+        let headerValues = [title, kindLine, main].compactMap { $0 } + extras
+        var sections: [PanelSection] = []
+        var sectionShown: [String] = []
+        func keptRows(_ rows: [(String, String?)]) -> [(String, String?)] {
+            var kept: [(String, String?)] = []
+            for (label, value) in rows {
+                guard let v = value?.nilIfEmpty.map({ decoded($0) }) else { continue }
+                if PanelDedupe.isSameValue(v, against: headerValues) { continue }
+                if sourceURLs.contains(where: { PanelDedupe.isSameURL($0, v) }) { continue }
+                guard shownKeys.insert(PanelDedupe.factKey(label: label, value: v)).inserted else { continue }
+                kept.append((label, v))
+                sectionShown.append(v)
+            }
+            return kept
+        }
+        for section in input.sections {
+            switch section.body {
+            case .facts(let rows):
+                let kept = keptRows(rows)
+                if !kept.isEmpty { sections.append(PanelSection(title: section.title, body: .facts(kept))) }
+            case .chips(let chips, let caption):
+                let values = chips.compactMap(\.nilIfEmpty)
+                if !values.isEmpty || caption?.nilIfEmpty != nil {
+                    sections.append(PanelSection(title: section.title, body: .chips(values, caption: caption?.nilIfEmpty)))
+                    sectionShown += values
+                }
+            case .dedupedChips(let chips):
+                let values = PanelDedupe.filterTags(chips.compactMap(\.nilIfEmpty), shown: chipShown)
+                if !values.isEmpty {
+                    sections.append(PanelSection(title: section.title, body: .chips(values, caption: nil)))
+                    sectionShown += values
+                }
+            case .refs(let refs):
+                let values = refs.filter { !$0.name.isEmpty }
+                if !values.isEmpty {
+                    sections.append(PanelSection(title: section.title, body: .refs(values)))
+                    sectionShown += values.map(\.name)
+                }
+            case .text(let text):
+                guard let t = text.nilIfEmpty.map({ decoded($0) }),
+                      !PanelDedupe.isRedundant(t, against: header.texts) else { continue }
+                sections.append(PanelSection(title: section.title, body: .text(t)))
+                sectionShown.append(t)
+            case .gallery, .faqs:
+                sections.append(section)
+            case .chipsAndFacts(let chips, let rows):
+                let values = chips.compactMap(\.nilIfEmpty)
+                let kept = keptRows(rows)
+                if !values.isEmpty || !kept.isEmpty {
+                    sections.append(PanelSection(title: section.title, body: .chipsAndFacts(values, kept)))
+                    sectionShown += values
+                }
+            }
+        }
 
         // Links: only places other than the saved / canonical page.
         let links = input.links.filter { _, value in
@@ -263,8 +376,6 @@ struct CardSubcards: View {
             return !PanelDedupe.isSameURL(url, item.sourceURL) && !PanelDedupe.isSameURL(url, input.canonicalURL)
         }
 
-        // Chips: Subjects / Teaches / Topics / Tech stack drop chips the facts already show.
-        let chipShown = header.shownValues.filter { $0 != header.mainText } + factValues
         var chips = input.plainChips
         for (key, values) in input.dedupedChips {
             chips[key] = PanelDedupe.filterTags(values, shown: chipShown)
@@ -273,15 +384,15 @@ struct CardSubcards: View {
         // Tags: hide (never delete) tags naming a value the panel already shows — including
         // site rows dropped above (platform, publication, provider) and the host itself.
         var tagShown = header.shownValues + factValues + input.facts.compactMap { $0.1?.nilIfEmpty }
-        tagShown += input.extraShown
+        tagShown += input.extraShown + sectionShown
         tagShown += chips.values.flatMap { $0 }
         if hasSource { tagShown.append(host) }
 
         return PanelLayout(
             header: header,
-            factsTitle: input.factsTitle,
             facts: facts,
             factLinks: factLinks,
+            sections: sections,
             links: links,
             chips: chips,
             tagShown: tagShown,
@@ -293,6 +404,28 @@ struct CardSubcards: View {
         CaptureService.decodeBasicEntities(text)
     }
 
+    /// The values the sections would show before de-duplication (rows, chips, ref names, texts).
+    private static func sectionValues(_ sections: [PanelSection]) -> [String] {
+        sections.flatMap { section -> [String] in
+            switch section.body {
+            case .facts(let rows): return rows.compactMap { $0.1 }
+            case .chips(let chips, _), .dedupedChips(let chips): return chips
+            case .refs(let refs): return refs.map(\.name) + [names(refs)].compactMap { $0 }
+            case .text(let text): return [text]
+            case .gallery, .faqs: return []
+            case .chipsAndFacts(let chips, let rows): return chips + rows.compactMap { $0.1 }
+            }
+        }
+    }
+
+    /// True when at least one ref opens an item in the store (its chip is tappable).
+    private func refsResolve(_ refs: [EntityRef]) -> Bool {
+        refs.contains { ref in
+            guard let slug = ref.slug else { return false }
+            return storeItems.contains { $0.slug == slug }
+        }
+    }
+
     private func kindPanelInput() -> KindPanelInput {
         var input = KindPanelInput()
         input.mainCandidates = [item.summary]
@@ -302,63 +435,39 @@ struct CardSubcards: View {
             guard let meta = item.typefaceMeta() else { break }
             input.mainCandidates = [item.summary, meta.overview, meta.description]
             input.showsExtraTexts = true
-            let designers = meta.typeDesigner.map(\.name).filter { !$0.isEmpty }
             input.facts = [
-                ("Foundry", meta.typeFoundry?.name),
-                (designers.count > 1 ? "Designers" : "Designer",
-                 designers.isEmpty ? meta.typeDesignerFallback : designers.joined(separator: ", ")),
-                ("Weights", meta.weightsCount ?? meta.weightCount.map(String.init)),
-                ("Styles", meta.stylesCount ?? meta.styleCount.map(String.init)),
-                ("Languages", meta.languagesCount ?? meta.languageSupport.map(String.init)),
-                ("Variable", meta.variableFontSupport.map { $0 ? "Yes" : "No" }),
                 ("Release year", meta.releaseYear),
                 ("License", meta.license),
                 ("Price", Self.typefacePrice(meta)),
+                ("Specimen link", meta.specimenLink ?? meta.specimenURL),
             ]
-            input.showsAuthor = !designers.isEmpty || meta.typeDesignerFallback?.nilIfEmpty != nil
-            input.plainChips["classification"] = meta.classification + meta.personality
+            input.factAliases = [("Price", "Starting price"), ("Price", "Paid / free")]
+            input.sections = typefaceSections(meta)
 
         case .website:
             guard let meta = item.websiteMeta() else { break }
             input.mainCandidates = [meta.tagline, item.summary, meta.description]
             input.showsExtraTexts = true
-            let founders = Self.names(meta.founders) ?? meta.founderName
-            input.facts = [
-                (meta.founders.count > 1 ? "Founders" : "Founder", founders),
-                ("Branding by", Self.names(meta.brandingMadeBy)),
-                ("Site designer", Self.names(meta.siteDesignerAgency) ?? meta.agencyName),
-                ("Typography", Self.names(meta.typography)),
-            ]
-            input.showsAuthor = founders != nil
-            input.plainChips["categories"] = Self.uniqueChips(meta.categories + meta.traits)
-            input.dedupedChips["techStack"] = meta.techStack
+            input.sections = websiteSections(meta)
 
         case .individual:
             guard let meta = item.individualMeta() else { break }
             input.mainCandidates = [meta.bio, item.summary]
             input.facts = [
-                ("Role", Self.roleLine(meta)),
+                ("Current role", meta.currentRole),
+                ("Employer", meta.currentEmployer),
                 ("Location", meta.location?.name),
                 ("Pronouns", meta.pronouns),
                 ("Experience", meta.professionalExperience.map { "\($0) years" }),
             ]
-            input.showsAuthor = true
-            input.links = [
-                ("Email", meta.email),
-                ("X", meta.xURL),
-                ("Instagram", meta.instagramURL),
-                ("LinkedIn", meta.linkedInURL),
-                ("Behance", meta.behanceURL),
-                ("Bluesky", meta.bluesky),
-                ("Mastodon", meta.mastodon),
-                ("Threads", meta.threads),
-                ("Blog", meta.blogLink),
-                ("Shop", meta.shopLink),
-            ]
-            input.plainChips["professions"] = meta.professions
+            input.sections = individualSections(meta)
 
         case .studio:
-            break
+            guard let meta = item.studioMeta() else { break }
+            input.sections = [
+                PanelSection(title: "Work", body: .refs(meta.work)),
+                PanelSection(title: "Team", body: .refs(meta.team)),
+            ]
 
         case .foundry:
             guard let meta = item.foundryMeta() else { break }
@@ -369,34 +478,44 @@ struct CardSubcards: View {
                 ("Founded", meta.foundedYear),
                 ("Price range", meta.priceRange),
             ]
-            input.plainChips["popularFonts"] = meta.popularFonts
+            input.factAliases = [("Location", "Geography")]
+            input.sections = foundrySections(meta)
 
         case .place:
             guard let meta = item.placeMeta() else { break }
-            input.factsTitle = "Location"
             input.facts = [("City", meta.city), ("Country", meta.country)]
 
         case .music:
             guard let meta = item.musicMeta() else { break }
-            input.factsTitle = "Music"
+            let artistNames = meta.artists.map(\.name).compactMap(\.nilIfEmpty)
+            // The Artists refs card when a ref opens a stored item; else a Summary row.
+            let artistsRow = refsResolve(meta.artists) ? nil : Self.names(meta.artists)
+            let curatorRow = meta.curator.flatMap { refsResolve([$0]) ? nil : $0.name.nilIfEmpty }
+            input.identityRow = (Self.musicIdentityLabel(meta.subtype), meta.cleanTitle?.nilIfEmpty ?? item.title)
             input.facts = [
+                (artistNames.count > 1 ? "Artists" : "Artist", artistsRow),
                 ("Type", meta.subtype?.capitalized),
                 ("Edition", meta.edition),
                 ("Year", meta.releaseYear),
                 ("Label", meta.label),
                 ("Film", meta.film),
                 ("Duration", musicDuration(meta.totalDurationSeconds)),
+                ("Tracks", meta.trackList.isEmpty ? nil : String(meta.trackList.count)),
+                (meta.isOwnPlaylist == true ? "Curator (you)" : "Curator", curatorRow),
+                ("Platform", Self.musicPlatformLabel(meta.platform)),
+                ("UPC", meta.upc),
             ]
-            input.showsAuthor = !meta.artists.isEmpty
+            input.keepsSiteRows = true
             input.plainChips["genres"] = meta.genres
-            input.extraShown = [meta.curator?.name, meta.platform].compactMap { $0 } + meta.artists.map(\.name)
-            input.canonicalURL = meta.canonicalURL
+            input.extraShown = [meta.curator?.name, meta.platform].compactMap { $0 }
+                + artistNames + [Self.names(meta.artists)].compactMap { $0 }
+            // Source opens the saved page; a different canonical page is a link of its own.
+            input.links = [("Canonical", meta.canonicalURL)]
 
         case .product:
             guard let meta = item.productMeta() else { break }
-            input.factsTitle = "Product"
+            input.identityRow = (meta.productNameIsGuess == true ? "Name (guess)" : "Name", meta.productName)
             input.facts = [
-                (meta.productNameIsGuess == true ? "Name (guess)" : "Name", meta.productName),
                 (meta.brandIsGuess == true ? "Brand (guess)" : "Brand", meta.brand?.name),
                 ("Price range", productPriceRange(meta)),
                 ("Price when saved", productPriceWhenSaved(meta)),
@@ -404,7 +523,6 @@ struct CardSubcards: View {
                 ("Shop", meta.shop),
                 ("Category", meta.category),
             ]
-            input.showsAuthor = meta.creator != nil
             input.links = [
                 ("Buy", meta.buyURL),
                 ("Original post", meta.originalPostURL),
@@ -421,20 +539,21 @@ struct CardSubcards: View {
             input.mainCandidates = [meta.text, item.summary]
             input.showsAIArtBadge = meta.isAIArt
                 && meta.aiModel?.nilIfEmpty == nil && meta.prompt?.nilIfEmpty == nil
-            input.factsTitle = "Details"
             input.facts = [
                 ("Platform", Self.postPlatformLabel(meta.platform)),
                 ("Author", authorLine),
                 ("Posted", meta.postedAt?.formatted(date: .abbreviated, time: .omitted)),
                 ("Media", postMediaLine(meta)),
             ]
-            input.showsAuthor = authorLine != nil
+            // The author line's parts: an `item.author` equal to the name or the handle is
+            // the same fact.
             input.extraShown = [meta.aiModel, meta.authorHandle, meta.author?.name].compactMap { $0 }
             input.canonicalURL = meta.canonicalURL
 
         case .tool:
             guard let meta = item.toolMeta() else { break }
             input.mainCandidates = [meta.tagline, item.summary]
+            input.identityRow = ("Name", meta.name)
             input.facts = [
                 ("Type", Self.toolSubtypeLabel(meta.subtype)),
                 (meta.platformsAreGuess ? "Platforms (guess)" : "Platforms", meta.platformsLine()),
@@ -442,7 +561,6 @@ struct CardSubcards: View {
                 (meta.pricingIsGuess ? "Price (guess)" : "Price", toolPriceLine(meta)),
                 ("Maker", meta.maker?.name),
             ]
-            input.showsAuthor = meta.maker?.name.nilIfEmpty != nil
             input.links = [
                 ("Website", toolWebsiteURL(meta)),
                 ("App Store", meta.appStoreURL),
@@ -462,13 +580,16 @@ struct CardSubcards: View {
                 ("Users", meta.users.map { ToolMeta.compactCount($0) }),
                 ("Likes", meta.likes.map { ToolMeta.compactCount($0) }),
             ]
-            input.showsAuthor = meta.maker?.name.nilIfEmpty != nil
             input.links = [("Maker's page", meta.maker?.url)]
             input.extraShown = [meta.name].compactMap { $0 } + meta.worksWith
             input.canonicalURL = meta.canonicalURL
 
         case .book:
             guard let meta = item.bookMeta() else { break }
+            if let bookTitle = meta.title?.nilIfEmpty,
+               !PanelDedupe.isSameValue(bookTitle, against: [item.title]) {
+                input.identityRow = ("Title", bookTitle)
+            }
             let authorLabel = meta.authors.count > 1 ? "Authors" : "Author"
             input.facts = [
                 (meta.authorsAreGuess ? "\(authorLabel) (guess)" : authorLabel, meta.authorsLine),
@@ -479,7 +600,6 @@ struct CardSubcards: View {
                 ("ISBN", meta.isbnLine),
                 ("Language", meta.languageLabel),
             ]
-            input.showsAuthor = meta.authorsLine != nil
             input.links = [
                 ("Open Library", meta.openLibraryURL),
                 ("Goodreads", meta.goodreadsURL),
@@ -491,6 +611,7 @@ struct CardSubcards: View {
 
         case .course:
             guard let meta = item.courseMeta() else { break }
+            input.identityRow = ("Course", meta.name)
             input.facts = [
                 ("Provider", meta.provider?.name),
                 ("Instructor", meta.instructor?.name),
@@ -500,7 +621,6 @@ struct CardSubcards: View {
                 ("Price", meta.priceLine),
                 ("Starts", Self.upcomingStart(meta.startsAt)),
             ]
-            input.showsAuthor = meta.instructor?.name.nilIfEmpty != nil
             input.links = [("Instructor page", meta.instructor?.url)]
             input.dedupedChips["teaches"] = meta.topics
             input.extraShown = [meta.name].compactMap { $0 }
@@ -517,7 +637,6 @@ struct CardSubcards: View {
                 ("Published", meta.publishedAt?.formatted(date: .abbreviated, time: .omitted)),
                 ("Reading time", meta.readingLine),
             ]
-            input.showsAuthor = meta.author?.name.nilIfEmpty != nil
             input.links = [("Author's page", meta.author?.url)]
             if meta.isTutorial { input.dedupedChips["techStack"] = meta.techStack }
             input.canonicalURL = meta.canonicalURL
@@ -605,10 +724,11 @@ struct CardSubcards: View {
         }
     }
 
-    /// The kind's facts card: de-duplicated rows, then Source (tappable) and Added.
+    /// The Summary card: the identity row and the kind's facts (exact repeats dropped), then
+    /// Author, Source (tappable) and Added.
     @ViewBuilder
-    private func factsCard(_ layout: PanelLayout) -> some View {
-        factsCard(title: layout.factsTitle, rows: layout.facts, links: layout.factLinks)
+    private func summaryCard(_ layout: PanelLayout) -> some View {
+        factsCard(title: "Summary", rows: layout.facts, links: layout.factLinks)
     }
 
     /// Places other than the saved / canonical page; hidden when empty.
@@ -888,29 +1008,99 @@ struct CardSubcards: View {
         return names.isEmpty ? nil : names.joined(separator: ", ")
     }
 
-    /// Case-insensitively unique, order kept.
-    private static func uniqueChips(_ chips: [String]) -> [String] {
-        var seen = Set<String>()
-        return chips.filter { chip in
-            guard let trimmed = chip.nilIfEmpty else { return false }
-            return seen.insert(trimmed.lowercased()).inserted
+    // MARK: - Sections (dossier kinds)
+
+    @ViewBuilder
+    private func sectionCards(_ sections: [PanelSection]) -> some View {
+        ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+            sectionCard(section)
+        }
+    }
+
+    @ViewBuilder
+    private func sectionCard(_ section: PanelSection) -> some View {
+        switch section.body {
+        case .facts(let rows):
+            factsCard(title: section.title, rows: rows)
+        case .chips(let chips, let caption):
+            chipsCard(title: section.title, chips: chips, caption: caption)
+        case .dedupedChips(let chips):
+            chipsCard(title: section.title, chips: chips)
+        case .refs(let refs):
+            refsCard(title: section.title, refs: refs)
+        case .text(let text):
+            textCard(title: section.title, text: text)
+        case .gallery(let roles):
+            imageGalleryCard(title: section.title, roles: roles)
+        case .faqs(let items):
+            faqCard(title: section.title, items: items)
+        case .chipsAndFacts(let chips, let rows):
+            let content = FactsSubCardContent(rows: rows)
+            if !chips.isEmpty || content != nil {
+                SubCard(title: section.title) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !chips.isEmpty {
+                            ChipsSubCardBody(chips: chips)
+                        }
+                        if let content {
+                            FactsSubCardBody(content: content)
+                        }
+                    }
+                }
+            }
         }
     }
 
     // MARK: - Typeface
 
-    @ViewBuilder
-    private func typefaceCards(_ meta: TypefaceMeta, layout: PanelLayout) -> some View {
-        chipsCard(title: "Classification", chips: layout.chips["classification"] ?? [])
-        factsCard(layout)
-        imageGalleryCard(
-            title: "Previews",
-            roles: [ItemImageRole.preview.rawValue, ItemImageRole.graphic.rawValue]
-        )
-        factsCard(title: "Related", rows: [
-            ("Pairing", meta.pairingFonts),
-            ("Similar", meta.similarFonts),
-        ])
+    private func typefaceSections(_ meta: TypefaceMeta) -> [PanelSection] {
+        let weightCount = meta.weightsCount ?? meta.weightCount.map(String.init)
+        let styleCount = meta.stylesCount ?? meta.styleCount.map(String.init)
+        let langCount = meta.languagesCount ?? meta.languageSupport.map(String.init)
+        var foundryDesigner: [EntityRef] = []
+        if let foundry = meta.typeFoundry { foundryDesigner.append(foundry) }
+        foundryDesigner.append(contentsOf: meta.typeDesigner)
+        return [
+            PanelSection(title: "Classification", body: .chips(meta.classification + meta.personality, caption: nil)),
+            PanelSection(title: "Weights", body: .chips(meta.weightTypes, caption: weightCount.map { "\($0) weights" })),
+            PanelSection(title: "Styles", body: .chips(meta.styleTypes, caption: styleCount.map { "\($0) styles" })),
+            PanelSection(title: "Languages", body: .chips(meta.languagesRegion, caption: langCount.map { "\($0) languages" })),
+            PanelSection(title: "Formats & tech", body: .chipsAndFacts(meta.availableFormats, [
+                ("Variable font", meta.variableFontSupport.map { $0 ? "Yes" : "No" }),
+                ("OpenType features", meta.openTypeFeatures.isEmpty ? nil : meta.openTypeFeatures.joined(separator: ", ")),
+            ])),
+            PanelSection(title: "Licensing & pricing", body: .facts([
+                ("License", meta.license),
+                ("Paid / free", meta.paidOrFree),
+                ("Starting price", meta.startingPrice),
+                ("Trial", meta.trialAvailability.map { $0 ? "Available" : "No" }),
+                ("Student discount", meta.studentDiscount.map { $0 ? "Yes" : "No" }),
+            ])),
+            PanelSection(title: "Distributed on", body: .refs(meta.distributedOn)),
+            PanelSection(title: "Foundry & designer", body: .refs(foundryDesigner)),
+            PanelSection(title: "Designer", body: .facts([("Name", meta.typeDesignerFallback)])),
+            PanelSection(title: "Technical", body: .facts([
+                ("Release year", meta.releaseYear),
+                ("Last update", meta.lastUpdate),
+                ("Version", meta.version),
+                ("Family count", meta.familyCount),
+                ("Family fonts", meta.familyFontNames.isEmpty ? nil : meta.familyFontNames.map(\.name).joined(separator: ", ")),
+            ])),
+            PanelSection(title: "Letterform graphics", body: .gallery([ItemImageRole.graphic.rawValue])),
+            PanelSection(title: "Insights", body: .facts([
+                ("Highlights", meta.highlights),
+                ("Use case", meta.useCase),
+                ("Design features", meta.designFeatures),
+            ])),
+            PanelSection(title: "Related fonts", body: .facts([
+                ("Pairing", meta.pairingFonts),
+                ("Similar", meta.similarFonts),
+                ("Fork", meta.forkFonts),
+            ])),
+            PanelSection(title: "Previews", body: .gallery([ItemImageRole.preview.rawValue])),
+            PanelSection(title: "FAQs", body: .faqs(meta.faqs)),
+            PanelSection(title: "Appears in", body: .refs(meta.creatives + meta.websites)),
+        ]
     }
 
     /// "Free" for a free family, else the starting price (else the paid / free label).
@@ -924,64 +1114,133 @@ struct CardSubcards: View {
 
     // MARK: - Website
 
-    @ViewBuilder
-    private func websiteCards(_ meta: WebsiteMeta, layout: PanelLayout) -> some View {
-        chipsCard(title: "Category", chips: layout.chips["categories"] ?? [])
-        factsCard(layout)
-        chipsCard(title: "Tech stack", chips: layout.chips["techStack"] ?? [])
-        if let review = meta.review?.nilIfEmpty,
-           !PanelDedupe.isRedundant(review, against: layout.header.texts) {
-            textCard(title: "Review", text: decoded(review))
+    private func websiteSections(_ meta: WebsiteMeta) -> [PanelSection] {
+        var sections: [PanelSection] = [
+            PanelSection(title: "Category", body: .chips(meta.categories, caption: nil)),
+            PanelSection(title: "Traits", body: .chips(meta.traits, caption: nil)),
+            PanelSection(title: "Focus areas", body: .chips(meta.focusAreas, caption: nil)),
+            PanelSection(title: "Review", body: .text(meta.review ?? "")),
+            PanelSection(title: "Platform", body: .chips(meta.platform, caption: nil)),
+            PanelSection(title: "Tech stack", body: .dedupedChips(meta.techStack)),
+            PanelSection(title: "Founders", body: .refs(meta.founders)),
+            PanelSection(title: "Founder", body: .facts([("Name", meta.founderName)])),
+            PanelSection(title: "Branding by", body: .refs(meta.brandingMadeBy)),
+            PanelSection(title: "Site designer", body: .refs(meta.siteDesignerAgency)),
+        ]
+        if meta.agencyName?.nilIfEmpty != nil {
+            sections.append(PanelSection(title: "Agency", body: .facts([
+                ("Name", meta.agencyName),
+                ("URL", meta.agencyURL),
+            ])))
         }
+        sections += [
+            PanelSection(title: "Creatives", body: .refs(meta.creatives)),
+            PanelSection(title: "Typography", body: .refs(meta.typography)),
+            PanelSection(title: "Typeface count", body: .facts([("Count", meta.typefaceCount)])),
+            PanelSection(title: "Foundries", body: .refs(meta.typeFoundries)),
+            PanelSection(title: "Web pages", body: .chips(meta.webPages, caption: meta.webPagesCount)),
+            PanelSection(title: "Key components", body: .chips(meta.keyComponents, caption: meta.keyComponentsCount)),
+            PanelSection(title: "Timeline", body: .facts([
+                ("First published", meta.firstPublished),
+                ("Date added", meta.dateAdded),
+                ("Date updated", meta.dateUpdated),
+            ])),
+        ]
+        return sections
     }
 
     // MARK: - Individual
 
-    @ViewBuilder
-    private func individualCards(_ meta: IndividualMeta, layout: PanelLayout) -> some View {
-        factsCard(layout)
-        chipsCard(title: "Professions", chips: layout.chips["professions"] ?? [])
-        linksCard(layout)
-        refsCard(title: "Typefaces", refs: meta.typefaces)
-    }
-
-    /// "Designer @ Acme", or whichever of the two is known.
-    private static func roleLine(_ meta: IndividualMeta) -> String? {
-        switch (meta.currentRole?.nilIfEmpty, meta.currentEmployer?.nilIfEmpty) {
-        case let (role?, employer?): return "\(role) @ \(employer)"
-        case let (role?, nil): return role
-        case let (nil, employer?): return employer
-        default: return nil
-        }
-    }
-
-    // MARK: - Studio
-
-    @ViewBuilder
-    private func studioCards(_ meta: StudioMeta, layout: PanelLayout) -> some View {
-        factsCard(layout)
-        refsCard(title: "Work", refs: meta.work)
-        refsCard(title: "Team", refs: meta.team)
+    private func individualSections(_ meta: IndividualMeta) -> [PanelSection] {
+        [
+            PanelSection(title: "Identity", body: .facts([
+                ("Pronouns", meta.pronouns),
+                ("Bio", meta.bio),
+                ("Location", meta.location?.name),
+            ])),
+            PanelSection(title: "Professions", body: .chips(meta.professions, caption: nil)),
+            PanelSection(title: "Traits", body: .chips(meta.traits, caption: nil)),
+            PanelSection(title: "Professional", body: .facts([
+                ("Experience", meta.professionalExperience.map { "\($0) years" }),
+                ("Current role", meta.currentRole),
+                ("Employer", meta.currentEmployer),
+                ("Notable works", meta.notableWorks),
+                ("Signature style", meta.signatureStyle),
+            ])),
+            PanelSection(title: "Work & community", body: .facts([
+                ("Own products", meta.ownProductsList),
+                ("Speaking", meta.speaking),
+                ("Workshops", meta.workshops),
+                ("Community", meta.communityWork),
+                ("Tools & stack", meta.toolsAndTechStack),
+            ])),
+            PanelSection(title: "Contact & social", body: .facts([
+                ("Email", meta.email),
+                ("X", meta.xURL),
+                ("Instagram", meta.instagramURL),
+                ("LinkedIn", meta.linkedInURL),
+                ("Behance", meta.behanceURL),
+                ("Bluesky", meta.bluesky),
+                ("Mastodon", meta.mastodon),
+                ("Threads", meta.threads),
+                ("Blog", meta.blogLink),
+                ("Shop", meta.shopLink),
+            ])),
+            PanelSection(title: "Personals", body: .facts([
+                ("Favourite book", meta.favouriteBook),
+                ("Fun fact", meta.funFact),
+                ("Hobbies", meta.hobbies),
+            ])),
+            PanelSection(title: "Typefaces", body: .refs(meta.typefaces)),
+            PanelSection(title: "Foundries", body: .refs(meta.typeFoundries)),
+        ]
     }
 
     // MARK: - Foundry
 
-    @ViewBuilder
-    private func foundryCards(_ meta: FoundryMeta, layout: PanelLayout) -> some View {
-        factsCard(layout)
-        refsCard(title: "Founders & designers", refs: meta.foundersDesigners)
-        chipsCard(title: "Popular fonts", chips: layout.chips["popularFonts"] ?? [])
-        refsCard(title: "Typefaces", refs: meta.typefaces)
+    private func foundrySections(_ meta: FoundryMeta) -> [PanelSection] {
+        [
+            PanelSection(title: "About", body: .facts([
+                ("Description", meta.description),
+                ("Category", meta.category),
+            ])),
+            PanelSection(title: "Origin & team", body: .facts([
+                ("Geography", meta.geography?.name),
+                ("Founded", meta.foundedYear),
+            ])),
+            PanelSection(title: "Founders & designers", body: .refs(meta.foundersDesigners)),
+            PanelSection(title: "Pricing & licensing", body: .facts([
+                ("Price range", meta.priceRange),
+                ("Trial fonts", meta.trialFonts.map { $0 ? "Yes" : "No" }),
+                ("Student discount", meta.studentDiscount.map { $0 ? "Yes" : "No" }),
+            ])),
+            PanelSection(title: "Licensing types", body: .chips(meta.licensingTypes, caption: nil)),
+            PanelSection(title: "Design approach", body: .facts([("Philosophy", meta.designPhilosophy)])),
+            PanelSection(title: "Popular fonts", body: .chips(meta.popularFonts, caption: nil)),
+            PanelSection(title: "Specialisation", body: .chips(meta.specialisation, caption: nil)),
+            PanelSection(title: "Custom services", body: .chips(meta.customServices, caption: nil)),
+            PanelSection(title: "Presence", body: .facts([
+                ("Social", meta.social),
+                ("Email", meta.email),
+                ("Thoughts", meta.thoughts),
+            ])),
+            PanelSection(title: "Distribution", body: .chips(meta.distribution, caption: nil)),
+            PanelSection(title: "Typefaces", body: .refs(meta.typefaces)),
+            PanelSection(title: "Websites", body: .refs(meta.websites)),
+            PanelSection(title: "Creatives", body: .refs(meta.creatives)),
+        ]
     }
 
     // MARK: - Music
 
     @ViewBuilder
     private func musicCards(_ meta: MusicMeta, layout: PanelLayout) -> some View {
-        factsCard(layout)
-
-        refsCard(title: "Artists", refs: meta.artists)
-        if let curator = meta.curator {
+        // Artists / curator as refs only when a ref opens a stored item; otherwise the names
+        // are Summary rows (never both).
+        if refsResolve(meta.artists) {
+            refsCard(title: "Artists", refs: meta.artists)
+        }
+        if let curator = meta.curator, refsResolve([curator]) {
             refsCard(title: meta.isOwnPlaylist == true ? "Curated by (you)" : "Curated by", refs: [curator])
         }
         chipsCard(title: "Genres", chips: layout.chips["genres"] ?? [])
@@ -1005,6 +1264,31 @@ struct CardSubcards: View {
                 }
             }
         }
+
+        linksCard(layout)
+    }
+
+    /// The Summary's identity label from the subtype: Album / Track / Playlist / Artist / Mix.
+    private static func musicIdentityLabel(_ subtype: String?) -> String {
+        guard let subtype = subtype?.nilIfEmpty else { return "Title" }
+        return subtype.prefix(1).uppercased() + String(subtype.dropFirst())
+    }
+
+    /// "Spotify", "Apple Music", "YouTube Music"…; nil for an unknown service.
+    private static func musicPlatformLabel(_ platform: String?) -> String? {
+        switch platform {
+        case nil, "unknown": return nil
+        case "spotify": return "Spotify"
+        case "apple-music": return "Apple Music"
+        case "youtube-music": return "YouTube Music"
+        case "youtube": return "YouTube"
+        case "soundcloud": return "SoundCloud"
+        case "bandcamp": return "Bandcamp"
+        case "tidal": return "Tidal"
+        case "mixcloud": return "Mixcloud"
+        case "deezer": return "Deezer"
+        case let other?: return other.replacingOccurrences(of: "-", with: " ").capitalized
+        }
     }
 
     // MARK: - Product
@@ -1013,8 +1297,6 @@ struct CardSubcards: View {
     private func productCards(_ meta: ProductMeta, layout: PanelLayout) -> some View {
         // The shop gallery (cover + up to 7 `gallery` images, capped at capture) renders in
         // the top images sub-card via `typedTopMediaRoles`.
-        factsCard(layout)
-
         if let creator = meta.creator {
             refsCard(title: "Posted by", refs: [creator])
         }
@@ -1041,8 +1323,6 @@ struct CardSubcards: View {
     private func postCards(_ meta: PostMeta, layout: PanelLayout) -> some View {
         // The post media (cover + up to 7 `gallery` images, capped at capture) renders in the
         // top images sub-card via `typedTopMediaRoles`. The text leads the header card.
-        factsCard(layout)
-
         // Model / prompt only; a flag with neither is the header's "AI art" badge.
         let model = meta.aiModel?.nilIfEmpty
         let prompt = meta.prompt?.nilIfEmpty
@@ -1128,8 +1408,6 @@ struct CardSubcards: View {
 
     @ViewBuilder
     private func toolCards(_ meta: ToolMeta, layout: PanelLayout) -> some View {
-        factsCard(layout)
-
         let topics = layout.chips["topics"] ?? []
         let hasRepoData = meta.stars != nil || meta.language != nil || meta.license != nil
             || meta.lastPushedAt != nil || !topics.isEmpty
@@ -1184,13 +1462,16 @@ struct CardSubcards: View {
         }
     }
 
-    /// The tool's own site, for a GitHub / App Store save only (the repo's homepage); any
-    /// other save's site is the Source row.
+    /// The tool's own site: the repo's homepage for a GitHub / App Store save; for any other
+    /// save the Source row opens the canonical page, so the homepage shows only when there is
+    /// no canonical page (and the links filter drops it when it is the saved URL).
     private func toolWebsiteURL(_ meta: ToolMeta) -> String? {
         let savedFromAppStore = item.sourceURL
             .flatMap { URL(string: $0) }
             .map { PageClassifier.isAppStoreAppURL($0) } ?? false
-        guard meta.repoURL != nil || savedFromAppStore else { return nil }
+        guard meta.repoURL != nil || savedFromAppStore else {
+            return meta.canonicalURL?.nilIfEmpty == nil ? meta.homepageURL : nil
+        }
         return meta.homepageURL
     }
 
@@ -1307,6 +1588,16 @@ struct CardSubcards: View {
                 )
             }
             .horizontalBleed(active: bleedsToTop && embedsInPanel)
+        }
+    }
+
+    @ViewBuilder
+    private func faqCard(title: String, items: [FAQItem]) -> some View {
+        let valid = items.filter { !$0.question.isEmpty && !$0.answer.isEmpty }
+        if !valid.isEmpty {
+            SubCard(title: title) {
+                FAQSubCardBody(items: valid)
+            }
         }
     }
 }

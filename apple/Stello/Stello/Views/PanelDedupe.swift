@@ -23,7 +23,8 @@ nonisolated enum PanelDedupe {
             .joined(separator: " ")
     }
 
-    /// True when `value` (normalised) equals, or is contained in, any shown value. Containment
+    /// For prose against prose (snippets, extra texts, Review): true when `value` (normalised)
+    /// equals, or is contained in, any shown value. Containment
     /// starts on a word; it must also end on a word unless the value is a text of 4+ words (a
     /// cut-off copy of a longer text ends mid-word). Values of 2 characters or fewer only
     /// match by equality.
@@ -41,6 +42,26 @@ nonisolated enum PanelDedupe {
             if isText, padded.contains(" \(needle)") { return true }
         }
         return false
+    }
+
+    /// True when `value` (normalised) equals any shown value — the rule for facts and rows: a
+    /// short fact inside a longer text is NOT a repeat.
+    static func isSameValue(_ value: String, against shown: [String]) -> Bool {
+        let needle = normalize(value)
+        guard !needle.isEmpty else { return false }
+        return shown.contains { normalize($0) == needle }
+    }
+
+    /// The key two fact rows are compared by. A value that means nothing without its label
+    /// (a number or year, "Yes" / "No", only symbols like "$$") is keyed with its label, so
+    /// "Weights 12" and "Styles 12" stay two facts; any other value is keyed by itself, so
+    /// "Free" under Price and under Paid / free is one fact.
+    static func factKey(label: String, value: String) -> String {
+        let v = normalize(value)
+        let labelDependent = v.isEmpty || !v.contains(where: \.isLetter) || v == "yes" || v == "no"
+        guard labelDependent else { return v }
+        let raw = v.isEmpty ? value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() : v
+        return "\(normalize(label))|\(raw)"
     }
 
     /// The tags worth showing: drops a tag whose normalised name equals a shown value, or is a

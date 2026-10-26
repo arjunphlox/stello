@@ -16,7 +16,7 @@ struct PanelDedupeTests {
         #expect(PanelDedupe.normalize("") == "")
     }
 
-    @Test("isRedundant: equal, a cut-off copy, and short values")
+    @Test("isRedundant (prose): equal, a cut-off copy, and short values")
     func isRedundant() {
         let text = "Made a free Midjourney Style Reference Tool with fifteen thousand srefs and smart AI search"
         // Equal after normalising.
@@ -34,6 +34,31 @@ struct PanelDedupeTests {
         // Unrelated values and empty input.
         #expect(PanelDedupe.isRedundant("Typography", against: [text]) == false)
         #expect(PanelDedupe.isRedundant("", against: [text]) == false)
+    }
+
+    @Test("isSameValue: facts repeat only on equality, never by containment")
+    func isSameValue() {
+        let text = "Made a free Midjourney Style Reference Tool with fifteen thousand srefs and smart AI search"
+        #expect(PanelDedupe.isSameValue("X.com", against: ["https://www.x.com/"]))
+        #expect(PanelDedupe.isSameValue("Fish &amp; Chips", against: ["fish & chips"]))
+        // A short fact contained in a long text is NOT redundant under the fact rule…
+        #expect(PanelDedupe.isSameValue("Midjourney", against: [text]) == false)
+        // …though the prose rule would call it a repeat.
+        #expect(PanelDedupe.isRedundant("Midjourney", against: [text]))
+        // An album name inside the track's summary still shows as its own row.
+        #expect(PanelDedupe.isSameValue("Hybrid Theory", against: ["In the End · Linkin Park · Hybrid Theory · 2000"]) == false)
+        #expect(PanelDedupe.isSameValue("", against: [""]) == false)
+    }
+
+    @Test("factKey: numbers and yes/no keyed with their label; other values by themselves")
+    func factKey() {
+        #expect(PanelDedupe.factKey(label: "Weights", value: "12") != PanelDedupe.factKey(label: "Styles", value: "12"))
+        #expect(PanelDedupe.factKey(label: "Release year", value: "2019") == PanelDedupe.factKey(label: "Release year", value: "2019"))
+        #expect(PanelDedupe.factKey(label: "Trial", value: "Yes") != PanelDedupe.factKey(label: "Student discount", value: "Yes"))
+        #expect(PanelDedupe.factKey(label: "Price", value: "Free") == PanelDedupe.factKey(label: "Paid / free", value: "free"))
+        #expect(PanelDedupe.factKey(label: "Location", value: "Berlin, Germany")
+            == PanelDedupe.factKey(label: "Geography", value: "Berlin Germany"))
+        #expect(PanelDedupe.factKey(label: "Price range", value: "$$") != PanelDedupe.factKey(label: "Price range", value: "$$$"))
     }
 
     @Test("filterTags: host, handle and model hidden when shown; unrelated tags kept")
