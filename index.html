@@ -37,7 +37,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Platypi:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="theme.css?v=1">
-  <link rel="stylesheet" href="style.css?v=74">
+  <link rel="stylesheet" href="style.css?v=75">
 </head>
 <body>
 
@@ -97,23 +97,36 @@
   <div class="main-layout">
     <div class="main-content">
       <div class="content-inner">
-        <!-- Header (ivory box, sticky, aligned to grid width) -->
+        <!-- Header (accent box, sticky, aligned to grid width). Actions live
+             in the bottom floating bar, matching the Mac app. -->
         <header class="header">
           <div class="header-row">
             <h1>Stello<sup class="header-count" id="header-count"></sup></h1>
-            <div class="header-actions">
-              <button class="header-btn" id="filter-panel-btn" title="Filters" data-icon="funnel" aria-label="Filters"></button>
-              <button class="header-btn" id="import-btn" title="Import URLs" data-icon="plus" aria-label="Import URLs"></button>
-              <button class="header-btn" id="settings-btn" title="Settings" data-icon="gear" aria-label="Settings"></button>
-            </div>
           </div>
         </header>
-        <input type="text" class="search-input" id="search-input" placeholder="Search items...">
         <div class="active-filters" id="active-filters"></div>
 
         <main class="grid-container">
+          <!-- Week timeline: one bar per week in the left gutter. Hover shows
+               the week, click filters the grid to it (Mac app parity). -->
+          <div class="timeline" id="timeline">
+            <div class="timeline-bars" id="timeline-bars"></div>
+            <div class="timeline-label" id="timeline-label" hidden></div>
+          </div>
           <div id="masonry-grid"></div>
+          <div class="grid-sentinel" id="grid-sentinel" aria-hidden="true"></div>
         </main>
+
+        <!-- Bottom floating control bar: Add, Filters, Search, Profile -->
+        <div class="bottom-bar" role="toolbar" aria-label="Library controls">
+          <button class="bar-btn" id="import-btn" type="button" title="Add" data-icon="plus" aria-label="Add"></button>
+          <button class="bar-btn" id="filter-panel-btn" type="button" title="Filters" data-icon="funnel" aria-label="Filters"></button>
+          <label class="bar-search">
+            <span class="bar-search-icon" data-icon="magnifying-glass" aria-hidden="true"></span>
+            <input type="search" class="search-input" id="search-input" placeholder="Search items…" aria-label="Search items" autocomplete="off">
+          </label>
+          <button class="bar-btn bar-btn-avatar" id="settings-btn" type="button" title="Settings" data-icon="user-circle" aria-label="Settings"></button>
+        </div>
       </div>
     </div>
     <aside class="panels-container" id="panels-container" aria-label="Comparison and tool panels"></aside>
@@ -125,6 +138,6 @@
 <script src="supabase-client.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script src="desktop-context.js?v=1"></script>
-<script src="app.js?v=47"></script>
+<script src="app.js?v=48"></script>
 </body>
 </html>
