@@ -15,7 +15,7 @@ Source of truth for scope and decisions: the PRD at `.cursor/plans/stello_native
 ## Workstream board
 Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 
-- ✅ **Sprint 0** — Walking skeleton. Models + masonry + 20 seed items render (2-col iPhone confirmed); CloudKit private sync enabled (container `iCloud.com.phloxpage.Stello`); test target green (9 tests/12 runs). Commits e4f9cbf, 789ab6f.
+- ✅ **Sprint 0** — Walking skeleton. Models + masonry + 20 seed items render (2-col iPhone confirmed); CloudKit private sync enabled (container `iCloud.com.arjunphlox.Stello`); test target green (9 tests/12 runs). Commits e4f9cbf, 789ab6f.
 - ✅ **Sprint 1** — Core read UX. Real theme (exact Radix, {dark,amber} default, @AppStorage + Settings picker), ISO-week sections, search, AND tag filters (+intent, counts, pills), DetailView (split on iPad/Mac), 25/25 tests. Commit f0ec677. Minor non-blocking notes below.
 - ✅ **Sprint 2a** — In-app capture. RuleTagger (faithful port), CaptureService (classify + on-device OG parse + image download/downsize + slug/dedupe), CaptureSheet (+ button, paste, PhotosPicker), 48 tests. Committed 05bb311. Follow-up: platformNoise in title mining (fold into 2b).
 - ✅ **Sprint 2a-share** — Share Extension + App Group shared store. StelloStore factory (App Group + CloudKit / extension / fallbacks), StelloShare extension (NSItemProvider routing -> CaptureService), entitlements on both targets. Built in Xcode, committed 3efdf93.

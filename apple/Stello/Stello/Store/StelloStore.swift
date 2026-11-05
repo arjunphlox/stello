@@ -2,8 +2,8 @@ import Foundation
 import SwiftData
 
 enum StelloStore {
-    static let appGroupID = "group.com.phloxpage.Stello"
-    static let cloudKitContainerID = "iCloud.com.phloxpage.Stello"
+    static let appGroupID = "group.com.arjunphlox.Stello"
+    static let cloudKitContainerID = "iCloud.com.arjunphlox.Stello"
 
     /// Item IDs already counted as opened this app session (in-memory debounce).
     private(set) static var openedItemIDsThisSession = Set<UUID>()

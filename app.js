@@ -1304,18 +1304,26 @@
       changes.removed_snippets = texts;
       next.snippets = next.snippets.filter(sn => !texts.includes(sn.text));
     }
+    // Images are identified to the apps by a fingerprint, since SwiftData
+    // doesn't expose CloudKit record names on the app side.
+    const fingerprint = (img) => ({ width: img.width || null, height: img.height || null, source: img.source || null, role: img.role || null });
+    const imageForPath = (path) => {
+      const rec = ckRecordFromPath(path);
+      return rec ? prev.images.find(img => img.ck === rec) : null;
+    };
     if (payload.primary_image_path) {
-      const rec = ckRecordFromPath(payload.primary_image_path);
-      if (rec) {
-        changes.primary_image = rec;
-        next.images = next.images.map(img => ({ ...img, is_primary: img.ck === rec }));
+      const img = imageForPath(payload.primary_image_path);
+      if (img) {
+        changes.primary_image = fingerprint(img);
+        next.images = next.images.map(i => ({ ...i, is_primary: i.ck === img.ck }));
         next.images.sort((x, y) => Number(y.is_primary) - Number(x.is_primary));
       }
     }
     if (payload.remove_image_paths) {
-      const recs = payload.remove_image_paths.map(ckRecordFromPath).filter(Boolean);
-      changes.remove_images = recs;
-      next.images = next.images.filter(img => !recs.includes(img.ck));
+      const imgs = payload.remove_image_paths.map(imageForPath).filter(Boolean);
+      changes.remove_images = imgs.map(fingerprint);
+      const drop = new Set(imgs.map(i => i.ck));
+      next.images = next.images.filter(img => !drop.has(img.ck));
     }
     if (payload.manual_image_upload) {
       const { base64, mime } = payload.manual_image_upload;

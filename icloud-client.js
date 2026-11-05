@@ -6,7 +6,7 @@
  *   - READS the SwiftData mirror zone (CD_Item, CD_Tag, CD_ItemImage, CD_Snippet)
  *     with change tokens, cached in IndexedDB so later visits fetch only changes,
  *   - WRITES nothing to that zone. Saves/edits go to a `StelloInbox` record in
- *     the default zone; the apps apply them (on-device fetch + tagging) and
+ *     its own `StelloInbox` zone; the apps apply them (on-device fetch + tagging) and
  *     delete the request. SwiftData's mirror layout is internal, so the apps
  *     stay the only writers of real items.
  */
@@ -15,7 +15,7 @@
 
   // ---- configuration ----
   const CONFIG = Object.assign({
-    containerIdentifier: 'iCloud.com.phloxpage.Stello',
+    containerIdentifier: 'iCloud.com.arjunphlox.Stello',
     // CloudKit Console → Tokens & Keys → API token (sign-in callback: postMessage).
     // Designed to be public; restricted to Stello's allowed origins.
     apiToken: 'REPLACE_WITH_CLOUDKIT_API_TOKEN',
@@ -25,7 +25,11 @@
   }, window.STELLO_CLOUDKIT || {});
 
   const MIRROR_ZONE = { zoneName: 'com.apple.coredata.cloudkit.zone' };
+  // Inbox requests live in their own zone so both sides can read them with
+  // zone changes (no query indexes to set up) and the apps can subscribe to
+  // the zone for silent pushes.
   const INBOX_TYPE = 'StelloInbox';
+  const INBOX_ZONE = { zoneName: 'StelloInbox' };
   const UPSTREAM_VERSION_URL = 'https://raw.githubusercontent.com/arjunphlox/stello/main/version.json';
   const CACHE_VERSION = 1;
   // Heavy fields stay out of the library sync; images load lazily per card.
@@ -364,8 +368,8 @@
    *   action: 'capture' { url, note? } | 'update' { itemID, changes } |
    *           'delete' { itemID } | 'reenrich' { itemID }
    *   changes (update): why_saved[], what_works, new_snippets[], removed_snippets[],
-   *           primary_image (record name), remove_images[] (record names),
-   *           add_image (bytes in the `image` asset field)
+   *           primary_image / remove_images[]: image fingerprints
+   *           { width, height, source, role }, add_image (bytes in the `image` asset)
    * Returns the request id so the UI can show a pending state.
    */
   async function enqueue(action, payload, attachment) {
@@ -379,11 +383,17 @@
     };
     // Optional image bytes (manual upload) ride along as a CloudKit asset.
     if (attachment) fields.image = { value: attachment };
-    const res = await container.privateCloudDatabase.saveRecords([{
-      recordType: INBOX_TYPE,
-      recordName: requestID,
-      fields,
-    }]);
+    const database = container.privateCloudDatabase;
+    const save = () => database.saveRecords(
+      [{ recordType: INBOX_TYPE, recordName: requestID, fields }],
+      { zoneID: INBOX_ZONE },
+    );
+    let res = await save();
+    if (res.hasErrors && String(res.errors[0].ckErrorCode) === 'ZONE_NOT_FOUND') {
+      // First web save before any app created the zone.
+      await database.saveRecordZones([INBOX_ZONE]);
+      res = await save();
+    }
     if (res.hasErrors) throw res.errors[0];
     return requestID;
   }
@@ -391,16 +401,17 @@
   /** Requests the apps haven't processed yet (for "processing" cards). */
   async function pendingRequests() {
     const container = await getContainer();
-    const res = await container.privateCloudDatabase.performQuery(
-      { recordType: INBOX_TYPE, sortBy: [{ fieldName: 'createdAt', ascending: false }] },
-    );
+    const res = await container.privateCloudDatabase.fetchRecordZoneChanges({ zoneID: INBOX_ZONE });
     if (res.hasErrors) return [];
-    return (res.records || []).map((r) => {
-      const f = flatten(r);
-      let payload = {};
-      try { payload = JSON.parse(f.payload || '{}'); } catch { /* ignore */ }
-      return { id: r.recordName, action: f.action, payload, createdAt: f.createdAt };
-    });
+    return (res.zones[0].records || [])
+      .filter((r) => !r.deleted && r.recordType === INBOX_TYPE)
+      .map((r) => {
+        const f = flatten(r);
+        let payload = {};
+        try { payload = JSON.parse(f.payload || '{}'); } catch { /* ignore */ }
+        return { id: r.recordName, action: f.action, payload, createdAt: f.createdAt };
+      })
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }
 
   // ---------- misc ----------
