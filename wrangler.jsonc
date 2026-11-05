@@ -3,36 +3,26 @@
   "name": "stello",
   "main": "src/index.js",
   "compatibility_date": "2025-04-01",
-  "compatibility_flags": ["nodejs_compat"],
 
   // Static frontend. dist/ is an allowlisted copy of the frontend files
   // (scripts/build-assets.js) — the repo root holds the knowledge-base .md
-  // content + tooling that must NOT be served. run_worker_first routes the
-  // API + image-serving paths to the Worker; everything else is a static asset.
+  // content + tooling that must NOT be served. Only /img/* runs the Worker
+  // first; everything else is a static asset.
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/img/*"],
+    "run_worker_first": ["/img/*"],
     "html_handling": "auto-trailing-slash"
   },
 
-  // Image bytes live in R2 (zero egress), served back via GET /img/*.
+  // Legacy item images, kept until the Supabase-era library is imported
+  // into iCloud (the export references them as /img/<key>).
   "r2_buckets": [
     { "binding": "BUCKET", "bucket_name": "stello-item-images" }
   ],
 
-  // sharp replacement — WebP encode + resize at ingest via the Images binding.
-  "images": { "binding": "IMAGES" },
+  // No scheduled jobs any more: an empty list removes the old daily cron on deploy.
+  "triggers": { "crons": [] },
 
-  // Daily batch drain (was vercel.json crons → /api/cron/process-batches).
-  "triggers": { "crons": ["0 0 * * *"] },
-
-  "observability": { "enabled": true },
-
-  // Public values (safe to expose — already shipped in supabase-client.js).
-  // Secrets (SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY) via `wrangler secret put`.
-  "vars": {
-    "SUPABASE_URL": "https://ngncjtzsqrrfrhgammne.supabase.co",
-    "SUPABASE_ANON_KEY": "sb_publishable_r7udhKoy2jEtBrcbKY1wGg_LFn-wMjR"
-  }
+  "observability": { "enabled": true }
 }

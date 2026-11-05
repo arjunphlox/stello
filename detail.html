@@ -206,8 +206,7 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-client.js?v=1"></script>
+  <script src="icloud-client.js?v=1"></script>
   <script>
   (function () {
     'use strict';
@@ -296,8 +295,8 @@
       return {
         ...row,
         tags,
-        has_image: !!row.og_image_path,
-        image_path: row.og_image_path || null,
+        has_image: !!(row.images && row.images[0]),
+        image_path: (row.images && row.images[0] && row.images[0].path) || null,
       };
     }
 
@@ -317,16 +316,12 @@
         return;
       }
 
-      // Load item from Supabase
-      const client = Stello.getClient();
-      const { data, error } = await client
-        .from('items')
-        .select('*')
-        .eq('slug', slug)
-        .eq('user_id', Stello.getUserId())
-        .single();
-      if (error) console.error('Supabase item fetch error:', error.message);
-      const item = data ? normalizeItem(data) : null;
+      // Load the item from the iCloud library cache (synced on the grid page).
+      let rows = [];
+      try { rows = await Stello.loadLibrary(); } catch (e) { console.error('iCloud load failed:', e); }
+      const row = rows.find(r => r.slug === slug);
+      const item = row ? normalizeItem(row) : null;
+      Stello.hydrateImages(document.body);
 
       if (!item) {
         document.getElementById('detail-right').innerHTML = '<p style="color:var(--text-dim)">Item not found.</p>';
