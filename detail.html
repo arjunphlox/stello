@@ -371,7 +371,7 @@
 
       document.getElementById('detail-right').innerHTML = html;
 
-      // Render markdown body from the Supabase row
+      // Render the markdown body
       const body = item.body_markdown
         ? stripSections(item.body_markdown, ['Summary', 'Key Details', 'Visual Assets'])
         : '';

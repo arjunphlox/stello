@@ -65,11 +65,8 @@ Filter applies to rendered pixels — nothing to align.
   `screenshots.js`, `capture.js`, `capture-bulk.js`, `enrich.js`,
   `reenrich.js`, `reprocess.js`, `item-update.js`, `upload-image.js`.
 - `renderCard()` emits `<img width=W height=H>` when known.
-- `scripts/backfill-image-dimensions.js` retrofits dims onto legacy rows
-  (requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY env vars).
-- Lazy in-app backfill runs at idle priority — `backfillImageDimensions()`
-  in app.js, idempotent, handles legacy `og_image_path`-only rows by
-  synthesising an `images[]` entry.
+- (Nov 2026) Dims now come from iCloud `CD_ItemImage` width/height; the
+  Supabase-era backfill script + in-app backfill were removed.
 
 **Things that no longer exist (don't reintroduce blindly)**
 - `:has(.panel) .content-inner { padding-right: 12px }` — gone.

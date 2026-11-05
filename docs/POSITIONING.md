@@ -186,7 +186,7 @@ enrichment · intent facet + review badge flow · search-over-everything · weig
 related items · revisit tracking · per-kind dossiers + cross-links · masonry/weeks/timeline/themes ·
 local-first + CloudKit sync.
 **In verification:** live on-device AI on real hardware (macOS in progress; iOS pending).
-**Committed next:** kind-dispatched enrichment + typed highlights · Supabase→native migration.
+**Committed next:** kind-dispatched enrichment + typed highlights · importing the old web library into iCloud.
 **Roadmap:** brief-aware surfacing · decision tools (type scale first) · internet-connected educator ·
 taste timeline · vibe search · embeddings · exports · rendered-page archive.
 

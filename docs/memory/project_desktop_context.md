@@ -10,7 +10,7 @@ Shipped 2026-06-17. Full plan: `~/.claude/plans/firstly-the-data-capture-optimiz
 
 ## What it is
 
-Second related-items source for Stello — driven by Mac context (watcher folder, Sketch artboards, Safari tabs), not Supabase tag overlap. Local SQLite + thumbnails; no cloud egress except loopback MLX.
+Second related-items source for Stello — driven by Mac context (watcher folder, Sketch artboards, Safari tabs), not tag overlap. Local SQLite + thumbnails; no cloud egress except loopback MLX.
 
 ## Key paths
 

@@ -187,6 +187,12 @@
           ],
         }, {
           "kind": "group",
+          "path": "Sync",
+          "children": [
+            { "path": "WebInboxProcessor.swift", "target-membership": [ "Stello/compile-sources" ] },
+          ],
+        }, {
+          "kind": "group",
           "path": "Theme",
           "children": [
             { "path": "StelloFont.swift", "target-membership": [ "Stello/compile-sources" ] },

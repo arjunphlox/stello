@@ -2,6 +2,7 @@
 
 Dated decisions, newest first. Moved out of `CLAUDE.md` on 2026-10-27. Add new lines at the top.
 
+- 2026-11-05 · iCloud is Stello's only data home; Supabase (auth, DB, RLS) and the Worker API removed · web reads the apps' SwiftData+CloudKit library through CloudKit JS with Apple ID sign-in and writes through a `StelloInbox` zone the apps apply (silent push), so there's nothing to run server-side and login is just Apple ID. Library exported first (3,605 items) for import into iCloud. App IDs renamed `com.phloxpage.*` → `com.arjunphlox.*`
 - 2026-11-05 · Native project = Apple's JSON `.xcproj` (`apple/Stello/Stello.xcodeproj/project.xcproj`, Xcode 27.2+); XcodeGen and `project.yml` retired, reversing 2026-06-26 · the format is text and agent-editable on its own, so the second source of truth (and the churn from regenerating) is gone. Trial on Xcode 27.3: 381/381 tests, iOS build, clean after open and close. Never run `xcodegen generate` on it
 - 2026-06-26 · Native Apple app under `apple/` (SwiftUI multiplatform iOS/iPadOS/macOS 27, local-first SwiftData+CloudKit, on-device AFM 3, no backend) · matures Stello to local-first/privacy/Apple-native per PRD; coexists with web (web NOT sunset until explicit OK)
 - 2026-06-26 · Native build harness = XcodeGen (`apple/Stello/project.yml` source of truth) + xcodebuild on iOS 27 sim (unsigned) · Xcode GUI target/capability/signing too painful; text project is agent-editable
