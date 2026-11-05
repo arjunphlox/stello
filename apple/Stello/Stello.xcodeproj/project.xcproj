@@ -317,7 +317,7 @@
         "PRODUCT_BUNDLE_IDENTIFIER[sdk=xros*]": "com.phloxpage.Stello",
         "REGISTER_APP_GROUPS": "YES",
         "SDKROOT": "auto",
-        "SKIP_INSTALL": "YES",
+        "SKIP_INSTALL": "NO",
         "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator xros xrsimulator macosx",
         "SUPPORTS_MACCATALYST": "NO",
         "SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD": "NO",
