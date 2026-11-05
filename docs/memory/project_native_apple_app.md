@@ -1,6 +1,6 @@
 ---
 name: Native Apple app — SwiftUI multiplatform architecture
-description: Stello native app under apple/Stello — local-first SwiftData+CloudKit, on-device Foundation Models enrichment, XcodeGen build harness, macOS inset-glass header pattern, CloudKit seed dedupe gotchas; coexists with web app
+description: Stello native app under apple/Stello — local-first SwiftData+CloudKit, on-device Foundation Models enrichment, JSON .xcproj project (XcodeGen retired), macOS inset-glass header pattern, CloudKit seed dedupe gotchas; coexists with web app
 type: project
 originSessionId: native-app-foundation-ship
 ---
@@ -16,7 +16,7 @@ Stello's native Apple app lives at `apple/Stello/` — a SwiftUI multiplatform t
 
 ## Build harness
 
-- **Source of truth:** `apple/Stello/project.yml` (XcodeGen) — agent-editable text project, not Xcode GUI target/capability/signing
+- **Source of truth:** `apple/Stello/Stello.xcodeproj/project.xcproj`, Apple's JSON project format (Xcode 27.2+, converted 2026-11-05 with `xcodebuild -convert-project xcproj`). Edit it directly or in Xcode. XcodeGen and `project.yml` are retired: never run `xcodegen generate` (it reports "Unable to read project" and breaks it). The file allows trailing commas, so it isn't strict JSON. *Historical:* 2026-06-26 to 2026-11-05 the source was an XcodeGen `project.yml`.
 - **CLI test:** `xcodebuild -project apple/Stello/Stello.xcodeproj -scheme Stello -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` (99 tests, unsigned iOS 27 sim)
 - **Model routing:** the Fable 5.1 orchestrator plans/reviews and never builds UI directly (orchestrator-built passes caused UI drift from the web reference); building goes to task-shape sub-agents — Opus 5.5 for layout/visual parity, Sonnet 5.5 for scoped components — or a closed-scope Grok 4.7 Cursor brief. *Historical:* until 2026-09-23 this read "Composer 2.5 builds, Opus orchestrates".
 - **macOS screenshots:** use `open -g` (non-foreground) to avoid focus-stealing during visual verification
@@ -56,7 +56,7 @@ Large web-parity + interaction pass (Karst font, single grid + timeline, panel, 
 - **Model name collision:** `Attachment` clashes with FoundationModels' `Attachment` → name it `LocalAttachment`.
 - **Typography:** rem has no native equivalent and hardcoding it breaks Dynamic Type. Use points + Dynamic Type via `Font.custom(_, size:, relativeTo: style)`. Base body = 14pt with a derived monotonic scale centralized in `StelloFont.defaultSize(for:)`; keep deliberate fixed sizes (wordmark, card title/pill zoom curve, timeline label) explicit.
 - **App-icon / Open-With capture:** declare `CFBundleDocumentTypes` (+ `UTImportedTypeDeclarations`) in `Info.plist` and handle `.onOpenURL` on the root scene; SwiftUI non-document apps still receive Dock-dropped files this way.
-- **XcodeGen + iCloud path** spawns `Stello 2.xcodeproj` / `Stello 3.xcodeproj` duplicate siblings on `xcodegen generate`. Gitignore `apple/**/*[0-9].xcodeproj/` and delete strays; only `Stello.xcodeproj` is real.
+- *(Historical, XcodeGen era)* **XcodeGen + iCloud path** spawned `Stello 2.xcodeproj` / `Stello 3.xcodeproj` duplicate siblings on `xcodegen generate`. Gitignore `apple/**/*[0-9].xcodeproj/` and delete strays; only `Stello.xcodeproj` is real.
 - **Codesign "resource fork / detritus"** on `StelloShare.appex` blocks signed build/test under the iCloud/space workspace path. Clear with `xattr -cr <project>` and build/test into `-derivedDataPath /tmp/StelloDD`.
 - **`.build-artifacts/` (Xcode DerivedData) is ~1.3 GB** — must be gitignored, never committed.
 
@@ -79,7 +79,7 @@ Shipped A–E (117→138 macOS tests). Timeline nudge session same day **reverte
 | B Why-saved intent | Tappable chips → intent tag @0.9; dismiss; `TagFilterSheet` "Why saved" first |
 | C Search blob | `ItemSearchBlob.swift`; extended `ItemFilter` full-text match |
 | D Awaiting review strip | `AwaitingReviewFilter.swift`, `AwaitingReviewStripView.swift`, masonry integration + seed `-screenshotAwaitingReview` (2026-07-06: strip view replaced by an on-card review badge in `ItemCardView.swift` — see Handoff log; `AwaitingReviewFilter.isEligible`/`dismissReview` lifecycle unchanged; 2026-07-06 also added a "Needs review" toggle in `TagFilterSheet` — `ItemFilter.apply(needsReviewOnly:)`, same `isEligible` predicate as the badge, wired through `ContentView`/`MasonryGridView`/`SidePanelView` bindings + `hasActiveFilters`/`filterPillsRow`) |
-| E Page classification | `PageClassifier.swift` in capture path; `PageClassifierTests.swift`; Share target includes `PageClassifier.swift` + `CardMetadata.swift` via `project.yml` |
+| E Page classification | `PageClassifier.swift` in capture path; `PageClassifierTests.swift`; Share target includes `PageClassifier.swift` + `CardMetadata.swift` via the project file |
 
 ### PR #30 fix round lessons (2026-07-06, Sonnet 5 sub-agent round)
 
