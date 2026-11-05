@@ -18,7 +18,7 @@
     containerIdentifier: 'iCloud.com.arjunphlox.Stello',
     // CloudKit Console → Tokens & Keys → API token (sign-in callback: postMessage).
     // Designed to be public; restricted to Stello's allowed origins.
-    apiToken: 'REPLACE_WITH_CLOUDKIT_API_TOKEN',
+    apiToken: '8e442426a5fa1acc0fa4cd1d4ce844bf0cf7acc90fb2bd64f25862dc7ba2b3d1',
     // Xcode builds sync to Development; switch to 'production' after the
     // schema is deployed and the apps ship through TestFlight/App Store.
     environment: 'development',
