@@ -39,5 +39,5 @@ apple/Stello/.build-artifacts/
 **/DerivedData/
 **/xcuserdata/
 *.xcuserstate
-# XcodeGen iCloud duplication artifacts
+# iCloud duplicate .xcodeproj siblings (from the XcodeGen era; still harmless to ignore)
 apple/**/*[0-9].xcodeproj/

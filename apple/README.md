@@ -22,6 +22,7 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done · 🔬 in review
 
 ## Build workflow (switched 2026-06-25)
 Xcode GUI proved too painful (targets/capabilities/signing). Now **Cursor-driven**: Opus orchestrates/reviews/commits; **Composer 2.5** sub-agents/sessions edit Swift + a text **XcodeGen `project.yml`**, build/test via `xcodebuild` (iOS Simulator, unsigned), and post screenshots. Toolchain: xcode-select -> /Applications/Xcode-beta.app (Xcode 27); xcodegen 2.45.4. In progress: migrate the hand-managed .xcodeproj to project.yml (all 3 targets).
+- **Since 2026-11-05 the project is Apple's JSON `.xcproj` format** (`Stello.xcodeproj/project.xcproj`, Xcode 27.2+), edited directly in a text editor or in Xcode. XcodeGen and `project.yml` are retired: never run `xcodegen generate`, because it breaks the project.
 - ✅ **Sprint 2b** — On-device Foundation Models enrichment. Swappable Enricher (FoundationModels / fallback / mock), @Generable color/style/mood + snippets + why-saved, auto-enrich after capture + launch backfill, DetailView light review (AI tags/snippets/why-saved chips -> intent tag @0.9). 83 tests green. Committed 5ff38bc7.
   - Pending: (1) LIVE on-device AI unverified — simulator lacks Apple Intelligence; verify on a real Apple-Intelligence device (needs signing). (2) Swap in the bake-off-winning prompt into EnrichmentPrompts.swift when ready.
 
