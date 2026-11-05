@@ -17,6 +17,7 @@
     'shuffle': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M237.66,178.34a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L212.69,192H200.94a72.12,72.12,0,0,1-58.59-30.15l-41.72-58.4A56.1,56.1,0,0,0,55.06,80H32a8,8,0,0,1,0-16H55.06a72.12,72.12,0,0,1,58.59,30.15l41.72,58.4A56.1,56.1,0,0,0,200.94,176h11.75l-10.35-10.34a8,8,0,0,1,11.32-11.32ZM143,107a8,8,0,0,0,11.16-1.86l1.2-1.67A56.1,56.1,0,0,1,200.94,80h11.75L202.34,90.34a8,8,0,0,0,11.32,11.32l24-24a8,8,0,0,0,0-11.32l-24-24a8,8,0,0,0-11.32,11.32L212.69,64H200.94a72.12,72.12,0,0,0-58.59,30.15l-1.2,1.67A8,8,0,0,0,143,107Zm-30,42a8,8,0,0,0-11.16,1.86l-1.2,1.67A56.1,56.1,0,0,1,55.06,176H32a8,8,0,0,0,0,16H55.06a72.12,72.12,0,0,0,58.59-30.15l1.2-1.67A8,8,0,0,0,113,149Z"/></svg>',
     'crosshair': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232,120H215.63a88.13,88.13,0,0,0-79.63-79.63V24a8,8,0,0,0-16,0V40.37A88.13,88.13,0,0,0,40.37,120H24a8,8,0,0,0,0,16H40.37A88.13,88.13,0,0,0,120,215.63V232a8,8,0,0,0,16,0V215.63A88.13,88.13,0,0,0,215.63,136H232a8,8,0,0,0,0-16ZM128,200a72,72,0,1,1,72-72A72.08,72.08,0,0,1,128,200Zm0-112a40,40,0,1,0,40,40A40,40,0,0,0,128,88Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,152Z"/></svg>',
     'trash': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></svg>',
+    'user-circle': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg>',
     'dots-three': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM48,116a12,12,0,1,0,12,12A12,12,0,0,0,48,116Zm160,0a12,12,0,1,0,12,12A12,12,0,0,0,208,116Z"/></svg>',
   };
   function icon(name) { return ICONS[name] || ''; }
@@ -27,7 +28,6 @@
   let activeTags = [];      // [{tag, category}]
   let searchQuery = '';
   let relatedIndex = {};     // slug -> Set of related slugs
-  let loadedWeeks = new Set(); // track which weeks have been rendered
 
   // --- Category colors (for pills) ---
   const CAT_CLASS = {
@@ -246,11 +246,10 @@
       renderStats();
       if (!booted) {
         booted = true;
-        renderGrid();
         injectHeaderIcons();
         bindEvents();
+        startGridColsObserver();   // sizes the columns, then renders the grid
         PanelManager.init();
-        startGridColsObserver();
         Stello.hydrateImages(document.body);
       } else {
         renderGrid();
@@ -473,6 +472,7 @@
         const inTags = item.tags.some(t => t.tag.toLowerCase().includes(q));
         if (!inTitle && !inSummary && !inTags) return false;
       }
+      if (selectedWeek && getWeekKey(item.added_at) !== selectedWeek) return false;
       if (activeTags.length > 0) {
         return activeTags.every(at =>
           item.tags.some(t => t.tag === at.tag && t.category === at.category)
@@ -527,135 +527,445 @@
     return weeks;
   }
 
-  function renderWeekCards(weekKey) {
-    const container = $grid.querySelector(`.masonry-section[data-week="${weekKey}"]`);
-    const header = $grid.querySelector(`.date-section-header[data-week="${weekKey}"]`);
-    const toggleLink = header?.querySelector('.week-show-link');
-    if (!container) return;
-
-    const items = getFilteredItems();
-    const weekItems = items.filter(i => getWeekKey(i.added_at) === weekKey);
-    const entries = weekItems.map((item, idx) => ({ item, idx }));
-
-    container.innerHTML = renderColumnsHTML(entries, currentGridCols());
-    container.style.display = '';
-    loadedWeeks.add(weekKey);
-    header?.classList.add('is-expanded');
-    if (header) {
-      header.setAttribute('aria-expanded', 'true');
-      header.setAttribute('aria-label', 'Collapse week');
-    }
-    if (toggleLink) toggleLink.innerHTML = icon('caret-up');
-    PanelManager.refreshAfterGridRender();
-  }
-
-  function collapseWeek(weekKey) {
-    const container = $grid.querySelector(`.masonry-section[data-week="${weekKey}"]`);
-    const header = $grid.querySelector(`.date-section-header[data-week="${weekKey}"]`);
-    const toggleLink = header?.querySelector('.week-show-link');
-    if (!container) return;
-    container.innerHTML = '';
-    container.style.display = 'none';
-    loadedWeeks.delete(weekKey);
-    header?.classList.remove('is-expanded');
-    if (header) {
-      header.setAttribute('aria-expanded', 'false');
-      header.setAttribute('aria-label', 'Expand week');
-    }
-    if (toggleLink) toggleLink.innerHTML = icon('caret-down');
-    PanelManager.refreshAfterGridRender();
-  }
-
-  const isSearchActive = () => searchQuery || activeTags.length > 0;
-
-  // ---- Grid column-count observer + flex-masonry distribution ----
-  // The grid is N flex columns (`.masonry-col`), each a vertical stack of
-  // cards. `distributeIntoColumns` packs cards greedily into the
-  // currently-shortest column so the column heights end up balanced —
-  // same visual result as column-count masonry, but with rock-solid
-  // flex layout instead of WebKit's flicker-prone column engine.
+  // ---- Continuous masonry + week timeline (Mac app parity) ----
+  // The grid is one continuous masonry (no per-week sections), rendered in
+  // batches as you scroll. Week grouping lives in the left-gutter timeline:
+  // one bar per ISO week, spanning that week's cards. Hover shows the week,
+  // click filters the grid to it — same model as the native app.
   //
-  // `updateGridCols` watches `.main-content`'s width via ResizeObserver
-  // and re-renders loaded weeks when the column count changes.
+  // Card size is set by the column count you get at full width (auto by
+  // breakpoint, or your pinch choice). Opening the side panel keeps that
+  // card width and drops columns instead of squeezing cards; the panel
+  // absorbs the leftover strip so the grid stays edge to edge.
+  const BATCH = 120;
+  const ZOOM_KEY = 'stello.gridColumns';   // 0 = auto; 1…12 = pinch choice
+  const MIN_COLS = 1, MAX_COLS = 12;
+  let zoomCols = (() => {
+    const n = parseInt(localStorage.getItem(ZOOM_KEY) || '0', 10);
+    return Number.isFinite(n) && n >= MIN_COLS && n <= MAX_COLS ? n : 0;
+  })();
+  let selectedWeek = null;        // 'YYYY-Wnn' week filter, or null
+  let filteredCache = [];          // getFilteredItems() snapshot for the current render
+  let renderedCount = 0;
+  let gridCols = 0;
+  let gridColsAtFullWidth = 0;    // column count with no panel open (sets card width)
+  let cardWidth = 0;
+  let panelExtra = 0;              // px the open panel grows to absorb leftover space
+  let colHeights = [];             // running estimated column heights (px)
+  let weekScrollMemory = null;     // { scrollTop, count } to restore after clearing a week filter
+
+  const isSearchActive = () => !!(searchQuery || activeTags.length > 0 || selectedWeek);
+
   function computeGridCols(width) {
     if (width <= 500) return 2;
     if (width <= 768) return 3;
     if (width <= 1200) return 4;
     return 5;
   }
-  const COL_WIDTH_ESTIMATE = 250; // px; rough enough for column-balance
+  function gridGap() {
+    const sec = $grid.querySelector('.masonry-section');
+    const g = sec ? parseFloat(getComputedStyle(sec).columnGap) : NaN;
+    return Number.isFinite(g) ? g : (window.innerWidth <= 768 ? 12 : 24);
+  }
+  function isOverlayPanelMode() { return window.innerWidth <= 768; }
+
+  // Grid width with no panel open — the width card size is derived from.
+  function fullGridWidth() {
+    const mc = document.querySelector('.main-content');
+    const inner = document.querySelector('.content-inner');
+    const cs = getComputedStyle(inner);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const maxW = parseFloat(cs.maxWidth);
+    const sb = mc ? (mc.offsetWidth - mc.clientWidth) : 0;
+    const innerW = Math.min(window.innerWidth - sb, Number.isFinite(maxW) ? maxW : Infinity);
+    return Math.max(0, innerW - 2 * padL);
+  }
+  function fitCols(avail, cw, gap) {
+    return Math.max(1, Math.floor((avail + gap + 0.5) / (cw + gap)));
+  }
+  function colsWidth(cols, cw, gap) { return cols * cw + (cols - 1) * gap; }
+
   function estimateCardHeight(item) {
-    if (item.image_width && item.image_height) {
-      return COL_WIDTH_ESTIMATE * (item.image_height / item.image_width);
+    const w = cardWidth || 250;
+    if (item.image_width && item.image_height) return w * (item.image_height / item.image_width);
+    if (item.has_image) return w * (630 / 1200);
+    return Math.min(242, w);
+  }
+
+  function scaffoldHTML(cols) {
+    let html = '<div class="masonry-section">';
+    for (let i = 0; i < cols; i++) html += '<div class="masonry-col"></div>';
+    return html + '</div>';
+  }
+
+  // Append the next batch of filtered items, packed into the shortest column.
+  function appendBatch(n) {
+    const section = $grid.querySelector('.masonry-section');
+    if (!section) return;
+    const cols = section.children;
+    if (!cols.length) return;
+    // Re-sync the running heights with real layout once per batch, so
+    // estimate drift from earlier batches doesn't accumulate.
+    for (let i = 0; i < cols.length; i++) colHeights[i] = cols[i].offsetHeight;
+    const end = Math.min(filteredCache.length, renderedCount + n);
+    const buckets = Array.from({ length: cols.length }, () => []);
+    for (let i = renderedCount; i < end; i++) {
+      const item = filteredCache[i];
+      let best = 0;
+      for (let c = 1; c < colHeights.length; c++) if (colHeights[c] < colHeights[best]) best = c;
+      buckets[best].push(renderCard(item, i));
+      colHeights[best] += estimateCardHeight(item) + gridGap();
     }
-    if (item.has_image) {
-      // OG default 1200/630 aspect ratio
-      return COL_WIDTH_ESTIMATE * (630 / 1200);
+    buckets.forEach((b, i) => { if (b.length) cols[i].insertAdjacentHTML('beforeend', b.join('')); });
+    renderedCount = end;
+  }
+
+  // Render (or re-render) the grid from scratch. `minCount` keeps at least
+  // that many cards rendered — used to hold scroll position on reflow.
+  function renderGrid(opts) {
+    opts = opts || {};
+    filteredCache = getFilteredItems();
+    if (filteredCache.length === 0) {
+      $grid.innerHTML = '<div class="no-results">No items match your filters.</div>';
+      renderedCount = 0;
+      scheduleTimeline();
+      PanelManager.refreshAfterGridRender();
+      return;
     }
-    // Text/placeholder cards are clamped by CSS to ~242px regardless of width.
-    return 242;
-  }
-  function distributeIntoColumns(entries, colCount) {
-    const cols = Array.from({ length: colCount }, () => ({ entries: [], height: 0 }));
-    for (const entry of entries) {
-      let shortest = cols[0];
-      for (const c of cols) if (c.height < shortest.height) shortest = c;
-      shortest.entries.push(entry);
-      shortest.height += estimateCardHeight(entry.item);
+    const cols = gridCols || 1;
+    $grid.innerHTML = scaffoldHTML(cols);
+    colHeights = new Array(cols).fill(0);
+    renderedCount = 0;
+    const want = Math.max(BATCH, opts.minCount || 0);
+    while (renderedCount < Math.min(want, filteredCache.length)) appendBatch(BATCH);
+
+    if (opts.stagger !== false) {
+      $grid.querySelectorAll('.card').forEach((c, j) => { if (j < 60) c.style.setProperty('--idx', j); });
     }
-    return cols.map(c => c.entries);
-  }
-  function renderColumnsHTML(entries, colCount) {
-    const cols = distributeIntoColumns(entries, colCount);
-    return cols
-      .map(colEntries => `<div class="masonry-col">${colEntries.map(e => renderCard(e.item, e.idx)).join('')}</div>`)
-      .join('');
-  }
-  function currentGridCols() {
-    const v = document.documentElement.style.getPropertyValue('--grid-cols');
-    const n = parseInt(v, 10);
-    return Number.isFinite(n) && n > 0 ? n : 5;
-  }
-  function redistributeLoadedWeeks() {
-    const colCount = currentGridCols();
-    const items = getFilteredItems();
-    loadedWeeks.forEach(weekKey => {
-      const section = $grid.querySelector(`.masonry-section[data-week="${weekKey}"]`);
-      if (!section) return;
-      const weekItems = items.filter(i => getWeekKey(i.added_at) === weekKey);
-      const entries = weekItems.map((item, idx) => ({ item, idx }));
-      section.innerHTML = renderColumnsHTML(entries, colCount);
-    });
     PanelManager.refreshAfterGridRender();
-    // refreshAfterGridRender re-applies .card-active for the open item,
-    // but not .card-focused (related-card outlines). Reapply those too —
-    // otherwise the first panel-open at a viewport where the column
-    // count drops would wipe the freshly-applied highlights, because
-    // ResizeObserver fires AFTER PanelManager.render() has already set
-    // them on the previous DOM nodes that we just rewrote.
     const openSlug = PanelManager.getOpenSlug();
     syncHighlightsToOpenPanels(openSlug ? [openSlug] : []);
+    scheduleTimeline();
+    updateFilterButtonState();
+    requestAnimationFrame(fillViewport);
   }
-  let lastGridCols = null;
+
+  // Keep rendering until the sentinel is past the viewport bottom.
+  function fillViewport() {
+    const mc = document.querySelector('.main-content');
+    const sentinel = document.getElementById('grid-sentinel');
+    if (!mc || !sentinel) return;
+    let guard = 0;
+    while (renderedCount < filteredCache.length && guard++ < 40) {
+      const r = sentinel.getBoundingClientRect();
+      if (r.top > mc.getBoundingClientRect().bottom + 1500) break;
+      appendBatch(BATCH);
+      PanelManager.refreshAfterGridRender();
+    }
+    scheduleTimeline();
+  }
+
+  // Older pages streamed in after first paint: extend the list in place.
+  function appendOlderWeeks() {
+    filteredCache = getFilteredItems();
+    if (renderedCount === 0) { renderGrid(); return; }
+    fillViewport();
+  }
+
+  // Reflow for a column-count change, keeping the first visible card in place.
+  function reflowGrid() {
+    const mc = document.querySelector('.main-content');
+    let anchor = null, anchorTop = 0;
+    if (mc && mc.scrollTop > 0) {
+      const top = mc.getBoundingClientRect().top + 140;
+      for (const card of $grid.querySelectorAll('.card')) {
+        const r = card.getBoundingClientRect();
+        if (r.bottom > top) { anchor = card.dataset.slug; anchorTop = r.top; break; }
+      }
+    }
+    renderGrid({ minCount: renderedCount, stagger: false });
+    if (anchor && mc) {
+      const el = $grid.querySelector(`.card[data-slug="${cssSelectorEscape(anchor)}"]`);
+      if (el) mc.scrollTop += el.getBoundingClientRect().top - anchorTop;
+    }
+  }
+
+  // Recompute card width + column count. Called on resize, panel
+  // open/close and pinch. Re-renders only when the column count changes.
   function updateGridCols() {
     const mc = document.querySelector('.main-content');
-    if (!mc) return;
-    const cols = computeGridCols(mc.offsetWidth);
-    if (cols === lastGridCols) return;
-    lastGridCols = cols;
+    const inner = document.querySelector('.content-inner');
+    if (!mc || !inner) return;
+    const gap = gridGap();
+    const full = fullGridWidth();
+    // A pinch choice made on a wide window shouldn't crush cards on a
+    // narrow one: keep cards at least 110px wide.
+    const maxFit = Math.max(1, Math.floor((full + gap) / (110 + gap)));
+    const baseCols = Math.min(zoomCols || computeGridCols(full), maxFit);
+    cardWidth = Math.max(60, (full - gap * (baseCols - 1)) / baseCols);
+    gridColsAtFullWidth = baseCols;
+    document.documentElement.style.setProperty('--card-w', cardWidth + 'px');
+
+    const panelOpen = !!document.querySelector('#panels-container .panel');
+    const avail = $grid.clientWidth || full;
+    let cols;
+    if (!panelOpen || isOverlayPanelMode()) {
+      cols = baseCols;
+      setPanelExtra(0);
+    } else {
+      // Width the grid would have at the panel's base width. If the
+      // content column is capped by max-width, growing the panel won't
+      // reclaim space, so leave the strip instead.
+      const capped = inner.offsetWidth < mc.clientWidth - 1;
+      const baseAvail = capped ? avail : avail + panelExtra;
+      cols = Math.min(baseCols, fitCols(baseAvail, cardWidth, gap));
+      setPanelExtra(capped ? 0 : Math.max(0, baseAvail - colsWidth(cols, cardWidth, gap)));
+    }
     document.documentElement.style.setProperty('--grid-cols', String(cols));
-    redistributeLoadedWeeks();
+    if (cols !== gridCols) {
+      gridCols = cols;
+      reflowGrid();
+    } else {
+      scheduleTimeline();
+    }
   }
+  function setPanelExtra(px) {
+    px = Math.round(px);
+    if (Math.abs(px - panelExtra) < 1) return;
+    panelExtra = px;
+    PanelManager.applyWidth && PanelManager.applyWidth();
+  }
+  function getPanelExtra() { return isOverlayPanelMode() ? 0 : panelExtra; }
+
   function startGridColsObserver() {
     updateGridCols();
     const mc = document.querySelector('.main-content');
     if (!mc) return;
+    let raf = 0;
+    const kick = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(updateGridCols); };
     if (typeof ResizeObserver === 'function') {
-      const ro = new ResizeObserver(updateGridCols);
-      ro.observe(mc);
+      new ResizeObserver(kick).observe(mc);
+      // Card heights settle as images load — keep timeline bars in step.
+      new ResizeObserver(scheduleTimeline).observe($grid);
     } else {
-      window.addEventListener('resize', updateGridCols);
+      window.addEventListener('resize', kick);
     }
+    // Progressive rendering as the sentinel nears the viewport.
+    const sentinel = document.getElementById('grid-sentinel');
+    if (sentinel && typeof IntersectionObserver === 'function') {
+      new IntersectionObserver((entries) => {
+        if (entries.some(e => e.isIntersecting)) fillViewport();
+      }, { root: mc, rootMargin: '0px 0px 1500px 0px' }).observe(sentinel);
+    }
+    mc.addEventListener('scroll', () => {
+      if (!spyRaf) spyRaf = requestAnimationFrame(() => { spyRaf = 0; updateScrollSpy(); });
+    }, { passive: true });
+    bindTimeline();
+    bindPinchZoom();
+  }
+
+  // ---- Pinch zoom (trackpad pinch, Ctrl/⌘+scroll, touch pinch, +/− keys) ----
+  // Spread → fewer, bigger cards. Pinch → more, smaller cards. Same
+  // direction and 1…12 range as the Mac app. Saved per browser.
+  function currentBaseCols() { return gridColsAtFullWidth || zoomCols || computeGridCols(fullGridWidth()); }
+  function setZoomCols(n) {
+    n = Math.max(MIN_COLS, Math.min(MAX_COLS, n));
+    if (n === currentBaseCols() && zoomCols) return;
+    zoomCols = n;
+    try { localStorage.setItem(ZOOM_KEY, String(n)); } catch { /* silent */ }
+    updateGridCols();
+  }
+  function stepZoom(delta) { setZoomCols(currentBaseCols() + delta); }
+
+  function bindPinchZoom() {
+    const mc = document.querySelector('.main-content');
+    if (!mc) return;
+    // Chrome/Firefox/Edge (and Safari 17+) report trackpad pinch as a
+    // ctrlKey wheel event. ⌘+scroll on a mouse is treated the same way.
+    let wheelAccum = 0, wheelTimer = 0;
+    mc.addEventListener('wheel', (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      wheelAccum += e.deltaY;
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => { wheelAccum = 0; }, 250);
+      const STEP = 40;
+      while (wheelAccum <= -STEP) { wheelAccum += STEP; stepZoom(-1); }
+      while (wheelAccum >= STEP) { wheelAccum -= STEP; stepZoom(1); }
+    }, { passive: false });
+
+    // Safari's proprietary gesture events (older Safari, no ctrl-wheel).
+    let gestureBase = null;
+    const onGesture = (scale) => {
+      if (gestureBase == null) gestureBase = currentBaseCols();
+      const target = Math.round(gestureBase / Math.max(0.2, scale));
+      if (target !== currentBaseCols()) setZoomCols(target);
+    };
+    mc.addEventListener('gesturestart', (e) => { e.preventDefault(); gestureBase = currentBaseCols(); });
+    mc.addEventListener('gesturechange', (e) => { e.preventDefault(); onGesture(e.scale); });
+    mc.addEventListener('gestureend', (e) => { e.preventDefault(); gestureBase = null; });
+
+    // Two-finger touch pinch (iPad, phones, touchscreens).
+    let touchStart = null;
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    mc.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) touchStart = { d: dist(e.touches), cols: currentBaseCols() };
+    }, { passive: true });
+    mc.addEventListener('touchmove', (e) => {
+      if (!touchStart || e.touches.length !== 2) return;
+      e.preventDefault();
+      const scale = dist(e.touches) / Math.max(1, touchStart.d);
+      const target = Math.round(touchStart.cols / Math.max(0.2, scale));
+      if (target !== currentBaseCols()) setZoomCols(target);
+    }, { passive: false });
+    mc.addEventListener('touchend', (e) => { if (e.touches.length < 2) touchStart = null; });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target && e.target.matches && e.target.matches('input, textarea, [contenteditable]')) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); stepZoom(-1); }
+      else if (e.key === '-' || e.key === '_') { e.preventDefault(); stepZoom(1); }
+      else if (e.key === '/') { e.preventDefault(); $search.focus(); }
+    });
+  }
+
+  // ---- Week timeline ----
+  const BAR_GAP = 4, BAR_MIN = 6;
+  let timelineRaf = 0, spyRaf = 0;
+  let barLayouts = [];            // [{ key, label, top, bottom }] sorted by top, grid-container coords
+  let hoverWeek = null;
+  let spyWeek = null;
+
+  function weekLabelFor(key) {
+    const it = filteredCache.find(i => getWeekKey(i.added_at) === key);
+    return (it && formatWeekLabel(it.added_at)) || 'Undated';
+  }
+
+  function scheduleTimeline() {
+    if (timelineRaf) return;
+    timelineRaf = requestAnimationFrame(() => { timelineRaf = 0; layoutTimeline(); });
+  }
+
+  function layoutTimeline() {
+    const container = document.querySelector('.grid-container');
+    const $bars = document.getElementById('timeline-bars');
+    if (!container || !$bars) return;
+    const base = container.getBoundingClientRect().top;
+    const ranges = new Map();
+    for (const card of $grid.querySelectorAll('.card[data-slug]')) {
+      const item = itemsBySlug[card.dataset.slug];
+      if (!item) continue;
+      const key = getWeekKey(item.added_at);
+      const r = card.getBoundingClientRect();
+      if (r.height === 0) continue;
+      const top = r.top - base, bottom = r.bottom - base;
+      const cur = ranges.get(key);
+      if (!cur) ranges.set(key, { top, bottom });
+      else { if (top < cur.top) cur.top = top; if (bottom > cur.bottom) cur.bottom = bottom; }
+    }
+    const raw = [...ranges.entries()].map(([key, r]) => ({ key, top: r.top, bottom: r.bottom }))
+      .sort((a, b) => a.top - b.top);
+    // Masonry interleaves weeks across columns, so ranges overlap; stack
+    // bars top-to-bottom with a small gap, like the Mac timeline does.
+    let prevBottom = -Infinity;
+    barLayouts = raw.map(b => {
+      let top = b.top;
+      if (top < prevBottom + BAR_GAP) top = prevBottom + BAR_GAP;
+      const bottom = Math.max(top + BAR_MIN, b.bottom);
+      prevBottom = bottom;
+      return { key: b.key, top, bottom };
+    });
+    $bars.innerHTML = barLayouts.map(b =>
+      `<div class="timeline-bar" data-week="${b.key}" style="top:${b.top}px;height:${b.bottom - b.top}px"></div>`
+    ).join('');
+    applyTimelineStates();
+    updateScrollSpy();
+  }
+
+  // Bands split at the middle of each inter-bar gap, so every point over
+  // a bar (or just around it) resolves to that bar.
+  function weekAtY(y) {
+    if (!barLayouts.length) return null;
+    for (let i = 0; i < barLayouts.length; i++) {
+      const next = barLayouts[i + 1];
+      if (!next) return barLayouts[i].key;
+      if (y < (barLayouts[i].bottom + next.top) / 2) return barLayouts[i].key;
+    }
+    return barLayouts[barLayouts.length - 1].key;
+  }
+
+  function applyTimelineStates() {
+    const $bars = document.getElementById('timeline-bars');
+    if (!$bars) return;
+    for (const el of $bars.children) {
+      const k = el.dataset.week;
+      el.classList.toggle('is-hover', k === hoverWeek);
+      el.classList.toggle('is-selected', k === selectedWeek);
+      el.classList.toggle('is-spy', k === spyWeek && k !== hoverWeek && k !== selectedWeek);
+    }
+    const $label = document.getElementById('timeline-label');
+    if (!$label) return;
+    const bar = hoverWeek && barLayouts.find(b => b.key === hoverWeek);
+    if (!bar) { $label.hidden = true; return; }
+    // Top-aligned with the bar, but kept below the sticky header so long
+    // weeks that start above the fold still show their label.
+    const container = document.querySelector('.grid-container');
+    const header = document.querySelector('.header');
+    const visibleTop = header
+      ? header.getBoundingClientRect().bottom - container.getBoundingClientRect().top + 8
+      : 0;
+    $label.textContent = weekLabelFor(hoverWeek);
+    $label.style.top = Math.min(bar.bottom - 10, Math.max(bar.top, visibleTop)) + 'px';
+    $label.hidden = false;
+  }
+
+  function updateScrollSpy() {
+    const container = document.querySelector('.grid-container');
+    const header = document.querySelector('.header');
+    if (!container || !barLayouts.length) { spyWeek = null; return; }
+    const line = (header ? header.getBoundingClientRect().bottom : 0) + 16 - container.getBoundingClientRect().top;
+    const next = weekAtY(line);
+    if (next !== spyWeek) { spyWeek = next; applyTimelineStates(); }
+    else if (hoverWeek) applyTimelineStates();
+  }
+
+  function setWeekFilter(key) {
+    const mc = document.querySelector('.main-content');
+    if (key && !selectedWeek && mc) weekScrollMemory = { scrollTop: mc.scrollTop, count: renderedCount };
+    selectedWeek = key;
+    hoverWeek = null;
+    renderActiveFilters();
+    if (key) {
+      renderGrid({ stagger: false });
+      if (mc) mc.scrollTop = 0;
+    } else {
+      const mem = weekScrollMemory;
+      weekScrollMemory = null;
+      renderGrid({ stagger: false, minCount: mem ? mem.count : 0 });
+      if (mc && mem) mc.scrollTop = mem.scrollTop;
+    }
+  }
+
+  function bindTimeline() {
+    const tl = document.getElementById('timeline');
+    const container = document.querySelector('.grid-container');
+    if (!tl || !container) return;
+    const yOf = (e) => e.clientY - container.getBoundingClientRect().top;
+    tl.addEventListener('pointermove', (e) => {
+      const k = weekAtY(yOf(e));
+      if (k !== hoverWeek) { hoverWeek = k; applyTimelineStates(); }
+    });
+    tl.addEventListener('pointerleave', () => { hoverWeek = null; applyTimelineStates(); });
+    tl.addEventListener('click', (e) => {
+      const k = weekAtY(yOf(e));
+      if (!k) return;
+      setWeekFilter(selectedWeek === k ? null : k);
+    });
+  }
+
+  function updateFilterButtonState() {
+    const btn = document.getElementById('filter-panel-btn');
+    if (btn) btn.classList.toggle('has-filters', activeTags.length > 0 || !!selectedWeek);
   }
 
   function sortItemsByAddedAt(arr) {
@@ -664,82 +974,6 @@
       const db = b.added_at ? new Date(b.added_at).getTime() : 0;
       return db - da;
     });
-  }
-
-  // Append week headers for any week not yet present in the grid DOM. Used
-  // after background-loaded older pages land — extends history downward
-  // without re-rendering (and thus visually disturbing) the already-painted
-  // first weeks. Skipped while a search/filter is active because that mode
-  // re-renders the whole grid through renderGrid() anyway.
-  function appendOlderWeeks() {
-    if (isSearchActive()) { renderGrid(); return; }
-    const items = getFilteredItems();
-    const weeks = groupByWeek(items);
-    const colCount = currentGridCols();
-    let html = '';
-    weeks.forEach(week => {
-      if ($grid.querySelector(`.date-section-header[data-week="${week.key}"]`)) return;
-      const isLoaded = loadedWeeks.has(week.key);
-      const caret = icon(isLoaded ? 'caret-up' : 'caret-down');
-      const aria = isLoaded ? 'Collapse week' : 'Expand week';
-      const headerClass = 'date-section-header' + (isLoaded ? ' is-expanded' : '');
-      html += `<div class="${headerClass}" data-week="${week.key}" role="button" tabindex="0" aria-expanded="${isLoaded}" aria-label="${aria}" style="grid-column: 1 / -1"><span>${week.label}</span><span class="week-show-link" aria-hidden="true">${caret}</span></div>`;
-      html += `<div class="masonry-section" data-week="${week.key}" style="${isLoaded ? '' : 'display:none'}">${isLoaded ? renderColumnsHTML(week.items, colCount) : ''}</div>`;
-    });
-    if (html) $grid.insertAdjacentHTML('beforeend', html);
-  }
-
-  function renderGrid() {
-    const items = getFilteredItems();
-
-    if (items.length === 0) {
-      $grid.innerHTML = '<div class="no-results">No items match your filters.</div>';
-      return;
-    }
-
-    const weeks = groupByWeek(items);
-    const searching = isSearchActive();
-
-    // When searching/filtering, reset lazy state and show all results
-    if (searching) {
-      loadedWeeks = new Set(weeks.map(w => w.key));
-    } else {
-      // Default: only first week is loaded
-      loadedWeeks = new Set();
-      if (weeks.length > 0) loadedWeeks.add(weeks[0].key);
-    }
-
-    const colCount = currentGridCols();
-    let html = '';
-    weeks.forEach((week, wi) => {
-      const isLoaded = loadedWeeks.has(week.key);
-      const caret = isLoaded ? icon('caret-up') : icon('caret-down');
-      const aria = isLoaded ? 'Collapse week' : 'Expand week';
-      const headerClass = 'date-section-header' + (isLoaded ? ' is-expanded' : '');
-      html += `<div class="${headerClass}" data-week="${week.key}" role="button" tabindex="0" aria-expanded="${isLoaded}" aria-label="${aria}" style="grid-column: 1 / -1"><span>${week.label}</span><span class="week-show-link" aria-hidden="true">${caret}</span></div>`;
-      html += `<div class="masonry-section" data-week="${week.key}" style="${isLoaded ? '' : 'display:none'}">`;
-      if (isLoaded) {
-        html += renderColumnsHTML(week.items, colCount);
-      }
-      html += '</div>';
-    });
-
-    $grid.innerHTML = html;
-
-    // Tag each direct child with a --idx so the post-login stagger reveal
-    // (style.css) can cascade in. Cheap enough to run on every render.
-    // Cards now live inside `.masonry-col` wrappers — walk descendants
-    // instead of direct children.
-    const children = $grid.children;
-    for (let i = 0; i < children.length; i++) {
-      children[i].style.setProperty('--idx', i);
-      const cards = children[i].querySelectorAll('.card');
-      for (let j = 0; j < cards.length; j++) {
-        cards[j].style.setProperty('--idx', j);
-      }
-    }
-
-    PanelManager.refreshAfterGridRender();
   }
 
   function cleanSummary(text) {
@@ -1118,7 +1352,7 @@
 
   // ---- Panel body binding (slider, capture form, snippets) ----
   // Wires up interactions in a freshly-rendered .panel-body. Each mutation
-  // posts a delta to /api/item-update, then updates local itemsBySlug and
+  // queues a change in the iCloud inbox, then updates local itemsBySlug and
   // refreshes the grid card. The panel body itself is only re-rendered on
   // explicit refreshItem calls (from enrichment polling) to avoid stomping
   // the user's in-flight form input.
@@ -1577,12 +1811,16 @@
 
   // --- Active filter pills ---
   function renderActiveFilters() {
-    if (activeTags.length === 0) {
+    updateFilterButtonState();
+    if (activeTags.length === 0 && !selectedWeek) {
       $activeFilters.innerHTML = '';
       return;
     }
-    $activeFilters.innerHTML = activeTags.map((at, i) =>
-      `<span class="active-filter-pill" data-idx="${i}">${at.tag} <span class="x">&times;</span></span>`
+    const weekPill = selectedWeek
+      ? `<span class="active-filter-pill active-filter-week" data-week="${selectedWeek}">${escHtml(weekLabelFor(selectedWeek))} <span class="x">&times;</span></span>`
+      : '';
+    $activeFilters.innerHTML = weekPill + activeTags.map((at, i) =>
+      `<span class="active-filter-pill" data-idx="${i}">${escHtml(at.tag)} <span class="x">&times;</span></span>`
     ).join('') + `<button class="clear-filters-btn" id="clear-filters">Clear all</button>`;
   }
 
@@ -1671,9 +1909,18 @@
 
   // --- Events ---
   function bindEvents() {
+    let searchTimer = 0;
     $search.addEventListener('input', function () {
-      searchQuery = this.value.trim();
-      renderGrid();
+      const v = this.value.trim();
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        if (v === searchQuery) return;
+        searchQuery = v;
+        renderGrid({ stagger: false });
+      }, 120);
+    });
+    $search.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { this.value = ''; this.dispatchEvent(new Event('input')); this.blur(); }
     });
 
     // Scrollbar auto-hide for the grid column: flash in while actively
@@ -1732,36 +1979,19 @@
       if (e.target.id === 'clear-filters' || e.target.closest('#clear-filters')) {
         activeTags = [];
         renderTagDrawer();
+        if (selectedWeek) { setWeekFilter(null); return; }
         renderActiveFilters();
         renderGrid();
         return;
       }
       const pill = e.target.closest('.active-filter-pill');
       if (!pill) return;
+      if (pill.dataset.week) { setWeekFilter(null); return; }
       const idx = parseInt(pill.dataset.idx, 10);
       activeTags.splice(idx, 1);
       renderTagDrawer();
       renderActiveFilters();
       renderGrid();
-    });
-
-    // Week Expand/Collapse toggle — entire bar is clickable (and keyboard-activatable)
-    $grid.addEventListener('click', function (e) {
-      const bar = e.target.closest('.date-section-header');
-      if (!bar) return;
-      e.stopPropagation();
-      const key = bar.dataset.week;
-      if (loadedWeeks.has(key)) collapseWeek(key);
-      else renderWeekCards(key);
-    });
-    $grid.addEventListener('keydown', function (e) {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      const bar = e.target.closest('.date-section-header');
-      if (!bar) return;
-      e.preventDefault();
-      const key = bar.dataset.week;
-      if (loadedWeeks.has(key)) collapseWeek(key);
-      else renderWeekCards(key);
     });
 
     // Card click -> open item in the side panel
@@ -2158,8 +2388,14 @@
 
     // Panel width is always 25% of viewport (rounded), clamped to [320, 480].
     // No user-resize affordance — viewport drives it, simple and predictable.
+    // Plus `getPanelExtra()`: with fixed card sizes the grid drops a column
+    // when the panel opens, and the panel absorbs the leftover strip.
     function computePanelWidth() {
-      return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.round(window.innerWidth * 0.25)));
+      return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.round(window.innerWidth * 0.25))) + getPanelExtra();
+    }
+    function applyWidth() {
+      const panel = $container && $container.querySelector('.panel');
+      if (panel) panel.style.setProperty('--panel-width', computePanelWidth() + 'px');
     }
 
     // ---- State <-> URL ----
@@ -2693,7 +2929,7 @@
     }
 
     return {
-      init, open, close, focus, shuffle,
+      init, open, close, focus, shuffle, applyWidth,
       openTool, closeTool,
       getOpenSlug,
       refreshAfterGridRender, refreshItem,

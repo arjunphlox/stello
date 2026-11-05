@@ -350,6 +350,7 @@ html.arriving-from-login .header {
 .main-content {
   flex: 1 1 auto;
   min-width: 0;
+  touch-action: pan-x pan-y;   /* two-finger pinch resizes cards, not the page */
   display: flex;
   flex-direction: column;
   align-items: center;  /* centers .content-inner within the main column without needing margin:auto */
@@ -358,7 +359,9 @@ html.arriving-from-login .header {
 
 /* === MAIN CONTENT INNER (header + grid share this wrapper's width/padding) === */
 .content-inner {
-  padding: 24px 24px 0;
+  --gutter: 24px;
+  flex: 1 0 auto;       /* fill the column so the bottom bar sits at the bottom */
+  padding: 24px var(--gutter) 0;
   max-width: 1800px;
   width: 100%;
   box-sizing: border-box;
@@ -390,9 +393,136 @@ html.arriving-from-login .header {
 
 /* === MASONRY GRID === */
 .grid-container {
+  position: relative;
   padding: 0 0 24px;
   width: 100%;
 }
+.grid-sentinel { height: 1px; }
+
+/* === WEEK TIMELINE (left gutter, Mac app parity) ===
+   Lives in the content-inner's left padding. One bar per week spans that
+   week's cards; hover thickens it and shows the week, click filters. */
+.timeline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * var(--gutter, 24px));
+  width: var(--gutter, 24px);
+  cursor: pointer;
+  z-index: 5;
+}
+.timeline-bars { position: absolute; inset: 0; pointer-events: none; }
+.timeline-bar {
+  position: absolute;
+  left: calc((var(--gutter, 24px) - 3px) / 2);
+  width: 3px;
+  border-radius: 1.5px;
+  background: color-mix(in srgb, var(--text-dim) 50%, transparent);
+  transition: width 0.2s ease-out, background 0.2s ease-out;
+}
+.timeline-bar.is-spy { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.timeline-bar.is-selected { background: var(--accent); }
+.timeline-bar.is-hover { background: var(--accent); width: 5px; }
+.timeline-label {
+  position: absolute;
+  left: calc((var(--gutter, 24px) - 3px) / 2 + 9px);
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 60;
+}
+.timeline-label[hidden] { display: none; }
+
+/* === BOTTOM FLOATING CONTROL BAR (Mac app parity) ===
+   Add · Filters · Search · Profile. Sticky to the bottom of the grid
+   column, so it never covers the side panel. Translucent blur stands in
+   for the native Liquid Glass material. */
+.bottom-bar {
+  position: sticky;
+  bottom: 24px;
+  margin-top: auto;
+  margin-bottom: 24px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.bar-btn,
+.bar-search {
+  background: color-mix(in srgb, var(--bg-secondary) 62%, transparent);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.bar-btn {
+  position: relative;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+.bar-btn svg { width: 18px; height: 18px; display: block; }
+.bar-btn-avatar svg { width: 24px; height: 24px; }
+.bar-btn:hover { background: color-mix(in srgb, var(--card-hover) 85%, transparent); }
+.bar-btn:active { transform: scale(0.96); }
+.bar-btn.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+.bar-btn.has-filters:not(.is-active)::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.bar-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  cursor: text;
+  transition: border-color 0.2s;
+}
+.bar-search:focus-within { border-color: var(--accent); }
+.bar-search-icon { display: flex; color: var(--text); }
+.bar-search-icon svg { width: 16px; height: 16px; display: block; }
+.bar-search .search-input {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  height: 100%;
+  padding: 0;
+  font-size: 0.95rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.bar-search .search-input:focus { border: none; }
+.bar-search .search-input::-webkit-search-cancel-button { cursor: pointer; }
 
 /* === COMPARISON PANELS ===
    Height is dictated by the 100vh .main-layout; individual .panel-body
@@ -419,7 +549,9 @@ html.arriving-from-login .header {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 12px;
-  transition: transform 250ms ease-out, opacity 250ms ease-out, width 150ms ease-out;
+  /* No width transition: the width is solved together with the grid's
+     column count, and animating it would feed half-way sizes back in. */
+  transition: transform 250ms ease-out, opacity 250ms ease-out;
   overflow: hidden;
   height: 100%;
   flex-shrink: 0;
@@ -731,7 +863,10 @@ html.arriving-from-login .header {
   margin-bottom: 16px;
 }
 .masonry-col {
-  flex: 1 1 0;
+  /* Fixed card width (set in JS from the full-width column count or the
+     pinch choice). Opening the panel drops columns instead of shrinking. */
+  flex: 0 0 var(--card-w, 250px);
+  width: var(--card-w, 250px);
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1027,14 +1162,16 @@ html.arriving-from-login .header {
 }
 @media (max-width: 768px) {
   .modal-panel { width: 100vw; }
-  .content-inner { padding: 16px 16px 0; }
+  .content-inner { --gutter: 16px; padding: 16px var(--gutter) 0; }
   .header { top: 16px; }
+  .bottom-bar { bottom: 16px; margin-bottom: 16px; }
   .masonry-section { gap: 12px; }
   .masonry-col { gap: 12px; }
 }
 @media (max-width: 500px) {
-  .content-inner { padding: 12px 12px 0; }
+  .content-inner { --gutter: 12px; padding: 12px var(--gutter) 0; }
   .header { top: 12px; }
+  .bottom-bar { bottom: 12px; margin-bottom: 12px; }
 }
 
 /* Under 768px, panels become full-screen overlays */

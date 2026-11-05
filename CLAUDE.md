@@ -29,7 +29,7 @@ Two layers:
 ## Dev Commands
 
 - `npm run dev` — builds `dist/` (asset allowlist) then runs `wrangler dev` (static web app + `/img/*`) on `http://localhost:8787`, an allowed CloudKit origin.
-- `npm run deploy` — `wrangler deploy` to `stello.arjunphlox.workers.dev`. No secrets needed.
+- Deploys are automatic: Cloudflare Workers Builds deploys every push to `main` (build `npm run build`, deploy `npx wrangler deploy`) to `stello.arjunphlox.workers.dev`. `npm run deploy` still works for a manual deploy. No secrets needed.
 - `python3 -m http.server 8080` — static preview only (no iCloud sign-in — useful for CSS tweaks)
 
 ## Architecture
