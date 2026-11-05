@@ -12,7 +12,7 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/img/*", "/.well-known/*"],
+    "run_worker_first": ["/api/*", "/img/*"],
     "html_handling": "auto-trailing-slash"
   },
 
@@ -23,17 +23,6 @@
 
   // sharp replacement — WebP encode + resize at ingest via the Images binding.
   "images": { "binding": "IMAGES" },
-
-  // Users, passkeys, sessions (and, after the move off Supabase, items).
-  // Create once: npx wrangler d1 create stello  → paste the id below.
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "stello",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
-      "migrations_dir": "scripts/d1"
-    }
-  ],
 
   // Daily batch drain (was vercel.json crons → /api/cron/process-batches).
   "triggers": { "crons": ["0 0 * * *"] },

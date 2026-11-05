@@ -25,20 +25,8 @@ import config from './routes/config.js';
 import batchStatus from './routes/batch-status.js';
 import authCallback from './routes/auth-callback.js';
 import processBatchesMod from './routes/process-batches.js';
-import auth from './routes/auth.js';
 
 const app = new Hono();
-
-// --- Login: Sign in with Apple + passkeys, sessions in D1 ---
-app.route('/api/auth', auth);
-
-// Associated domains for the native apps: lets Stello for Mac/iPhone use
-// passkeys made on this site (webcredentials) — Apple fetches this file.
-app.get('/.well-known/apple-app-site-association', (c) => {
-  const team = c.env.APPLE_TEAM_ID || '69E4GPJ74B';
-  const bundles = (c.env.APPLE_BUNDLE_IDS || 'com.phloxpage.Stello').split(',').map((s) => s.trim());
-  return c.json({ webcredentials: { apps: bundles.map((b) => `${team}.${b}`) } });
-});
 
 // --- API routes (app.all → the handler does its own method + CORS guard) ---
 app.all('/api/capture', route(capture));
