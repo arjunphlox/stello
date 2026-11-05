@@ -1611,67 +1611,6 @@ html.arriving-from-login .header {
   color: var(--text-dim);
 }
 
-/* Passkeys — list of registered passkeys + "Add a passkey" */
-.settings-passkeys[hidden],
-.login-btn[hidden] { display: none; }
-.settings-passkeys {
-  border: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.settings-passkeys legend {
-  font-size: 0.7rem;
-  color: var(--text-dim);
-  margin-bottom: 4px;
-  padding: 0;
-}
-.settings-passkey-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.settings-passkey-list:empty { display: none; }
-.settings-passkey {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.75rem;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.settings-passkey-name {
-  color: var(--text);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.settings-passkey-meta {
-  color: var(--text-dim);
-  font-size: 0.7rem;
-}
-.settings-passkey-remove,
-.settings-passkey-add {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 0.7rem;
-  cursor: pointer;
-}
-.settings-passkey-add { padding: 7px 16px; font-size: 0.75rem; }
-.settings-passkey-remove:hover,
-.settings-passkey-add:hover { border-color: var(--accent); }
-
 /* Logout — secondary destructive action, separated from the main
    settings actions by a thin divider so it reads as "leave", not "save". */
 /* Pinned to the bottom of the settings panel (like item-panel tags).

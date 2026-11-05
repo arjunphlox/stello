@@ -2453,58 +2453,6 @@
       });
     });
 
-    // Passkeys — list, add and remove the passkeys that can sign in to this account
-    const $passkeys = $panel.querySelector('.settings-passkeys');
-    if ($passkeys && window.Stello && Stello.passkeysSupported && Stello.passkeysSupported()) {
-      $passkeys.hidden = false;
-      const $list = $passkeys.querySelector('.settings-passkey-list');
-      const $add = $passkeys.querySelector('.settings-passkey-add');
-      const $pkStatus = $passkeys.querySelector('.settings-passkey-status');
-      const fmtDate = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-
-      const renderPasskeys = async () => {
-        const { data, error } = await Stello.listPasskeys();
-        $list.textContent = '';
-        if (error) { $pkStatus.textContent = 'Passkeys unavailable'; return; }
-        $pkStatus.textContent = data.length ? '' : 'None yet';
-        data.forEach(pk => {
-          const $li = document.createElement('li');
-          $li.className = 'settings-passkey';
-          const $name = document.createElement('span');
-          $name.className = 'settings-passkey-name';
-          $name.textContent = pk.friendly_name || 'Passkey';
-          const $meta = document.createElement('span');
-          $meta.className = 'settings-passkey-meta';
-          $meta.textContent = pk.last_used_at ? `Used ${fmtDate(pk.last_used_at)}` : `Added ${fmtDate(pk.created_at)}`;
-          const $del = document.createElement('button');
-          $del.type = 'button';
-          $del.className = 'settings-passkey-remove';
-          $del.textContent = 'Remove';
-          $del.addEventListener('click', async () => {
-            if (!confirm(`Remove “${$name.textContent}”? You won't be able to sign in with it any more.`)) return;
-            const { error: delErr } = await Stello.deletePasskey(pk.id);
-            if (delErr) { showToast('Could not remove passkey'); return; }
-            showToast('Passkey removed');
-            renderPasskeys();
-          });
-          $li.append($name, $meta, $del);
-          $list.appendChild($li);
-        });
-      };
-
-      $add.addEventListener('click', async () => {
-        $add.disabled = true;
-        const { error, cancelled } = await Stello.registerPasskey();
-        $add.disabled = false;
-        if (cancelled) return;
-        if (error) { showToast('Could not add passkey: ' + error); return; }
-        showToast('Passkey added');
-        renderPasskeys();
-      });
-
-      renderPasskeys();
-    }
-
     // Logout — signs out of Supabase and redirects to the login page
     const $logout = $panel.querySelector('.settings-logout');
     if ($logout) {

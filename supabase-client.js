@@ -91,66 +91,6 @@
     if (error) console.error('Apple sign-in error:', error.message);
   }
 
-  /** True when this browser can do WebAuthn and the loaded supabase-js has the passkey API. */
-  function passkeysSupported() {
-    const client = getClient();
-    return !!(window.PublicKeyCredential && client && typeof client.auth.signInWithPasskey === 'function');
-  }
-
-  /** WebAuthn errors that just mean "the user closed the sheet" or "a newer prompt replaced this one". */
-  function isPasskeyCancel(error) {
-    const name = error?.name || error?.cause?.name || '';
-    const code = error?.code || '';
-    return name === 'NotAllowedError' || name === 'AbortError' || code === 'ERROR_CEREMONY_ABORTED';
-  }
-
-  /**
-   * Sign in with a passkey. Pass { conditional: true } to offer passkeys in
-   * the browser's autofill (needs an input with autocomplete="username webauthn").
-   * Returns { error, cancelled }.
-   */
-  async function signInWithPasskey({ conditional = false } = {}) {
-    const client = getClient();
-    if (!passkeysSupported()) return { error: 'Passkeys are not supported in this browser.' };
-    const options = conditional ? { mediation: 'conditional' } : {};
-    const { data, error } = await client.auth.signInWithPasskey({ options });
-    if (error) {
-      if (isPasskeyCancel(error)) return { error: null, cancelled: true };
-      return { error: error.message || String(error), code: error.code };
-    }
-    _session = data?.session || null;
-    return { error: null };
-  }
-
-  /** Create a passkey for the signed-in user (Settings → Passkeys). */
-  async function registerPasskey() {
-    const client = getClient();
-    if (!passkeysSupported()) return { error: 'Passkeys are not supported in this browser.' };
-    const { error } = await client.auth.registerPasskey();
-    if (error) {
-      if (isPasskeyCancel(error)) return { error: null, cancelled: true };
-      return { error: error.message || String(error) };
-    }
-    return { error: null };
-  }
-
-  /** List the signed-in user's passkeys: [{ id, friendly_name, created_at, last_used_at }]. */
-  async function listPasskeys() {
-    const client = getClient();
-    if (!passkeysSupported()) return { data: [], error: null };
-    const { data, error } = await client.auth.passkey.list();
-    if (error) return { data: [], error: error.message || String(error) };
-    return { data: Array.isArray(data) ? data : (data?.passkeys || []), error: null };
-  }
-
-  /** Remove one of the signed-in user's passkeys. */
-  async function deletePasskey(passkeyId) {
-    const client = getClient();
-    if (!client) return { error: 'Client not initialized' };
-    const { error } = await client.auth.passkey.delete({ passkeyId });
-    return { error: error ? (error.message || String(error)) : null };
-  }
-
   /**
    * Sign in with email and password.
    */
@@ -259,11 +199,6 @@
     requireAuth,
     apiFetch,
     signInWithApple,
-    passkeysSupported,
-    signInWithPasskey,
-    registerPasskey,
-    listPasskeys,
-    deletePasskey,
     signInWithEmail,
     signUpWithEmail,
     requestPasswordReset,
