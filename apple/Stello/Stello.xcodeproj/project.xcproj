@@ -184,6 +184,7 @@
               ],
             },
             { "path": "UserProfile.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "WebLibraryImporter.swift", "target-membership": [ "Stello/compile-sources" ] },
           ],
         }, {
           "kind": "group",

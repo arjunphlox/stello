@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import PhotosUI
 
 /// Shared User Preferences body — profile row, appearance, and optional sections.
@@ -61,6 +62,8 @@ struct UserPreferencesContent: View {
                 }
             }
 
+            WebLibraryImportSection()
+
             if showsAboutSection {
                 Section("About") {
                     LabeledContent("Version", value: "1.0")
@@ -68,6 +71,57 @@ struct UserPreferencesContent: View {
                         .font(.karst(.caption))
                         .foregroundStyle(theme.textSecondary)
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Web library import
+
+/// One-time import of the old web library (Supabase export JSON) into iCloud.
+private struct WebLibraryImportSection: View {
+    @Environment(\.appTheme) private var theme
+    @Environment(\.modelContext) private var context
+    @Environment(\.enrichmentCoordinator) private var coordinator
+
+    @State private var importer = WebLibraryImporter.shared
+    @State private var pickingFile = false
+    @State private var pilotOnly = true
+
+    var body: some View {
+        Section("Old web library") {
+            Toggle("Test with 50 items first", isOn: $pilotOnly)
+                .disabled(importer.isRunning)
+            if importer.isRunning {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text(importer.statusText)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.textSecondary)
+                    Spacer()
+                    Button("Stop") { importer.cancel() }
+                }
+            } else {
+                Button("Import export file…") { pickingFile = true }
+                if !importer.statusText.isEmpty {
+                    Text(importer.statusText)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            Text("Brings items from the old Stello web app into this library. Each item is then re-checked and sorted into its kind.")
+                .font(.karst(.caption))
+                .foregroundStyle(theme.textSecondary)
+        }
+        .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.json]) { result in
+            guard case .success(let url) = result else { return }
+            Task {
+                await importer.run(
+                    fileURL: url,
+                    context: context,
+                    coordinator: coordinator,
+                    limit: pilotOnly ? 50 : nil
+                )
             }
         }
     }
