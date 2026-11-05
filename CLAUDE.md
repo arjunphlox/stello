@@ -30,7 +30,7 @@ Two layers:
 
 - `npm run dev` — builds `dist/` (asset allowlist) then runs `wrangler dev` (local Worker + static assets). Loads env from `.env.local` (copy `.env.example`).
 - `npm run dev:remote` — `wrangler dev --remote` against the real R2 + Images bindings; needed to exercise image conversion/serving locally.
-- `npm run deploy` — `wrangler deploy` to `stello.arjunphlox.workers.dev`. Secrets set via `wrangler secret put` (not in the repo).
+- Deploys are automatic: Cloudflare Workers Builds deploys every push to `main` (build `npm run build`, deploy `npx wrangler deploy`) to `stello.arjunphlox.workers.dev`. `npm run deploy` still works for a manual deploy. Secrets set via `wrangler secret put` (not in the repo).
 - `python3 -m http.server 8080` — static preview only (no auth, no API — useful for CSS tweaks)
 - `node scripts/verify-supabase.js` — check schema + RLS + storage bucket
 - `node scripts/sync-local.js` — back up Supabase items to a local `_items/` mirror
