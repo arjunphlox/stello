@@ -18,6 +18,11 @@ final class ItemImage {
     var label: String?
     /// `cover`, `specimen`, `graphic`, `gallery`, or `preview`.
     var role: String = "cover"
+    /// Where the image came from. `data` may be a small thumbnail of this.
+    var sourceURL: String?
+    /// Waiting for the import's cover pass. With no `sourceURL`, the pass reads the
+    /// item's page to find one.
+    var coverPending: Bool = false
 
     var item: Item?
 

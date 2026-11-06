@@ -447,7 +447,7 @@ enum CaptureService {
     }
 
     /// Parses OG/Twitter meta tags order-independently (no assumption on attribute order within a tag).
-    static func parseOG(html: String, baseURL: URL) -> OGResult {
+    nonisolated static func parseOG(html: String, baseURL: URL) -> OGResult {
         var result = OGResult()
         let nsHTML = html as NSString
 

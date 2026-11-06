@@ -88,13 +88,10 @@ private struct WebLibraryImportSection: View {
     @State private var importer = WebLibraryImporter.shared
     @State private var pickingFile = false
     @State private var pilotOnly = true
-    @State private var classifyLater = true
 
     var body: some View {
         Section("Old web library") {
             Toggle("Test with 50 items first", isOn: $pilotOnly)
-                .disabled(importer.isRunning)
-            Toggle("Sort into kinds later, in the background", isOn: $classifyLater)
                 .disabled(importer.isRunning)
             if importer.isRunning {
                 HStack {
@@ -113,7 +110,15 @@ private struct WebLibraryImportSection: View {
                         .foregroundStyle(theme.textSecondary)
                 }
             }
-            Text("Brings items from the old Stello web app into this library. Each item is then re-checked and sorted into its kind.")
+            if let stage = importer.stageText {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text(stage)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            Text("Brings items from the old Stello web app into this library. Items appear right away; covers and kinds fill in while Stello is open, and AI summaries follow slowly or when you open an item.")
                 .font(.karst(.caption))
                 .foregroundStyle(theme.textSecondary)
         }
@@ -123,9 +128,7 @@ private struct WebLibraryImportSection: View {
                 await importer.run(
                     fileURL: url,
                     context: context,
-                    coordinator: coordinator,
-                    limit: pilotOnly ? 50 : nil,
-                    classify: !classifyLater
+                    limit: pilotOnly ? 50 : nil
                 )
                 if !WebInboxProcessor.isDisabled {
                     await WebLibraryImporter.classifyPending(context: context, coordinator: coordinator)

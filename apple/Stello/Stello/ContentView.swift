@@ -51,8 +51,11 @@ struct ContentView: View {
             // Sample catalog stays out of the synced library too.
             if SeedData.isInMemory(context) {
                 await OptacosImporter.importIfNeeded(in: context)
+                // Also demo-only: on the real library it would refetch pages one at a
+                // time every launch, drop covers still waiting to download, and sync
+                // generated placeholders.
+                await SeedData.backfillSeedCovers(in: context)
             }
-            await SeedData.backfillSeedCovers(in: context)
             await enrichmentCoordinator.enrichPendingItems(context: context)
             if !WebInboxProcessor.isDisabled {
                 await WebLibraryImporter.classifyPending(context: context, coordinator: enrichmentCoordinator)

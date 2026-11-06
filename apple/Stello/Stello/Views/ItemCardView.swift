@@ -132,6 +132,7 @@ struct ItemCardView: View {
 
     var body: some View {
         cardContent
+            .onAppear { WebLibraryImporter.prioritize(item) }
             .clipShape(RoundedRectangle(cornerRadius: Self.visualCornerRadius, style: .continuous))
             .overlay {
                 if isSelected {
