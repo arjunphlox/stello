@@ -99,8 +99,10 @@ final class WebLibraryImporter {
         }
 
         // Bring back the curated sample catalog (typefaces, foundries, sites,
-        // studios), only the entries the library doesn't already have.
-        if !cancelled {
+        // studios), only the entries the library doesn't already have. Full imports
+        // only: against a partial library it would add rows the rest of the export
+        // already has, and those URLs would then be skipped by the full import.
+        if !cancelled, limit == nil {
             await OptacosImporter.importIfNeeded(in: context, options: .uniqueIntoLibrary)
         }
 
