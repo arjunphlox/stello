@@ -20,13 +20,6 @@ struct HorizontalOutsetClip: Shape {
     }
 }
 
-private struct GridContainerWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 375
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 private struct ScrollContentBottomKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -338,9 +331,6 @@ struct MasonryGridView: View {
                     .onPreferenceChange(ScrollOffsetKey.self) { offset in
                         applyScrollOffset(offset)
                     }
-                    .onPreferenceChange(GridContainerWidthKey.self) { width in
-                        gridContainerWidth = width
-                    }
                     .onPreferenceChange(GridViewportTopKey.self) { top in
                         applyGridViewportTop(top)
                     }
@@ -378,6 +368,11 @@ struct MasonryGridView: View {
                 }
                 .overlay(alignment: .bottom) {
                     bottomControlOverlay(safeBottom: viewport.safeAreaInsets.bottom)
+                }
+                // The grid's width is the viewport less the paddings in `gridScrollContent`.
+                .onChange(of: viewport.size.width, initial: true) { _, width in
+                    gridContainerWidth = width - StelloLayout.windowInset
+                        - (embedInPanelLayout ? 0 : StelloLayout.windowInset)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -479,14 +474,6 @@ struct MasonryGridView: View {
             .padding(.horizontal, -Self.selectionOutlineInset)
 
             scrollContentBottomProbe
-        }
-        .background {
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: GridContainerWidthKey.self,
-                    value: geo.size.width
-                )
-            }
         }
         // Embed (Mac/iPad): the grid column includes the leading window gutter, so the
         // card stack pads leading by the inset to keep cards at the baseline x while the
