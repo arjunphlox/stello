@@ -111,6 +111,42 @@ enum CoverImageCache {
         return c
     }()
 
+    private final class DecodedBox: NSObject, @unchecked Sendable {
+        let image: CGImage
+        init(_ image: CGImage) { self.image = image }
+    }
+
+    /// Decoded bitmaps for grid cards. Cost is decoded bytes, so the limit is real memory.
+    nonisolated private static let decoded: NSCache<NSString, DecodedBox> = {
+        let cache = NSCache<NSString, DecodedBox>()
+        cache.totalCostLimit = 192 * 1024 * 1024
+        return cache
+    }()
+
+    nonisolated static func decodedImage(forKey key: String) -> CGImage? {
+        decoded.object(forKey: key as NSString)?.image
+    }
+
+    /// Decodes off the main thread and keeps the bitmap, ready to draw. nil if the bytes
+    /// aren't a readable image.
+    nonisolated static func decode(_ data: Data, key: String, maxPixels: Int = 1200) async -> CGImage? {
+        if let cached = decodedImage(forKey: key) { return cached }
+        let image = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+            ]
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+            return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        }.value
+        if let image {
+            decoded.setObject(DecodedBox(image), forKey: key as NSString, cost: image.bytesPerRow * image.height)
+        }
+        return image
+    }
+
     static func platformImage(data: Data, cacheKey: String) -> PlatformImage? {
         let key = cacheKey as NSString
         if let cached = cache.object(forKey: key)?.image { return cached }
