@@ -5,17 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stello — Sign in</title>
   <script>
-    /* Password-recovery safety-net (mirrors index.html): if a recovery link
-       lands here, bounce to the reset page before supabase-js consumes the
-       token and signs the user in. */
-    (function(){try{
-      var h = location.hash || '';
-      if (h.indexOf('type=recovery') !== -1 && location.pathname.indexOf('/reset-password') === -1) {
-        location.replace('/reset-password.html' + h);
-      }
-    }catch(e){}})();
-  </script>
-  <script>
     // Apply random accent on each visit
     (function(){
       var accents = ['lime', 'amber', 'iris'];
@@ -28,78 +17,40 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Platypi:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="theme.css?v=1">
-  <link rel="stylesheet" href="style.css?v=52">
+  <link rel="stylesheet" href="style.css?v=75">
 </head>
 <body>
 
   <div class="login-layout">
     <header class="header login-header" data-mode="choose">
-      <!-- Top-left "back to sign-in options" link, shown only in email mode.
-           Uses the same treatment on desktop and mobile for consistency. -->
-      <button class="login-back-link" id="login-back" type="button">
-        <svg width="14" height="14" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H59.31l58.35,58.34a8,8,0,0,1-11.32,11.32l-72-72a8,8,0,0,1,0-11.32l72-72a8,8,0,0,1,11.32,11.32L59.31,120H216A8,8,0,0,1,224,128Z"/></svg>
-        <span>Sign in options</span>
-      </button>
-
       <div class="header-row">
         <h1>Stello<sup class="header-count" id="login-action">scout</sup></h1>
 
-        <!-- Top-right "Create account" toggle. Mirrors the back link on the
-           left edge; only shown in email mode via data-mode selectors. -->
-      <button class="login-switch" id="login-switch" type="button">Create account</button>
-
-      <!-- "Choose" mode: the two sign-in options -->
         <div class="header-actions login-actions" id="login-choose">
-          <button class="login-btn" id="apple-login" type="button">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09M12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
-            Sign in with Apple
-          </button>
-          <button class="login-btn" id="email-toggle" type="button">
-            <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48Zm-96,85.15L52.57,64H203.43ZM98.71,128,40,181.81V74.19Zm11.84,10.85,12,11.05a8,8,0,0,0,10.82,0l12-11.05,58,53.15H52.57ZM157.29,128,216,74.19V181.81Z"/></svg>
-            Sign in with Email
-          </button>
-        </div>
-
-        <!-- "Email" mode: email form, horizontal row on wide, stacked on narrow.
-             The error line is absolutely positioned above the form so the form
-             itself stays pinned to the same bottom slot the login buttons use. -->
-        <form class="login-email-form" id="email-form" novalidate>
           <p class="login-error" id="login-error" aria-live="polite"></p>
-          <input type="email" class="login-input" id="login-email" placeholder="Email" required autocomplete="email">
-          <input type="password" class="login-input" id="login-password" placeholder="Password" required autocomplete="current-password">
-          <button type="button" class="login-forgot" id="login-forgot">Forgot?</button>
-          <button type="submit" class="login-submit" id="login-submit">Sign in</button>
-        </form>
+          <button class="login-btn" id="apple-login" type="button" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09M12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+            Sign in with Apple ID
+          </button>
+          <!-- CloudKit JS renders its Apple ID button here; our styled button
+               forwards the click so the sign-in popup opens from a user gesture. -->
+          <div id="ck-sign-in" class="login-ck-button" aria-hidden="true"></div>
+        </div>
       </div>
     </header>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-client.js?v=1"></script>
+<script src="icloud-client.js?v=3"></script>
 <script>
 (function () {
   'use strict';
 
-  let isSignUp = false;
-
-  const $header = document.querySelector('.login-header');
-  const $emailToggle = document.getElementById('email-toggle');
-  const $emailForm = document.getElementById('email-form');
-  const $email = document.getElementById('login-email');
-  const $password = document.getElementById('login-password');
-  const $submit = document.getElementById('login-submit');
-  const $switch = document.getElementById('login-switch');
-  const $error = document.getElementById('login-error');
-  const $appleBtn = document.getElementById('apple-login');
-  const $back = document.getElementById('login-back');
   const $action = document.getElementById('login-action');
-  const $forgot = document.getElementById('login-forgot');
+  const $apple = document.getElementById('apple-login');
+  const $ck = document.getElementById('ck-sign-in');
+  const $error = document.getElementById('login-error');
 
   // --- Action-word shuffle in superscript ---
-  // Gives the login page a hint at what Stello does without requiring
-  // a Supabase session we don't have yet pre-login. Words lean on the
-  // experience of coming back to collected things rather than on any
-  // specific feature name (no "tag", "filter", "sort" etc.).
   const actions = [
     'wander', 'linger', 'gather', 'savor',
     'muse', 'ponder', 'dream', 'marvel',
@@ -117,120 +68,31 @@
     }, 220);
   }, 2400);
 
-  // --- Mode switching ---
-  function setMode(mode) {
-    $header.setAttribute('data-mode', mode);
-    $error.textContent = '';
-    if (mode === 'email') {
-      // Defer focus so the transition doesn't fight an immediate focus jump
-      setTimeout(() => $email.focus(), 60);
-    }
-  }
-
-  // If already signed in, redirect to main page
-  (async function checkSession() {
-    const session = await Stello.getSession();
-    if (session) {
-      window.location.href = '/';
-      return;
-    }
-  })();
-
-  // Open email form
-  $emailToggle.addEventListener('click', () => setMode('email'));
-  // Back to the two-option choice (also resets the sign-up toggle)
-  $back.addEventListener('click', () => {
-    isSignUp = false;
-    $submit.textContent = 'Sign in';
-    $switch.textContent = 'Create account';
-    setMode('choose');
-  });
-
-  // Apple sign in
-  $appleBtn.addEventListener('click', () => {
-    Stello.signInWithApple();
-  });
-
-  // Toggle sign in / sign up
-  $switch.addEventListener('click', () => {
-    isSignUp = !isSignUp;
-    $submit.textContent = isSignUp ? 'Create account' : 'Sign in';
-    $switch.textContent = isSignUp ? 'Already have an account?' : 'Create account';
-    // "Forgot?" only makes sense when signing in.
-    $forgot.style.display = isSignUp ? 'none' : '';
-    $error.textContent = '';
-  });
-
-  // Forgot password — sends a recovery email to the address in the email
-  // field. Reuses the error slot to surface the success message in the
-  // accent-contrast color (same pattern as the sign-up "check your email"
-  // confirmation).
-  $forgot.addEventListener('click', async () => {
-    const email = $email.value.trim();
-    if (!email) {
-      $error.style.color = '';
-      $error.textContent = 'Enter your email first.';
-      $email.focus();
-      return;
-    }
-    $forgot.disabled = true;
-    $error.textContent = '';
-    const { error } = await Stello.requestPasswordReset(email);
-    $forgot.disabled = false;
-    if (error) {
-      $error.style.color = '';
-      $error.textContent = error;
-      return;
-    }
-    $error.style.color = 'var(--accent-contrast)';
-    $error.textContent = 'Check your email for a reset link.';
-  });
-
-  // Show an error string in the floating slot, replaying the shake animation
-  // each time so consecutive failures still register as a fresh signal.
-  function showError(text, accent) {
-    $error.style.color = accent ? 'var(--accent-contrast)' : '';
+  function showError(text) {
     $error.textContent = text;
     $error.classList.remove('shake');
     void $error.offsetWidth;
-    if (!accent) $error.classList.add('shake');
+    $error.classList.add('shake');
   }
 
-  // Email form submit
-  $emailForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    $error.textContent = '';
-    $error.classList.remove('shake');
-    const idleLabel = isSignUp ? 'Create account' : 'Sign in';
-    $submit.dataset.idleLabel = idleLabel;
-    $submit.textContent = isSignUp ? 'Creating account…' : 'Signing in…';
-    $submit.disabled = true;
+  // Signed in already → straight to the grid. Otherwise CloudKit renders its
+  // Apple ID button into #ck-sign-in and resolves once the user signs in.
+  Stello.waitForSignIn({ signIn: 'ck-sign-in' })
+    .then(() => { window.location.href = '/?welcome=1'; })
+    .catch((e) => {
+      console.error(e);
+      showError('iCloud sign-in is unavailable right now.');
+    });
 
-    const email = $email.value.trim();
-    const password = $password.value;
+  // Enable our button once CloudKit's button exists.
+  new MutationObserver(() => {
+    if ($ck.firstElementChild) $apple.disabled = false;
+  }).observe($ck, { childList: true, subtree: true });
 
-    let result;
-    if (isSignUp) {
-      result = await Stello.signUpWithEmail(email, password);
-      if (!result.error && result.needsConfirmation) {
-        showError('Check your email to confirm your account.', true);
-        $submit.textContent = idleLabel;
-        $submit.disabled = false;
-        return;
-      }
-    } else {
-      result = await Stello.signInWithEmail(email, password);
-    }
-
-    if (result.error) {
-      showError(result.error, false);
-      $submit.textContent = idleLabel;
-      $submit.disabled = false;
-      return;
-    }
-
-    // ?welcome=1 triggers the one-shot post-login stagger reveal in app.js init().
-    window.location.href = '/?welcome=1';
+  $apple.addEventListener('click', () => {
+    const target = $ck.querySelector('a, button, [role="button"], div[id]') || $ck.firstElementChild;
+    if (target) target.click();
+    else showError('Sign-in is still loading, try again in a moment.');
   });
 })();
 </script>

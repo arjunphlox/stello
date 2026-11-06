@@ -1,6 +1,6 @@
 # Stello
 
-Personal knowledge base — a rich item analysis and discovery tool with weighted tags, masonry grid UI, and content organization.
+Personal knowledge base — a rich item analysis and discovery tool with weighted tags, masonry grid UI, and content organization. Data lives in the user's iCloud; native apps + a web app read the same library.
 
 ## AI Coding Workflow
 
@@ -28,21 +28,17 @@ Two layers:
 
 ## Dev Commands
 
-- `npm run dev` — builds `dist/` (asset allowlist) then runs `wrangler dev` (local Worker + static assets). Loads env from `.env.local` (copy `.env.example`).
-- `npm run dev:remote` — `wrangler dev --remote` against the real R2 + Images bindings; needed to exercise image conversion/serving locally.
-- Deploys are automatic: Cloudflare Workers Builds deploys every push to `main` (build `npm run build`, deploy `npx wrangler deploy`) to `stello.arjunphlox.workers.dev`. `npm run deploy` still works for a manual deploy. Secrets set via `wrangler secret put` (not in the repo).
-- `python3 -m http.server 8080` — static preview only (no auth, no API — useful for CSS tweaks)
-- `node scripts/verify-supabase.js` — check schema + RLS + storage bucket
-- `node scripts/sync-local.js` — back up Supabase items to a local `_items/` mirror
+- `npm run dev` — builds `dist/` (asset allowlist) then runs `wrangler dev` (static web app + `/img/*`) on `http://localhost:8787`, an allowed CloudKit origin.
+- Deploys are automatic: Cloudflare Workers Builds deploys every push to `main` (build `npm run build`, deploy `npx wrangler deploy`) to `stello.arjunphlox.workers.dev`. `npm run deploy` still works for a manual deploy. No secrets needed.
+- `python3 -m http.server 8080` — static preview only (no iCloud sign-in — useful for CSS tweaks)
 
 ## Architecture
 
-Vanilla HTML/CSS/JS frontend, Supabase for auth + data (Postgres + RLS), a single Cloudflare Worker (Hono) for item capture/enrichment + image serving, and R2 for image bytes. Minimal build step (asset allowlist copy only, no framework).
+**iCloud is the only data home** (since 2026-11-05; Supabase removed). Vanilla HTML/CSS/JS web app, native SwiftUI apps, and a tiny Cloudflare Worker that only serves files. See `docs/memory/project_icloud_data.md`.
 
-- **Frontend**: `index.html` (masonry grid), `detail.html` (item detail view), `app.js` (client logic), `style.css`, `supabase-client.js` (auth + session helpers).
-- **Worker**: one Hono Worker (`src/index.js`) serves the static frontend (`dist/`) + all `/api/*` routes (`src/routes/*`) + `/img/*` R2 image serving + a daily Cron Trigger. Endpoints ported from the old Vercel fns via `src/lib/adapter.js`. Image bytes live in R2 (`src/lib/storage.js`), served back at `/img/<key>` (zero egress); WebP conversion via the CF Images binding (`src/lib/images.js`). All auth-gated via `src/lib/supabase.js`.
-- **Data**: Items in Supabase `items` table, per-user, RLS-scoped. Schema in `scripts/schema.sql`. Local `_items/` + `index.json` are backup mirrors written by `scripts/sync-local.js`.
-- **Config**: Per-user Anthropic keys in `user_settings`. `config.json` is legacy and gitignored.
+- **Apps**: `apple/Stello` — SwiftData + CloudKit (container `iCloud.com.arjunphlox.Stello`), on-device capture + enrichment. `Sync/WebInboxProcessor.swift` applies web saves/edits from the `StelloInbox` zone (silent push).
+- **Web**: `index.html` (masonry grid), `detail.html`, `login.html` (Apple ID sign-in), `app.js` (client logic), `style.css`, `icloud-client.js` (CloudKit JS: Apple ID auth, reads the apps' SwiftData mirror zone into IndexedDB, lazy images, inbox writes). The web never writes SwiftData's `CD_` records directly.
+- **Worker**: `src/index.js` (Hono) serves `dist/` + legacy `/img/*` from R2. `/img` + R2 stay only until the Supabase export is imported into iCloud.
 - **Desktop context (local Mac only)**: `desktop-context/` is a Python LaunchAgent (`com.stello.context`) on `127.0.0.1:8766` — watches `~/Downloads/Stello Watcher`, introspects Sketch + Safari, indexes into local SQLite, and serves `/related`. The frontend stub `desktop-context.js` calls it only when the page is loaded from `localhost` or `127.0.0.1` (`window.stelloDesktop.fetchRelated(k)`); production deploys never contact the daemon.
 
 ## Key Files
@@ -51,17 +47,15 @@ Vanilla HTML/CSS/JS frontend, Supabase for auth + data (Postgres + RLS), a singl
 |---|---|
 | `index.html` | Main grid view with search, tag filtering, import modal |
 | `detail.html` | Item detail page |
+| `login.html` | Sign in with Apple ID (CloudKit JS) |
 | `app.js` | All frontend logic — filtering, masonry layout, tag system, related items index |
+| `icloud-client.js` | CloudKit JS client — auth, library sync + cache, lazy images, `StelloInbox` writes. Holds the CloudKit API token + environment |
 | `desktop-context.js` | Localhost-only bridge to the desktop-context daemon (`window.stelloDesktop.fetchRelated`) |
 | `style.css` | All styles |
-| `supabase-client.js` | Client-side auth + session helpers |
-| `src/index.js` | Hono Worker entry — `/api/*` routes, `/img/*` R2 serving, daily cron |
-| `src/routes/*.js` | Ported endpoint handlers (capture, enrich, upload-image, …) |
-| `src/lib/*.js` | Shared: `supabase` (auth + OG/tag helpers), `images` (CF Images→WebP), `storage` (R2), `adapter` (req/res shim) |
-| `wrangler.jsonc` | Worker config — assets, R2 + Images bindings, cron trigger |
-| `scripts/schema.sql` | Supabase schema + RLS policies |
-| `index.json` | Local backup mirror (regenerated by sync-local.js) |
-| `config.json` | Legacy API key config (gitignored) — per-user keys now live in `user_settings` |
+| `src/index.js` | Worker entry — static assets + `/img/*` R2 serving |
+| `wrangler.jsonc` | Worker config — assets + R2 binding |
+| `apple/Stello/Stello/Sync/WebInboxProcessor.swift` | Native side of the web inbox |
+| `index.json` | Old local backup mirror (Supabase era) |
 
 ## Tag System
 
@@ -75,9 +69,10 @@ Items stored as markdown files in `_items/` directory with YAML frontmatter meta
 
 - `python3 scripts/link_check.py run` — check for dead links (reads the local `_items/` backup mirror; every 7 days)
 - `python3 scripts/refetch.py run` — retry image fetching for items without images (reads the local `_items/` backup mirror)
-- Archived: `scripts/archive/analyze.py`, `scripts/archive/enrich.py`, `scripts/archive/vision_enrich.py` — superseded by `src/routes/capture.js` + `src/routes/enrich.js`; enrichment now happens at capture time in the Worker flow
+- Archived: `scripts/archive/analyze.py`, `scripts/archive/vision_enrich.py` — superseded; enrichment now happens on-device in the native apps
 
 ## Active Work
+- [~] **iCloud as the only data home** (2026-11-05) — Supabase + Worker API removed; web reads iCloud via CloudKit JS with Apple ID sign-in; web writes via the `StelloInbox` zone. Pending: CloudKit API token in `icloud-client.js`, on-device inbox test, importing the 3,605-item Supabase export into iCloud, then dropping R2 + `/img`.
 - [ ] **Desktop-context follow-ups** — e2e smoke (BACKLOG), cards UI scoping (BACKLOG). V1 pipeline shipped 2026-06-17.
 - [~] **Native Apple app** (`apple/Stello`) — foundations shipped (Sprints 0-2 + refinement): local-first SwiftData+CloudKit, on-device Foundation Models enrichment, capture + Share Extension, masonry/weeks/search/filters/detail/themes, web-faithful macOS chrome. Refinement ongoing; data migration (Sprint 3) + real-device AI verification pending.
 - [x] **Native quick-wins sprint** — SHIPPED (PR #30, 2026-07-06): revisit tracking, why-saved→intent facet, awaiting-review strip, search-over-everything, deterministic PageClassifier at capture. Built by Cursor/Composer, review-fixed by Claude Code (Opus orchestrator + Sonnet 5 sub-agents, `docs/plans/pr30-fix-round.md`) — 8/9 review findings closed, 1 acceptable partial; residual minors in BACKLOG. Next from the possibilities analysis: kind-dispatched AI enrichment + typed Highlights (BACKLOG, gated on real-device AFM verification).

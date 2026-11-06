@@ -1,4 +1,6 @@
 import SwiftUI
+import SwiftData
+import UniformTypeIdentifiers
 import PhotosUI
 
 /// Shared User Preferences body — profile row, appearance, and optional sections.
@@ -61,12 +63,75 @@ struct UserPreferencesContent: View {
                 }
             }
 
+            WebLibraryImportSection()
+
             if showsAboutSection {
                 Section("About") {
                     LabeledContent("Version", value: "1.0")
                     Text("Personal knowledge base")
                         .font(.karst(.caption))
                         .foregroundStyle(theme.textSecondary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Web library import
+
+/// One-time import of the old web library (Supabase export JSON) into iCloud.
+private struct WebLibraryImportSection: View {
+    @Environment(\.appTheme) private var theme
+    @Environment(\.modelContext) private var context
+    @Environment(\.enrichmentCoordinator) private var coordinator
+
+    @State private var importer = WebLibraryImporter.shared
+    @State private var pickingFile = false
+    @State private var pilotOnly = true
+
+    var body: some View {
+        Section("Old web library") {
+            Toggle("Test with 50 items first", isOn: $pilotOnly)
+                .disabled(importer.isRunning)
+            if importer.isRunning {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text(importer.statusText)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.textSecondary)
+                    Spacer()
+                    Button("Stop") { importer.cancel() }
+                }
+            } else {
+                Button("Import export file…") { pickingFile = true }
+                if !importer.statusText.isEmpty {
+                    Text(importer.statusText)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            if let stage = importer.stageText {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text(stage)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            Text("Brings items from the old Stello web app into this library. Items appear right away; covers and kinds fill in while Stello is open, and AI summaries follow slowly or when you open an item.")
+                .font(.karst(.caption))
+                .foregroundStyle(theme.textSecondary)
+        }
+        .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.json]) { result in
+            guard case .success(let url) = result else { return }
+            Task {
+                await importer.run(
+                    fileURL: url,
+                    context: context,
+                    limit: pilotOnly ? 50 : nil
+                )
+                if !WebInboxProcessor.isDisabled {
+                    await WebLibraryImporter.classifyPending(context: context, coordinator: coordinator)
                 }
             }
         }

@@ -308,12 +308,11 @@ Native app (primary surface now):
 
 Web app (post-Cloudflare-migration paths; the `api/*` refs above are historical):
 - Schema / columns to add: `scripts/schema.sql`
-- Tag generation: `src/lib/supabase.js`, enrichment: `src/routes/enrich.js`
+- Tag generation + enrichment: native `apple/Stello/Stello/Capture/` (RuleTagger, EnrichmentService); the web Worker pipeline was removed Nov 2026
 - Related-items graph: `app.js` (`relatedIndex`); panel curation: `app.js` + `src/routes/item-update.js`; filter drawer: `app.js`
 
 ## Verification (when any one of these lands)
 
 - Local: `npm run dev`, capture a URL, confirm the new facet/column/view renders.
-- Schema changes: `node scripts/verify-supabase.js` to check RLS + columns.
 - Backup round-trip: `node scripts/sync-local.js` still mirrors cleanly.
 - Visual QA the new view in Chrome + Firefox (cross-doc VT matters for 8.3 and 8.4).

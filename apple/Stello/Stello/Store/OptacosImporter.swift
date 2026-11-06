@@ -49,9 +49,15 @@ enum OptacosImporter {
     nonisolated struct Options: Sendable {
         var fetchImages: Bool = true
         var respectGuard: Bool = true
+        /// Skip rows whose URL or title is already in the library (any slug).
+        var skipExisting: Bool = false
 
         /// Offline, guard-free run for unit tests.
         nonisolated static let offline = Options(fetchImages: false, respectGuard: false)
+
+        /// Adds only the catalog entries the library doesn't have yet. Used after the
+        /// web-library import so the curated catalog survives the move to iCloud.
+        nonisolated static let uniqueIntoLibrary = Options(fetchImages: true, respectGuard: false, skipExisting: true)
     }
 
     /// Runs once after demo seed; idempotent by slug and guarded by UserDefaults + existing typed items.
@@ -80,6 +86,17 @@ enum OptacosImporter {
         var usedSlugs = Set<String>()
         var importQueue: [(row: [String: Any], slug: String, kind: ItemKind, collectionName: String)] = []
 
+        var libraryURLs = Set<String>()
+        var libraryTitles = Set<String>()
+        if options.skipExisting {
+            let all = (try? context.fetch(FetchDescriptor<Item>())) ?? []
+            libraryURLs = Set(all.compactMap { normalizedURL($0.sourceURL) })
+            libraryTitles = Set(all.compactMap {
+                let t = $0.title.lowercased().trimmingCharacters(in: .whitespaces)
+                return t.isEmpty ? nil : t
+            })
+        }
+
         for (collectionName, kind) in entityCollections {
             guard let col = collections[collectionName],
                   let items = col["items"] as? [[String: Any]] else { continue }
@@ -87,6 +104,14 @@ enum OptacosImporter {
             for row in items {
                 guard let slug = row["slug"] as? String, !slug.isEmpty else { continue }
                 slugKindMap[slug] = kind
+
+                if options.skipExisting {
+                    let rowURL = normalizedURL(linkValue(row["URL"]) ?? stringValue(row["URL"]))
+                    let rowTitle = titleForRow(row, collectionName: collectionName)
+                        .lowercased().trimmingCharacters(in: .whitespaces)
+                    if let rowURL, libraryURLs.contains(rowURL) { continue }
+                    if !rowTitle.isEmpty, libraryTitles.contains(rowTitle) { continue }
+                }
 
                 var itemSlug = slug
                 if usedSlugs.contains(slug) {
@@ -114,10 +139,7 @@ enum OptacosImporter {
 
             await MainActor.run {
                 context.insert(result.item)
-                for tag in result.tags {
-                    context.insert(tag)
-                    tag.item = result.item
-                }
+                result.item.tags = result.tags
                 for img in result.images {
                     context.insert(img)
                     img.item = result.item
@@ -256,6 +278,15 @@ enum OptacosImporter {
         return ((try? context.fetchCount(descriptor)) ?? 0) > 0
     }
 
+    /// Host + path, lowercased, without scheme, `www.` or trailing slash.
+    private static func normalizedURL(_ raw: String?) -> String? {
+        guard var u = raw?.trimmingCharacters(in: .whitespaces).lowercased(), !u.isEmpty else { return nil }
+        for prefix in ["https://", "http://"] where u.hasPrefix(prefix) { u.removeFirst(prefix.count) }
+        if u.hasPrefix("www.") { u.removeFirst(4) }
+        while u.hasSuffix("/") { u.removeLast() }
+        return u
+    }
+
     @MainActor
     private static func itemExists(slug: String, in context: ModelContext) -> Bool {
         let descriptor = FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.slug == slug })
@@ -330,7 +361,7 @@ enum OptacosImporter {
 
     private struct BuildResult {
         var item: Item
-        var tags: [Tag]
+        var tags: [ItemTag]
         var images: [ItemImage]
         var pendingDownloads: [PendingImage]
     }
@@ -367,7 +398,7 @@ enum OptacosImporter {
             kind: kind.rawValue
         )
 
-        var tags: [Tag] = []
+        var tags: [ItemTag] = []
         var images: [ItemImage] = []
         var pending: [PendingImage] = []
 
@@ -596,7 +627,7 @@ enum OptacosImporter {
     private static func appendTypefaceTags(
         from row: [String: Any],
         tagCatalog: [String: TagEntry],
-        into tags: inout [Tag]
+        into tags: inout [ItemTag]
     ) {
         addTags(fromRefField: row["Classification"], facet: "Classification", tagCatalog: tagCatalog, into: &tags)
         addTags(fromRefField: row["Personality"], facet: "Personality", tagCatalog: tagCatalog, into: &tags)
@@ -610,7 +641,7 @@ enum OptacosImporter {
     private static func appendFoundryTags(
         from row: [String: Any],
         tagCatalog: [String: TagEntry],
-        into tags: inout [Tag]
+        into tags: inout [ItemTag]
     ) {
         addTags(fromRefField: row["Licensing Types"], facet: "Licensing Types", tagCatalog: tagCatalog, into: &tags)
         addTags(fromRefField: row["Specialisation"], facet: "Specialisation", tagCatalog: tagCatalog, into: &tags)
@@ -623,12 +654,12 @@ enum OptacosImporter {
         fromRefField value: Any?,
         facet: String,
         tagCatalog: [String: TagEntry],
-        into tags: inout [Tag]
+        into tags: inout [ItemTag]
     ) {
         for slug in refSlugs(value) {
             let name = tagCatalog[slug]?.title ?? slug.replacingOccurrences(of: "-", with: " ")
             let category = tagCatalog[slug]?.facet ?? facet
-            tags.append(Tag(name: name, category: category, weight: 0.75, source: "rule"))
+            tags.append(ItemTag(name: name, category: category, weight: 0.75, source: "rule"))
         }
     }
 
@@ -671,12 +702,10 @@ enum OptacosImporter {
         await MainActor.run {
             for assignment in assignments {
                 guard let item = fetchItem(slug: assignment.targetSlug, in: context) else { continue }
-                if item.tags?.contains(where: { $0.name == assignment.tagName && $0.category == assignment.facet }) == true {
+                if item.tags.contains(where: { $0.name == assignment.tagName && $0.category == assignment.facet }) {
                     continue
                 }
-                let tag = Tag(name: assignment.tagName, category: assignment.facet, weight: 0.8, source: "rule")
-                context.insert(tag)
-                tag.item = item
+                item.tags.append(ItemTag(name: assignment.tagName, category: assignment.facet, weight: 0.8, source: "rule"))
             }
             try? context.save()
         }

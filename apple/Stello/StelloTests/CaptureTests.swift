@@ -552,9 +552,7 @@ struct StoreIntegrationTests {
         let items = try context.fetch(FetchDescriptor<Item>())
         #expect(items.count == 1)
         #expect(items[0].title == "Typography design inspiration book")
-        let tags = try context.fetch(FetchDescriptor<Stello.Tag>())
-        #expect(!tags.isEmpty)
-        #expect(tags.allSatisfy { $0.item?.id == items[0].id })
+        #expect(!items[0].tags.isEmpty)
     }
 
     @Test("captureText slug is first five words lowercased-hyphenated")

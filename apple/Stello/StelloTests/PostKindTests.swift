@@ -486,10 +486,8 @@ struct PostAIArtTests {
         meta.text = "Brutalist library at dusk #aiart"
         let item = Item(title: "@janedoe: Brutalist library at dusk #aiart", kind: ItemKind.post.rawValue)
         item.setMetadata(meta)
-        let label = Stello.Tag(name: "midjourney", category: "collection", weight: 1.0)
         context.insert(item)
-        context.insert(label)
-        label.item = item
+        item.tags = [ItemTag(name: "midjourney", category: "collection", weight: 1.0)]
         try context.save()
 
         await EnrichmentService.applyPostAIArtIfNeeded(item: item, enricher: RuleBasedFallbackEnricher())

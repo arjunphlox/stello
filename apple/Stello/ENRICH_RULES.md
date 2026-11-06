@@ -1,6 +1,6 @@
 # Stello rule-based tagging (exact port reference)
 
-Verbatim from the web app's `src/lib/enrich-rules.js` + call-site params in `src/lib/supabase.js`. Port to Swift exactly — these are the deterministic, offline baseline tags (also the fallback when Apple Intelligence is unavailable). Match spelling/casing/hyphenation precisely.
+Ported verbatim from the former web Worker's `src/lib/enrich-rules.js` + `src/lib/supabase.js` (both removed Nov 2026; see git history). Port to Swift exactly — these are the deterministic, offline baseline tags (also the fallback when Apple Intelligence is unavailable). Match spelling/casing/hyphenation precisely.
 
 ## Pipeline (generateTagsFromMetadata)
 Order, then sort by weight desc, then **cap to 12** total:

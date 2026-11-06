@@ -9,14 +9,9 @@
     "dev:up": "dev-up",
     "dev:down": "dev-down",
     "dev:remote": "node scripts/build-assets.js && wrangler dev --remote",
-    "deploy": "node scripts/build-assets.js && wrangler deploy",
-    "backup": "node scripts/sync-local.js",
-    "backup:full": "node scripts/sync-local.js --full",
-    "verify": "node scripts/verify-supabase.js"
+    "deploy": "node scripts/build-assets.js && wrangler deploy"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
-    "@supabase/supabase-js": "^2.49.4",
     "hono": "^4.6.14"
   },
   "devDependencies": {

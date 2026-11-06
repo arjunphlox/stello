@@ -10,17 +10,16 @@ enum EnrichmentService {
         to item: Item,
         context: ModelContext
     ) throws {
-        let existingNames = Set((item.tags ?? []).map { $0.name.lowercased() })
-        var names = existingNames
+        var tags = item.tags
+        var names = Set(tags.map { $0.name.lowercased() })
 
         for spec in result.visionTags {
             let key = spec.name.lowercased()
             guard !names.contains(key) else { continue }
             names.insert(key)
-            let tag = Tag(name: spec.name, category: spec.category, weight: spec.weight, source: "ai")
-            context.insert(tag)
-            tag.item = item
+            tags.append(ItemTag(name: spec.name, category: spec.category, weight: spec.weight, source: "ai"))
         }
+        item.tags = tags
 
         item.enrichmentStatus = "vision_done"
 
@@ -269,11 +268,9 @@ enum EnrichmentService {
         removeFromSuggestions: Bool = true
     ) throws {
         let key = name.lowercased()
-        let existing = (item.tags ?? []).contains { $0.name.lowercased() == key }
+        let existing = item.tags.contains { $0.name.lowercased() == key }
         if !existing {
-            let tag = Tag(name: name, category: "intent", weight: 0.9, source: "manual")
-            context.insert(tag)
-            tag.item = item
+            item.tags.append(ItemTag(name: name, category: "intent", weight: 0.9, source: "manual"))
         }
 
         if removeFromSuggestions, let json = item.whySavedSuggestionsJSON {
@@ -431,12 +428,10 @@ enum EnrichmentService {
 
         item.whySavedSuggestionsJSON = encodeWhySavedSuggestions(musicWhySavedSuggestions(subtype: meta.subtype))
 
-        let existingNames = Set((item.tags ?? []).map { $0.name.lowercased() })
-        for mood in moodTags(forGenres: meta.genres) where !existingNames.contains(mood) {
-            let tag = Tag(name: mood, category: "mood", weight: 0.6, source: "rule")
-            context.insert(tag)
-            tag.item = item
-        }
+        let existingNames = Set(item.tags.map { $0.name.lowercased() })
+        item.tags += moodTags(forGenres: meta.genres)
+            .filter { !existingNames.contains($0) }
+            .map { ItemTag(name: $0, category: "mood", weight: 0.6, source: "rule") }
 
         // Vision is the only AI job music items still run — a sleeve is a design reference
         // in its own right (palette, typography, style tags).
@@ -444,12 +439,10 @@ enum EnrichmentService {
         if enricher.isAvailable, let coverData {
             do {
                 let visionTags = try await enricher.enrichVisionOnly(coverImageData: coverData)
-                let existingAfterMood = Set((item.tags ?? []).map { $0.name.lowercased() })
-                for spec in visionTags where !existingAfterMood.contains(spec.name.lowercased()) {
-                    let tag = Tag(name: spec.name, category: spec.category, weight: spec.weight, source: "ai")
-                    context.insert(tag)
-                    tag.item = item
-                }
+                let existingAfterMood = Set(item.tags.map { $0.name.lowercased() })
+                item.tags += visionTags
+                    .filter { !existingAfterMood.contains($0.name.lowercased()) }
+                    .map { ItemTag(name: $0.name, category: $0.category, weight: $0.weight, source: "ai") }
                 item.enrichmentError = nil
             } catch {
                 item.enrichmentError = "vision: \(error.localizedDescription)"
@@ -488,7 +481,7 @@ enum EnrichmentService {
     /// Collection labels (`category == "collection"` tags: wishlist, digital-tools, …) —
     /// hints that break classification ties; imported items carry them, fresh captures don't.
     static func collectionLabels(for item: Item) -> [String] {
-        (item.tags ?? []).filter { $0.category == "collection" }.map(\.name)
+        item.tags.filter { $0.category == "collection" }.map(\.name)
     }
 
     /// Force-Enrich hook: when a `link` or `product` item's refetched page classifies as a
@@ -677,7 +670,7 @@ enum EnrichmentService {
     static func applyPostAIArtIfNeeded(item: Item, enricher: Enricher) async {
         guard var meta = item.postMeta() else { return }
         let labels = collectionLabels(for: item)
-        let tags = (item.tags ?? []).filter { $0.category != "collection" }.map(\.name)
+        let tags = item.tags.filter { $0.category != "collection" }.map(\.name)
         PostReader.applyAIArt(to: &meta, labels: labels, tags: tags)
 
         if meta.isAIArt, meta.prompt == nil, meta.text != nil {

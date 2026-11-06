@@ -146,12 +146,6 @@
     }
   };
 
-  // --- Auth-aware fetch wrapper ---
-  function apiFetch(url, opts = {}) {
-    if (window.Stello) return Stello.apiFetch(url, opts);
-    return fetch(url, opts); // local dev fallback
-  }
-
   // --- Login arrival fallback (GSAP) ---
   // When the inline <head> gate in index.html detects a browser without
   // cross-document view-transition support, it adds .arriving-from-login
@@ -235,297 +229,62 @@
       console.error('Stello auth module failed to load');
       return;
     }
-    const session = await Stello.requireAuth();
+    const session = await Stello.requireAuth({ signOut: 'ck-sign-out' });
     if (!session) return; // redirecting to login
     Stello.initAuthListener();
 
-    // Load items from Supabase, paging through results (default limit is 1000).
-    // First-page-first: render with the most recent 1000 items immediately,
-    // then stream older history in the background. Subsequent pages cover
-    // older weeks that are collapsed by default, so their headers can be
-    // appended without disturbing the already-rendered first weeks.
-    const client = Stello.getClient();
-    const userId = Stello.getUserId();
-    const PAGE = 1000;
-
-    async function fetchItemsPage(from) {
-      const { data, error } = await client
-        .from('items')
-        .select('*')
-        .eq('user_id', userId)
-        .order('added_at', { ascending: false })
-        .range(from, from + PAGE - 1);
-      if (error) {
-        console.error('Failed to load items from Supabase:', error.message);
-        return [];
+    // Load the library from iCloud (the apps' SwiftData + CloudKit store).
+    // Repeat visits render instantly from the IndexedDB cache, then apply
+    // whatever changed in iCloud since last time.
+    let booted = false;
+    const applyItems = (rows) => {
+      allItems = rows.map(normalizeItem);
+      sortItemsByAddedAt(allItems);
+      itemsBySlug = {};
+      allItems.forEach(item => { itemsBySlug[item.slug] = item; });
+      buildRelatedIndex();
+      renderStats();
+      if (!booted) {
+        booted = true;
+        injectHeaderIcons();
+        bindEvents();
+        startGridColsObserver();   // sizes the columns, then renders the grid
+        PanelManager.init();
+        Stello.hydrateImages(document.body);
+      } else {
+        renderGrid();
       }
-      return data || [];
-    }
+    };
 
-    const firstPage = await fetchItemsPage(0);
-    allItems = firstPage.map(normalizeItem);
-    sortItemsByAddedAt(allItems);
-    itemsBySlug = {};
-    allItems.forEach(item => { itemsBySlug[item.slug] = item; });
-
-    buildRelatedIndex();
-    renderStats();
-    injectHeaderIcons();
-    bindEvents();
-    startGridColsObserver();   // sizes the columns, then renders the grid
-    PanelManager.init();
-
-    // Background-stream remaining pages. Only runs if the first page hit the
-    // limit — small libraries are done in a single round trip.
-    if (firstPage.length === PAGE) {
-      (async () => {
-        for (let from = PAGE; ; from += PAGE) {
-          const page = await fetchItemsPage(from);
-          if (page.length === 0) break;
-          const normalized = page.map(normalizeItem);
-          allItems = allItems.concat(normalized);
-          normalized.forEach(item => { itemsBySlug[item.slug] = item; });
-          if (page.length < PAGE) break;
-        }
-        sortItemsByAddedAt(allItems);
-        buildRelatedIndex();
-        renderStats();
-        appendOlderWeeks();
-        // Re-run dimensions backfill now that older pages are in memory.
-        // Use setTimeout rather than requestIdleCallback because the
-        // initial backfill keeps the main thread fairly busy (image
-        // probes + Supabase writes), so an idle callback can be starved.
-        // backfillImageDimensions is idempotent and self-locking so
-        // overlapping calls coalesce safely.
-        setTimeout(() => backfillImageDimensions(), 500);
-      })();
-    }
-
-    // Kick off silent backfill for items that predate the entity-decode
-    // and rule-enrichment fixes. Runs in the background, two concurrent
-    // requests at a time, so it doesn't compete with the initial render.
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(() => backfillEnrichment(), { timeout: 4000 });
-    } else {
-      setTimeout(() => backfillEnrichment(), 2500);
-    }
-
-    // Backfill image dimensions for legacy items (captured before sharp
-    // started storing width/height). Sniffs naturalWidth/naturalHeight
-    // from the loaded image and persists via the user's session — the
-    // RLS policy `Users can update own items` covers this. After enough
-    // sessions every card has explicit width/height, eliminating the
-    // column-count reflow that caused thumbnails to fragment across
-    // columns.
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(() => backfillImageDimensions(), { timeout: 8000 });
-    } else {
-      setTimeout(() => backfillImageDimensions(), 6000);
-    }
-  }
-
-  // --- Silent re-enrichment drip for pre-fix items ---
-  // Flags an item as needing reprocessing if it's stuck in text_done / pending
-  // or if its stored title/summary still contain HTML-entity artifacts from
-  // before the decode fix landed.
-  function itemNeedsBackfill(item) {
-    const status = item.enrichment_status;
-    if (status === 'error') return false;            // give up
-    // vision_done = image+vision finished; candidates_done = terminal for
-    // imageless pages (nothing left to fetch). Anything earlier still has work.
-    if (status && status !== 'vision_done' && status !== 'candidates_done') return true;
-    const text = (item.title || '') + ' ' + (item.summary || '');
-    if (/&#\d|&#x|&amp;|&quot;|&lt;|&gt;/i.test(text)) return true;
-    // Vision-done items with no image → nothing to do
-    return false;
-  }
-
-  async function backfillEnrichment() {
-    const queue = allItems.filter(itemNeedsBackfill);
-    if (queue.length === 0) return;
-
-    console.log(`[stello] backfill: re-enriching ${queue.length} items`);
-
-    const CONCURRENCY = 2;
-    let next = 0;
-    let processed = 0;
-
-    async function worker() {
-      while (!worker.stop) {
-        const slot = next++;
-        if (slot >= queue.length) return;
-        const item = queue[slot];
-        try {
-          const res = await apiFetch('/api/reprocess', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug: item.slug }),
-          });
-          if (!res.ok) continue;
-
-          // Refetch the updated row so the UI shows the new tags/image
-          // without another round trip.
-          const client = Stello.getClient();
-          const { data } = await client.from('items').select('*')
-            .eq('slug', item.slug).eq('user_id', Stello.getUserId())
-            .single();
-          if (!data) continue;
-
-          const refreshed = normalizeItem(data);
-          const idx = allItems.findIndex(i => i.slug === item.slug);
-          if (idx >= 0) allItems[idx] = refreshed;
-          itemsBySlug[item.slug] = refreshed;
-
-          const cardEl = $grid.querySelector(`.card[data-slug="${item.slug}"]:not(.card-question)`);
-          if (cardEl && cardEl.dataset.renderSig !== cardRenderSig(refreshed)) {
-            cardEl.outerHTML = renderCard(refreshed, 0);
-          }
-          PanelManager.refreshItem(item.slug);   // diff-aware; safe to call every pass
-
-          // If reprocess downloaded an image, kick off vision enrichment
-          // too. Fire-and-forget; pollForEnrichment handles the UI update.
-          if (refreshed.enrichment_status === 'text_done' && refreshed.has_image) {
-            apiFetch('/api/enrich', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ slug: item.slug }),
-            }).catch(() => {});
-            pollForEnrichment(item.slug, { maxAttempts: 12, interval: 4000 });
-          }
-        } catch { /* move on to the next slot */ }
-        processed++;
+    // Pending (processing) cards survive re-syncs until the real item lands.
+    const mergePending = (rows) => {
+      const real = rows.map(normalizeItem);
+      const urls = new Set(real.map(i => i.source_url).filter(Boolean));
+      const pend = allItems.filter(i => i.pending && !(i.source_url && urls.has(i.source_url)));
+      return { real, pend };
+    };
+    reloadLibrary = async () => {
+      const rows = await Stello.loadLibrary();
+      const { pend } = mergePending(rows);
+      const sigBefore = allItems.length + ':' + allItems.map(i => i.updated_at).join();
+      applyItems(rows);
+      if (pend.length) {
+        allItems = pend.concat(allItems);
+        pend.forEach(i => { itemsBySlug[i.slug] = i; });
+        renderGrid();
       }
+      return sigBefore !== allItems.length + ':' + allItems.map(i => i.updated_at).join();
+    };
+
+    try {
+      const rows = await Stello.loadLibrary({ onCached: applyItems });
+      applyItems(rows);
+    } catch (e) {
+      console.error('Failed to load library from iCloud:', e);
+      if (!booted) applyItems([]);
+      showToast('Could not reach iCloud');
     }
-
-    const workers = [];
-    for (let i = 0; i < CONCURRENCY; i++) workers.push(worker());
-    await Promise.all(workers);
-
-    buildRelatedIndex();
-    console.log(`[stello] backfill: done (${processed}/${queue.length})`);
-  }
-
-  // --- Lazy image-dimensions backfill ---
-  // Sniffs naturalWidth/naturalHeight from each legacy image and persists
-  // them into items.images[] so subsequent renders emit <img width=W
-  // height=H> and the column-count engine never reflows on image-load.
-  // Runs at idle priority, two concurrent fetches at a time, capped at
-  // 50 items per session to avoid hammering Supabase on first visit.
-  function loadImageDimensions(url) {
-    return new Promise(resolve => {
-      const probe = new Image();
-      let done = false;
-      const finish = (val) => { if (done) return; done = true; resolve(val); };
-      probe.onload = () => finish({ width: probe.naturalWidth || 0, height: probe.naturalHeight || 0 });
-      probe.onerror = () => finish(null);
-      probe.src = url;
-      // Guard against images that never resolve so we don't hold a worker forever.
-      setTimeout(() => finish(null), 8000);
-    });
-  }
-
-  let dimsBackfillRunning = false;
-  let dimsBackfillPending = false;
-  async function backfillImageDimensions() {
-    if (dimsBackfillRunning) {
-      // A call arrived mid-run — likely after background pages added more
-      // items. Mark for re-run once the current pass releases the lock.
-      dimsBackfillPending = true;
-      return;
-    }
-    if (!window.Stello) return;
-    const client = Stello.getClient();
-    const userId = Stello.getUserId();
-    if (!client || !userId) return;
-
-    // Items qualify if they have a renderable image (either an entry in
-    // images[] or just og_image_path from a legacy capture) and that
-    // image lacks dimensions. Legacy rows often have only og_image_path,
-    // so we synthesise an images[] entry here — same shape as the seeding
-    // step in api/item-update.js.
-    const queue = allItems.filter(item => {
-      if (!item.has_image) return false;
-      const imgs = item.images || [];
-      const primary = imgs.find(i => i && i.is_primary) || imgs[0];
-      if (primary && primary.path) {
-        return !(primary.width && primary.height);
-      }
-      // No images[] entry — fall back to og_image_path. Caller will seed.
-      return !!item.og_image_path;
-    });
-    if (queue.length === 0) return;
-    dimsBackfillRunning = true;
-
-    // No per-session cap — runs at idle priority so it's harmless to let
-    // the whole queue drain. 4 concurrent fetches is well below Supabase
-    // storage's per-IP rate limits.
-    const work = queue;
-    const CONCURRENCY = 4;
-    let next = 0;
-    let processed = 0;
-
-    async function worker() {
-      while (true) {
-        const slot = next++;
-        if (slot >= work.length) return;
-        const item = work[slot];
-        try {
-          let imgs = (item.images || []).slice();
-          let primaryIdx = imgs.findIndex(i => i && i.is_primary);
-          // Legacy row: synthesise the OG entry into images[] so the
-          // dimensions can ride along on the same JSON shape we use for
-          // every other image source.
-          if (primaryIdx < 0 && (!imgs.length || !imgs[0]?.path)) {
-            if (!item.og_image_path) continue;
-            imgs = [{ path: item.og_image_path, source: 'og', is_primary: true }];
-            primaryIdx = 0;
-          }
-          const idx = primaryIdx >= 0 ? primaryIdx : 0;
-          const entry = imgs[idx];
-          if (!entry || !entry.path) continue;
-
-          const dims = await loadImageDimensions(entry.path);
-          if (!dims || !dims.width || !dims.height) continue;
-
-          imgs[idx] = { ...entry, width: dims.width, height: dims.height };
-          const { error } = await client.from('items')
-            .update({ images: JSON.stringify(imgs) })
-            .eq('slug', item.slug)
-            .eq('user_id', userId);
-          if (error) continue;
-
-          // Update in-memory state so subsequent renders pick up the dims.
-          item.images = imgs;
-          item.image_width = dims.width;
-          item.image_height = dims.height;
-          itemsBySlug[item.slug] = item;
-
-          // Patch the live <img> attrs in case the card is currently mounted —
-          // doesn't change layout (image already loaded), but keeps the DOM
-          // accurate and helps tools that introspect it.
-          const cardEl = $grid.querySelector(`.card[data-slug="${cssSelectorEscape(item.slug)}"] .card-thumb`);
-          if (cardEl) {
-            cardEl.setAttribute('width', String(dims.width));
-            cardEl.setAttribute('height', String(dims.height));
-          }
-          processed++;
-        } catch { /* keep working */ }
-      }
-    }
-
-    const workers = [];
-    for (let i = 0; i < CONCURRENCY; i++) workers.push(worker());
-    await Promise.all(workers);
-    dimsBackfillRunning = false;
-
-    if (processed > 0) console.log(`[stello] image-dims backfill: ${processed}/${work.length} items`);
-
-    // If another call arrived mid-run (likely from the background-page
-    // loader handing off more items), pick those up now.
-    if (dimsBackfillPending) {
-      dimsBackfillPending = false;
-      backfillImageDimensions();
-    }
+    renderPendingCaptures();
   }
 
   function cssSelectorEscape(s) {
@@ -533,7 +292,7 @@
     return String(s).replace(/([^a-zA-Z0-9_-])/g, '\\$1');
   }
 
-  /** Normalize a Supabase item row to match the frontend shape */
+  /** Normalize an item row (from icloud-client.js) to the frontend shape */
   function normalizeItem(row) {
     const tags = parseJsonField(row.tags, []);
     const images = parseJsonField(row.images, []);
@@ -1301,7 +1060,8 @@
       ? `<a class="card-url-pill"${item.source_url ? ` href="${escHtml(item.source_url).replace(/"/g, '&quot;')}" target="_blank" rel="noopener"` : ''} style="--pill-bg:${pillBg};--pill-bg-hover:${pillBgHover};--pill-color-hover:${pillColorHover}" onclick="event.stopPropagation()">${escHtml(item.domain)}</a>`
       : '';
 
-    const cardClass = hasImage ? ' card-visual' : (hasTextContent ? ' card-text' : '');
+    const cardClass = (hasImage ? ' card-visual' : (hasTextContent ? ' card-text' : ''))
+      + (item.pending ? ' card-pending' : '');
 
     return `<div class="card${cardClass}" data-slug="${item.slug}" data-render-sig="${cardRenderSig(item)}" tabindex="-1">
       <div class="card-visual-area">
@@ -1592,7 +1352,7 @@
 
   // ---- Panel body binding (slider, capture form, snippets) ----
   // Wires up interactions in a freshly-rendered .panel-body. Each mutation
-  // posts a delta to /api/item-update, then updates local itemsBySlug and
+  // queues a change in the iCloud inbox, then updates local itemsBySlug and
   // refreshes the grid card. The panel body itself is only re-rendered on
   // explicit refreshItem calls (from enrichment polling) to avoid stomping
   // the user's in-flight form input.
@@ -1744,35 +1504,87 @@
     if (updated) PanelManager.refreshItem(slug);
   }
 
+  // Edits go to the iCloud inbox (see icloud-client.js); the Mac/iPhone app
+  // applies them to the real item. The web applies the same change locally
+  // right away so the UI doesn't wait for the round trip.
+  const ckRecordFromPath = (path) => {
+    const m = /#ck=(.+)$/.exec(path || '');
+    return m ? m[1] : null;
+  };
+
   async function postItemUpdate(slug, payload) {
-    try {
-      const res = await apiFetch('/api/item-update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, ...payload }),
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      // Merge server truth into local state and update the grid card.
-      const prev = itemsBySlug[slug];
-      const next = normalizeItem({
-        ...(prev || {}),
-        ...data,
-      });
-      itemsBySlug[slug] = next;
-      // Update the grid card thumb if primary image changed.
-      const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
-      if (card) {
-        const newThumb = card.querySelector('.card-thumb');
-        if (newThumb && next.image_path) {
-          newThumb.src = next.image_path;
-        }
+    const prev = itemsBySlug[slug];
+    if (!prev) return null;
+    const changes = {};
+    const next = { ...prev, images: [...(prev.images || [])], snippets: [...(prev.snippets || [])], tags: [...(prev.tags || [])] };
+    let attachment = null;
+
+    if (payload.why_saved) {
+      changes.why_saved = payload.why_saved;
+      next.why_saved = payload.why_saved;
+      next.needs_review = false;
+    }
+    if (payload.what_works !== undefined) {
+      changes.what_works = payload.what_works;
+      next.what_works = payload.what_works;
+      next.needs_review = false;
+    }
+    if (payload.new_snippets) {
+      changes.new_snippets = payload.new_snippets;
+      payload.new_snippets.forEach(text => next.snippets.push({ text, source: 'manual', added_at: new Date().toISOString() }));
+    }
+    if (payload.removed_snippet_ids) {
+      const texts = payload.removed_snippet_ids.map(i => prev.snippets?.[i]?.text).filter(Boolean);
+      changes.removed_snippets = texts;
+      next.snippets = next.snippets.filter(sn => !texts.includes(sn.text));
+    }
+    // Images are identified to the apps by a fingerprint, since SwiftData
+    // doesn't expose CloudKit record names on the app side.
+    const fingerprint = (img) => ({ width: img.width || null, height: img.height || null, source: img.source || null, role: img.role || null });
+    const imageForPath = (path) => {
+      const rec = ckRecordFromPath(path);
+      return rec ? prev.images.find(img => img.ck === rec) : null;
+    };
+    if (payload.primary_image_path) {
+      const img = imageForPath(payload.primary_image_path);
+      if (img) {
+        changes.primary_image = fingerprint(img);
+        next.images = next.images.map(i => ({ ...i, is_primary: i.ck === img.ck }));
+        next.images.sort((x, y) => Number(y.is_primary) - Number(x.is_primary));
       }
-      return next;
+    }
+    if (payload.remove_image_paths) {
+      const imgs = payload.remove_image_paths.map(imageForPath).filter(Boolean);
+      changes.remove_images = imgs.map(fingerprint);
+      const drop = new Set(imgs.map(i => i.ck));
+      next.images = next.images.filter(img => !drop.has(img.ck));
+    }
+    if (payload.manual_image_upload) {
+      const { base64, mime } = payload.manual_image_upload;
+      const bin = atob(base64);
+      attachment = new Blob([Uint8Array.from(bin, ch => ch.charCodeAt(0))], { type: mime });
+      changes.add_image = true;
+      const localURL = URL.createObjectURL(attachment);
+      next.images.push({ path: localURL, source: 'manual', is_primary: next.images.length === 0 });
+    }
+    if (Object.keys(changes).length === 0) return prev;
+
+    try {
+      await Stello.enqueue('update', { itemID: prev.id, slug, changes }, attachment);
     } catch (err) {
-      console.warn('postItemUpdate failed', slug, err.message);
+      console.warn('Queueing update failed', slug, err);
+      showToast('Could not save to iCloud');
       return null;
     }
+
+    const normalized = normalizeItem(next);
+    itemsBySlug[slug] = normalized;
+    const idx = allItems.findIndex(i => i.slug === slug);
+    if (idx >= 0) allItems[idx] = normalized;
+    const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
+    const newThumb = card?.querySelector('.card-thumb');
+    if (newThumb && normalized.image_path) newThumb.src = normalized.image_path;
+    return normalized;
   }
 
   function refreshSliderFrom(bodyEl, item) {
@@ -1908,17 +1720,10 @@
       enrichBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         closeMenu();
-        showToast('Enriching…');
         try {
-          const res = await apiFetch('/api/reenrich', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug }),
-          });
-          if (!res.ok) throw new Error('Enrich request failed');
-          // Poll for enrichment completion so the panel + grid update live.
-          if (typeof pollForEnrichment === 'function') pollForEnrichment(slug);
-          showToast('Enriching in background…');
+          const item = itemsBySlug[slug];
+          await Stello.enqueue('reenrich', { itemID: item?.id, slug });
+          showToast('Re-tagging on your Mac or iPhone…');
         } catch (err) {
           showToast('Enrich failed: ' + (err.message || 'unknown'));
         }
@@ -1936,12 +1741,7 @@
         }
         // Second click -> execute.
         try {
-          const res = await apiFetch('/api/item-delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug }),
-          });
-          if (!res.ok) throw new Error('Delete failed');
+          await Stello.enqueue('delete', { itemID: itemsBySlug[slug]?.id, slug });
           // Locally remove: card, lookups, open panel.
           const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
           if (card) card.remove();
@@ -2286,74 +2086,63 @@
     renderStats();
   }
 
-  async function captureURL(urlStr) {
-    const id = 'ph-' + Date.now();
-    insertPlaceholder(id);
-    try {
-      const res = await apiFetch('/api/capture', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'url', content: urlStr }),
-      });
-      const item = await res.json();
-      if (res.status === 409) {
-        removePlaceholder(id);
-        showToast('Item already exists: ' + (item.existing?.title || urlStr));
-        return;
-      }
-      if (!res.ok) {
-        removePlaceholder(id);
-        showToast('Capture failed');
-        return;
-      }
-      replacePlaceholder(id, item);
-      showToast('Added: ' + item.title);
-      enqueueForCuration(item.slug);
-    } catch (err) {
-      removePlaceholder(id);
-      showToast('Error: ' + err.message);
-    }
+  // --- Capture via the iCloud inbox ---
+  // The web can't write real items (SwiftData owns that format), so a save
+  // becomes an inbox request. A "processing" card shows at once; the Mac or
+  // iPhone app fetches the page, tags it on-device and writes the real item,
+  // which then replaces the card on the next library sync.
+  function pendingItem(requestId, { url, text, label, localImage }) {
+    let domain = null;
+    try { if (url) domain = new URL(url).hostname.replace(/^www\./, ''); } catch { /* ignore */ }
+    return normalizeItem({
+      slug: 'pending-' + requestId,
+      pending: true,
+      title: label || (text ? text.slice(0, 80) : domain || 'Saving…'),
+      source_url: url || null,
+      domain,
+      summary: text || null,
+      added_at: new Date().toISOString(),
+      enrichment_status: 'pending',
+      tags: [],
+      images: localImage ? [{ path: localImage, source: 'manual', is_primary: true }] : [],
+      snippets: [],
+    });
   }
 
-  async function captureImage(file) {
+  async function queueCapture(payload, attachment, display) {
     const id = 'ph-' + Date.now() + Math.random();
     insertPlaceholder(id);
     try {
-      const buf = await file.arrayBuffer();
-      const res = await apiFetch('/api/upload-image', {
-        method: 'POST',
-        headers: { 'Content-Type': file.type },
-        body: buf,
-      });
-      const item = await res.json();
-      if (!res.ok) { removePlaceholder(id); showToast('Image capture failed'); return; }
-      replacePlaceholder(id, item);
-      showToast('Added image');
-      enqueueForCuration(item.slug);
+      const requestId = await Stello.enqueue('capture', payload, attachment);
+      replacePlaceholder(id, pendingItem(requestId, display || payload));
+      startLibraryWatch();
+      return requestId;
     } catch (err) {
       removePlaceholder(id);
-      showToast('Error: ' + err.message);
+      showToast('Could not save to iCloud');
+      console.error(err);
+      return null;
+    }
+  }
+
+  async function captureURL(urlStr) {
+    const existing = allItems.find(i => !i.pending && i.source_url === urlStr);
+    if (existing) {
+      showToast('Item already exists: ' + (existing.title || urlStr));
+      return;
+    }
+    if (await queueCapture({ url: urlStr })) showToast('Saved — tagging on your Mac or iPhone');
+  }
+
+  async function captureImage(file) {
+    const localImage = URL.createObjectURL(file);
+    if (await queueCapture({ kind: 'image', mime: file.type }, file, { label: 'Image', localImage })) {
+      showToast('Image saved');
     }
   }
 
   async function captureText(text) {
-    const id = 'ph-' + Date.now();
-    insertPlaceholder(id);
-    try {
-      const res = await apiFetch('/api/capture', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'text', content: text }),
-      });
-      const item = await res.json();
-      if (!res.ok) { removePlaceholder(id); showToast('Text capture failed'); return; }
-      replacePlaceholder(id, item);
-      showToast('Added note: ' + item.title);
-      enqueueForCuration(item.slug);
-    } catch (err) {
-      removePlaceholder(id);
-      showToast('Error: ' + err.message);
-    }
+    if (await queueCapture({ text })) showToast('Note saved');
   }
 
   function removePlaceholder(id) {
@@ -2361,163 +2150,55 @@
     if (ph) ph.remove();
   }
 
-  // --- Bulk capture (polling-based for serverless) ---
   async function captureBulkURLs(urls) {
-    const ids = urls.map((_, i) => 'bulk-' + Date.now() + '-' + i);
-    ids.forEach(id => insertPlaceholder(id));
-    showToast(`Adding ${urls.length} items...`);
-
-    try {
-      const res = await apiFetch('/api/capture-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urls }),
-      });
-      const { batchId, completed: initialCompleted, status: initialStatus } = await res.json();
-
-      // Handle results from inline processing
-      if (initialCompleted > 0) {
-        const statusRes = await apiFetch(`/api/batch-status?id=${batchId}`);
-        const statusData = await statusRes.json();
-        processResults(statusData.results, ids);
-      }
-
-      // If all done inline, no need to poll
-      if (initialStatus === 'completed') {
-        showToast(`Done! Added ${urls.length} items.`);
-        return;
-      }
-
-      // Poll for remaining items
-      const processed = new Set();
-      const poll = setInterval(async () => {
-        try {
-          const statusRes = await apiFetch(`/api/batch-status?id=${batchId}`);
-          const data = await statusRes.json();
-          processResults(data.results, ids, processed);
-
-          if (data.status === 'completed' || data.status === 'failed') {
-            clearInterval(poll);
-            showToast(`Done! Added ${data.completed} items.`);
-            // Clean any remaining placeholders
-            ids.forEach(id => removePlaceholder(id));
-          }
-        } catch {
-          clearInterval(poll);
-          ids.forEach(id => removePlaceholder(id));
-        }
-      }, 3000);
-    } catch (err) {
-      ids.forEach(id => removePlaceholder(id));
-      showToast('Bulk capture failed');
+    const known = new Set(allItems.map(i => i.source_url).filter(Boolean));
+    const fresh = [...new Set(urls)].filter(u => !known.has(u));
+    if (fresh.length === 0) { showToast('All of these are already saved'); return; }
+    showToast(`Saving ${fresh.length} items…`);
+    let ok = 0;
+    for (const url of fresh) {
+      if (await queueCapture({ url })) ok++;
     }
+    showToast(`Saved ${ok} items — tagging on your Mac or iPhone`);
   }
 
-  function processResults(results, ids, processed) {
-    if (!results) return;
-    const seen = processed || new Set();
-    for (const r of results) {
-      if (seen.has(r.index)) continue;
-      seen.add(r.index);
-      const phId = ids[r.index];
-      if (r.item && !r.item.is_duplicate && !r.error) {
-        const item = normalizeItem(r.item);
-        replacePlaceholder(phId, item);
-        enqueueForCuration(item.slug);
-      } else {
-        removePlaceholder(phId);
-      }
-    }
+  /** On load: show requests the apps haven't processed yet as processing cards. */
+  async function renderPendingCaptures() {
+    let requests = [];
+    try { requests = await Stello.pendingRequests(); } catch { return; }
+    const captures = requests.filter(r => r.action === 'capture');
+    if (!captures.length) return;
+    const pendings = captures.map(r => pendingItem(r.id, r.payload));
+    allItems = pendings.concat(allItems.filter(i => !i.pending));
+    pendings.forEach(i => { itemsBySlug[i.slug] = i; });
+    renderGrid();
+    startLibraryWatch();
   }
 
-  // --- Enrichment polling ---
-  // Active polls, keyed by slug, so we don't stack them when a panel
-  // re-renders or an item is captured twice in quick succession.
-  const activePolls = new Map();
+  // --- Library watch ---
+  // While inbox requests are outstanding, re-sync the library every few
+  // seconds (only changes are fetched) so processed items replace their
+  // processing cards without a reload. Stops after ~3 minutes of no change.
+  let libraryWatch = null;
+  let reloadLibrary = null;   // set by init()
 
-  /**
-   * Watch an item in the DB until enrichment lands (or times out).
-   *
-   * The capture API returns with `enrichment_status='text_done'`. As the
-   * server runs vision and candidate extraction, the status advances to
-   * 'vision_done' and finally 'candidates_done'. Each tick re-renders the
-   * grid card and diffs any open panel so new tags, image candidates, and
-   * snippet candidates appear without a reload.
-   *
-   * Polls every 3s up to maxAttempts (default 14 → ~42s, generous to cover
-   * the extra HTML-fetch + Claude call the candidates phase adds). Stops
-   * early on `candidates_done` / `error`, or if the item is deleted.
-   */
-  function pollForEnrichment(slug, { maxAttempts = 14, interval = 3000 } = {}) {
-    if (!slug) return null;
-    const existing = activePolls.get(slug);
-    if (existing) return existing;
-
-    let attempts = 0;
-    let timer = null;
-    let cancelled = false;
-    // Track the appearance we last rendered so ticks that don't change the
-    // card skip the DOM replacement — the unconditional per-tick re-render was
-    // re-creating each <img> every few seconds, i.e. the grid "blinking".
-    let lastRenderedSig = $grid.querySelector(`.card[data-slug="${slug}"]`)?.dataset.renderSig ?? null;
-
-    const stop = () => {
-      cancelled = true;
-      if (timer) { clearTimeout(timer); timer = null; }
-      activePolls.delete(slug);
-    };
-
+  function startLibraryWatch({ interval = 5000, idleLimit = 36 } = {}) {
+    if (libraryWatch || !reloadLibrary) return;
+    let idle = 0;
     const tick = async () => {
-      if (cancelled) return;
-      attempts++;
-      try {
-        const client = Stello.getClient();
-        const { data } = await client
-          .from('items')
-          .select('*')
-          .eq('slug', slug)
-          .eq('user_id', Stello.getUserId())
-          .single();
-        if (!data) { stop(); return; }
-
-        const item = normalizeItem(data);
-        const idx = allItems.findIndex(i => i.slug === slug);
-        if (idx >= 0) allItems[idx] = item;
-        itemsBySlug[slug] = item;
-
-        // Only mutate the DOM when the card's visible state actually changed.
-        const sig = cardRenderSig(item);
-        if (sig !== lastRenderedSig) {
-          lastRenderedSig = sig;
-
-          // Rebuild the related-items index so tag-based recommendations
-          // reflect the new vision tags immediately.
-          buildRelatedIndex();
-
-          // Re-render the in-grid card (image + text content may have changed)
-          const cardEl = $grid.querySelector(`.card[data-slug="${slug}"]`);
-          if (cardEl) cardEl.outerHTML = renderCard(item, 0);
-
-          // Push live updates into any open panel for this slug.
-          PanelManager.refreshItem(slug);
-        }
-
-        const status = item.enrichment_status;
-        if (status === 'candidates_done' || status === 'error' || attempts >= maxAttempts) {
-          stop();
-          return;
-        }
-      } catch {
-        // Transient — keep polling until maxAttempts.
-      }
-      if (!cancelled) timer = setTimeout(tick, interval);
+      const before = allItems.filter(i => !i.pending).length;
+      const changed = await reloadLibrary().catch(() => false);
+      const after = allItems.filter(i => !i.pending).length;
+      idle = (changed || after !== before) ? 0 : idle + 1;
+      const stillPending = allItems.some(i => i.pending);
+      if (!stillPending || idle >= idleLimit) { libraryWatch = null; return; }
+      libraryWatch = setTimeout(tick, interval);
     };
-
-    timer = setTimeout(tick, interval);
-    const controller = { slug, stop };
-    activePolls.set(slug, controller);
-    return controller;
+    libraryWatch = setTimeout(tick, interval);
   }
+
+  // Kept for call sites that used to poll a single item.
+  function pollForEnrichment() { startLibraryWatch(); }
 
   // Back-compat alias retained in case legacy call sites exist.
   const pollForReview = pollForEnrichment;
@@ -2617,42 +2298,6 @@
   async function loadSettingsIntoPanel() {
     const $panel = document.querySelector('.panel-tool[data-tool="settings"]');
     if (!$panel) return;
-    const $keyInput = $panel.querySelector('.settings-key');
-    const $profileInput = $panel.querySelector('.settings-profile');
-    const $status = $panel.querySelector('.settings-status');
-
-    try {
-      const res = await apiFetch('/api/config');
-      const config = await res.json();
-      if (config.active_profile && config.profiles[config.active_profile]) {
-        const p = config.profiles[config.active_profile];
-        $keyInput.placeholder = p.has_key ? `Key: ${p.key_preview}` : 'Enter API key...';
-        $profileInput.value = config.active_profile;
-      }
-      $status.textContent = config.active_profile ? `Active: ${config.active_profile}` : 'No API key configured';
-    } catch { /* silent */ }
-
-    const $save = $panel.querySelector('.settings-save');
-    if ($save) {
-      $save.addEventListener('click', async () => {
-        const key = $keyInput.value;
-        const profile = $profileInput.value || 'default';
-        if (!key) { showToast('Enter an API key'); return; }
-        try {
-          await apiFetch('/api/config', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ profile, key }),
-          });
-          $keyInput.value = '';
-          $status.textContent = `Saved! Active: ${profile}`;
-          showToast('API key saved');
-        } catch {
-          showToast('Failed to save key');
-        }
-      });
-    }
-
     // --- Theme controls ---
     const prefs = ThemeManager.load();
 
@@ -2683,11 +2328,15 @@
       });
     });
 
-    // Logout — signs out of Supabase and redirects to the login page
+    // Sign out of iCloud. CloudKit JS owns sign-out through the button it
+    // rendered into #ck-sign-out (index.html); forward the click to it.
     const $logout = $panel.querySelector('.settings-logout');
     if ($logout) {
       $logout.addEventListener('click', () => {
-        if (window.Stello && Stello.signOut) Stello.signOut();
+        const target = document.querySelector('#ck-sign-out a, #ck-sign-out button, #ck-sign-out [role="button"]')
+          || document.getElementById('ck-sign-out')?.firstElementChild;
+        if (target) target.click();
+        else showToast('Sign-out is still loading, try again in a moment.');
       });
     }
 

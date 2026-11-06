@@ -23,7 +23,7 @@ This command **never launches an agent and never writes code** — it only produ
 4. **Verdict** — one of:
    - **✅ Cloud** — all gates pass. Pick the executor by task shape: **Opus 5.5** (risky / layout / multi-file), **Sonnet 5.5** (scoped, measurement, docs), **Haiku 4.5** (mechanical) as a sub-agent / Claude cloud session (effort scaled to difficulty); **Grok 4.7 in Cursor** only for closed-scope literal edits via a paste-ready brief. Fable 5.1 reviews the result either way.
    - **⚠️ Split** — diagnosis/judgment is needed first (desk), but the resulting *fix* is delegatable. Name what to resolve at the desk, then what to hand off.
-   - **❌ Desk** — name the failing gate(s) and the one thing that would flip it to cloud (e.g. "add a failing test", "load `SUPABASE_SERVICE_ROLE_KEY` into the Claude environment secrets").
+   - **❌ Desk** — name the failing gate(s) and the one thing that would flip it to cloud (e.g. "add a failing test", "load the needed secret into the Claude environment").
 
 5. **Emit the launch-ready brief** (only for ✅ Cloud, or the cloud half of ⚠️ Split) — exactly this shape, ready to paste into a cloud agent:
 

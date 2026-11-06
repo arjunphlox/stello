@@ -1,63 +1,20 @@
 /**
- * Stello on Cloudflare Workers — single Worker: static frontend (ASSETS) +
- * all /api/* endpoints + /img/* R2 image serving + daily batch cron.
+ * Stello on Cloudflare Workers — serves the static web app (ASSETS) and the
+ * legacy item images in R2 at /img/*.
  *
- * Routing is governed by wrangler.jsonc `assets.run_worker_first`:
- *   /api/*, /img/*  → this Worker first
- *   everything else → static asset, Worker only as a fallback on asset-miss
+ * Stello's data lives in the user's private iCloud database (the Mac/iPhone
+ * apps' SwiftData + CloudKit store). The web app talks to iCloud directly
+ * through CloudKit JS with Apple ID sign-in, so this Worker holds no data,
+ * no logins and no API.
  *
- * The /api/* handlers are Vercel-style (req,res) functions adapted via
- * lib/adapter.js. Supabase stays the DB + auth; only compute + image bytes
- * moved off Vercel.
+ * /img/* stays while the Supabase-era library is imported into iCloud: the
+ * export file references images by these paths. Remove it (and the R2
+ * binding) once the import is done.
  */
 import { Hono } from 'hono';
-import { route } from './lib/adapter.js';
-
-import capture from './routes/capture.js';
-import captureBulk from './routes/capture-bulk.js';
-import enrich from './routes/enrich.js';
-import reenrich from './routes/reenrich.js';
-import reprocess from './routes/reprocess.js';
-import uploadImage from './routes/upload-image.js';
-import itemUpdate from './routes/item-update.js';
-import itemDelete from './routes/item-delete.js';
-import config from './routes/config.js';
-import batchStatus from './routes/batch-status.js';
-import authCallback from './routes/auth-callback.js';
-import processBatchesMod from './routes/process-batches.js';
 
 const app = new Hono();
 
-// --- API routes (app.all → the handler does its own method + CORS guard) ---
-app.all('/api/capture', route(capture));
-app.all('/api/capture-bulk', route(captureBulk));
-app.all('/api/enrich', route(enrich));
-app.all('/api/reenrich', route(reenrich));
-app.all('/api/reprocess', route(reprocess));
-app.all('/api/upload-image', route(uploadImage));
-app.all('/api/item-update', route(itemUpdate));
-app.all('/api/item-delete', route(itemDelete));
-app.all('/api/config', route(config));
-app.all('/api/batch-status', route(batchStatus));
-app.all('/api/auth-callback', route(authCallback));
-// NOTE: /api/cron/process-batches is intentionally NOT an HTTP route — it
-// drains batches with the admin client and runs only via scheduled() below.
-
-// Guarded manual enrichment drain — clears a deep 'text_done' backlog on
-// demand instead of waiting days for the daily cron. Gated by the service-role
-// key as a bearer (no new secret); only an operator holding that key can call
-// it. `?limit=N` (1–75) bounds how many items one invocation processes.
-app.post('/api/cron/drain-enrichment', async (c) => {
-  const auth = c.req.header('authorization') || '';
-  if (!c.env.SUPABASE_SERVICE_ROLE_KEY || auth !== `Bearer ${c.env.SUPABASE_SERVICE_ROLE_KEY}`) {
-    return c.json({ error: 'unauthorized' }, 401);
-  }
-  const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '25', 10) || 25, 1), 75);
-  const result = await processBatchesMod.drainEnrichment(c.env, { limit });
-  return c.json(result);
-});
-
-// --- Image serving from R2 (zero egress; replaces Supabase public URLs) ---
 app.get('/img/*', async (c) => {
   const key = decodeURIComponent(new URL(c.req.url).pathname.slice('/img/'.length));
   if (!key) return c.notFound();
@@ -70,16 +27,9 @@ app.get('/img/*', async (c) => {
   return new Response(obj.body, { headers });
 });
 
-// --- Fallback: anything that reached the Worker but isn't ours → static assets.
-// (Only hit for non-asset paths under run_worker_first's fallthrough.)
+// Anything else that reached the Worker → static assets.
 app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default {
   fetch: (request, env, ctx) => app.fetch(request, env, ctx),
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(processBatchesMod.processBatches(env));
-    // Steady backstop: heal a small batch of stuck-'text_done' items each run
-    // so the queue drains server-side even if nobody opens the app.
-    ctx.waitUntil(processBatchesMod.drainEnrichment(env, { limit: 20 }));
-  },
 };

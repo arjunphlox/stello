@@ -32,8 +32,13 @@ final class Item {
   /// JSON-encoded `[String]` of suggested why-saved reasons from AI enrichment.
     var whySavedSuggestionsJSON: String?
 
-    @Relationship(deleteRule: .cascade, inverse: \Tag.item)
-    var tags: [Tag]?
+    /// JSON-encoded `[ItemTag]`, nil when the item has none. Read and write through `tags`.
+    var tagsJSON: String?
+    /// Width over height of the cover the card shows, or 0 for no cover. Kept here so the
+    /// grid can place every card without reading image rows or bytes.
+    var coverAspect: Double = 0
+
+    @Transient var tagCache = ItemTagCache()
 
     @Relationship(deleteRule: .cascade, inverse: \ItemImage.item)
     var images: [ItemImage]?
