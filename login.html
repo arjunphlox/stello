@@ -5,17 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stello — Sign in</title>
   <script>
-    /* Password-recovery safety-net (mirrors index.html): if a recovery link
-       lands here, bounce to the reset page before supabase-js consumes the
-       token and signs the user in. */
-    (function(){try{
-      var h = location.hash || '';
-      if (h.indexOf('type=recovery') !== -1 && location.pathname.indexOf('/reset-password') === -1) {
-        location.replace('/reset-password.html' + h);
-      }
-    }catch(e){}})();
-  </script>
-  <script>
     // Apply random accent on each visit
     (function(){
       var accents = ['lime', 'amber', 'iris'];
@@ -74,8 +63,7 @@
     </header>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-client.js?v=1"></script>
+<script src="auth-client.js?v=1"></script>
 <script>
 (function () {
   'use strict';
@@ -97,7 +85,7 @@
 
   // --- Action-word shuffle in superscript ---
   // Gives the login page a hint at what Stello does without requiring
-  // a Supabase session we don't have yet pre-login. Words lean on the
+  // a session we don't have yet pre-login. Words lean on the
   // experience of coming back to collected things rather than on any
   // specific feature name (no "tag", "filter", "sort" etc.).
   const actions = [
@@ -133,6 +121,20 @@
     if (session) {
       window.location.href = '/';
       return;
+    }
+  })();
+
+  // Hide what this deployment doesn't offer, and surface errors passed back
+  // from the Apple sign-in redirect (?error=…).
+  (async function applyAuthConfig() {
+    const cfg = await Stello.getAuthConfig();
+    if (!cfg.apple) $appleBtn.style.display = 'none';
+    if (!cfg.signup) $switch.style.display = 'none';
+    const err = new URLSearchParams(location.search).get('error');
+    if (err) {
+      setMode('email');
+      showError(err, false);
+      history.replaceState(null, '', '/login.html');
     }
   })();
 

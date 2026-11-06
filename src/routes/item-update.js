@@ -1,4 +1,4 @@
-const { authenticateRequest, jsonResponse, handleCors } = require('../lib/supabase');
+const { authenticateRequest, jsonResponse, handleCors } = require('../lib/common');
 const { ensureWebp } = require('../lib/images');
 const storage = require('../lib/storage');
 

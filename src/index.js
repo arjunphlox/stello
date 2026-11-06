@@ -6,9 +6,9 @@
  *   /api/*, /img/*  → this Worker first
  *   everything else → static asset, Worker only as a fallback on asset-miss
  *
- * The /api/* handlers are Vercel-style (req,res) functions adapted via
- * lib/adapter.js. Supabase stays the DB + auth; only compute + image bytes
- * moved off Vercel.
+ * The capture/enrich handlers are Vercel-style (req,res) functions adapted
+ * via lib/adapter.js. Data + accounts live in D1 (env.DB, schema applied on
+ * first request by lib/schema.js), image bytes in R2 (env.BUCKET).
  */
 import { Hono } from 'hono';
 import { route } from './lib/adapter.js';
@@ -23,10 +23,26 @@ import itemUpdate from './routes/item-update.js';
 import itemDelete from './routes/item-delete.js';
 import config from './routes/config.js';
 import batchStatus from './routes/batch-status.js';
-import authCallback from './routes/auth-callback.js';
+import mountAuth from './routes/auth.js';
+import mountData from './routes/data.js';
+import { ensureSchema } from './lib/schema.js';
 import processBatchesMod from './routes/process-batches.js';
 
 const app = new Hono();
+
+// Apply the D1 schema once per isolate before any API work.
+app.use('/api/*', async (c, next) => {
+  await ensureSchema(c.env);
+  await next();
+});
+
+mountAuth(app);
+mountData(app);
+
+app.onError((err, c) => {
+  console.error('worker error', c.req.path, err && err.stack || err);
+  return c.json({ error: 'Server error', detail: String(err && err.message || err) }, 500);
+});
 
 // --- API routes (app.all → the handler does its own method + CORS guard) ---
 app.all('/api/capture', route(capture));
@@ -39,17 +55,16 @@ app.all('/api/item-update', route(itemUpdate));
 app.all('/api/item-delete', route(itemDelete));
 app.all('/api/config', route(config));
 app.all('/api/batch-status', route(batchStatus));
-app.all('/api/auth-callback', route(authCallback));
 // NOTE: /api/cron/process-batches is intentionally NOT an HTTP route — it
 // drains batches with the admin client and runs only via scheduled() below.
 
 // Guarded manual enrichment drain — clears a deep 'text_done' backlog on
-// demand instead of waiting days for the daily cron. Gated by the service-role
-// key as a bearer (no new secret); only an operator holding that key can call
-// it. `?limit=N` (1–75) bounds how many items one invocation processes.
+// demand instead of waiting days for the daily cron. Gated by ADMIN_TOKEN as
+// a bearer (falls back to the Supabase service-role key until it's deleted). `?limit=N` (1–75) bounds how many items one invocation processes.
 app.post('/api/cron/drain-enrichment', async (c) => {
   const auth = c.req.header('authorization') || '';
-  if (!c.env.SUPABASE_SERVICE_ROLE_KEY || auth !== `Bearer ${c.env.SUPABASE_SERVICE_ROLE_KEY}`) {
+  const want = c.env.ADMIN_TOKEN || c.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!want || auth !== `Bearer ${want}`) {
     return c.json({ error: 'unauthorized' }, 401);
   }
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '25', 10) || 25, 1), 75);
@@ -77,6 +92,9 @@ app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 export default {
   fetch: (request, env, ctx) => app.fetch(request, env, ctx),
   async scheduled(event, env, ctx) {
+    await ensureSchema(env);
+    // TODO(sync): call purgeExpired + writeSnapshot/pruneSnapshots from
+    // src/lib/sync.js here once the app<->web sync branch lands.
     ctx.waitUntil(processBatchesMod.processBatches(env));
     // Steady backstop: heal a small batch of stuck-'text_done' items each run
     // so the queue drains server-side even if nobody opens the app.

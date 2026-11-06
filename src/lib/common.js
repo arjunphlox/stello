@@ -1,53 +1,34 @@
-const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const {
   runRuleEnrichment, mineSubjectKeywords, formatTagFor,
   STOP_WORDS_EXT, PLATFORM_NOISE,
 } = require('./enrich-rules');
 const { ensureWebp } = require('./images');
+const db = require('./db');
+const auth = require('./auth');
 
 /**
- * Env is per-request on Workers (no process.env at module scope). Every
- * client factory takes the Worker `env`; handlers reach it via `req.env`
- * (attached by the Hono adapter) or pass it explicitly (cron/scheduled).
+ * Shared server helpers. Data lives in Cloudflare D1 (env.DB) via the
+ * supabase-shaped builder in ./db; accounts + sessions in ./auth.
+ * Env is per-request on Workers: handlers reach it via `req.env`.
  */
 
-/** Admin client (bypasses RLS — for cron jobs and migrations) */
+/** Unscoped client for cron jobs (all users). */
 function getAdminClient(env) {
-  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  return db.admin(env);
 }
 
-/** User-scoped client from a request's auth header */
-function getUserClient(req) {
-  const env = req.env;
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
-  return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
+/** Client scoped to one user (the old RLS). */
+function userClient(env, userId) {
+  return db.forUser(env, userId);
 }
 
-/** User-scoped client from a raw bearer token (used by enrichCore + waitUntil) */
-function userClientFromToken(env, token) {
-  return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-}
-
-/** Extract and verify user from request. Returns { user, error, status, client }. */
+/** Resolve the signed-in user (cookie or bearer). Returns { user, error, status, client }. */
 async function authenticateRequest(req) {
   const env = req.env;
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
-  if (!token) {
-    return { user: null, error: 'Missing authorization header', status: 401 };
-  }
-  const client = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-  const { data: { user }, error } = await client.auth.getUser(token);
-  if (error || !user) {
-    return { user: null, error: 'Invalid or expired token', status: 401 };
-  }
-  return { user, error: null, status: 200, client };
+  const user = await auth.userFromHeaders(env, (n) => req.headers[n.toLowerCase()]);
+  if (!user) return { user: null, error: 'Not signed in', status: 401 };
+  return { user, error: null, status: 200, client: db.forUser(env, user.id) };
 }
 
 /** Standard JSON response with CORS headers */
@@ -282,8 +263,7 @@ function extractDomain(url) {
 
 module.exports = {
   getAdminClient,
-  getUserClient,
-  userClientFromToken,
+  userClient,
   authenticateRequest,
   jsonResponse,
   handleCors,
