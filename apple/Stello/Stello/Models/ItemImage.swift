@@ -23,6 +23,9 @@ final class ItemImage {
     /// Waiting for the import's cover pass. With no `sourceURL`, the pass reads the
     /// item's page to find one.
     var coverPending: Bool = false
+    /// Where the web copy keeps these bytes (`/img/<key>` on the Stello Worker), once
+    /// the sync bridge has uploaded them or matched them to an existing R2 image.
+    var remotePath: String?
 
     var item: Item?
 

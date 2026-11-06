@@ -36,6 +36,7 @@ struct StelloApp: App {
             container = try! StelloStore.makeLocalContainer()
         }
         SeedData.prepareSyncedStore(in: container.mainContext)
+        _ = SyncChildTracking.install
     }
 
     var body: some Scene {
@@ -95,8 +96,16 @@ private struct RootView: View {
             .task {
                 WebInboxProcessor.shared.start(context: container.mainContext, coordinator: enrichmentCoordinator)
             }
+            // Keep the web copy (Stello account) in step with this library.
+            .task { SyncBridge.shared.start(container: container) }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { Task { await WebInboxProcessor.shared.processPending() } }
+                if phase == .active {
+                    Task { await WebInboxProcessor.shared.processPending() }
+                    Task { await SyncBridge.shared.sync() }
+                }
+                #if os(iOS)
+                if phase == .background { SyncBridge.scheduleBackgroundRefresh() }
+                #endif
             }
     }
 }
@@ -123,6 +132,7 @@ final class StelloAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         application.registerForRemoteNotifications()
+        if !SyncBridge.isDisabled { SyncBridge.registerBackgroundRefresh() }
         return true
     }
 
