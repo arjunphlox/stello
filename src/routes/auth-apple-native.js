@@ -25,7 +25,7 @@ export default async function appleNative(c) {
   try {
     claims = await verifyAppleIdentityToken(idToken, {
       audiences: appleAudiences(c.env, 'app'),
-      nonce: typeof body.nonce === 'string' ? body.nonce : undefined,
+      rawNonce: typeof body.nonce === 'string' ? body.nonce : undefined,
     });
   } catch (err) {
     console.warn('apple native sign-in rejected', err?.message);
