@@ -422,9 +422,11 @@ final class WebLibraryImporter {
             predicate: #Predicate<Item> { $0.enrichmentStatus == status },
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
         )
+        // Count before limiting the fetch to one item, or the total reads "1".
+        let total = (try? context.fetchCount(descriptor)) ?? 0
         descriptor.fetchLimit = 1
 
-        shared.setStage("Writing AI summaries", total: (try? context.fetchCount(descriptor)) ?? 0)
+        shared.setStage("Writing AI summaries", total: total)
         var finished = 0
         while !Task.isCancelled, let item = try? context.fetch(descriptor).first {
             await enrich(item)
