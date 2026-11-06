@@ -188,10 +188,13 @@ struct MasonryGridView: View {
     private func applyGridViewportTop(_ top: CGFloat) {
         guard top != gridViewportTop else { return }
         gridViewportTop = top
-        let window = Int(max(0, -top) / Self.visibleWindowStep)
-        if window != visibleWindowIndex { visibleWindowIndex = window }
         publishWeekAnchors()
         updateActiveWeekKey()
+    }
+
+    private func updateVisibleWindow(scrollOffset: CGFloat) {
+        let window = Int(max(0, scrollOffset) / Self.visibleWindowStep)
+        if window != visibleWindowIndex { visibleWindowIndex = window }
     }
 
     /// The built cards: one viewport of overscan either side of the visible window.
@@ -329,10 +332,11 @@ struct MasonryGridView: View {
                     .frame(width: viewport.size.width, height: viewport.size.height)
                     .coordinateSpace(name: "stelloScroll")
                     .onPreferenceChange(ScrollOffsetKey.self) { offset in
+                        updateVisibleWindow(scrollOffset: offset)
                         applyScrollOffset(offset)
                     }
                     .onPreferenceChange(GridViewportTopKey.self) { top in
-                        applyGridViewportTop(top)
+                        if let top { applyGridViewportTop(top) }
                     }
                     .onPreferenceChange(ScrollContentBottomKey.self) { bottom in
                         scrollContentBottom = bottom
@@ -816,10 +820,11 @@ struct MasonryGridView: View {
         .frame(width: 1280, height: 900)
 }
 
+/// nil means "no value here", so a sibling that sets nothing can't erase the real one.
 private struct GridViewportTopKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+    static var defaultValue: CGFloat?
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
     }
 }
 
