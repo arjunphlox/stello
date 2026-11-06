@@ -39,6 +39,11 @@ app.use('/api/*', async (c, next) => {
 mountAuth(app);
 mountData(app);
 
+app.onError((err, c) => {
+  console.error('worker error', c.req.path, err && err.stack || err);
+  return c.json({ error: 'Server error', detail: String(err && err.message || err) }, 500);
+});
+
 // --- API routes (app.all → the handler does its own method + CORS guard) ---
 app.all('/api/capture', route(capture));
 app.all('/api/capture-bulk', route(captureBulk));
