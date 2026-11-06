@@ -332,11 +332,12 @@ struct MasonryGridView: View {
                     .frame(width: viewport.size.width, height: viewport.size.height)
                     .coordinateSpace(name: "stelloScroll")
                     .onPreferenceChange(ScrollOffsetKey.self) { offset in
-                        updateVisibleWindow(scrollOffset: offset)
                         applyScrollOffset(offset)
                     }
-                    .onPreferenceChange(GridViewportTopKey.self) { top in
-                        if let top { applyGridViewportTop(top) }
+                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.contentOffset.y + geometry.contentInsets.top
+                    } action: { _, offset in
+                        updateVisibleWindow(scrollOffset: offset)
                     }
                     .onPreferenceChange(ScrollContentBottomKey.self) { bottom in
                         scrollContentBottom = bottom
@@ -455,13 +456,12 @@ struct MasonryGridView: View {
             .equatable()
             .frame(height: gridModel.contentHeight, alignment: .topLeading)
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .named("stelloScroll")).minY
+            } action: { top in
+                applyGridViewportTop(top)
+            }
             .background(alignment: .topLeading) {
-                GeometryReader { geo in
-                    Color.clear.preference(
-                        key: GridViewportTopKey.self,
-                        value: geo.frame(in: .named("stelloScroll")).minY
-                    )
-                }
                 if ProcessInfo.processInfo.arguments.contains("-screenshotScrolledHeader") {
                     ForEach(Array(gridModel.weekTops.keys), id: \.self) { key in
                         Color.clear
@@ -820,13 +820,6 @@ struct MasonryGridView: View {
         .frame(width: 1280, height: 900)
 }
 
-/// nil means "no value here", so a sibling that sets nothing can't erase the real one.
-private struct GridViewportTopKey: PreferenceKey {
-    static var defaultValue: CGFloat?
-    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
-        value = nextValue() ?? value
-    }
-}
 
 private struct PlacedCard {
     let item: Item
