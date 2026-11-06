@@ -98,6 +98,12 @@ final class WebLibraryImporter {
             return
         }
 
+        // Bring back the curated sample catalog (typefaces, foundries, sites,
+        // studios), only the entries the library doesn't already have.
+        if !cancelled {
+            await OptacosImporter.importIfNeeded(in: context, options: .uniqueIntoLibrary)
+        }
+
         if classify, !cancelled {
             phase = .classifying
             for item in newItems where item.sourceURL != nil {
