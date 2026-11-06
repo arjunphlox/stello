@@ -22,6 +22,11 @@ final class WebLibraryImporter {
 
     enum Phase: Equatable { case idle, importing, classifying, done, failed(String) }
 
+    /// `enrichmentStatus` of an imported item still waiting for the background
+    /// classify pass. Stored on the item, so the queue survives quits and syncs.
+    nonisolated static let awaitingClassifyStatus = "awaiting_classify"
+    private static var isClassifyingPending = false
+
     private(set) var phase: Phase = .idle
     private(set) var total = 0
     private(set) var imported = 0
@@ -84,7 +89,7 @@ final class WebLibraryImporter {
                 skipped += 1
                 continue
             }
-            let item = makeItem(record, id: id, context: context)
+            let item = makeItem(record, id: id, deferClassify: !classify, context: context)
             await attachImages(record.images ?? [], to: item, baseURL: baseURL, context: context)
             newItems.append(item)
             existingIDs.insert(id)
@@ -117,9 +122,56 @@ final class WebLibraryImporter {
         phase = .done
     }
 
+    // MARK: - Background classify pass
+
+    /// Works through imported items still marked `awaitingClassifyStatus`, one at a
+    /// time with a pause between them so the app stays usable. Safe to stop anywhere:
+    /// an unfinished item keeps its marker and the next launch picks it up.
+    static func classifyPending(
+        context: ModelContext,
+        coordinator: EnrichmentCoordinator,
+        pause: Duration = .seconds(2)
+    ) async {
+        // Without the system model the fallback would finish items with nothing
+        // learned, so leave them queued for a launch when it's available.
+        guard coordinator.primary.isAvailable else { return }
+        await classifyPending(context: context, pause: pause) { item in
+            await coordinator.enrichItem(item, context: context, force: true)
+        }
+    }
+
+    static func classifyPending(
+        context: ModelContext,
+        pause: Duration,
+        classify: (Item) async -> Void
+    ) async {
+        guard !isClassifyingPending else { return }
+        isClassifyingPending = true
+        defer { isClassifyingPending = false }
+
+        let status = awaitingClassifyStatus
+        var descriptor = FetchDescriptor<Item>(
+            predicate: #Predicate<Item> { $0.enrichmentStatus == status },
+            sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+
+        var finished = 0
+        while !Task.isCancelled, let item = try? context.fetch(descriptor).first {
+            await classify(item)
+            if Task.isCancelled { break }
+            // Enrich normally moves the item on; never loop on one that it didn't.
+            if item.enrichmentStatus == status { item.enrichmentStatus = "candidates_done" }
+            try? context.save()
+            finished += 1
+            NSLog("Web import classify: %d finished this run", finished)
+            try? await Task.sleep(for: pause)
+        }
+    }
+
     // MARK: - Mapping
 
-    private func makeItem(_ r: Export.Record, id: UUID, context: ModelContext) -> Item {
+    private func makeItem(_ r: Export.Record, id: UUID, deferClassify: Bool, context: ModelContext) -> Item {
         let item = Item(
             id: id,
             slug: r.slug ?? id.uuidString.lowercased(),
@@ -136,7 +188,7 @@ final class WebLibraryImporter {
             updatedAt: Self.date(r.updatedAt) ?? .now,
             // Terminal status: auto-enrichment leaves imported items alone; Enrich
             // (force) still runs on them to refetch and classify.
-            enrichmentStatus: "candidates_done",
+            enrichmentStatus: deferClassify && r.sourceURL != nil ? Self.awaitingClassifyStatus : "candidates_done",
             kind: ItemKind.link.rawValue
         )
         context.insert(item)

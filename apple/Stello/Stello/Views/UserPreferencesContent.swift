@@ -88,10 +88,13 @@ private struct WebLibraryImportSection: View {
     @State private var importer = WebLibraryImporter.shared
     @State private var pickingFile = false
     @State private var pilotOnly = true
+    @State private var classifyLater = true
 
     var body: some View {
         Section("Old web library") {
             Toggle("Test with 50 items first", isOn: $pilotOnly)
+                .disabled(importer.isRunning)
+            Toggle("Sort into kinds later, in the background", isOn: $classifyLater)
                 .disabled(importer.isRunning)
             if importer.isRunning {
                 HStack {
@@ -121,8 +124,12 @@ private struct WebLibraryImportSection: View {
                     fileURL: url,
                     context: context,
                     coordinator: coordinator,
-                    limit: pilotOnly ? 50 : nil
+                    limit: pilotOnly ? 50 : nil,
+                    classify: !classifyLater
                 )
+                if !WebInboxProcessor.isDisabled {
+                    await WebLibraryImporter.classifyPending(context: context, coordinator: coordinator)
+                }
             }
         }
     }

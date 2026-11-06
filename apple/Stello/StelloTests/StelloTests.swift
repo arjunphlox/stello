@@ -433,3 +433,76 @@ struct StelloTests {
         return try ModelContainer(for: schema, configurations: [config])
     }
 }
+
+@Suite("Web import background classify")
+@MainActor
+struct WebImportClassifyTests {
+    private func makeContext() throws -> ModelContext {
+        ModelContext(try StelloStore.makeInMemoryContainer())
+    }
+
+    private func pendingCount(_ context: ModelContext) throws -> Int {
+        let status = WebLibraryImporter.awaitingClassifyStatus
+        return try context.fetchCount(FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.enrichmentStatus == status }))
+    }
+
+    @Test("Import with classify off queues items that have a URL")
+    func importQueuesItems() async throws {
+        let context = try makeContext()
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let json = """
+        {"items":[
+          {"id":"\(UUID().uuidString)","slug":"has-url","title":"Has URL","source_url":"https://example.com/a"},
+          {"id":"\(UUID().uuidString)","slug":"no-url","title":"No URL"}
+        ]}
+        """
+        try Data(json.utf8).write(to: file)
+
+        let importer = WebLibraryImporter()
+        await importer.run(fileURL: file, context: context, coordinator: EnrichmentCoordinator(), limit: 2, classify: false)
+
+        #expect(importer.imported == 2)
+        #expect(importer.classified == 0)
+        let items = try context.fetch(FetchDescriptor<Item>())
+        #expect(items.first { $0.slug == "has-url" }?.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus)
+        #expect(items.first { $0.slug == "no-url" }?.enrichmentStatus == "candidates_done")
+    }
+
+    @Test("Classify pass finishes queued items only, even when Enrich changes nothing")
+    func passFinishesQueuedItems() async throws {
+        let context = try makeContext()
+        for index in 0..<3 {
+            context.insert(Item(slug: "queued-\(index)", title: "Queued", enrichmentStatus: WebLibraryImporter.awaitingClassifyStatus))
+        }
+        context.insert(Item(slug: "other", title: "Other", enrichmentStatus: "text_done"))
+        try context.save()
+
+        var seen: [String] = []
+        await WebLibraryImporter.classifyPending(context: context, pause: .zero) { seen.append($0.slug) }
+
+        #expect(seen.count == 3)
+        #expect(!seen.contains("other"))
+        #expect(try pendingCount(context) == 0)
+    }
+
+    @Test("A stopped pass keeps the unfinished items and the next run resumes them")
+    func stoppedPassResumes() async throws {
+        let context = try makeContext()
+        for index in 0..<3 {
+            context.insert(Item(slug: "queued-\(index)", title: "Queued", enrichmentStatus: WebLibraryImporter.awaitingClassifyStatus))
+        }
+        try context.save()
+
+        let first = Task { @MainActor in
+            await WebLibraryImporter.classifyPending(context: context, pause: .zero) { _ in
+                withUnsafeCurrentTask { $0?.cancel() }
+            }
+        }
+        await first.value
+        #expect(try pendingCount(context) == 3)
+
+        await WebLibraryImporter.classifyPending(context: context, pause: .zero) { _ in }
+        #expect(try pendingCount(context) == 0)
+    }
+}

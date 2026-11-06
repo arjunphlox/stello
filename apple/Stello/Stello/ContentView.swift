@@ -54,6 +54,9 @@ struct ContentView: View {
             }
             await SeedData.backfillSeedCovers(in: context)
             await enrichmentCoordinator.enrichPendingItems(context: context)
+            if !WebInboxProcessor.isDisabled {
+                await WebLibraryImporter.classifyPending(context: context, coordinator: enrichmentCoordinator)
+            }
         }
         .onAppear {
             applyScreenshotLaunchState()
