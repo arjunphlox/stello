@@ -191,6 +191,9 @@
           "kind": "group",
           "path": "Sync",
           "children": [
+            { "path": "SyncAPI.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "SyncBridge.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "SyncWire.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "WebInboxProcessor.swift", "target-membership": [ "Stello/compile-sources" ] },
           ],
         }, {
@@ -256,6 +259,7 @@
         { "path": "ResourceKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "RevisitTrackingTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "SearchBlobTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "SyncWireTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "StelloTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ToolKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "WhySavedIntentTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
