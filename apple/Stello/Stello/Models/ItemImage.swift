@@ -65,6 +65,20 @@ extension Item {
     }
 
     var hasRenderableCover: Bool { coverImage?.hasRenderableCoverData == true }
+
+    /// The value `coverAspect` should hold. Matches how `ItemCardView` sizes its cover.
+    var renderedCoverAspect: Double {
+        guard let cover = coverImage, cover.hasRenderableCoverData else { return 0 }
+        if let width = cover.width, let height = cover.height, width > 0, height > 0 {
+            return Double(width) / Double(height)
+        }
+        return 1200.0 / 630.0
+    }
+
+    func refreshCoverAspect() {
+        let aspect = renderedCoverAspect
+        if coverAspect != aspect { coverAspect = aspect }
+    }
 }
 
 /// Shared cover decode check for persistence tests and card rendering.

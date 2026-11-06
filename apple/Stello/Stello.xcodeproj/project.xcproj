@@ -213,6 +213,7 @@
             { "path": "MacWindowConfigurator.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "MasonryGridView.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "MasonryLayout.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "VirtualMasonry.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "PanelDedupe.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "SettingsView.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "SidePanelContent.swift", "target-membership": [ "Stello/compile-sources" ] },
