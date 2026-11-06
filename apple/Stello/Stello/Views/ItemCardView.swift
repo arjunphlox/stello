@@ -123,7 +123,7 @@ struct ItemCardView: View {
     }
 
     private var dominantColor: Color? {
-        let colorTags = (item.tags ?? [])
+        let colorTags = item.tags
             .filter { $0.category == "color" }
             .sorted { $0.weight > $1.weight }
         for t in colorTags { if let c = Self.namedColor(t.name) { return c } }
@@ -745,7 +745,7 @@ struct ItemCardView: View {
         }
         metadata.append("- **Saved:** \(Self.exportDateFormatter.string(from: item.addedAt))")
 
-        let tagNames = (item.tags ?? [])
+        let tagNames = item.tags
             .map(\.name)
             .filter { !$0.isEmpty }
         if !tagNames.isEmpty {

@@ -79,15 +79,15 @@ struct StelloTests {
         let ctx = ModelContext(container)
 
         let item1 = Item(title: "Swift UI")
-        let tag1a = Tag(name: "swift", category: "tool", weight: 0.9)
-        let tag1b = Tag(name: "ui", category: "subject", weight: 0.8)
-        ctx.insert(item1); ctx.insert(tag1a); ctx.insert(tag1b)
-        tag1a.item = item1; tag1b.item = item1
+        ctx.insert(item1)
+        item1.tags = [
+            ItemTag(name: "swift", category: "tool", weight: 0.9),
+            ItemTag(name: "ui", category: "subject", weight: 0.8),
+        ]
 
         let item2 = Item(title: "Swift Only")
-        let tag2 = Tag(name: "swift", category: "tool", weight: 0.9)
-        ctx.insert(item2); ctx.insert(tag2)
-        tag2.item = item2
+        ctx.insert(item2)
+        item2.tags = [ItemTag(name: "swift", category: "tool", weight: 0.9)]
 
         try ctx.save()
 
@@ -104,12 +104,10 @@ struct StelloTests {
         let item1 = Item(title: "A")
         let item2 = Item(title: "B")
         let item3 = Item(title: "C")
-        let t1 = Tag(name: "swift", category: "tool", weight: 0.9)
-        let t2 = Tag(name: "swift", category: "tool", weight: 0.9)
-        let t3 = Tag(name: "css", category: "tool", weight: 0.9)
         ctx.insert(item1); ctx.insert(item2); ctx.insert(item3)
-        ctx.insert(t1); ctx.insert(t2); ctx.insert(t3)
-        t1.item = item1; t2.item = item2; t3.item = item3
+        item1.tags = [ItemTag(name: "swift", category: "tool", weight: 0.9)]
+        item2.tags = [ItemTag(name: "swift", category: "tool", weight: 0.9)]
+        item3.tags = [ItemTag(name: "css", category: "tool", weight: 0.9)]
 
         try ctx.save()
 
@@ -428,7 +426,7 @@ struct StelloTests {
     }
 
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self, LocalAttachment.self])
+        let schema = Schema([Item.self, ItemImage.self, Snippet.self, LocalAttachment.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try ModelContainer(for: schema, configurations: [config])
     }
@@ -526,9 +524,7 @@ struct WebImportClassifyTests {
         let item = Item(slug: slug, title: slug, sourceURL: url, enrichmentStatus: WebLibraryImporter.awaitingClassifyStatus)
         context.insert(item)
         if let label {
-            let tag = Stello.Tag(name: label, category: "collection", weight: 0.5, source: "import")
-            context.insert(tag)
-            tag.item = item
+            item.tags = [ItemTag(name: label, category: "collection", weight: 0.5, source: "import")]
         }
         return item
     }

@@ -139,10 +139,7 @@ enum OptacosImporter {
 
             await MainActor.run {
                 context.insert(result.item)
-                for tag in result.tags {
-                    context.insert(tag)
-                    tag.item = result.item
-                }
+                result.item.tags = result.tags
                 for img in result.images {
                     context.insert(img)
                     img.item = result.item
@@ -364,7 +361,7 @@ enum OptacosImporter {
 
     private struct BuildResult {
         var item: Item
-        var tags: [Tag]
+        var tags: [ItemTag]
         var images: [ItemImage]
         var pendingDownloads: [PendingImage]
     }
@@ -401,7 +398,7 @@ enum OptacosImporter {
             kind: kind.rawValue
         )
 
-        var tags: [Tag] = []
+        var tags: [ItemTag] = []
         var images: [ItemImage] = []
         var pending: [PendingImage] = []
 
@@ -630,7 +627,7 @@ enum OptacosImporter {
     private static func appendTypefaceTags(
         from row: [String: Any],
         tagCatalog: [String: TagEntry],
-        into tags: inout [Tag]
+        into tags: inout [ItemTag]
     ) {
         addTags(fromRefField: row["Classification"], facet: "Classification", tagCatalog: tagCatalog, into: &tags)
         addTags(fromRefField: row["Personality"], facet: "Personality", tagCatalog: tagCatalog, into: &tags)
@@ -644,7 +641,7 @@ enum OptacosImporter {
     private static func appendFoundryTags(
         from row: [String: Any],
         tagCatalog: [String: TagEntry],
-        into tags: inout [Tag]
+        into tags: inout [ItemTag]
     ) {
         addTags(fromRefField: row["Licensing Types"], facet: "Licensing Types", tagCatalog: tagCatalog, into: &tags)
         addTags(fromRefField: row["Specialisation"], facet: "Specialisation", tagCatalog: tagCatalog, into: &tags)
@@ -657,12 +654,12 @@ enum OptacosImporter {
         fromRefField value: Any?,
         facet: String,
         tagCatalog: [String: TagEntry],
-        into tags: inout [Tag]
+        into tags: inout [ItemTag]
     ) {
         for slug in refSlugs(value) {
             let name = tagCatalog[slug]?.title ?? slug.replacingOccurrences(of: "-", with: " ")
             let category = tagCatalog[slug]?.facet ?? facet
-            tags.append(Tag(name: name, category: category, weight: 0.75, source: "rule"))
+            tags.append(ItemTag(name: name, category: category, weight: 0.75, source: "rule"))
         }
     }
 
@@ -705,12 +702,10 @@ enum OptacosImporter {
         await MainActor.run {
             for assignment in assignments {
                 guard let item = fetchItem(slug: assignment.targetSlug, in: context) else { continue }
-                if item.tags?.contains(where: { $0.name == assignment.tagName && $0.category == assignment.facet }) == true {
+                if item.tags.contains(where: { $0.name == assignment.tagName && $0.category == assignment.facet }) {
                     continue
                 }
-                let tag = Tag(name: assignment.tagName, category: assignment.facet, weight: 0.8, source: "rule")
-                context.insert(tag)
-                tag.item = item
+                item.tags.append(ItemTag(name: assignment.tagName, category: assignment.facet, weight: 0.8, source: "rule"))
             }
             try? context.save()
         }

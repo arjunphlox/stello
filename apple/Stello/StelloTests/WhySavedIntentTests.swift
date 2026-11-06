@@ -22,7 +22,7 @@ struct WhySavedIntentTests {
 
         try EnrichmentService.addIntentTag(name: "layout-reference", to: item, context: context)
 
-        let tags = try context.fetch(FetchDescriptor<Stello.Tag>())
+        let tags = item.tags
         let intent = tags.first { $0.category == "intent" && $0.name == "layout-reference" }
         #expect(intent != nil)
         #expect(intent?.weight == 0.9)
@@ -48,7 +48,7 @@ struct WhySavedIntentTests {
 
         try EnrichmentService.dismissWhySavedSuggestion(name: "palette-reference", from: item, context: context)
 
-        let tags = try context.fetch(FetchDescriptor<Stello.Tag>())
+        let tags = item.tags
         #expect(tags.isEmpty)
 
         let remaining = EnrichmentService.decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON)

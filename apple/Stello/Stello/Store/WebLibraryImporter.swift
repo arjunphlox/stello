@@ -462,13 +462,13 @@ final class WebLibraryImporter {
         context.insert(item)
 
         var seen = Set<String>()
+        var tags: [ItemTag] = []
         for t in r.tags ?? [] {
             guard let name = t.tag, !name.isEmpty, let category = t.category else { continue }
             guard seen.insert("\(category):\(name.lowercased())").inserted else { continue }
-            let tag = Tag(name: name, category: category, weight: t.weight ?? 0.5, source: "import")
-            context.insert(tag)
-            tag.item = item
+            tags.append(ItemTag(name: name, category: category, weight: t.weight ?? 0.5, source: "import"))
         }
+        item.tags = tags
         for s in r.snippets ?? [] {
             guard let text = s.text, !text.isEmpty else { continue }
             let snippet = Snippet(text: text, source: s.source ?? "import", addedAt: Self.date(s.addedAt) ?? item.addedAt)

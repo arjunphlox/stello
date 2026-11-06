@@ -136,7 +136,7 @@
                 "StelloShare/compile-sources",
               ],
             }, {
-              "path": "Tag.swift",
+              "path": "ItemTag.swift",
               "target-membership": [
                 "Stello/compile-sources",
                 "StelloShare/compile-sources",
@@ -245,6 +245,7 @@
         { "path": "DropImportTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "EnrichmentTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ItemBundleExportTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "ItemTagTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "MasonryLayoutTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "PageClassifierTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "PanelDedupeTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
