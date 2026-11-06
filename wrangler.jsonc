@@ -21,6 +21,19 @@
     { "binding": "BUCKET", "bucket_name": "stello-item-images" }
   ],
 
+  // Items, accounts and sessions (replaces Supabase). No database_id on
+  // purpose: wrangler finds the database by name, and creates it on the first
+  // build if it doesn't exist yet. Schema is applied by the Worker itself
+  // (src/lib/schema.js ← migrations/0001_init.sql).
+  "d1_databases": [
+    { "binding": "DB", "database_name": "stello" }
+  ],
+
+  // Lets the Worker import migrations/*.sql as text.
+  "rules": [
+    { "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }
+  ],
+
   // sharp replacement — WebP encode + resize at ingest via the Images binding.
   "images": { "binding": "IMAGES" },
 
@@ -29,10 +42,17 @@
 
   "observability": { "enabled": true },
 
-  // Public values (safe to expose — already shipped in supabase-client.js).
-  // Secrets (SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY) via `wrangler secret put`.
+  // Public values. Secrets (ANTHROPIC_API_KEY, ADMIN_TOKEN and, until the
+  // import is done, SUPABASE_SERVICE_ROLE_KEY) via `wrangler secret put`.
   "vars": {
-    "SUPABASE_URL": "https://ngncjtzsqrrfrhgammne.supabase.co",
-    "SUPABASE_ANON_KEY": "sb_publishable_r7udhKoy2jEtBrcbKY1wGg_LFn-wMjR"
+    // Sign in with Apple. APPLE_SERVICES_ID is the web Services ID; empty
+    // hides the button. APPLE_APP_IDS are the app bundle ids allowed to sign
+    // in natively (comma-separated).
+    "APPLE_SERVICES_ID": "",
+    "APPLE_APP_IDS": "com.arjunphlox.Stello",
+    // Open sign-up for new email / Apple accounts. Off: Stello is invite-only.
+    "ALLOW_SIGNUP": "false",
+    // Only used by the one-off Supabase → D1 import (/api/admin/import-supabase).
+    "SUPABASE_URL": "https://ngncjtzsqrrfrhgammne.supabase.co"
   }
 }

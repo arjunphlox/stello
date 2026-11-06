@@ -1,4 +1,4 @@
-const { authenticateRequest, jsonResponse, handleCors } = require('../lib/supabase');
+const { authenticateRequest, jsonResponse, handleCors } = require('../lib/common');
 
 module.exports = async function handler(req, res) {
   if (handleCors(req, res)) return;

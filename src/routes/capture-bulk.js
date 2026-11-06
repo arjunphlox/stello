@@ -1,7 +1,7 @@
 const {
   authenticateRequest, jsonResponse, handleCors, generateSlug, normalizeUrl,
   fetchOGMetadata, downloadImage, generateTagsFromMetadata, extractDomain,
-} = require('../lib/supabase');
+} = require('../lib/common');
 const storage = require('../lib/storage');
 
 module.exports = async function handler(req, res) {

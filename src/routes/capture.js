@@ -2,7 +2,7 @@ const {
   authenticateRequest, jsonResponse, handleCors,
   generateSlug, normalizeUrl, fetchOGMetadata,
   downloadImage, generateTagsFromMetadata, extractDomain,
-} = require('../lib/supabase');
+} = require('../lib/common');
 const storage = require('../lib/storage');
 const { enrichCore } = require('./enrich');
 
@@ -137,10 +137,9 @@ async function handleUrlCapture(req, client, user, url, res) {
 
   // Background enrichment — run after the response via waitUntil (no
   // self-subrequest; call the enrich core directly with the user's token).
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
-  if (req.ctx && token) {
+  if (req.ctx) {
     req.ctx.waitUntil(
-      enrichCore(env, token, { slug, itemId: inserted.id }).catch(() => {})
+      enrichCore(env, user.id, { slug, itemId: inserted.id }).catch(() => {})
     );
   }
 
