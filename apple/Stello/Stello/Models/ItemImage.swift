@@ -49,6 +49,8 @@ extension ItemImage {
     /// Non-empty bytes that decode to a platform bitmap (guards external-storage faulting + corrupt rows).
     var hasRenderableCoverData: Bool {
         guard let data, !data.isEmpty else { return false }
+        // Import thumbnails were decoded when written; this runs for every card render.
+        if sourceURL != nil { return true }
         return CoverImageDecoder.canDecode(data)
     }
 }

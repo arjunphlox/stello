@@ -135,7 +135,7 @@ final class WebLibraryImporter {
         context: ModelContext,
         coordinator: EnrichmentCoordinator,
         network: ImportNetwork = .live,
-        pause: Duration = .seconds(2)
+        pause: Duration = .seconds(20)
     ) async {
         guard !isClassifyingPending else { return }
         isClassifyingPending = true
@@ -144,21 +144,26 @@ final class WebLibraryImporter {
             shared.setStage(nil)
         }
 
-        await assignKindsFromLabels(context: context)
-        await downloadKnownCovers(context: context, network: network)
-        await readPages(context: context, network: network)
+        // The grid builds every card and rebuilds them when the main context changes, so
+        // this work stays in its own context and only reaches the UI when it saves.
+        let work = ModelContext(context.container)
+        work.autosaveEnabled = false
+
+        await assignKindsFromLabels(context: work)
+        await downloadKnownCovers(context: work, network: network)
+        await readPages(context: work, network: network)
 
         if !Task.isCancelled, UserDefaults.standard.bool(forKey: catalogPendingKey) {
             shared.setStage("Adding the sample catalog")
-            await OptacosImporter.importIfNeeded(in: context, options: .uniqueIntoLibrary)
+            await OptacosImporter.importIfNeeded(in: work, options: .uniqueIntoLibrary)
             UserDefaults.standard.set(false, forKey: catalogPendingKey)
         }
 
         // Without the system model the fallback would finish items with nothing
         // learned, so leave them queued for a launch when it's available.
         guard coordinator.primary.isAvailable else { return }
-        await enrichAwaitingAI(context: context, pause: pause) { item in
-            await coordinator.enrichItem(item, context: context, force: true)
+        await enrichAwaitingAI(context: work, pause: pause) { item in
+            await coordinator.enrichItem(item, context: work, force: true)
         }
     }
 
@@ -222,6 +227,7 @@ final class WebLibraryImporter {
         itemID: (Job) -> PersistentIdentifier,
         concurrency: Int,
         context: ModelContext,
+        saveEvery: Duration,
         work: @escaping @Sendable (Job) async -> Outcome,
         apply: (Outcome) -> Void
     ) async {
@@ -256,6 +262,8 @@ final class WebLibraryImporter {
                 group.addTask { await work(job) }
             }
             var finished = 0
+            let clock = ContinuousClock()
+            var lastSave = clock.now
             while let outcome = await group.next() {
                 if Task.isCancelled {
                     group.cancelAll()
@@ -264,7 +272,11 @@ final class WebLibraryImporter {
                 apply(outcome)
                 finished += 1
                 shared.stageDone = finished
-                if finished % 50 == 0 { try? context.save() }
+                // Each save refreshes the whole grid, so it's the costly step here.
+                if clock.now - lastSave >= saveEvery {
+                    try? context.save()
+                    lastSave = clock.now
+                }
                 if let job = next() { group.addTask { await work(job) } }
             }
         }
@@ -285,7 +297,12 @@ final class WebLibraryImporter {
     }
 
     /// Downloads images whose URL is already known and stores a small thumbnail.
-    static func downloadKnownCovers(context: ModelContext, network: ImportNetwork, concurrency: Int = 24) async {
+    static func downloadKnownCovers(
+        context: ModelContext,
+        network: ImportNetwork,
+        concurrency: Int = 24,
+        saveEvery: Duration = .seconds(30)
+    ) async {
         let jobs: [CoverJob] = pendingCovers(in: context).compactMap { image in
             guard let raw = image.sourceURL, let url = URL(string: raw), let item = image.item else { return nil }
             return CoverJob(itemID: item.persistentModelID, imageID: image.persistentModelID, url: url)
@@ -293,7 +310,7 @@ final class WebLibraryImporter {
         guard !jobs.isEmpty else { return }
         shared.setStage("Downloading covers", total: jobs.count)
         await runPool(
-            jobs: jobs, itemID: \.itemID, concurrency: concurrency, context: context,
+            jobs: jobs, itemID: \.itemID, concurrency: concurrency, context: context, saveEvery: saveEvery,
             work: { job in CoverOutcome(imageID: job.imageID, thumbnail: await network.thumbnail(job.url)) },
             apply: { outcome in
                 guard let image = context.model(for: outcome.imageID) as? ItemImage else { return }
@@ -340,7 +357,12 @@ final class WebLibraryImporter {
 
     /// One fetch per item that still needs a kind or a cover. Rules only, no AI. An item
     /// whose page can't be read moves on as a `link`; Enrich tries it again later.
-    static func readPages(context: ModelContext, network: ImportNetwork, concurrency: Int = 24) async {
+    static func readPages(
+        context: ModelContext,
+        network: ImportNetwork,
+        concurrency: Int = 24,
+        saveEvery: Duration = .seconds(30)
+    ) async {
         var coverRows: [PersistentIdentifier: ItemImage] = [:]
         for image in pendingCovers(in: context) where image.sourceURL == nil {
             guard let item = image.item else { continue }
@@ -366,7 +388,7 @@ final class WebLibraryImporter {
 
         shared.setStage("Reading pages", total: jobs.count)
         await runPool(
-            jobs: jobs, itemID: \.itemID, concurrency: concurrency, context: context,
+            jobs: jobs, itemID: \.itemID, concurrency: concurrency, context: context, saveEvery: saveEvery,
             work: { job in await readPage(job, network: network) },
             apply: { outcome in
                 if let item = context.model(for: outcome.job.itemID) as? Item {
