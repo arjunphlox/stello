@@ -135,7 +135,7 @@ final class WebLibraryImporter {
         context: ModelContext,
         coordinator: EnrichmentCoordinator,
         network: ImportNetwork = .live,
-        pause: Duration = .seconds(20)
+        pause: Duration = .seconds(2)
     ) async {
         guard !isClassifyingPending else { return }
         isClassifyingPending = true
