@@ -40,6 +40,9 @@ struct ItemCardView: View {
     /// Measured from the domain pill via `DomainPillHeightKey` so the review badge's
     /// circle diameter matches it exactly instead of a hardcoded constant.
     @State private var domainPillHeight: CGFloat = 0
+    /// The key whose bitmap has arrived, which redraws the card from the cache.
+    @State private var decodedCoverKey: String?
+    @State private var undecodableCoverKey: String?
 
     @State private var showMarkdownExporter = false
     @State private var showImageExporter = false
@@ -68,7 +71,17 @@ struct ItemCardView: View {
 
     private var coverCacheKey: String {
         let count = primaryImage?.data?.count ?? 0
-        return "\(item.persistentModelID)-\(count)"
+        return "\(item.id.uuidString)-\(count)"
+    }
+
+    private func decodeCover() async {
+        guard hasImage, let data = primaryImage?.data else { return }
+        let key = coverCacheKey
+        if await CoverImageCache.decode(data, key: key) != nil {
+            decodedCoverKey = key
+        } else {
+            undecodableCoverKey = key
+        }
     }
 
     /// The cover's own aspect ratio (a portrait book cover stays portrait); the OG default
@@ -123,7 +136,7 @@ struct ItemCardView: View {
     }
 
     private var dominantColor: Color? {
-        let colorTags = (item.tags ?? [])
+        let colorTags = item.tags
             .filter { $0.category == "color" }
             .sorted { $0.weight > $1.weight }
         for t in colorTags { if let c = Self.namedColor(t.name) { return c } }
@@ -132,6 +145,11 @@ struct ItemCardView: View {
 
     var body: some View {
         cardContent
+            .onAppear {
+                WebLibraryImporter.prioritize(item)
+                item.refreshCoverAspect()
+            }
+            .task(id: coverCacheKey) { await decodeCover() }
             .clipShape(RoundedRectangle(cornerRadius: Self.visualCornerRadius, style: .continuous))
             .overlay {
                 if isSelected {
@@ -177,8 +195,15 @@ struct ItemCardView: View {
     }
 
     @ViewBuilder private var cardContent: some View {
-        if hasImage, let data = primaryImage?.data, let img = Self.platformImage(data, cacheKey: coverCacheKey) {
-            imageCard(img)
+        // Reading this makes the card redraw when its bitmap lands in the cache.
+        let _ = decodedCoverKey
+        if hasImage, let cover = CoverImageCache.decodedImage(forKey: coverCacheKey) {
+            imageCard(Image(decorative: cover, scale: 1))
+        } else if hasImage, undecodableCoverKey != coverCacheKey {
+            // Same size as the cover, so nothing shifts when the bitmap arrives.
+            placeholderGradient
+                .aspectRatio(aspect, contentMode: .fit)
+                .frame(maxWidth: .infinity)
         } else if isVideoCard {
             videoCard
         } else if let toolMeta = item.toolMeta() {
@@ -744,7 +769,7 @@ struct ItemCardView: View {
         }
         metadata.append("- **Saved:** \(Self.exportDateFormatter.string(from: item.addedAt))")
 
-        let tagNames = (item.tags ?? [])
+        let tagNames = item.tags
             .map(\.name)
             .filter { !$0.isEmpty }
         if !tagNames.isEmpty {

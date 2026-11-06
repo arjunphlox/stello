@@ -39,14 +39,30 @@ struct ContentView: View {
             theme.background.ignoresSafeArea()
         }
         .environment(\.font, .karst(.body))
+        #if DEBUG
+        .task { await ScaleCheck.run(context: context) }
+        #endif
         .task {
-            await SeedData.prepareStore(in: context)
+            // Demo catalog only for in-memory (preview/screenshot) stores; the
+            // synced library is prepared in StelloApp.init before any view renders.
+            if SeedData.isInMemory(context) {
+                await SeedData.prepareStore(in: context)
+            }
             applyScreenshotLaunchState()
         }
         .task(priority: .background) {
-            await OptacosImporter.importIfNeeded(in: context)
-            await SeedData.backfillSeedCovers(in: context)
+            // Sample catalog stays out of the synced library too.
+            if SeedData.isInMemory(context) {
+                await OptacosImporter.importIfNeeded(in: context)
+                // Also demo-only: on the real library it would refetch pages one at a
+                // time every launch, drop covers still waiting to download, and sync
+                // generated placeholders.
+                await SeedData.backfillSeedCovers(in: context)
+            }
             await enrichmentCoordinator.enrichPendingItems(context: context)
+            if !WebInboxProcessor.isDisabled {
+                await WebLibraryImporter.classifyPending(context: context, coordinator: enrichmentCoordinator)
+            }
         }
         .onAppear {
             applyScreenshotLaunchState()

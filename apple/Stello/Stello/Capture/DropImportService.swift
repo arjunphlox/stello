@@ -226,11 +226,7 @@ enum DropImportService {
         }
 
         let tagSpecs = RuleTagger.generateTags(title: title, description: item.summary, domain: nil)
-        for spec in tagSpecs {
-            let tag = Tag(name: spec.name, category: spec.category, weight: spec.weight)
-            context.insert(tag)
-            tag.item = item
-        }
+        item.tags = tagSpecs.map { ItemTag(name: $0.name, category: $0.category, weight: $0.weight) }
 
         try context.save()
         return item

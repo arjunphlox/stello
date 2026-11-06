@@ -20,27 +20,6 @@ struct HorizontalOutsetClip: Shape {
     }
 }
 
-private struct GridContainerWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 375
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct WeekAnchorPreferenceKey: PreferenceKey {
-    static var defaultValue: [String: CGFloat] = [:]
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue()) { _, new in new }
-    }
-}
-
-private struct WeekBottomAnchorPreferenceKey: PreferenceKey {
-    static var defaultValue: [String: CGFloat] = [:]
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue()) { _, new in new }
-    }
-}
-
 private struct ScrollContentBottomKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -132,9 +111,15 @@ struct MasonryGridView: View {
     @State private var cachedTagFilteredItems: [Item] = []
     @State private var cachedDisplayItems: [Item] = []
     @State private var cachedTimelineWeekGroups: [WeekGroup] = []
-    @State private var cachedFirstWeekAnchorByItemID: [PersistentIdentifier: String] = [:]
-    @State private var cachedLastWeekAnchorByItemID: [PersistentIdentifier: String] = [:]
+    @State private var cachedDisplayWeekKeys: [String] = []
     @State private var filterCacheToken: UInt = 0
+    /// Frames for every card in `displayItems`. Only cards near the viewport are built.
+    @State private var gridModel = VirtualMasonryModel()
+    @State private var gridModelVersion: UInt = 0
+    /// The grid's top edge in the scroll view's coordinate space.
+    @State private var gridViewportTop: CGFloat = 0
+    /// Scroll position in `visibleWindowStep`s: cards are only rebuilt when this changes.
+    @State private var visibleWindowIndex = 0
 
     /// Ring headroom for the 4pt outset selection ring. Applied vertically inside the
     /// card stack; horizontally it lives in the HorizontalOutsetClip boundaries so the
@@ -142,6 +127,9 @@ struct MasonryGridView: View {
     private static let selectionOutlineInset: CGFloat = StelloLayout.gridRingClipOutset
     /// Deadband past a column boundary before stepping to the next count (prevents flicker).
     private static let columnHysteresis: Double = 0.35
+    /// How far the grid scrolls before the set of built cards is refreshed.
+    private static let visibleWindowStep: CGFloat = 300
+    private static let gridSpacing: CGFloat = 12
     /// Minimum scroll delta before updating header / week-spy state.
     private static let scrollOffsetDeadband: CGFloat = 10
 
@@ -156,10 +144,16 @@ struct MasonryGridView: View {
     private var tagFilteredItems: [Item] { cachedTagFilteredItems }
     private var displayItems: [Item] { cachedDisplayItems }
     private var timelineWeekGroups: [WeekGroup] { cachedTimelineWeekGroups }
-    private var firstOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedFirstWeekAnchorByItemID }
-    private var lastOfWeekAnchorByItemID: [PersistentIdentifier: String] { cachedLastWeekAnchorByItemID }
 
     private func refreshFilterCaches() {
+        #if DEBUG
+        let refreshStart = Date()
+        defer {
+            if ScaleCheck.isEnabled, allItems.count >= ScaleCheck.itemCount {
+                ScaleCheck.gridRefreshSeconds = Date().timeIntervalSince(refreshStart)
+            }
+        }
+        #endif
         let tagFiltered = ItemFilter.apply(
             allItems,
             searchText: searchText,
@@ -174,20 +168,54 @@ struct MasonryGridView: View {
         }
         cachedTimelineWeekGroups = WeekGroup.makeGroups(from: tagFiltered)
 
-        var firstMap: [PersistentIdentifier: String] = [:]
-        var lastMap: [PersistentIdentifier: String] = [:]
-        var previousKey: String?
-        for item in cachedDisplayItems {
-            let key = WeekGroup.isoWeekKey(for: item.addedAt)
-            if key != previousKey {
-                firstMap[item.persistentModelID] = key
-                previousKey = key
-            }
-            lastMap[item.persistentModelID] = key
-        }
-        cachedFirstWeekAnchorByItemID = firstMap
-        cachedLastWeekAnchorByItemID = lastMap
+        cachedDisplayWeekKeys = cachedDisplayItems.map { WeekGroup.isoWeekKey(for: $0.addedAt) }
         filterCacheToken &+= 1
+        rebuildGridModel()
+    }
+
+    private func rebuildGridModel() {
+        gridModel = VirtualMasonryModel(
+            aspects: cachedDisplayItems.map(\.coverAspect),
+            weekKeys: cachedDisplayWeekKeys,
+            width: gridContainerWidth,
+            columnCount: resolvedColumnCount(for: gridContainerWidth),
+            spacing: Self.gridSpacing
+        )
+        gridModelVersion &+= 1
+        publishWeekAnchors()
+    }
+
+    /// Feeds the timeline from computed frames, because offscreen cards don't exist.
+    private func publishWeekAnchors() {
+        let top = gridViewportTop
+        weekAnchorYs = gridModel.weekTops.mapValues { $0 + top }
+        weekBottomYs = gridModel.weekBottoms.mapValues { $0 + top }
+        cacheContentWeekRangesIfNeeded()
+    }
+
+    private func applyGridViewportTop(_ top: CGFloat) {
+        guard top != gridViewportTop else { return }
+        gridViewportTop = top
+        publishWeekAnchors()
+        updateActiveWeekKey()
+    }
+
+    private func updateVisibleWindow(scrollOffset: CGFloat) {
+        let window = Int(max(0, scrollOffset) / Self.visibleWindowStep)
+        if window != visibleWindowIndex { visibleWindowIndex = window }
+    }
+
+    /// The built cards: one viewport of overscan either side of the visible window.
+    private func placedCards(viewportHeight: CGFloat) -> [PlacedCard] {
+        let windowTop = CGFloat(visibleWindowIndex) * Self.visibleWindowStep
+        let indices = gridModel.visibleIndices(
+            minY: windowTop - viewportHeight,
+            maxY: windowTop + Self.visibleWindowStep + viewportHeight * 2
+        )
+        return indices.compactMap { index in
+            guard index < displayItems.count else { return nil }
+            return PlacedCard(item: displayItems[index], frame: gridModel.frames[index])
+        }
     }
 
     private func applyScrollOffset(_ offset: CGFloat) {
@@ -265,9 +293,16 @@ struct MasonryGridView: View {
         .onChange(of: needsReviewOnly) { _, _ in refreshFilterCaches() }
         // Reviewing an item flips needsReview at the store layer; the cached filter results
         // must follow so a just-reviewed card leaves the "Needs review"-filtered grid live.
-        .onChange(of: allItems.map(\.needsReview)) { _, _ in
-            if needsReviewOnly { refreshFilterCaches() }
+        .background {
+            LibraryChangeWatcher(
+                items: allItems,
+                onReviewChange: { if needsReviewOnly { refreshFilterCaches() } },
+                onCoverChange: { rebuildGridModel() }
+            )
+            .equatable()
         }
+        .onChange(of: gridContainerWidth) { _, _ in rebuildGridModel() }
+        .onChange(of: gridColumns) { _, _ in rebuildGridModel() }
         .onChange(of: weekAnchorYs) { _, _ in
             cacheContentWeekRangesIfNeeded()
         }
@@ -292,7 +327,7 @@ struct MasonryGridView: View {
 
                 ZStack(alignment: .top) {
                     ScrollView {
-                        gridScrollContent(topInset: compactScrollInset)
+                        gridScrollContent(topInset: compactScrollInset, viewportHeight: viewport.size.height)
                             .frame(width: viewport.size.width, alignment: .leading)
                     }
                     // The scroll clip would cut the selection ring at the flush card
@@ -307,16 +342,10 @@ struct MasonryGridView: View {
                     .onPreferenceChange(ScrollOffsetKey.self) { offset in
                         applyScrollOffset(offset)
                     }
-                    .onPreferenceChange(GridContainerWidthKey.self) { width in
-                        gridContainerWidth = width
-                    }
-                    .onPreferenceChange(WeekAnchorPreferenceKey.self) { anchors in
-                        weekAnchorYs = anchors
-                        cacheContentWeekRangesIfNeeded()
-                    }
-                    .onPreferenceChange(WeekBottomAnchorPreferenceKey.self) { anchors in
-                        weekBottomYs = anchors
-                        cacheContentWeekRangesIfNeeded()
+                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.contentOffset.y + geometry.contentInsets.top
+                    } action: { _, offset in
+                        updateVisibleWindow(scrollOffset: offset)
                     }
                     .onPreferenceChange(ScrollContentBottomKey.self) { bottom in
                         scrollContentBottom = bottom
@@ -353,10 +382,21 @@ struct MasonryGridView: View {
                 .overlay(alignment: .bottom) {
                     bottomControlOverlay(safeBottom: viewport.safeAreaInsets.bottom)
                 }
+                // The grid's width is the viewport less the paddings in `gridScrollContent`.
+                .onChange(of: viewport.size.width, initial: true) { _, width in
+                    gridContainerWidth = width - StelloLayout.windowInset
+                        - (embedInPanelLayout ? 0 : StelloLayout.windowInset)
+                }
             }
             .frame(maxHeight: .infinity)
             .clipShape(HorizontalOutsetClip(outset: Self.selectionOutlineInset))
             .onAppear {
+                #if DEBUG
+                if ScaleCheck.isEnabled {
+                    ScaleCheck.scrollToWeek = { scrollProxy.scrollTo($0, anchor: .top) }
+                    ScaleCheck.weekKeys = { timelineWeekGroups.map(\.key) }
+                }
+                #endif
                 scrollForScreenshotIfNeeded(using: scrollProxy)
                 updateActiveWeekKey()
                 applyScreenshotTimelineHoverIfNeeded()
@@ -408,7 +448,7 @@ struct MasonryGridView: View {
         .frame(maxWidth: .infinity, alignment: .bottom)
     }
 
-    private func gridScrollContent(topInset: CGFloat) -> some View {
+    private func gridScrollContent(topInset: CGFloat, viewportHeight: CGFloat) -> some View {
         VStack(spacing: 12) {
             scrollOffsetProbe
 
@@ -416,17 +456,34 @@ struct MasonryGridView: View {
                 filterPillsRow
             }
 
-            MasonryLayout(spacing: 12, forcedColumns: effectiveForcedColumns) {
-                ForEach(displayItems) { item in
-                    card(for: item)
-                        .modifier(WeekAnchorModifier(
-                            weekKey: firstOfWeekAnchorByItemID[item.persistentModelID],
-                            edge: .top
-                        ))
-                        .modifier(WeekAnchorModifier(
-                            weekKey: lastOfWeekAnchorByItemID[item.persistentModelID],
-                            edge: .bottom
-                        ))
+            VirtualMasonryCards(
+                placed: placedCards(viewportHeight: viewportHeight),
+                token: VirtualMasonryCards.Token(
+                    window: visibleWindowIndex,
+                    viewportHeight: viewportHeight,
+                    modelVersion: gridModelVersion,
+                    filterVersion: filterCacheToken,
+                    selectedItem: panelContent == .itemDetail ? selectedItem?.persistentModelID : nil
+                ),
+                card: { card(for: $0) }
+            )
+            .equatable()
+            .frame(height: gridModel.contentHeight, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .named("stelloScroll")).minY
+            } action: { top in
+                applyGridViewportTop(top)
+            }
+            .background(alignment: .topLeading) {
+                if ProcessInfo.processInfo.arguments.contains("-screenshotScrolledHeader")
+                    || ProcessInfo.processInfo.arguments.contains("-scaleCheck") {
+                    ForEach(Array(gridModel.weekTops.keys), id: \.self) { key in
+                        Color.clear
+                            .frame(height: 1)
+                            .offset(y: gridModel.weekTops[key] ?? 0)
+                            .id(key)
+                    }
                 }
             }
             .padding(Self.selectionOutlineInset)
@@ -436,14 +493,6 @@ struct MasonryGridView: View {
             .padding(.horizontal, -Self.selectionOutlineInset)
 
             scrollContentBottomProbe
-        }
-        .background {
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: GridContainerWidthKey.self,
-                    value: geo.size.width
-                )
-            }
         }
         // Embed (Mac/iPad): the grid column includes the leading window gutter, so the
         // card stack pads leading by the inset to keep cards at the baseline x while the
@@ -756,43 +805,6 @@ struct MasonryGridView: View {
 
 // MARK: - Week scroll anchor
 
-private enum WeekAnchorEdge {
-    case top
-    case bottom
-}
-
-private struct WeekAnchorModifier: ViewModifier {
-    let weekKey: String?
-    var edge: WeekAnchorEdge = .top
-
-    func body(content: Content) -> some View {
-        if let weekKey {
-            content
-                .id(edge == .top ? weekKey : "\(weekKey)-bottom")
-                .background {
-                    GeometryReader { geo in
-                        let frame = geo.frame(in: .named("stelloScroll"))
-                        let y = frame.minY + (edge == .bottom ? frame.height : 0)
-                        Group {
-                            if edge == .top {
-                                Color.clear.preference(
-                                    key: WeekAnchorPreferenceKey.self,
-                                    value: [weekKey: y]
-                                )
-                            } else {
-                                Color.clear.preference(
-                                    key: WeekBottomAnchorPreferenceKey.self,
-                                    value: [weekKey: y]
-                                )
-                            }
-                        }
-                    }
-                }
-        } else {
-            content
-        }
-    }
-}
 
 // MARK: - Previews
 
@@ -821,4 +833,59 @@ private struct WeekAnchorModifier: ViewModifier {
         .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
         .preferredColorScheme(.dark)
         .frame(width: 1280, height: 900)
+}
+
+
+private struct PlacedCard {
+    let item: Item
+    let frame: CGRect
+}
+
+/// Only the cards near the viewport. Equatable so scrolling within a window, which
+/// re-renders the grid view for the timeline, leaves the cards alone.
+private struct VirtualMasonryCards<Card: View>: View, Equatable {
+    struct Token: Equatable {
+        var window: Int
+        var viewportHeight: CGFloat
+        var modelVersion: UInt
+        var filterVersion: UInt
+        var selectedItem: PersistentIdentifier?
+    }
+
+    let placed: [PlacedCard]
+    let token: Token
+    @ViewBuilder let card: (Item) -> Card
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.token == rhs.token
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(placed, id: \.item.persistentModelID) { placed in
+                card(placed.item)
+                    .frame(width: placed.frame.width, height: placed.frame.height, alignment: .top)
+                    .offset(x: placed.frame.minX, y: placed.frame.minY)
+            }
+        }
+    }
+}
+
+/// Watches per-item values in a view of its own: reading them in the grid's body would
+/// walk the whole library on every scroll tick.
+private struct LibraryChangeWatcher: View, Equatable {
+    let items: [Item]
+    let onReviewChange: () -> Void
+    let onCoverChange: () -> Void
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.items.count == rhs.items.count
+    }
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onChange(of: items.map(\.needsReview)) { _, _ in onReviewChange() }
+            .onChange(of: items.map(\.coverAspect)) { _, _ in onCoverChange() }
+    }
 }
