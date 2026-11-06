@@ -25,6 +25,8 @@ final class WebLibraryImporter {
     /// `enrichmentStatus` of an imported item still waiting for the background
     /// classify pass. Stored on the item, so the queue survives quits and syncs.
     nonisolated static let awaitingClassifyStatus = "awaiting_classify"
+    /// Kind is settled; the item is still waiting for full Enrich (on-device AI).
+    nonisolated static let awaitingAIStatus = "awaiting_ai"
     private static var isClassifyingPending = false
 
     private(set) var phase: Phase = .idle
@@ -124,32 +126,152 @@ final class WebLibraryImporter {
 
     // MARK: - Background classify pass
 
-    /// Works through imported items still marked `awaitingClassifyStatus`, one at a
-    /// time with a pause between them so the app stays usable. Safe to stop anywhere:
-    /// an unfinished item keeps its marker and the next launch picks it up.
+    /// Runs the deferred work on imported items, cheapest first. Every stage keeps
+    /// its queue in `enrichmentStatus`, so it's safe to stop anywhere: unfinished
+    /// items keep their marker and the next launch picks them up.
+    /// 1. Kinds from URL and collection labels (no network).
+    /// 2. Kinds from fetched pages, several at once (no AI).
+    /// 3. Full Enrich with the on-device model, one at a time at low priority.
     static func classifyPending(
         context: ModelContext,
         coordinator: EnrichmentCoordinator,
         pause: Duration = .seconds(2)
     ) async {
-        // Without the system model the fallback would finish items with nothing
-        // learned, so leave them queued for a launch when it's available.
-        guard coordinator.primary.isAvailable else { return }
-        await classifyPending(context: context, pause: pause) { item in
-            await coordinator.enrichItem(item, context: context, force: true)
-        }
-    }
-
-    static func classifyPending(
-        context: ModelContext,
-        pause: Duration,
-        classify: (Item) async -> Void
-    ) async {
         guard !isClassifyingPending else { return }
         isClassifyingPending = true
         defer { isClassifyingPending = false }
 
+        await assignKindsFromLabels(context: context)
+        await assignKindsFromPages(context: context) { await CaptureService.fetchPage(url: $0) }
+
+        // Without the system model the fallback would finish items with nothing
+        // learned, so leave them queued for a launch when it's available.
+        guard coordinator.primary.isAvailable else { return }
+        await enrichAwaitingAI(context: context, pause: pause) { item in
+            await coordinator.enrichItem(item, context: context, force: true)
+        }
+    }
+
+    static func isQueued(_ item: Item) -> Bool {
+        item.enrichmentStatus == awaitingClassifyStatus || item.enrichmentStatus == awaitingAIStatus
+    }
+
+    /// The kinds Enrich can reach from a `link`, so the fast stages agree with it.
+    private nonisolated static let assignableKinds: Set<ItemKind> = [
+        .post, .resource, .book, .product, .tool, .course, .article,
+    ]
+
+    private static func itemsAwaitingClassify(in context: ModelContext) -> [Item] {
         let status = awaitingClassifyStatus
+        let descriptor = FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.enrichmentStatus == status })
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// Stage 1. Decides what the URL and labels alone can. The rest stay queued for stage 2.
+    static func assignKindsFromLabels(context: ModelContext) async {
+        for (index, item) in itemsAwaitingClassify(in: context).enumerated() {
+            if Task.isCancelled { break }
+            if let raw = item.sourceURL, let url = URL(string: raw) {
+                let result = PageClassifier.classify(
+                    html: "", baseURL: url, domain: item.domain, title: item.title, ogDescription: nil,
+                    collectionLabels: EnrichmentService.collectionLabels(for: item)
+                )
+                if assignableKinds.contains(result.kind) {
+                    item.kind = result.kind.rawValue
+                    item.enrichmentStatus = awaitingAIStatus
+                }
+            }
+            if index % 200 == 199 {
+                try? context.save()
+                await Task.yield()
+            }
+        }
+        try? context.save()
+    }
+
+    private struct PageJob: Sendable {
+        var id: PersistentIdentifier
+        var url: URL
+        var domain: String?
+        var title: String?
+        var labels: [String]
+    }
+
+    private struct PageOutcome: Sendable {
+        var id: PersistentIdentifier
+        var kind: ItemKind?
+        var isGone = false
+    }
+
+    private nonisolated static func classifyPage(
+        _ job: PageJob,
+        fetch: @Sendable (URL) async -> PageFetchResult?
+    ) async -> PageOutcome {
+        guard let page = await fetch(job.url) else { return PageOutcome(id: job.id, kind: nil) }
+        let result = PageClassifier.classify(
+            html: page.html, baseURL: job.url, domain: job.domain, title: job.title,
+            ogDescription: page.og.description, ogType: page.og.ogType, collectionLabels: job.labels
+        )
+        return PageOutcome(id: job.id, kind: assignableKinds.contains(result.kind) ? result.kind : nil, isGone: page.isGone)
+    }
+
+    /// Stage 2. Fetches the remaining pages a few at a time and applies the rules, no AI.
+    /// An item whose page can't be read moves on as a `link`; stage 3 tries it again.
+    static func assignKindsFromPages(
+        context: ModelContext,
+        concurrency: Int = 6,
+        fetch: @escaping @Sendable (URL) async -> PageFetchResult?
+    ) async {
+        var jobs: [PageJob] = []
+        for item in itemsAwaitingClassify(in: context) {
+            guard let raw = item.sourceURL, let url = URL(string: raw) else {
+                item.enrichmentStatus = awaitingAIStatus
+                continue
+            }
+            jobs.append(PageJob(
+                id: item.persistentModelID, url: url, domain: item.domain, title: item.title,
+                labels: EnrichmentService.collectionLabels(for: item)
+            ))
+        }
+        try? context.save()
+
+        await withTaskGroup(of: PageOutcome.self) { group in
+            var queue = jobs.makeIterator()
+            for _ in 0..<concurrency {
+                guard let job = queue.next() else { break }
+                group.addTask { await classifyPage(job, fetch: fetch) }
+            }
+            var finished = 0
+            while let outcome = await group.next() {
+                if Task.isCancelled {
+                    group.cancelAll()
+                    break
+                }
+                if let item = context.model(for: outcome.id) as? Item, item.enrichmentStatus == awaitingClassifyStatus {
+                    if let kind = outcome.kind { item.kind = kind.rawValue }
+                    if outcome.isGone { item.status = "gone" }
+                    item.enrichmentStatus = awaitingAIStatus
+                }
+                finished += 1
+                if finished % 20 == 0 {
+                    try? context.save()
+                    NSLog("Web import kinds: %d of %d pages read", finished, jobs.count)
+                }
+                if let job = queue.next() {
+                    group.addTask { await classifyPage(job, fetch: fetch) }
+                }
+            }
+        }
+        try? context.save()
+    }
+
+    /// Stage 3. Full Enrich, one item at a time with a pause so the app stays usable.
+    static func enrichAwaitingAI(
+        context: ModelContext,
+        pause: Duration,
+        enrich: (Item) async -> Void
+    ) async {
+        let status = awaitingAIStatus
         var descriptor = FetchDescriptor<Item>(
             predicate: #Predicate<Item> { $0.enrichmentStatus == status },
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
@@ -158,13 +280,13 @@ final class WebLibraryImporter {
 
         var finished = 0
         while !Task.isCancelled, let item = try? context.fetch(descriptor).first {
-            await classify(item)
+            await enrich(item)
             if Task.isCancelled { break }
             // Enrich normally moves the item on; never loop on one that it didn't.
             if item.enrichmentStatus == status { item.enrichmentStatus = "candidates_done" }
             try? context.save()
             finished += 1
-            NSLog("Web import classify: %d finished this run", finished)
+            NSLog("Web import enrich: %d finished this run", finished)
             try? await Task.sleep(for: pause)
         }
     }

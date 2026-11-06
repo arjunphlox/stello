@@ -442,7 +442,7 @@ struct WebImportClassifyTests {
     }
 
     private func pendingCount(_ context: ModelContext) throws -> Int {
-        let status = WebLibraryImporter.awaitingClassifyStatus
+        let status = WebLibraryImporter.awaitingAIStatus
         return try context.fetchCount(FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.enrichmentStatus == status }))
     }
 
@@ -469,40 +469,120 @@ struct WebImportClassifyTests {
         #expect(items.first { $0.slug == "no-url" }?.enrichmentStatus == "candidates_done")
     }
 
-    @Test("Classify pass finishes queued items only, even when Enrich changes nothing")
+    private func queued(_ slug: String, url: String?, label: String? = nil, in context: ModelContext) -> Item {
+        let item = Item(slug: slug, title: slug, sourceURL: url, enrichmentStatus: WebLibraryImporter.awaitingClassifyStatus)
+        context.insert(item)
+        if let label {
+            let tag = Stello.Tag(name: label, category: "collection", weight: 0.5, source: "import")
+            context.insert(tag)
+            tag.item = item
+        }
+        return item
+    }
+
+    @Test("Labels pass settles what the URL and labels decide and leaves the rest queued")
+    func labelsPass() async throws {
+        let context = try makeContext()
+        let post = queued("post", url: "https://x.com/someone/status/123", in: context)
+        let tool = queued("tool", url: "https://example.com/app", label: "digital-tools", in: context)
+        let plain = queued("plain", url: "https://example.com/about", in: context)
+        try context.save()
+
+        await WebLibraryImporter.assignKindsFromLabels(context: context)
+
+        #expect(post.kind == ItemKind.post.rawValue)
+        #expect(post.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
+        #expect(tool.kind == ItemKind.tool.rawValue)
+        #expect(plain.kind == ItemKind.link.rawValue)
+        #expect(plain.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus)
+    }
+
+    @Test("Pages pass reads kinds, flags gone pages and moves failed fetches on as links")
+    func pagesPass() async throws {
+        let context = try makeContext()
+        let article = queued("article", url: "https://example.com/blog/how-kerning-works", in: context)
+        let gone = queued("gone", url: "https://example.com/gone", in: context)
+        let failed = queued("failed", url: "https://example.com/fail", in: context)
+        let noURL = queued("no-url", url: nil, in: context)
+        try context.save()
+
+        await WebLibraryImporter.assignKindsFromPages(context: context, concurrency: 2) { url in
+            switch url.lastPathComponent {
+            case "how-kerning-works":
+                let html = #"<html><head><meta property="og:type" content="article"></head></html>"#
+                return PageFetchResult(html: html, og: CaptureService.parseOG(html: html, baseURL: url), statusCode: 200)
+            case "gone":
+                return PageFetchResult(html: "", og: OGResult(), statusCode: 404)
+            default:
+                return nil
+            }
+        }
+
+        #expect(article.kind == ItemKind.article.rawValue)
+        #expect(gone.status == "gone")
+        #expect(failed.kind == ItemKind.link.rawValue)
+        for item in [article, gone, failed, noURL] {
+            #expect(item.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
+        }
+    }
+
+    @Test("Pages pass never runs more fetches at once than asked")
+    func pagesPassConcurrency() async throws {
+        actor Gauge {
+            var now = 0, peak = 0
+            func enter() { now += 1; peak = max(peak, now) }
+            func leave() { now -= 1 }
+        }
+        let context = try makeContext()
+        for index in 0..<12 { _ = queued("q\(index)", url: "https://example.com/\(index)", in: context) }
+        try context.save()
+
+        let gauge = Gauge()
+        await WebLibraryImporter.assignKindsFromPages(context: context, concurrency: 3) { _ in
+            await gauge.enter()
+            try? await Task.sleep(for: .milliseconds(20))
+            await gauge.leave()
+            return nil
+        }
+        let peak = await gauge.peak
+        #expect(peak > 1)
+        #expect(peak <= 3)
+    }
+
+    @Test("Enrich pass finishes queued items only, even when Enrich changes nothing")
     func passFinishesQueuedItems() async throws {
         let context = try makeContext()
         for index in 0..<3 {
-            context.insert(Item(slug: "queued-\(index)", title: "Queued", enrichmentStatus: WebLibraryImporter.awaitingClassifyStatus))
+            context.insert(Item(slug: "queued-\(index)", title: "Queued", enrichmentStatus: WebLibraryImporter.awaitingAIStatus))
         }
         context.insert(Item(slug: "other", title: "Other", enrichmentStatus: "text_done"))
         try context.save()
 
         var seen: [String] = []
-        await WebLibraryImporter.classifyPending(context: context, pause: .zero) { seen.append($0.slug) }
+        await WebLibraryImporter.enrichAwaitingAI(context: context, pause: .zero) { seen.append($0.slug) }
 
         #expect(seen.count == 3)
         #expect(!seen.contains("other"))
         #expect(try pendingCount(context) == 0)
     }
 
-    @Test("A stopped pass keeps the unfinished items and the next run resumes them")
+    @Test("A stopped Enrich pass keeps the unfinished items and the next run resumes them")
     func stoppedPassResumes() async throws {
         let context = try makeContext()
         for index in 0..<3 {
-            context.insert(Item(slug: "queued-\(index)", title: "Queued", enrichmentStatus: WebLibraryImporter.awaitingClassifyStatus))
+            context.insert(Item(slug: "queued-\(index)", title: "Queued", enrichmentStatus: WebLibraryImporter.awaitingAIStatus))
         }
         try context.save()
 
         let first = Task { @MainActor in
-            await WebLibraryImporter.classifyPending(context: context, pause: .zero) { _ in
+            await WebLibraryImporter.enrichAwaitingAI(context: context, pause: .zero) { _ in
                 withUnsafeCurrentTask { $0?.cancel() }
             }
         }
         await first.value
         #expect(try pendingCount(context) == 3)
 
-        await WebLibraryImporter.classifyPending(context: context, pause: .zero) { _ in }
+        await WebLibraryImporter.enrichAwaitingAI(context: context, pause: .zero) { _ in }
         #expect(try pendingCount(context) == 0)
     }
 }
