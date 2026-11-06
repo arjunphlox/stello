@@ -26,7 +26,7 @@ struct TagFilterContent: View {
     private func tags(in category: String) -> [(name: String, count: Int)] {
         var counts: [String: Int] = [:]
         for item in allItems {
-            for tag in (item.tags ?? []) where tag.category == category {
+            for tag in item.tags where tag.category == category {
                 counts[tag.name, default: 0] += 1
             }
         }

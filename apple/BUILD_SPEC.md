@@ -6,7 +6,7 @@ Exact constants/rules extracted from the Stello web codebase — the source of t
 
 ## 1. Tag generation
 
-Pipeline `generateTagsFromMetadata` (`src/lib/supabase.js:240`):
+Pipeline `generateTagsFromMetadata` (former `src/lib/supabase.js:240`, removed Nov 2026):
 - Format tag (1) via `formatTagFor`.
 - Domain tag (1): `{ tag: hostname sans "www.", category: "domain", weight: 0.6 }`.
 - Title subject mining: up to **5**, `minLen 3`, weight `0.8` step `-0.1` floor `0.5`.

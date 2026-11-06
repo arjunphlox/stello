@@ -59,12 +59,9 @@ struct SearchBlobTests {
 
         let byTitle = Item(title: "SwiftUI Layout Guide")
         let byTag = Item(title: "Unrelated")
-        let tag = Tag(name: "typography", category: "subject", weight: 0.9)
         ctx.insert(byTitle)
         ctx.insert(byTag)
-        ctx.insert(tag)
-        tag.item = byTag
-        byTag.tags = [tag]
+        byTag.tags = [ItemTag(name: "typography", category: "subject", weight: 0.9)]
         try ctx.save()
 
         let titleResult = ItemFilter.apply([byTitle, byTag], searchText: "swiftui", selectedTagNames: [])
@@ -112,7 +109,7 @@ struct SearchBlobTests {
     // MARK: - Helpers
 
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self, LocalAttachment.self])
+        let schema = Schema([Item.self, ItemImage.self, Snippet.self, LocalAttachment.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try ModelContainer(for: schema, configurations: [config])
     }

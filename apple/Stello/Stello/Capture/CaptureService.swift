@@ -354,11 +354,7 @@ enum CaptureService {
             img.item = item
         }
 
-        for spec in tagSpecs {
-            let tag = Tag(name: spec.name, category: spec.category, weight: spec.weight)
-            context.insert(tag)
-            tag.item = item
-        }
+        item.tags = tagSpecs.map { ItemTag(name: $0.name, category: $0.category, weight: $0.weight) }
 
         try context.save()
         return item
@@ -378,11 +374,7 @@ enum CaptureService {
         let item = Item(slug: slug, title: title, summary: summary, enrichmentStatus: "text_done")
         context.insert(item)
 
-        for spec in tagSpecs {
-            let tag = Tag(name: spec.name, category: spec.category, weight: spec.weight)
-            context.insert(tag)
-            tag.item = item
-        }
+        item.tags = tagSpecs.map { ItemTag(name: $0.name, category: $0.category, weight: $0.weight) }
 
         try context.save()
         return item
@@ -408,9 +400,7 @@ enum CaptureService {
         context.insert(img)
         img.item = item
 
-        let tag = Tag(name: "image-upload", category: "format", weight: 0.4)
-        context.insert(tag)
-        tag.item = item
+        item.tags = [ItemTag(name: "image-upload", category: "format", weight: 0.4)]
 
         try context.save()
         return item
@@ -447,7 +437,7 @@ enum CaptureService {
     }
 
     /// Parses OG/Twitter meta tags order-independently (no assumption on attribute order within a tag).
-    static func parseOG(html: String, baseURL: URL) -> OGResult {
+    nonisolated static func parseOG(html: String, baseURL: URL) -> OGResult {
         var result = OGResult()
         let nsHTML = html as NSString
 

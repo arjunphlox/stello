@@ -7,6 +7,7 @@ struct DetailView: View {
 
     @Environment(\.appTheme) private var theme
     @Environment(\.modelContext) private var context
+    @Environment(\.enrichmentCoordinator) private var coordinator
 
     var body: some View {
         ScrollView {
@@ -14,7 +15,13 @@ struct DetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(embedsInPanel ? Color.clear : theme.background)
-        .task(id: item.persistentModelID) { StelloStore.recordOpen(for: item) }
+        .task(id: item.persistentModelID) {
+            StelloStore.recordOpen(for: item)
+            // An imported item still in the background queue goes first once it's opened.
+            if WebLibraryImporter.isQueued(item), coordinator.primary.isAvailable {
+                await coordinator.enrichItem(item, context: context, force: true)
+            }
+        }
         // Covers push-navigation pop (this view unmounts). Sheet dismiss and panel
         // close/switch are already covered by ContentView's `onChange(of: selectedItem)`;
         // guarding on `needsReview` keeps this idempotent when both fire for the same item.
