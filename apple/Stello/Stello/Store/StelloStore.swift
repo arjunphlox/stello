@@ -38,7 +38,8 @@ enum StelloStore {
         let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self, LocalAttachment.self])
         let config = ModelConfiguration(
             schema: schema,
-            groupContainer: .identifier(appGroupID)
+            groupContainer: .identifier(appGroupID),
+            cloudKitDatabase: .none
         )
         return try ModelContainer(for: schema, configurations: [config])
     }
