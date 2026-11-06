@@ -55,6 +55,53 @@ enum SeedData {
         return item
     }
 
+    /// True for preview / screenshot / test stores that never sync to iCloud.
+    static func isInMemory(_ context: ModelContext) -> Bool {
+        context.container.configurations.allSatisfy(\.isStoredInMemoryOnly)
+    }
+
+    private static let demoSeedsRemovedKey = "stello.demoSeedsRemoved.v1"
+
+    /// Launch pass for the real iCloud-synced library. Runs before any view renders,
+    /// so no card is on screen while a row is deleted. The demo catalog is never
+    /// seeded here: the library is the user's own data, shared by every device.
+    @discardableResult
+    static func prepareSyncedStore(in context: ModelContext) -> DedupeResult {
+        let countBefore = (try? context.fetchCount(FetchDescriptor<Item>())) ?? 0
+        guard let items = try? context.fetch(FetchDescriptor<Item>()) else {
+            return DedupeResult(countBefore: countBefore, countAfter: countBefore)
+        }
+        let catalogURLs = seedURLCatalog()
+        var deleted = 0
+        var remaining = items
+
+        // One-time cleanup of demo rows earlier builds seeded (and synced).
+        if !UserDefaults.standard.bool(forKey: demoSeedsRemovedKey) {
+            let demoSlugs = Set(makeSeedItems().map(\.slug)).union(ephemeralSeedSlugs())
+            var removedIDs = Set<PersistentIdentifier>()
+            for item in items where demoSlugs.contains(item.slug) {
+                let url = item.sourceURL
+                guard url == nil || url == catalogURLs[item.slug] else { continue }
+                removedIDs.insert(item.persistentModelID)
+                context.delete(item)
+                deleted += 1
+            }
+            remaining = items.filter { !removedIDs.contains($0.persistentModelID) }
+            UserDefaults.standard.set(true, forKey: demoSeedsRemovedKey)
+        }
+
+        // CloudKit can deliver the same item twice from two devices.
+        deleted += collapseDuplicateSlugs(in: context, items: remaining, catalogURLs: catalogURLs)
+
+        if deleted > 0 { try? context.save() }
+        let result = DedupeResult(
+            countBefore: countBefore,
+            countAfter: (try? context.fetchCount(FetchDescriptor<Item>())) ?? countBefore
+        )
+        logDedupeResult(result)
+        return result
+    }
+
     /// Launch pipeline: dedupe persisted rows, upsert catalog seeds, refresh URLs.
     static func prepareStore(in context: ModelContext) async {
         let result = deduplicateAndCleanSeedStore(in: context)

@@ -40,11 +40,18 @@ struct ContentView: View {
         }
         .environment(\.font, .karst(.body))
         .task {
-            await SeedData.prepareStore(in: context)
+            // Demo catalog only for in-memory (preview/screenshot) stores; the
+            // synced library is prepared in StelloApp.init before any view renders.
+            if SeedData.isInMemory(context) {
+                await SeedData.prepareStore(in: context)
+            }
             applyScreenshotLaunchState()
         }
         .task(priority: .background) {
-            await OptacosImporter.importIfNeeded(in: context)
+            // Sample catalog stays out of the synced library too.
+            if SeedData.isInMemory(context) {
+                await OptacosImporter.importIfNeeded(in: context)
+            }
             await SeedData.backfillSeedCovers(in: context)
             await enrichmentCoordinator.enrichPendingItems(context: context)
         }

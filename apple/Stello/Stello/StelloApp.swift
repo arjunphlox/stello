@@ -35,6 +35,7 @@ struct StelloApp: App {
             print("⚠️ App Group container failed (\(error)); falling back to local store")
             container = try! StelloStore.makeLocalContainer()
         }
+        SeedData.prepareSyncedStore(in: container.mainContext)
     }
 
     var body: some Scene {
