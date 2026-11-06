@@ -39,6 +39,9 @@ struct ContentView: View {
             theme.background.ignoresSafeArea()
         }
         .environment(\.font, .karst(.body))
+        #if DEBUG
+        .task { await ScaleCheck.run(context: context) }
+        #endif
         .task {
             // Demo catalog only for in-memory (preview/screenshot) stores; the
             // synced library is prepared in StelloApp.init before any view renders.

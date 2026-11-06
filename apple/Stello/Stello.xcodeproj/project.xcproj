@@ -176,6 +176,7 @@
             { "path": "OptacosImporter.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "SampleCoverGenerator.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "SeedData.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "ScaleCheck.swift", "target-membership": [ "Stello/compile-sources" ] },
             {
               "path": "StelloStore.swift",
               "target-membership": [

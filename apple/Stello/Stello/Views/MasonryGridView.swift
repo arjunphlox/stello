@@ -146,6 +146,14 @@ struct MasonryGridView: View {
     private var timelineWeekGroups: [WeekGroup] { cachedTimelineWeekGroups }
 
     private func refreshFilterCaches() {
+        #if DEBUG
+        let refreshStart = Date()
+        defer {
+            if ScaleCheck.isEnabled, allItems.count >= ScaleCheck.itemCount {
+                ScaleCheck.gridRefreshSeconds = Date().timeIntervalSince(refreshStart)
+            }
+        }
+        #endif
         let tagFiltered = ItemFilter.apply(
             allItems,
             searchText: searchText,
@@ -383,6 +391,12 @@ struct MasonryGridView: View {
             .frame(maxHeight: .infinity)
             .clipShape(HorizontalOutsetClip(outset: Self.selectionOutlineInset))
             .onAppear {
+                #if DEBUG
+                if ScaleCheck.isEnabled {
+                    ScaleCheck.scrollToWeek = { scrollProxy.scrollTo($0, anchor: .top) }
+                    ScaleCheck.weekKeys = { timelineWeekGroups.map(\.key) }
+                }
+                #endif
                 scrollForScreenshotIfNeeded(using: scrollProxy)
                 updateActiveWeekKey()
                 applyScreenshotTimelineHoverIfNeeded()
@@ -462,7 +476,8 @@ struct MasonryGridView: View {
                 applyGridViewportTop(top)
             }
             .background(alignment: .topLeading) {
-                if ProcessInfo.processInfo.arguments.contains("-screenshotScrolledHeader") {
+                if ProcessInfo.processInfo.arguments.contains("-screenshotScrolledHeader")
+                    || ProcessInfo.processInfo.arguments.contains("-scaleCheck") {
                     ForEach(Array(gridModel.weekTops.keys), id: \.self) { key in
                         Color.clear
                             .frame(height: 1)
