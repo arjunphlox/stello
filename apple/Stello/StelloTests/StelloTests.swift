@@ -613,6 +613,26 @@ struct WebImportClassifyTests {
         #expect(peak <= 3)
     }
 
+    @Test("Items with a summary skip the background pass but stay queued for opening")
+    func triage() async throws {
+        let context = try makeContext()
+        let summarized = Item(
+            slug: "summarized", title: "Has summary",
+            summary: "A real summary that is comfortably longer than thirty characters.",
+            enrichmentStatus: WebLibraryImporter.awaitingAIStatus
+        )
+        let bare = Item(slug: "bare", title: "No summary", enrichmentStatus: WebLibraryImporter.awaitingAIStatus)
+        context.insert(summarized)
+        context.insert(bare)
+        try context.save()
+
+        await WebLibraryImporter.triageAwaitingAI(context: context)
+
+        #expect(summarized.enrichmentStatus == WebLibraryImporter.awaitingOpenStatus)
+        #expect(WebLibraryImporter.isQueued(summarized))
+        #expect(bare.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
+    }
+
     @Test("Enrich pass finishes queued items only, even when Enrich changes nothing")
     func passFinishesQueuedItems() async throws {
         let context = try makeContext()
@@ -623,7 +643,7 @@ struct WebImportClassifyTests {
         try context.save()
 
         var seen: [String] = []
-        await WebLibraryImporter.enrichAwaitingAI(context: context, pause: .zero) { seen.append($0.slug) }
+        await WebLibraryImporter.enrichAwaitingAI(context: context, pause: { .zero }) { seen.append($0.slug) }
 
         #expect(seen.count == 3)
         #expect(!seen.contains("other"))
@@ -639,14 +659,14 @@ struct WebImportClassifyTests {
         try context.save()
 
         let first = Task { @MainActor in
-            await WebLibraryImporter.enrichAwaitingAI(context: context, pause: .zero) { _ in
+            await WebLibraryImporter.enrichAwaitingAI(context: context, pause: { .zero }) { _ in
                 withUnsafeCurrentTask { $0?.cancel() }
             }
         }
         await first.value
         #expect(try pendingCount(context) == 3)
 
-        await WebLibraryImporter.enrichAwaitingAI(context: context, pause: .zero) { _ in }
+        await WebLibraryImporter.enrichAwaitingAI(context: context, pause: { .zero }) { _ in }
         #expect(try pendingCount(context) == 0)
     }
 }

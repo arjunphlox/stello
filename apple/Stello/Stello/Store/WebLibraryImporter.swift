@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import ImageIO
 import SwiftData
 import UniformTypeIdentifiers
@@ -26,8 +27,11 @@ final class WebLibraryImporter {
     /// `enrichmentStatus` of an imported item whose kind isn't settled yet.
     /// Stored on the item, so the queue survives quits and syncs.
     nonisolated static let awaitingClassifyStatus = "awaiting_classify"
-    /// Kind is settled; the item is still waiting for full Enrich (on-device AI).
+    /// Kind is settled. The background pass will write a summary if it's missing one.
     nonisolated static let awaitingAIStatus = "awaiting_ai"
+    /// Nothing left for the background: full Enrich (snippets, why-saved, extra tags)
+    /// runs when the item is first opened.
+    nonisolated static let awaitingOpenStatus = "awaiting_open"
     private static let catalogPendingKey = "webImport.catalogPending"
     private static var isClassifyingPending = false
 
@@ -130,12 +134,11 @@ final class WebLibraryImporter {
     /// 2. Thumbnails for images whose URL the export already gave.
     /// 3. Pages for items still needing a kind or a cover (rules only, no AI).
     /// 4. The sample catalog, after a full import.
-    /// 5. Full Enrich with the on-device model: a slow trickle, or when an item is opened.
+    /// 5. Summaries for items without one. Full Enrich waits until an item is opened.
     static func classifyPending(
         context: ModelContext,
         coordinator: EnrichmentCoordinator,
-        network: ImportNetwork = .live,
-        pause: Duration = .seconds(2)
+        network: ImportNetwork = .live
     ) async {
         guard !isClassifyingPending else { return }
         isClassifyingPending = true
@@ -159,16 +162,44 @@ final class WebLibraryImporter {
             UserDefaults.standard.set(false, forKey: catalogPendingKey)
         }
 
-        // Without the system model the fallback would finish items with nothing
-        // learned, so leave them queued for a launch when it's available.
+        await triageAwaitingAI(context: work)
+
+        // Without the system model nothing can be written, so leave items queued for a
+        // launch when it's available.
         guard coordinator.primary.isAvailable else { return }
-        await enrichAwaitingAI(context: work, pause: pause) { item in
-            await coordinator.enrichItem(item, context: work, force: true)
+        await enrichAwaitingAI(context: work, pause: { userIsActive ? .seconds(2) : .zero }) { item in
+            await coordinator.writeSummary(for: item)
         }
     }
 
     static func isQueued(_ item: Item) -> Bool {
-        item.enrichmentStatus == awaitingClassifyStatus || item.enrichmentStatus == awaitingAIStatus
+        [awaitingClassifyStatus, awaitingAIStatus, awaitingOpenStatus].contains(item.enrichmentStatus)
+    }
+
+    /// Mirrors the card's own test for real summary text.
+    static func hasSummary(_ item: Item) -> Bool {
+        (item.summary?.trimmingCharacters(in: .whitespacesAndNewlines).count ?? 0) > 30
+    }
+
+    /// True when someone used the keyboard or pointer in the last few seconds.
+    private static var userIsActive: Bool {
+        #if os(macOS)
+        guard let anyInput = CGEventType(rawValue: ~0) else { return true }
+        return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput) < 5
+        #else
+        return true
+        #endif
+    }
+
+    /// Items that already have a summary skip the background pass.
+    static func triageAwaitingAI(context: ModelContext) async {
+        let status = awaitingAIStatus
+        let descriptor = FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.enrichmentStatus == status })
+        for (index, item) in ((try? context.fetch(descriptor)) ?? []).enumerated() where hasSummary(item) {
+            item.enrichmentStatus = awaitingOpenStatus
+            if index % 500 == 499 { await Task.yield() }
+        }
+        try? context.save()
     }
 
     /// The kinds Enrich can reach from a `link`, so the fast stages agree with it.
@@ -216,7 +247,9 @@ final class WebLibraryImporter {
 
     /// Called as a card appears, so what's visible gets its cover first.
     static func prioritize(_ item: Item) {
-        guard isClassifyingPending, item.images?.contains(where: \.coverPending) == true else { return }
+        guard isClassifyingPending,
+              item.enrichmentStatus == awaitingAIStatus || item.images?.contains(where: \.coverPending) == true
+        else { return }
         priorityItems.append(item.persistentModelID)
     }
 
@@ -411,10 +444,11 @@ final class WebLibraryImporter {
         )
     }
 
-    /// Stage 5. Full Enrich, one item at a time with a pause so the app stays usable.
+    /// Stage 5. One item at a time: cards on screen first, then the newest saves. An item
+    /// moves on to `awaitingOpenStatus` either way, so this can't loop on one it can't help.
     static func enrichAwaitingAI(
         context: ModelContext,
-        pause: Duration,
+        pause: () -> Duration,
         enrich: (Item) async -> Void
     ) async {
         let status = awaitingAIStatus
@@ -426,18 +460,24 @@ final class WebLibraryImporter {
         let total = (try? context.fetchCount(descriptor)) ?? 0
         descriptor.fetchLimit = 1
 
-        shared.setStage("Writing AI summaries", total: total)
+        shared.setStage("Writing summaries", total: total)
+        func next() -> Item? {
+            while let id = priorityItems.popLast() {
+                if let item = context.model(for: id) as? Item, item.enrichmentStatus == status { return item }
+            }
+            return try? context.fetch(descriptor).first
+        }
+
         var finished = 0
-        while !Task.isCancelled, let item = try? context.fetch(descriptor).first {
+        while !Task.isCancelled, let item = next() {
             await enrich(item)
             if Task.isCancelled { break }
-            // Enrich normally moves the item on; never loop on one that it didn't.
-            if item.enrichmentStatus == status { item.enrichmentStatus = "candidates_done" }
+            if item.enrichmentStatus == status { item.enrichmentStatus = awaitingOpenStatus }
             try? context.save()
             finished += 1
             shared.stageDone = finished
             NSLog("Web import enrich: %d finished this run", finished)
-            try? await Task.sleep(for: pause)
+            try? await Task.sleep(for: pause())
         }
     }
 
