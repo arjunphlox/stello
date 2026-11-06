@@ -36,7 +36,16 @@ final class WebInboxProcessor {
     }
 
     /// Call once at launch with the app's main context.
+    /// Screenshot and test runs use a throwaway store; processing there would
+    /// apply web saves to it and then delete them from iCloud.
+    nonisolated static var isDisabled: Bool {
+        let info = ProcessInfo.processInfo
+        return info.arguments.contains("-screenshotCleanStore")
+            || info.environment["XCTestConfigurationFilePath"] != nil
+    }
+
     func start(context: ModelContext, coordinator: EnrichmentCoordinator) {
+        guard !Self.isDisabled else { return }
         self.context = context
         self.coordinator = coordinator
         Task {
@@ -72,6 +81,7 @@ final class WebInboxProcessor {
 
     /// Fetches every outstanding request and applies them oldest first.
     func processPending() async {
+        guard !Self.isDisabled, context != nil else { return }
         if isProcessing { runAgain = true; return }
         isProcessing = true
         defer { isProcessing = false }
