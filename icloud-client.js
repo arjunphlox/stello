@@ -3,7 +3,7 @@
  * Stello's data lives in the user's private iCloud database, written by the
  * Mac/iPhone apps through SwiftData + CloudKit. The web app:
  *   - signs in with Apple ID (CloudKit JS, no Stello server login),
- *   - READS the SwiftData mirror zone (CD_Item, CD_Tag, CD_ItemImage, CD_Snippet)
+ *   - READS the SwiftData mirror zone (CD_Item with CD_tagsJSON, CD_ItemImage, CD_Snippet)
  *     with change tokens, cached in IndexedDB so later visits fetch only changes,
  *   - WRITES nothing to that zone. Saves/edits go to a `StelloInbox` record in
  *     its own `StelloInbox` zone; the apps apply them (on-device fetch + tagging) and
@@ -36,7 +36,7 @@
   const ITEM_KEYS = [
     'CD_entityName', 'CD_id', 'CD_slug', 'CD_title', 'CD_sourceURL', 'CD_domain', 'CD_author',
     'CD_summary', 'CD_bodyMarkdown', 'CD_status', 'CD_needsReview', 'CD_addedAt', 'CD_updatedAt',
-    'CD_analyzedAt', 'CD_enrichmentStatus', 'CD_enrichmentError', 'CD_kind', 'CD_metadataJSON',
+    'CD_analyzedAt', 'CD_enrichmentStatus', 'CD_enrichmentError', 'CD_kind', 'CD_metadataJSON', 'CD_tagsJSON',
     'CD_name', 'CD_category', 'CD_weight', 'CD_source', 'CD_item',
     'CD_isPrimary', 'CD_width', 'CD_height', 'CD_label', 'CD_role',
     'CD_text', 'CD_mediaType',
@@ -222,6 +222,16 @@
 
   /** Join mirror records into the web app's item rows (see normalizeItem in app.js). */
   function assemble(records) {
+    function parseTagsJSON(raw) {
+      if (!raw) return [];
+      try {
+        const list = JSON.parse(raw);
+        return Array.isArray(list)
+          ? list.filter(t => t && t.name).map(t => ({ tag: t.name, category: t.category, weight: t.weight ?? 0.5, source: t.source }))
+          : [];
+      } catch { return []; }
+    }
+
     const items = new Map();
     const children = [];
     for (const r of records) {
@@ -251,7 +261,7 @@
         enrichment_error: r.enrichmentError || null,
         kind: r.kind || 'link',
         metadata: r.metadataJSON || null,
-        tags: [],
+        tags: parseTagsJSON(r.tagsJSON),
         images: [],
         snippets: [],
       });
@@ -262,6 +272,7 @@
       if (!row) continue;
       const type = c.recordType || ('CD_' + c.entityName);
       if (type === 'CD_Tag') {
+        // Legacy: tags as separate records (before tags moved onto the item).
         row.tags.push({ tag: c.name, category: c.category, weight: c.weight ?? 0.5, source: c.source });
       } else if (type === 'CD_ItemImage') {
         row.images.push({
