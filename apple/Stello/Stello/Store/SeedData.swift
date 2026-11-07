@@ -15,7 +15,7 @@ enum SeedData {
     }
 
     static var previewContainer: ModelContainer = {
-        let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self])
+        let schema = Schema([Item.self, ItemImage.self, Snippet.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try! ModelContainer(for: schema, configurations: [config])
         let ctx = ModelContext(container)
@@ -42,17 +42,64 @@ enum SeedData {
             ])
         )
         item.tags = [
-            Tag(name: "tutorial", category: "format", weight: 0.9, source: "rule"),
-            Tag(name: "figma", category: "tool", weight: 0.95, source: "rule"),
-            Tag(name: "teal", category: "color", weight: 0.85, source: "ai"),
-            Tag(name: "minimalist", category: "style", weight: 0.7, source: "ai"),
-            Tag(name: "calm", category: "mood", weight: 0.6, source: "ai"),
+            ItemTag(name: "tutorial", category: "format", weight: 0.9, source: "rule"),
+            ItemTag(name: "figma", category: "tool", weight: 0.95, source: "rule"),
+            ItemTag(name: "teal", category: "color", weight: 0.85, source: "ai"),
+            ItemTag(name: "minimalist", category: "style", weight: 0.7, source: "ai"),
+            ItemTag(name: "calm", category: "mood", weight: 0.6, source: "ai"),
         ]
         item.snippets = [
             Snippet(text: "Auto layout handles the hardest part of responsive design.", source: "ai"),
             Snippet(text: "Constraints and padding work together in Figma frames.", source: "ai"),
         ]
         return item
+    }
+
+    /// True for preview / screenshot / test stores that never sync to iCloud.
+    static func isInMemory(_ context: ModelContext) -> Bool {
+        context.container.configurations.allSatisfy(\.isStoredInMemoryOnly)
+    }
+
+    private static let demoSeedsRemovedKey = "stello.demoSeedsRemoved.v1"
+
+    /// Launch pass for the real iCloud-synced library. Runs before any view renders,
+    /// so no card is on screen while a row is deleted. The demo catalog is never
+    /// seeded here: the library is the user's own data, shared by every device.
+    @discardableResult
+    static func prepareSyncedStore(in context: ModelContext) -> DedupeResult {
+        let countBefore = (try? context.fetchCount(FetchDescriptor<Item>())) ?? 0
+        guard let items = try? context.fetch(FetchDescriptor<Item>()) else {
+            return DedupeResult(countBefore: countBefore, countAfter: countBefore)
+        }
+        let catalogURLs = seedURLCatalog()
+        var deleted = 0
+        var remaining = items
+
+        // One-time cleanup of demo rows earlier builds seeded (and synced).
+        if !UserDefaults.standard.bool(forKey: demoSeedsRemovedKey) {
+            let demoSlugs = Set(makeSeedItems().map(\.slug)).union(ephemeralSeedSlugs())
+            var removedIDs = Set<PersistentIdentifier>()
+            for item in items where demoSlugs.contains(item.slug) {
+                let url = item.sourceURL
+                guard url == nil || url == catalogURLs[item.slug] else { continue }
+                removedIDs.insert(item.persistentModelID)
+                context.delete(item)
+                deleted += 1
+            }
+            remaining = items.filter { !removedIDs.contains($0.persistentModelID) }
+            UserDefaults.standard.set(true, forKey: demoSeedsRemovedKey)
+        }
+
+        // CloudKit can deliver the same item twice from two devices.
+        deleted += collapseDuplicateSlugs(in: context, items: remaining, catalogURLs: catalogURLs)
+
+        if deleted > 0 { try? context.save() }
+        let result = DedupeResult(
+            countBefore: countBefore,
+            countAfter: (try? context.fetchCount(FetchDescriptor<Item>())) ?? countBefore
+        )
+        logDedupeResult(result)
+        return result
     }
 
     /// Launch pipeline: dedupe persisted rows, upsert catalog seeds, refresh URLs.
@@ -301,10 +348,6 @@ enum SeedData {
         let item = enrichedSampleItem
         item.slug = slug
         context.insert(item)
-        for tag in item.tags ?? [] {
-            context.insert(tag)
-            tag.item = item
-        }
         for snippet in item.snippets ?? [] {
             context.insert(snippet)
             snippet.item = item
@@ -370,15 +413,7 @@ enum SeedData {
         item.updatedAt = template.updatedAt
         item.enrichmentStatus = template.enrichmentStatus
 
-        for tag in item.tags ?? [] { context.delete(tag) }
-        var newTags: [Tag] = []
-        for src in template.tags ?? [] {
-            let tag = Tag(name: src.name, category: src.category, weight: src.weight, source: src.source)
-            context.insert(tag)
-            tag.item = item
-            newTags.append(tag)
-        }
-        item.tags = newTags
+        item.tags = template.tags
     }
 
     private static func pickCanonicalItem(
@@ -402,10 +437,6 @@ enum SeedData {
 
     /// Inserts an item and every related model so external-storage blobs persist on first save.
     private static func insertItemGraph(_ item: Item, in context: ModelContext) {
-        for tag in item.tags ?? [] {
-            context.insert(tag)
-            tag.item = item
-        }
         for img in item.images ?? [] {
             context.insert(img)
             img.item = item
@@ -674,7 +705,7 @@ enum SeedData {
             updatedAt: Self.daysAgo(daysAgo),
             enrichmentStatus: "candidates_done"
         )
-        item.tags = tags.map { Tag(name: $0.0, category: $0.1, weight: $0.2) }
+        item.tags = tags.map { ItemTag(name: $0.0, category: $0.1, weight: $0.2) }
         return item
     }
 }

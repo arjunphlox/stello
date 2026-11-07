@@ -1,8 +1,20 @@
 import SwiftUI
 import SwiftData
 
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
+
 @main
 struct StelloApp: App {
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(StelloAppDelegate.self) private var appDelegate
+    #else
+    @UIApplicationDelegateAdaptor(StelloAppDelegate.self) private var appDelegate
+    #endif
+
     let container: ModelContainer
 
     init() {
@@ -11,7 +23,9 @@ struct StelloApp: App {
 
         // Screenshot runs use a clean in-memory store so CloudKit-synced legacy records
         // (stale titles / duplicates) don't pollute the captured grid.
-        if ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore") {
+        // Unit tests are hosted by the app: never let a test run open the real iCloud library.
+        if ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore")
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
             container = try! StelloStore.makeInMemoryContainer()
             return
         }
@@ -23,6 +37,8 @@ struct StelloApp: App {
             print("⚠️ App Group container failed (\(error)); falling back to local store")
             container = try! StelloStore.makeLocalContainer()
         }
+        SeedData.prepareSyncedStore(in: container.mainContext)
+        _ = SyncChildTracking.install
     }
 
     var body: some Scene {
@@ -54,6 +70,7 @@ struct StelloApp: App {
 /// Resolves stored appearance preference (`system` / `light` / `dark`) against the device scheme.
 private struct RootView: View {
     @Environment(\.colorScheme) private var systemScheme
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var context
     @AppStorage(ThemeAppearancePreference.storageKey) private var rawMode: String = ThemeAppearancePreference.defaultMode
     @AppStorage("theme.accent") private var rawAccent: String = AccentColor.amber.rawValue
@@ -77,5 +94,57 @@ private struct RootView: View {
             .onOpenURL { url in
                 DropImportService.importFileURL(url, context: context, coordinator: enrichmentCoordinator)
             }
+            // Apply saves/edits made in the web app (iCloud inbox).
+            .task {
+                WebInboxProcessor.shared.start(context: container.mainContext, coordinator: enrichmentCoordinator)
+            }
+            // Keep the web copy (Stello account) in step with this library.
+            .task { SyncBridge.shared.start(container: container) }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    Task { await WebInboxProcessor.shared.processPending() }
+                    Task { await SyncBridge.shared.sync() }
+                }
+                #if os(iOS)
+                if phase == .background { SyncBridge.scheduleBackgroundRefresh() }
+                #endif
+            }
     }
 }
+
+// MARK: - Remote notifications (web inbox pushes)
+
+/// Registers for CloudKit silent pushes and hands inbox pushes to
+/// `WebInboxProcessor`, so web saves are processed without opening the app.
+#if os(macOS)
+final class StelloAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApplication.shared.registerForRemoteNotifications()
+    }
+
+    func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
+        guard WebInboxProcessor.isInboxNotification(userInfo) else { return }
+        Task { @MainActor in await WebInboxProcessor.shared.processPending() }
+    }
+}
+#else
+final class StelloAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        application.registerForRemoteNotifications()
+        if !SyncBridge.isDisabled { SyncBridge.registerBackgroundRefresh() }
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any]
+    ) async -> UIBackgroundFetchResult {
+        guard WebInboxProcessor.isInboxNotification(userInfo) else { return .noData }
+        await WebInboxProcessor.shared.processPending()
+        return .newData
+    }
+}
+#endif

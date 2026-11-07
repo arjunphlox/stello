@@ -39,6 +39,18 @@ final class EnrichmentCoordinator {
         }
     }
 
+    /// The one thing the background import pass writes: a summary from the page text.
+    /// Skips the rest of Enrich, which waits until the item is opened.
+    func writeSummary(for item: Item) async {
+        guard !WebLibraryImporter.hasSummary(item),
+              let raw = item.sourceURL, let url = URL(string: raw),
+              let page = await ImportNetwork.live.page(url),
+              let text = CaptureService.extractText(html: page.html),
+              let facts = try? await activeEnricher.summarizeArticle(text: text),
+              let summary = facts.summary, !summary.isEmpty else { return }
+        item.summary = summary
+    }
+
     func enrichPendingItems(context: ModelContext) async {
         let status = "text_done"
         let descriptor = FetchDescriptor<Item>(

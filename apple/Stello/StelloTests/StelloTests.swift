@@ -79,15 +79,15 @@ struct StelloTests {
         let ctx = ModelContext(container)
 
         let item1 = Item(title: "Swift UI")
-        let tag1a = Tag(name: "swift", category: "tool", weight: 0.9)
-        let tag1b = Tag(name: "ui", category: "subject", weight: 0.8)
-        ctx.insert(item1); ctx.insert(tag1a); ctx.insert(tag1b)
-        tag1a.item = item1; tag1b.item = item1
+        ctx.insert(item1)
+        item1.tags = [
+            ItemTag(name: "swift", category: "tool", weight: 0.9),
+            ItemTag(name: "ui", category: "subject", weight: 0.8),
+        ]
 
         let item2 = Item(title: "Swift Only")
-        let tag2 = Tag(name: "swift", category: "tool", weight: 0.9)
-        ctx.insert(item2); ctx.insert(tag2)
-        tag2.item = item2
+        ctx.insert(item2)
+        item2.tags = [ItemTag(name: "swift", category: "tool", weight: 0.9)]
 
         try ctx.save()
 
@@ -104,12 +104,10 @@ struct StelloTests {
         let item1 = Item(title: "A")
         let item2 = Item(title: "B")
         let item3 = Item(title: "C")
-        let t1 = Tag(name: "swift", category: "tool", weight: 0.9)
-        let t2 = Tag(name: "swift", category: "tool", weight: 0.9)
-        let t3 = Tag(name: "css", category: "tool", weight: 0.9)
         ctx.insert(item1); ctx.insert(item2); ctx.insert(item3)
-        ctx.insert(t1); ctx.insert(t2); ctx.insert(t3)
-        t1.item = item1; t2.item = item2; t3.item = item3
+        item1.tags = [ItemTag(name: "swift", category: "tool", weight: 0.9)]
+        item2.tags = [ItemTag(name: "swift", category: "tool", weight: 0.9)]
+        item3.tags = [ItemTag(name: "css", category: "tool", weight: 0.9)]
 
         try ctx.save()
 
@@ -428,8 +426,247 @@ struct StelloTests {
     }
 
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema([Item.self, Tag.self, ItemImage.self, Snippet.self, LocalAttachment.self])
+        let schema = Schema([Item.self, ItemImage.self, Snippet.self, LocalAttachment.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try ModelContainer(for: schema, configurations: [config])
+    }
+}
+
+@Suite("Web import background classify")
+@MainActor
+struct WebImportClassifyTests {
+    private func makeContext() throws -> ModelContext {
+        ModelContext(try StelloStore.makeInMemoryContainer())
+    }
+
+    private func pendingCount(_ context: ModelContext) throws -> Int {
+        let status = WebLibraryImporter.awaitingAIStatus
+        return try context.fetchCount(FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.enrichmentStatus == status }))
+    }
+
+    @Test("Import writes rows and queues covers without touching the network")
+    func importQueuesItems() async throws {
+        let context = try makeContext()
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let json = """
+        {"image_base_url":"https://images.example.com/img/","items":[
+          {"id":"\(UUID().uuidString)","slug":"has-image","title":"Has image","source_url":"https://example.com/a",
+           "images":[{"path":"/img/u/a/og.png","source":"og","is_primary":true,"width":2400,"height":1260}]},
+          {"id":"\(UUID().uuidString)","slug":"no-image","title":"No image","source_url":"https://x.com/someone/status/1"},
+          {"id":"\(UUID().uuidString)","slug":"no-url","title":"No URL"}
+        ]}
+        """
+        try Data(json.utf8).write(to: file)
+
+        let importer = WebLibraryImporter()
+        await importer.run(fileURL: file, context: context, limit: 3)
+
+        #expect(importer.imported == 3)
+        let items = try context.fetch(FetchDescriptor<Item>())
+        let hasImage = try #require(items.first { $0.slug == "has-image" })
+        let row = try #require(hasImage.images?.first)
+        #expect(hasImage.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus)
+        #expect(row.coverPending)
+        #expect(row.data == nil)
+        #expect(row.sourceURL == "https://images.example.com/img/u/a/og.png")
+
+        // The URL alone settles this one, and an empty row asks the page pass for a cover.
+        let noImage = try #require(items.first { $0.slug == "no-image" })
+        #expect(noImage.kind == ItemKind.post.rawValue)
+        #expect(noImage.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
+        #expect(noImage.images?.first?.coverPending == true)
+        #expect(noImage.images?.first?.sourceURL == nil)
+
+        let noURL = try #require(items.first { $0.slug == "no-url" })
+        #expect(noURL.enrichmentStatus == "candidates_done")
+        #expect(noURL.images?.isEmpty != false)
+    }
+
+    @Test("Thumbnails fit the size limit and reject non-images")
+    func thumbnails() throws {
+        let cover = try #require(SampleCoverGenerator.cover(seed: 7))
+        let thumbnail = try #require(ImportThumbnail(imageData: cover.data, maxPixels: 64))
+        #expect(max(thumbnail.width, thumbnail.height) <= 64)
+        #expect(ImportThumbnail(imageData: Data("<svg/>".utf8)) == nil)
+    }
+
+    @Test("Known covers store a thumbnail, and a failed download stops retrying but keeps its URL")
+    func knownCovers() async throws {
+        let context = try makeContext()
+        func row(_ slug: String) -> ItemImage {
+            let item = queued(slug, url: "https://example.com/\(slug)", in: context)
+            let image = ItemImage(source: "og", isPrimary: true)
+            image.sourceURL = "https://images.example.com/\(slug).png"
+            image.coverPending = true
+            context.insert(image)
+            image.item = item
+            return image
+        }
+        let good = row("good")
+        let bad = row("bad")
+        try context.save()
+
+        let network = ImportNetwork(page: { _ in nil }, thumbnail: { url in
+            url.lastPathComponent == "good.png" ? ImportThumbnail(data: Data([1, 2, 3]), width: 600, height: 300) : nil
+        })
+        await WebLibraryImporter.downloadKnownCovers(context: context, network: network)
+
+        #expect(good.data == Data([1, 2, 3]))
+        #expect(good.width == 600)
+        #expect(!good.coverPending)
+        #expect(bad.data == nil)
+        #expect(!bad.coverPending)
+        #expect(bad.sourceURL != nil)
+    }
+
+    private func queued(_ slug: String, url: String?, label: String? = nil, in context: ModelContext) -> Item {
+        let item = Item(slug: slug, title: slug, sourceURL: url, enrichmentStatus: WebLibraryImporter.awaitingClassifyStatus)
+        context.insert(item)
+        if let label {
+            item.tags = [ItemTag(name: label, category: "collection", weight: 0.5, source: "import")]
+        }
+        return item
+    }
+
+    @Test("Labels pass settles what the URL and labels decide and leaves the rest queued")
+    func labelsPass() async throws {
+        let context = try makeContext()
+        let post = queued("post", url: "https://x.com/someone/status/123", in: context)
+        let tool = queued("tool", url: "https://example.com/app", label: "digital-tools", in: context)
+        let plain = queued("plain", url: "https://example.com/about", in: context)
+        try context.save()
+
+        await WebLibraryImporter.assignKindsFromLabels(context: context)
+
+        #expect(post.kind == ItemKind.post.rawValue)
+        #expect(post.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
+        #expect(tool.kind == ItemKind.tool.rawValue)
+        #expect(plain.kind == ItemKind.link.rawValue)
+        #expect(plain.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus)
+    }
+
+    @Test("Page pass reads kinds and covers, flags gone pages, and moves failures on as links")
+    func pagesPass() async throws {
+        let context = try makeContext()
+        let article = queued("article", url: "https://example.com/blog/how-kerning-works", in: context)
+        let gone = queued("gone", url: "https://example.com/gone", in: context)
+        let failed = queued("failed", url: "https://example.com/fail", in: context)
+        let noURL = queued("no-url", url: nil, in: context)
+        let row = ItemImage(source: "og", isPrimary: true)
+        row.coverPending = true
+        context.insert(row)
+        row.item = article
+        let failedRow = ItemImage(source: "og", isPrimary: true)
+        failedRow.coverPending = true
+        context.insert(failedRow)
+        failedRow.item = failed
+        try context.save()
+
+        let network = ImportNetwork(page: { url in
+            switch url.lastPathComponent {
+            case "how-kerning-works":
+                let html = #"<html><head><meta property="og:type" content="article"><meta property="og:image" content="https://example.com/og.png"></head></html>"#
+                return PageFetchResult(html: html, og: CaptureService.parseOG(html: html, baseURL: url), statusCode: 200)
+            case "gone":
+                return PageFetchResult(html: "", og: OGResult(), statusCode: 404)
+            default:
+                return nil
+            }
+        }, thumbnail: { _ in ImportThumbnail(data: Data([9]), width: 10, height: 10) })
+
+        await WebLibraryImporter.readPages(context: context, network: network, concurrency: 2)
+
+        #expect(article.kind == ItemKind.article.rawValue)
+        #expect(row.data == Data([9]))
+        #expect(row.sourceURL == "https://example.com/og.png")
+        #expect(!row.coverPending)
+        #expect(gone.status == "gone")
+        #expect(failed.kind == ItemKind.link.rawValue)
+        #expect(failed.images?.isEmpty != false)
+        for item in [article, gone, failed, noURL] {
+            #expect(item.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
+        }
+    }
+
+    @Test("Page pass never runs more fetches at once than asked")
+    func pagesPassConcurrency() async throws {
+        actor Gauge {
+            var now = 0, peak = 0
+            func enter() { now += 1; peak = max(peak, now) }
+            func leave() { now -= 1 }
+        }
+        let context = try makeContext()
+        for index in 0..<12 { _ = queued("q\(index)", url: "https://example.com/\(index)", in: context) }
+        try context.save()
+
+        let gauge = Gauge()
+        let network = ImportNetwork(page: { _ in
+            await gauge.enter()
+            try? await Task.sleep(for: .milliseconds(20))
+            await gauge.leave()
+            return nil
+        }, thumbnail: { _ in nil })
+        await WebLibraryImporter.readPages(context: context, network: network, concurrency: 3)
+        let peak = await gauge.peak
+        #expect(peak > 1)
+        #expect(peak <= 3)
+    }
+
+    @Test("Items with a summary skip the background pass but stay queued for opening")
+    func triage() async throws {
+        let context = try makeContext()
+        let summarized = Item(
+            slug: "summarized", title: "Has summary",
+            summary: "A real summary that is comfortably longer than thirty characters.",
+            enrichmentStatus: WebLibraryImporter.awaitingAIStatus
+        )
+        let bare = Item(slug: "bare", title: "No summary", enrichmentStatus: WebLibraryImporter.awaitingAIStatus)
+        context.insert(summarized)
+        context.insert(bare)
+        try context.save()
+
+        await WebLibraryImporter.triageAwaitingAI(context: context)
+
+        #expect(summarized.enrichmentStatus == WebLibraryImporter.awaitingOpenStatus)
+        #expect(WebLibraryImporter.isQueued(summarized))
+        #expect(bare.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
+    }
+
+    @Test("Enrich pass finishes queued items only, even when Enrich changes nothing")
+    func passFinishesQueuedItems() async throws {
+        let context = try makeContext()
+        for index in 0..<3 {
+            context.insert(Item(slug: "queued-\(index)", title: "Queued", enrichmentStatus: WebLibraryImporter.awaitingAIStatus))
+        }
+        context.insert(Item(slug: "other", title: "Other", enrichmentStatus: "text_done"))
+        try context.save()
+
+        var seen: [String] = []
+        await WebLibraryImporter.enrichAwaitingAI(context: context, pause: { .zero }) { seen.append($0.slug) }
+
+        #expect(seen.count == 3)
+        #expect(!seen.contains("other"))
+        #expect(try pendingCount(context) == 0)
+    }
+
+    @Test("A stopped Enrich pass keeps the unfinished items and the next run resumes them")
+    func stoppedPassResumes() async throws {
+        let context = try makeContext()
+        for index in 0..<3 {
+            context.insert(Item(slug: "queued-\(index)", title: "Queued", enrichmentStatus: WebLibraryImporter.awaitingAIStatus))
+        }
+        try context.save()
+
+        let first = Task { @MainActor in
+            await WebLibraryImporter.enrichAwaitingAI(context: context, pause: { .zero }) { _ in
+                withUnsafeCurrentTask { $0?.cancel() }
+            }
+        }
+        await first.value
+        #expect(try pendingCount(context) == 3)
+
+        await WebLibraryImporter.enrichAwaitingAI(context: context, pause: { .zero }) { _ in }
+        #expect(try pendingCount(context) == 0)
     }
 }

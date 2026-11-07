@@ -26,6 +26,10 @@ import batchStatus from './routes/batch-status.js';
 import mountAuth from './routes/auth.js';
 import mountData from './routes/data.js';
 import { ensureSchema } from './lib/schema.js';
+import auth from './lib/auth.js';
+import syncRoutes from './routes/sync.js';
+import appleNative from './routes/auth-apple-native.js';
+import { runDailySync } from './lib/sync-cron.js';
 import processBatchesMod from './routes/process-batches.js';
 
 const app = new Hono();
@@ -38,6 +42,10 @@ app.use('/api/*', async (c, next) => {
 
 mountAuth(app);
 mountData(app);
+
+// Apple app <-> web copy sync (docs/plans/apple-web-sync.md).
+app.post('/api/auth/apple/native', appleNative);
+app.route('/api/sync', syncRoutes({ requireUser: auth.requireUser }));
 
 app.onError((err, c) => {
   console.error('worker error', c.req.path, err && err.stack || err);
@@ -93,8 +101,8 @@ export default {
   fetch: (request, env, ctx) => app.fetch(request, env, ctx),
   async scheduled(event, env, ctx) {
     await ensureSchema(env);
-    // TODO(sync): call purgeExpired + writeSnapshot/pruneSnapshots from
-    // src/lib/sync.js here once the app<->web sync branch lands.
+    // 30-day purge of deleted items + daily library snapshot to R2.
+    ctx.waitUntil(runDailySync(env));
     ctx.waitUntil(processBatchesMod.processBatches(env));
     // Steady backstop: heal a small batch of stuck-'text_done' items each run
     // so the queue drains server-side even if nobody opens the app.

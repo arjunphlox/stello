@@ -1,6 +1,6 @@
 import Foundation
 
-// Value type returned from the tagger pipeline; converted to Tag model objects at save time.
+// Value type returned from the tagger pipeline; converted to ItemTag values at save time.
 struct TagSpec: Equatable {
     let name: String
     let category: String
