@@ -7,7 +7,12 @@ export function makeD1(schemaSql) {
   const prep = (sql) => {
     const bound = { sql, args: [] };
     const api = {
-      bind: (...args) => { bound.args = args; return api; },
+      bind: (...args) => {
+        // Same limit as D1, so tests catch statements that would fail there.
+        if (args.length > 100) throw new Error(`D1_ERROR: too many SQL variables (${args.length})`);
+        bound.args = args;
+        return api;
+      },
       all: async () => ({ results: raw.prepare(sql).all(...bound.args) }),
       first: async () => raw.prepare(sql).get(...bound.args) ?? null,
       run: async () => runOne(bound),
