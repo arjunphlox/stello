@@ -164,6 +164,7 @@ module.exports = function mountAuth(app) {
 
   app.post('/api/auth/apple/callback', async (c) => {
     const body = await readBody(c);
+    console.log('apple callback', { hasToken: !!body.id_token, hasState: !!body.state, error: body.error || null, firstAuth: !!body.user });
     if (body.error) return loginError(c, body.error === 'user_cancelled_authorize' ? 'Apple sign-in was cancelled.' : `Apple: ${body.error}`);
     const st = body.state && await c.env.DB.prepare('SELECT * FROM auth_states WHERE state = ?').bind(String(body.state)).first();
     if (!st || Date.now() - st.created_at > STATE_TTL_MS) return loginError(c, 'Sign-in expired. Try again.');

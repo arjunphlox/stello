@@ -192,6 +192,14 @@ module.exports = function mountData(app) {
               (SELECT COUNT(*) FROM items WHERE deleted_at IS NOT NULL) AS deleted,
               (SELECT COUNT(*) FROM identities WHERE provider = 'apple') AS apple_links`
     ).first();
-    return c.json(r);
+    // Sign-in diagnostics: unfinished Apple sign-ins (callback never arrived),
+    // recent sessions and identity links, newest first. No tokens returned.
+    const [{ results: pending }, { results: sessions }, { results: links }] = await c.env.DB.batch([
+      c.env.DB.prepare("SELECT mode, created_at FROM auth_states WHERE mode != 'magic' ORDER BY created_at DESC LIMIT 10"),
+      c.env.DB.prepare('SELECT kind, created_at FROM sessions ORDER BY created_at DESC LIMIT 10'),
+      c.env.DB.prepare('SELECT provider, created_at FROM identities ORDER BY created_at DESC LIMIT 10'),
+    ]);
+    const iso = (rows) => rows.map(x => ({ ...x, created_at: new Date(x.created_at).toISOString() }));
+    return c.json({ ...r, pending_apple_states: iso(pending), recent_sessions: iso(sessions), identities: iso(links) });
   });
 };
