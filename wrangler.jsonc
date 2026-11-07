@@ -46,7 +46,7 @@
     // Sign in with Apple. APPLE_SERVICES_ID is the web Services ID; empty
     // hides the button. APPLE_APP_IDS are the app bundle ids allowed to sign
     // in natively (comma-separated).
-    "APPLE_SERVICES_ID": "",
+    "APPLE_SERVICES_ID": "com.arjunphlox.Stello.web",
     "APPLE_APP_IDS": "com.arjunphlox.Stello",
     // Open sign-up for new email / Apple accounts. Off: Stello is invite-only.
     "ALLOW_SIGNUP": "false",
