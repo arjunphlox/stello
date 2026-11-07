@@ -40,8 +40,7 @@
 
   "observability": { "enabled": true },
 
-  // Public values. Secrets (ANTHROPIC_API_KEY, ADMIN_TOKEN and, until the
-  // import is done, SUPABASE_SERVICE_ROLE_KEY) via `wrangler secret put`.
+  // Public values. Secrets (ANTHROPIC_API_KEY, ADMIN_TOKEN) via `wrangler secret put`.
   "vars": {
     // Sign in with Apple. APPLE_SERVICES_ID is the web Services ID; empty
     // hides the button. APPLE_APP_IDS are the app bundle ids allowed to sign
@@ -49,8 +48,6 @@
     "APPLE_SERVICES_ID": "com.arjunphlox.Stello.web",
     "APPLE_APP_IDS": "com.arjunphlox.Stello",
     // Open sign-up for new email / Apple accounts. Off: Stello is invite-only.
-    "ALLOW_SIGNUP": "false",
-    // Only used by the one-off Supabase → D1 import (/api/admin/import-supabase).
-    "SUPABASE_URL": "https://ngncjtzsqrrfrhgammne.supabase.co"
+    "ALLOW_SIGNUP": "false"
   }
 }

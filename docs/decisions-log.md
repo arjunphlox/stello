@@ -2,6 +2,7 @@
 
 Dated decisions, newest first. Moved out of `CLAUDE.md` on 2026-10-27. Add new lines at the top.
 
+- 2026-11-07 · Supabase removed; web data + accounts on Cloudflare D1 (PR #59 onward) · two synced copies: Apple apps keep SwiftData+CloudKit (ADP), web keeps D1+R2, one Stello account with email and Sign in with Apple. Final Supabase backup in project files `stello/export/supabase-final-2026-11-07/`
 - 2026-11-05 · Web grid matches the Mac app's controls: bottom floating bar (Add, Filters, Search, Profile), left week timeline bars with a week filter, one continuous masonry (collapsible week headers removed), pinch to change card size. Card width is fixed by the full-width column count; opening the side panel drops columns and the panel widens to absorb the leftover strip (Arjun's pick). The Mac app still shrinks cards when its panel opens and should adopt this later
 - 2026-11-05 · Native project = Apple's JSON `.xcproj` (`apple/Stello/Stello.xcodeproj/project.xcproj`, Xcode 27.2+); XcodeGen and `project.yml` retired, reversing 2026-06-26 · the format is text and agent-editable on its own, so the second source of truth (and the churn from regenerating) is gone. Trial on Xcode 27.3: 381/381 tests, iOS build, clean after open and close. Never run `xcodegen generate` on it
 - 2026-06-26 · Native Apple app under `apple/` (SwiftUI multiplatform iOS/iPadOS/macOS 27, local-first SwiftData+CloudKit, on-device AFM 3, no backend) · matures Stello to local-first/privacy/Apple-native per PRD; coexists with web (web NOT sunset until explicit OK)

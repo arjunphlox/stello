@@ -343,7 +343,7 @@ class Client {
   from(table) { return new Query(this, table); }
 }
 
-/** Client scoped to one user — the replacement for a Supabase user client + RLS. */
+/** Client scoped to one user (row-level isolation). */
 function forUser(env, userId) {
   if (!userId) throw new Error('forUser: missing userId');
   return new Client(env.DB, { userId });

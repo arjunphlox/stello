@@ -1,4 +1,4 @@
-/* === Stello — auth client (Stello accounts on the Worker; replaces supabase-client.js) ===
+/* === Stello — auth client (Stello accounts on the Worker) ===
  *
  * The session lives in an HttpOnly cookie set by /api/auth/*, so the browser
  * never holds a token. Same-origin fetches send it automatically.
