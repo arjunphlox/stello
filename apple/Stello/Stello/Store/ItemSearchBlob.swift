@@ -282,6 +282,8 @@ extension MusicMeta {
         ItemSearchBlob.appendOptional(cleanTitle, to: &parts)
         ItemSearchBlob.appendOptional(edition, to: &parts)
         ItemSearchBlob.appendEntityRefs(artists, to: &parts)
+        ItemSearchBlob.appendOptional(album, to: &parts)
+        ItemSearchBlob.appendOptional(albumArtist, to: &parts)
         ItemSearchBlob.appendEntityRef(curator, to: &parts)
         ItemSearchBlob.appendOptional(platform, to: &parts)
         ItemSearchBlob.appendOptional(releaseYear, to: &parts)

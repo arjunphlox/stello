@@ -252,6 +252,7 @@
         { "path": "ItemBundleExportTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ItemTagTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "MasonryLayoutTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "MusicEnrichmentTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "PageClassifierTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "PanelDedupeTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "PostKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },

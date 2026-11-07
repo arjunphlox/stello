@@ -871,8 +871,31 @@ enum CaptureService {
     struct DeezerSearchResult: Decodable {
         var id: Int
     }
+    struct DeezerTrackSearchResponse: Decodable {
+        var data: [DeezerTrackSearchResult]
+    }
+    struct DeezerTrackSearchResult: Decodable {
+        var id: Int
+        var title: String?
+        var duration: Int?
+        var album: DeezerAlbumRef?
+    }
+    struct DeezerAlbumRef: Decodable {
+        var id: Int
+        var title: String?
+    }
+    struct DeezerArtist: Decodable {
+        var name: String?
+    }
+    /// A Deezer hit: the album detail, plus the matched track when the lookup was for one.
+    struct DeezerMatch {
+        var album: DeezerAlbumResponse
+        var track: DeezerTrackSearchResult?
+    }
     struct DeezerAlbumResponse: Decodable {
         var title: String?
+        /// The album's credited artist ("Various Artists" on a compilation).
+        var artist: DeezerArtist?
         var upc: String?
         var releaseDate: String?
         var label: String?
@@ -974,12 +997,24 @@ enum CaptureService {
                 coverURL = page.og.imageURL
                 applyMusicJSONLD(html: page.html, to: &meta)
             }
+            if platform == "apple-music", subtype == "track", let page {
+                // Apple Music's og:title for a track reads "Song by Artist on Apple Music".
+                rawTitle = cleanAppleMusicTrackTitle(page.og.title) ?? rawTitle
+            }
 
         case "spotify":
             if let response = await fetchOEmbed(URL(string: "https://open.spotify.com/oembed?url=\(percentEncodeForMusic(sourceURL.absoluteString))")) {
                 rawTitle = response.title ?? rawTitle
                 coverURL = response.thumbnailURL.flatMap { URL(string: $0) }
                 meta.embedURL = embedURL(from: response)
+            }
+            // Spotify's oEmbed has no artist; the already-fetched page's description does
+            // ("Listen to X on Spotify. Song · Artist · 2019."), which sharpens the Deezer match.
+            if let parsed = parseSpotifyDescription(page?.og.description) {
+                if meta.artists.isEmpty, let artist = parsed.artist {
+                    meta.artists = [EntityRef(name: artist, slug: nil, kind: ItemKind.individual.rawValue)]
+                }
+                if meta.releaseYear == nil { meta.releaseYear = parsed.year }
             }
 
         case "youtube", "youtube-music":
@@ -999,6 +1034,15 @@ enum CaptureService {
                     if !cleaned.isEmpty {
                         meta.artists = [EntityRef(name: cleaned, slug: nil, kind: ItemKind.individual.rawValue)]
                     }
+                }
+            }
+            // "Provided to YouTube by …" auto-generated descriptions name the album — read from
+            // the page already fetched at capture (no extra network).
+            if subtype == "track", let page,
+               let provided = parseProvidedToYouTube(youtubeDescription(html: page.html) ?? page.og.description) {
+                if meta.album == nil { meta.album = provided.album }
+                if meta.artists.isEmpty, !provided.artists.isEmpty {
+                    meta.artists = provided.artists.map { EntityRef(name: $0, slug: nil, kind: ItemKind.individual.rawValue) }
                 }
             }
             if let videoID = youtubeVideoID(from: sourceURL) {
@@ -1042,8 +1086,8 @@ enum CaptureService {
 
         // Cross-platform resolver — one search + one detail call, best-effort, silent on failure.
         if let searchTitle = (meta.cleanTitle ?? rawTitle)?.trimmingCharacters(in: .whitespacesAndNewlines), !searchTitle.isEmpty {
-            if let deezer = await deezerResolve(artist: meta.artists.first?.name, title: searchTitle) {
-                applyDeezerData(deezer, to: &meta)
+            if let match = await deezerResolve(artist: meta.artists.first?.name, title: searchTitle, subtype: subtype) {
+                applyDeezerMatch(match, to: &meta)
             }
         }
 
@@ -1096,21 +1140,55 @@ enum CaptureService {
     // MARK: - Music: Deezer resolver
 
     /// Best-effort cross-platform lookup — exactly one search call + one detail call, silent
-    /// on any failure (never blocks the rest of the pipeline).
-    private static func deezerResolve(artist: String?, title: String) async -> DeezerAlbumResponse? {
+    /// on any failure (never blocks the rest of the pipeline). A track searches Deezer's
+    /// tracks (its hit names the album the track is on); anything else searches albums.
+    private static func deezerResolve(artist: String?, title: String, subtype: String) async -> DeezerMatch? {
         let query = [artist, title].compactMap { $0 }.joined(separator: " ")
-        guard let searchURL = URL(string: "https://api.deezer.com/search/album?q=\(percentEncodeForMusic(query))") else { return nil }
-
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
 
-        guard let (searchData, _) = try? await URLSession.shared.data(for: URLRequest(url: searchURL, timeoutInterval: 10)),
-              let searchResult = try? decoder.decode(DeezerSearchResponse.self, from: searchData),
-              let albumID = searchResult.data.first?.id,
-              let albumURL = URL(string: "https://api.deezer.com/album/\(albumID)") else { return nil }
+        var albumID: Int?
+        var track: DeezerTrackSearchResult?
+        if subtype == "track",
+           let url = URL(string: "https://api.deezer.com/search/track?q=\(percentEncodeForMusic(query))"),
+           let (data, _) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 10)),
+           let hit = (try? decoder.decode(DeezerTrackSearchResponse.self, from: data))?.data.first {
+            track = hit
+            albumID = hit.album?.id
+        }
+        if albumID == nil, track == nil,
+           let url = URL(string: "https://api.deezer.com/search/album?q=\(percentEncodeForMusic(query))"),
+           let (data, _) = try? await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 10)) {
+            albumID = (try? decoder.decode(DeezerSearchResponse.self, from: data))?.data.first?.id
+        }
 
-        guard let (albumData, _) = try? await URLSession.shared.data(for: URLRequest(url: albumURL, timeoutInterval: 10)) else { return nil }
-        return try? decoder.decode(DeezerAlbumResponse.self, from: albumData)
+        guard let albumID, let albumURL = URL(string: "https://api.deezer.com/album/\(albumID)"),
+              let (albumData, _) = try? await URLSession.shared.data(for: URLRequest(url: albumURL, timeoutInterval: 10)),
+              let album = try? decoder.decode(DeezerAlbumResponse.self, from: albumData) else { return nil }
+        return DeezerMatch(album: album, track: track)
+    }
+
+    /// Applies a Deezer hit. For a track it fills Album / Album artist and the track's own
+    /// length; when the page already named a different album, the hit is a different
+    /// release, so none of its album-level data (UPC, label, tracklist…) is taken.
+    static func applyDeezerMatch(_ match: DeezerMatch, to meta: inout MusicMeta) {
+        guard meta.subtype == "track" else {
+            applyDeezerData(match.album, to: &meta)
+            return
+        }
+        let deezerAlbum = match.album.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        if let known = meta.album?.nilIfEmpty, let deezerAlbum,
+           known.caseInsensitiveCompare(deezerAlbum) != .orderedSame {
+            return
+        }
+        if meta.album == nil { meta.album = deezerAlbum }
+        if meta.albumArtist == nil {
+            meta.albumArtist = match.album.artist?.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        }
+        applyDeezerData(match.album, to: &meta)
+        if let length = match.track?.duration, length > 0 {
+            meta.totalDurationSeconds = length
+        }
     }
 
     static func applyDeezerData(_ deezer: DeezerAlbumResponse, to meta: inout MusicMeta) {
@@ -1131,13 +1209,37 @@ enum CaptureService {
 
     // MARK: - Music: JSON-LD (Apple Music / Deezer / Bandcamp direct-fetch platforms)
 
-    private static func applyMusicJSONLD(html: String, to meta: inout MusicMeta) {
+    static func applyMusicJSONLD(html: String, to meta: inout MusicMeta) {
         for node in PageClassifier.jsonLDNodes(from: html) {
             let types = node.types
             let dict = node.dict
 
-            if types.contains(where: { $0.caseInsensitiveCompare("MusicAlbum") == .orderedSame }) {
+            if meta.subtype == "track",
+               types.contains(where: { $0.caseInsensitiveCompare("MusicRecording") == .orderedSame }) {
                 if meta.cleanTitle == nil, let name = dict["name"] as? String { meta.cleanTitle = name }
+                if meta.artists.isEmpty, let byArtist = dict["byArtist"] {
+                    meta.artists = musicEntityRefs(from: byArtist)
+                }
+                if let inAlbum = dict["inAlbum"] as? [String: Any] {
+                    if meta.album == nil { meta.album = (inAlbum["name"] as? String)?.nilIfEmpty }
+                    if meta.albumArtist == nil, let byArtist = inAlbum["byArtist"] {
+                        meta.albumArtist = musicEntityRefs(from: byArtist).map(\.name).joined(separator: ", ").nilIfEmpty
+                    }
+                }
+                if meta.totalDurationSeconds == nil, let duration = dict["duration"] as? String {
+                    meta.totalDurationSeconds = parseISO8601MusicDuration(duration)
+                }
+            }
+
+            if types.contains(where: { $0.caseInsensitiveCompare("MusicAlbum") == .orderedSame }) {
+                if meta.subtype == "track" {
+                    // A track saved from its album page (Apple Music `?i=`): the album node
+                    // names the album, not the track.
+                    if meta.album == nil { meta.album = (dict["name"] as? String)?.nilIfEmpty }
+                    if meta.albumArtist == nil, let byArtist = dict["byArtist"] {
+                        meta.albumArtist = musicEntityRefs(from: byArtist).map(\.name).joined(separator: ", ").nilIfEmpty
+                    }
+                } else if meta.cleanTitle == nil, let name = dict["name"] as? String { meta.cleanTitle = name }
                 if meta.genres.isEmpty { meta.genres = musicStringArray(dict["genre"]) }
                 if meta.releaseYear == nil, let date = dict["datePublished"] as? String, date.count >= 4 {
                     meta.releaseYear = String(date.prefix(4))
@@ -1233,6 +1335,82 @@ enum CaptureService {
             }
         }
         return seconds > 0 ? seconds : nil
+    }
+
+    // MARK: - Music: page-text album hints (deterministic, from the capture-time fetch)
+
+    struct ProvidedToYouTube: Equatable {
+        var artists: [String]
+        var album: String?
+    }
+
+    private static let shortDescriptionRegex = try? NSRegularExpression(
+        pattern: #""shortDescription":"((?:[^"\\]|\\.)*)""#, options: []
+    )
+
+    /// The full video description from the watch page's embedded player JSON.
+    static func youtubeDescription(html: String) -> String? {
+        guard let regex = shortDescriptionRegex else { return nil }
+        let ns = html as NSString
+        guard let m = regex.firstMatch(in: html, range: NSRange(location: 0, length: ns.length)),
+              let r = Range(m.range(at: 1), in: html),
+              let data = "\"\(html[r])\"".data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(String.self, from: data) else { return nil }
+        return decoded.nilIfEmpty
+    }
+
+    /// Parses YouTube's auto-generated music description:
+    /// "Provided to YouTube by Label\n\nTrack · Artist · Artist\n\nAlbum\n\n℗ 2020 …".
+    /// Nil when the description isn't in that shape (never guesses from free text).
+    static func parseProvidedToYouTube(_ description: String?) -> ProvidedToYouTube? {
+        guard let description else { return nil }
+        let lines = description.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard let start = lines.firstIndex(where: { $0.lowercased().hasPrefix("provided to youtube by") }),
+              start + 1 < lines.count else { return nil }
+        let credit = lines[start + 1].components(separatedBy: " · ")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard credit.count >= 2 else { return nil }
+        var album: String? = nil
+        if start + 2 < lines.count {
+            let candidate = lines[start + 2]
+            let lower = candidate.lowercased()
+            let isFooter = candidate.hasPrefix("℗") || candidate.hasPrefix("©")
+                || lower.hasPrefix("released on") || lower.hasPrefix("auto-generated")
+            if !isFooter { album = candidate }
+        }
+        return ProvidedToYouTube(artists: Array(credit.dropFirst()), album: album)
+    }
+
+    /// "Listen to X on Spotify. Song · Artist · 2019." → (Artist, 2019). Nil when the
+    /// description has no "Song/Album/Single/EP · Artist" credit.
+    static func parseSpotifyDescription(_ description: String?) -> (artist: String?, year: String?)? {
+        guard let description else { return nil }
+        let segments = description.components(separatedBy: " · ")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "."))) }
+        let typeWords: Set<String> = ["song", "album", "single", "ep", "compilation"]
+        guard let typeIndex = segments.firstIndex(where: { segment in
+            let last = segment.components(separatedBy: " ").last?.lowercased() ?? ""
+            return typeWords.contains(last)
+        }), typeIndex + 1 < segments.count else { return nil }
+        let artist = segments[typeIndex + 1].nilIfEmpty
+        let year = segments.dropFirst(typeIndex + 2).first { $0.count == 4 && $0.allSatisfy(\.isNumber) }
+        return (artist, year)
+    }
+
+    /// "Blinding Lights by The Weeknd on Apple Music" → "Blinding Lights".
+    static func cleanAppleMusicTrackTitle(_ ogTitle: String?) -> String? {
+        guard var title = ogTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else { return nil }
+        guard let suffix = title.range(of: " on Apple Music", options: [.caseInsensitive, .backwards]) else {
+            return title
+        }
+        title = String(title[..<suffix.lowerBound])
+        if let r = title.range(of: " by ", options: .backwards) {
+            title = String(title[..<r.lowerBound])
+        }
+        return title.trimmingCharacters(in: .whitespaces).nilIfEmpty
     }
 
     // MARK: - Music: title parsing (rule-based; AI refinement lives in FoundationModelsEnricher)
@@ -1346,5 +1524,12 @@ enum CaptureService {
 
     private static func resolve(_ urlString: String, base: URL) -> URL? {
         URL(string: urlString, relativeTo: base)?.absoluteURL
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        let t = trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
     }
 }

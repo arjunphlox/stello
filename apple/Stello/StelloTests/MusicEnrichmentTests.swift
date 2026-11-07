@@ -292,3 +292,160 @@ struct MusicUpgradePurgeTests {
         #expect(item.extractedText == nil)
     }
 }
+
+// MARK: - Album + album artist on tracks
+
+@Suite("Music album + album artist")
+@MainActor
+struct MusicAlbumTests {
+
+    @Test("'Provided to YouTube' description names track artists and album")
+    func providedToYouTube() {
+        let description = """
+        Provided to YouTube by Republic Records
+
+        Blinding Lights · The Weeknd
+
+        After Hours
+
+        ℗ 2020 The Weeknd XO, Inc.
+
+        Released on: 2020-03-20
+        """
+        let parsed = CaptureService.parseProvidedToYouTube(description)
+        #expect(parsed == .init(artists: ["The Weeknd"], album: "After Hours"))
+    }
+
+    @Test("Several credited artists; a missing album line yields no album")
+    func providedToYouTubeNoAlbum() {
+        let description = "Provided to YouTube by DistroKid\n\nSong · Artist One · Artist Two\n\n℗ 2021 Artist One"
+        let parsed = CaptureService.parseProvidedToYouTube(description)
+        #expect(parsed?.artists == ["Artist One", "Artist Two"])
+        #expect(parsed?.album == nil)
+    }
+
+    @Test("An ordinary video description is not parsed")
+    func providedToYouTubeNegative() {
+        #expect(CaptureService.parseProvidedToYouTube("New video every week! Subscribe for more.") == nil)
+        #expect(CaptureService.parseProvidedToYouTube(nil) == nil)
+    }
+
+    @Test("Full description is read from the watch page's player JSON")
+    func youtubeShortDescription() {
+        let html = #"<script>var ytInitialPlayerResponse = {"videoDetails":{"shortDescription":"Provided to YouTube by X\n\nTrack · Artist\n\nThe \"Album\"\n\n℗ 2020","isLive":false}};</script>"#
+        let description = CaptureService.youtubeDescription(html: html)
+        #expect(description == "Provided to YouTube by X\n\nTrack · Artist\n\nThe \"Album\"\n\n℗ 2020")
+        #expect(CaptureService.parseProvidedToYouTube(description)?.album == "The \"Album\"")
+    }
+
+    @Test("Spotify description gives the artist and year")
+    func spotifyDescription() {
+        let parsed = CaptureService.parseSpotifyDescription("Listen to Blinding Lights on Spotify. Song · The Weeknd · 2019.")
+        #expect(parsed?.artist == "The Weeknd")
+        #expect(parsed?.year == "2019")
+        #expect(CaptureService.parseSpotifyDescription("Spotify is a digital music service.") == nil)
+    }
+
+    @Test("Apple Music track og:title is cleaned to the song name")
+    func appleMusicTitle() {
+        #expect(CaptureService.cleanAppleMusicTrackTitle("Blinding Lights by The Weeknd on Apple Music") == "Blinding Lights")
+        #expect(CaptureService.cleanAppleMusicTrackTitle("Stand by Me by Ben E. King on Apple Music") == "Stand by Me")
+        #expect(CaptureService.cleanAppleMusicTrackTitle("Stand by Me") == "Stand by Me")
+    }
+
+    @Test("Apple Music MusicRecording JSON-LD fills album and album artist")
+    func appleMusicRecordingJSONLD() {
+        let html = """
+        <script type="application/ld+json">
+        {"@context":"https://schema.org","@type":"MusicRecording","name":"One More Time",
+         "byArtist":[{"@type":"MusicGroup","name":"Daft Punk"}],"duration":"PT5M20S",
+         "inAlbum":{"@type":"MusicAlbum","name":"Discovery","byArtist":[{"@type":"MusicGroup","name":"Daft Punk"}]}}
+        </script>
+        """
+        var meta = MusicMeta()
+        meta.subtype = "track"
+        CaptureService.applyMusicJSONLD(html: html, to: &meta)
+        #expect(meta.cleanTitle == "One More Time")
+        #expect(meta.artists.map(\.name) == ["Daft Punk"])
+        #expect(meta.album == "Discovery")
+        #expect(meta.albumArtist == "Daft Punk")
+        #expect(meta.totalDurationSeconds == 320)
+    }
+
+    @Test("A track saved from its album page takes the album node as Album, not the title")
+    func appleMusicAlbumPageTrack() {
+        let html = """
+        <script type="application/ld+json">
+        {"@type":"MusicAlbum","name":"Now That's Music","byArtist":{"@type":"MusicGroup","name":"Various Artists"}}
+        </script>
+        """
+        var meta = MusicMeta()
+        meta.subtype = "track"
+        CaptureService.applyMusicJSONLD(html: html, to: &meta)
+        #expect(meta.cleanTitle == nil)
+        #expect(meta.album == "Now That's Music")
+        #expect(meta.albumArtist == "Various Artists")
+    }
+
+    private func deezerAlbum(_ json: String) throws -> CaptureService.DeezerAlbumResponse {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(CaptureService.DeezerAlbumResponse.self, from: Data(json.utf8))
+    }
+
+    @Test("Deezer track hit fills Album, Album artist and the track's own length")
+    func deezerTrackMatch() throws {
+        let album = try deezerAlbum(#"{"title":"Hits 2020","artist":{"name":"Various Artists"},"upc":"123","label":"Sony","tracks":{"data":[{"title":"A","duration":200},{"title":"B","duration":100}]}}"#)
+        let track = CaptureService.DeezerTrackSearchResult(id: 1, title: "A", duration: 200, album: .init(id: 9, title: "Hits 2020"))
+        var meta = MusicMeta()
+        meta.subtype = "track"
+        CaptureService.applyDeezerMatch(.init(album: album, track: track), to: &meta)
+        #expect(meta.album == "Hits 2020")
+        #expect(meta.albumArtist == "Various Artists")
+        #expect(meta.upc == "123")
+        #expect(meta.totalDurationSeconds == 200)
+    }
+
+    @Test("A Deezer hit on a different album than the page named is ignored")
+    func deezerTrackMismatch() throws {
+        let album = try deezerAlbum(#"{"title":"Some Live Album","artist":{"name":"Band"},"upc":"999"}"#)
+        var meta = MusicMeta()
+        meta.subtype = "track"
+        meta.album = "Studio Album"
+        CaptureService.applyDeezerMatch(.init(album: album, track: nil), to: &meta)
+        #expect(meta.album == "Studio Album")
+        #expect(meta.albumArtist == nil)
+        #expect(meta.upc == nil)
+    }
+
+    @Test("Album subtype never gets Album / Album artist from Deezer")
+    func deezerAlbumSubtype() throws {
+        let album = try deezerAlbum(#"{"title":"Discovery","artist":{"name":"Daft Punk"},"upc":"0724"}"#)
+        var meta = MusicMeta()
+        meta.subtype = "album"
+        CaptureService.applyDeezerMatch(.init(album: album, track: nil), to: &meta)
+        #expect(meta.album == nil)
+        #expect(meta.albumArtist == nil)
+        #expect(meta.upc == "0724")
+    }
+
+    @Test("Album artist row hides when it matches the track artist")
+    func albumArtistRow() {
+        var meta = MusicMeta()
+        meta.subtype = "track"
+        meta.artists = [EntityRef(name: "The Weeknd", slug: nil, kind: "individual")]
+        meta.albumArtist = "the weeknd"
+        #expect(CardSubcards.musicAlbumArtistRow(meta) == nil)
+        meta.albumArtist = "Various Artists"
+        #expect(CardSubcards.musicAlbumArtistRow(meta) == "Various Artists")
+        meta.subtype = "album"
+        #expect(CardSubcards.musicAlbumArtistRow(meta) == nil)
+    }
+
+    @Test("Old stored MusicMeta without album fields still decodes")
+    func legacyDecode() throws {
+        let meta = try JSONDecoder().decode(MusicMeta.self, from: Data(#"{"subtype":"track","artists":[],"genres":[],"trackList":[]}"#.utf8))
+        #expect(meta.album == nil)
+        #expect(meta.albumArtist == nil)
+    }
+}
