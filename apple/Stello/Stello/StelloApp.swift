@@ -23,7 +23,9 @@ struct StelloApp: App {
 
         // Screenshot runs use a clean in-memory store so CloudKit-synced legacy records
         // (stale titles / duplicates) don't pollute the captured grid.
-        if ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore") {
+        // Unit tests are hosted by the app: never let a test run open the real iCloud library.
+        if ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore")
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
             container = try! StelloStore.makeInMemoryContainer()
             return
         }
