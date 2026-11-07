@@ -54,10 +54,12 @@ export function planMerges(rows) {
         images.set(img.path, r === keep ? img : { ...img, is_primary: false });
       }
     }
+    const merged = [...images.values()];
+    if (merged.length && !merged.some((i) => i.is_primary)) merged[0] = { ...merged[0], is_primary: true };
     const fields = {
       tags: [...tags.values()],
       snippets: [...snippets.values()],
-      images: [...images.values()],
+      images: merged,
       added_at: [keep, ...rest].map((r) => r.added_at).filter(Boolean).sort()[0] ?? keep.added_at,
     };
     for (const f of ['summary', 'body_markdown', 'author']) {
