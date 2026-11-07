@@ -239,27 +239,20 @@
     if (!session) return; // redirecting to login
     Stello.initAuthListener();
 
-    // Load items from Supabase, paging through results (default limit is 1000).
+    // Load items from the Worker (/api/items), paging through results.
     // First-page-first: render with the most recent 1000 items immediately,
     // then stream older history in the background. Subsequent pages cover
     // older weeks that are collapsed by default, so their headers can be
     // appended without disturbing the already-rendered first weeks.
-    const client = Stello.getClient();
-    const userId = Stello.getUserId();
     const PAGE = 1000;
 
     async function fetchItemsPage(from) {
-      const { data, error } = await client
-        .from('items')
-        .select('*')
-        .eq('user_id', userId)
-        .order('added_at', { ascending: false })
-        .range(from, from + PAGE - 1);
-      if (error) {
-        console.error('Failed to load items from Supabase:', error.message);
+      const body = await Stello.apiGet(`/api/items?offset=${from}&limit=${PAGE}`);
+      if (!body) {
+        console.error('Failed to load items');
         return [];
       }
-      return data || [];
+      return body.items || [];
     }
 
     const firstPage = await fetchItemsPage(0);
@@ -294,7 +287,7 @@
         // Re-run dimensions backfill now that older pages are in memory.
         // Use setTimeout rather than requestIdleCallback because the
         // initial backfill keeps the main thread fairly busy (image
-        // probes + Supabase writes), so an idle callback can be starved.
+        // probes + dimension writes), so an idle callback can be starved.
         // backfillImageDimensions is idempotent and self-locking so
         // overlapping calls coalesce safely.
         setTimeout(() => backfillImageDimensions(), 500);
@@ -365,10 +358,7 @@
 
           // Refetch the updated row so the UI shows the new tags/image
           // without another round trip.
-          const client = Stello.getClient();
-          const { data } = await client.from('items').select('*')
-            .eq('slug', item.slug).eq('user_id', Stello.getUserId())
-            .single();
+          const data = (await Stello.apiGet(`/api/item?slug=${encodeURIComponent(item.slug)}`))?.item;
           if (!data) continue;
 
           const refreshed = normalizeItem(data);
@@ -410,7 +400,7 @@
   // them into items.images[] so subsequent renders emit <img width=W
   // height=H> and the column-count engine never reflows on image-load.
   // Runs at idle priority, two concurrent fetches at a time, capped at
-  // 50 items per session to avoid hammering Supabase on first visit.
+  // 50 items per session to avoid hammering the API on first visit.
   function loadImageDimensions(url) {
     return new Promise(resolve => {
       const probe = new Image();
@@ -434,9 +424,7 @@
       return;
     }
     if (!window.Stello) return;
-    const client = Stello.getClient();
-    const userId = Stello.getUserId();
-    if (!client || !userId) return;
+    if (!Stello.getUserId()) return;
 
     // Items qualify if they have a renderable image (either an entry in
     // images[] or just og_image_path from a legacy capture) and that
@@ -457,7 +445,7 @@
     dimsBackfillRunning = true;
 
     // No per-session cap — runs at idle priority so it's harmless to let
-    // the whole queue drain. 4 concurrent fetches is well below Supabase
+    // the whole queue drain. 4 concurrent fetches is well below R2
     // storage's per-IP rate limits.
     const work = queue;
     const CONCURRENCY = 4;
@@ -488,11 +476,12 @@
           if (!dims || !dims.width || !dims.height) continue;
 
           imgs[idx] = { ...entry, width: dims.width, height: dims.height };
-          const { error } = await client.from('items')
-            .update({ images: JSON.stringify(imgs) })
-            .eq('slug', item.slug)
-            .eq('user_id', userId);
-          if (error) continue;
+          const saved = await Stello.apiFetch('/api/item-dims', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug: item.slug, images: imgs }),
+          });
+          if (!saved.ok) continue;
 
           // Update in-memory state so subsequent renders pick up the dims.
           item.images = imgs;
@@ -533,7 +522,7 @@
     return String(s).replace(/([^a-zA-Z0-9_-])/g, '\\$1');
   }
 
-  /** Normalize a Supabase item row to match the frontend shape */
+  /** Normalize an item row from /api/items to match the frontend shape */
   function normalizeItem(row) {
     const tags = parseJsonField(row.tags, []);
     const images = parseJsonField(row.images, []);
@@ -2471,13 +2460,7 @@
       if (cancelled) return;
       attempts++;
       try {
-        const client = Stello.getClient();
-        const { data } = await client
-          .from('items')
-          .select('*')
-          .eq('slug', slug)
-          .eq('user_id', Stello.getUserId())
-          .single();
+        const data = (await Stello.apiGet(`/api/item?slug=${encodeURIComponent(slug)}`))?.item;
         if (!data) { stop(); return; }
 
         const item = normalizeItem(data);
@@ -2683,7 +2666,24 @@
       });
     });
 
-    // Logout — signs out of Supabase and redirects to the login page
+    // Account: which sign-in methods are linked, link Apple ID.
+    (async () => {
+      const session = await Stello.getSession();
+      const cfg = await Stello.getAuthConfig();
+      if (!session) return;
+      const $email = $panel.querySelector('.settings-account-email');
+      const $link = $panel.querySelector('.settings-link-apple');
+      const $acctStatus = $panel.querySelector('.settings-account-status');
+      const providers = new Set((session.identities || []).map(i => i.provider));
+      if ($email) $email.textContent = session.user.email || 'Apple ID';
+      if ($acctStatus) $acctStatus.textContent = providers.has('apple') ? 'Apple ID linked' : '';
+      if ($link && cfg.apple && !providers.has('apple')) {
+        $link.hidden = false;
+        $link.addEventListener('click', () => Stello.signInWithApple({ link: true }));
+      }
+    })();
+
+    // Logout — ends the session and redirects to the login page
     const $logout = $panel.querySelector('.settings-logout');
     if ($logout) {
       $logout.addEventListener('click', () => {

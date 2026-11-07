@@ -37,11 +37,11 @@ Two layers:
 
 ## Architecture
 
-Vanilla HTML/CSS/JS frontend, Supabase for auth + data (Postgres + RLS), a single Cloudflare Worker (Hono) for item capture/enrichment + image serving, and R2 for image bytes. Minimal build step (asset allowlist copy only, no framework).
+Vanilla HTML/CSS/JS frontend, a single Cloudflare Worker (Hono) for accounts, data API, capture/enrichment + image serving, Cloudflare D1 for data + accounts, and R2 for image bytes. (Supabase is being retired: see `docs/plans/cloudflare-storage.md`.) Minimal build step (asset allowlist copy only, no framework).
 
 - **Frontend**: `index.html` (masonry grid), `detail.html` (item detail view), `app.js` (client logic), `style.css`, `supabase-client.js` (auth + session helpers).
-- **Worker**: one Hono Worker (`src/index.js`) serves the static frontend (`dist/`) + all `/api/*` routes (`src/routes/*`) + `/img/*` R2 image serving + a daily Cron Trigger. Endpoints ported from the old Vercel fns via `src/lib/adapter.js`. Image bytes live in R2 (`src/lib/storage.js`), served back at `/img/<key>` (zero egress); WebP conversion via the CF Images binding (`src/lib/images.js`). All auth-gated via `src/lib/supabase.js`.
-- **Data**: Items in Supabase `items` table, per-user, RLS-scoped. Schema in `scripts/schema.sql`. Local `_items/` + `index.json` are backup mirrors written by `scripts/sync-local.js`.
+- **Worker**: one Hono Worker (`src/index.js`) serves the static frontend (`dist/`) + all `/api/*` routes (`src/routes/*`) + `/img/*` R2 image serving + a daily Cron Trigger. Endpoints ported from the old Vercel fns via `src/lib/adapter.js`. Image bytes live in R2 (`src/lib/storage.js`), served back at `/img/<key>` (zero egress); WebP conversion via the CF Images binding (`src/lib/images.js`). All auth-gated via `src/lib/common.js` → `src/lib/auth.js`.
+- **Data**: Items in D1 `items` table (`env.DB`), per-user; `src/lib/db.js` scopes every query to the signed-in user, soft-deletes, and bumps the sync counters. Schema in `migrations/0001_init.sql`, applied by the Worker itself. Accounts: `src/lib/auth.js` (email + password, Sign in with Apple, cookie sessions, device tokens). Local `_items/` + `index.json` are backup mirrors written by `scripts/sync-local.js`.
 - **Config**: Per-user Anthropic keys in `user_settings`. `config.json` is legacy and gitignored.
 - **Desktop context (local Mac only)**: `desktop-context/` is a Python LaunchAgent (`com.stello.context`) on `127.0.0.1:8766` — watches `~/Downloads/Stello Watcher`, introspects Sketch + Safari, indexes into local SQLite, and serves `/related`. The frontend stub `desktop-context.js` calls it only when the page is loaded from `localhost` or `127.0.0.1` (`window.stelloDesktop.fetchRelated(k)`); production deploys never contact the daemon.
 
@@ -54,7 +54,7 @@ Vanilla HTML/CSS/JS frontend, Supabase for auth + data (Postgres + RLS), a singl
 | `app.js` | All frontend logic — filtering, masonry layout, tag system, related items index |
 | `desktop-context.js` | Localhost-only bridge to the desktop-context daemon (`window.stelloDesktop.fetchRelated`) |
 | `style.css` | All styles |
-| `supabase-client.js` | Client-side auth + session helpers |
+| `auth-client.js` | Client-side auth + session helpers (`window.Stello`) |
 | `src/index.js` | Hono Worker entry — `/api/*` routes, `/img/*` R2 serving, daily cron |
 | `src/routes/*.js` | Ported endpoint handlers (capture, enrich, upload-image, …) |
 | `src/lib/*.js` | Shared: `supabase` (auth + OG/tag helpers), `images` (CF Images→WebP), `storage` (R2), `adapter` (req/res shim) |

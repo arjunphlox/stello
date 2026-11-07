@@ -1,6 +1,6 @@
 const {
   authenticateRequest, jsonResponse, handleCors, generateSlug,
-} = require('../lib/supabase');
+} = require('../lib/common');
 const { ensureWebp } = require('../lib/images');
 const storage = require('../lib/storage');
 const { enrichCore } = require('./enrich');
@@ -77,10 +77,9 @@ module.exports = async function handler(req, res) {
   }
 
   // Background enrichment via waitUntil.
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
-  if (req.ctx && token) {
+  if (req.ctx) {
     req.ctx.waitUntil(
-      enrichCore(env, token, { slug, itemId: inserted.id }).catch(() => {})
+      enrichCore(env, user.id, { slug, itemId: inserted.id }).catch(() => {})
     );
   }
 

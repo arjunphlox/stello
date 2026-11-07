@@ -2,7 +2,7 @@ const {
   authenticateRequest, jsonResponse, handleCors,
   fetchOGMetadata, downloadImage, generateTagsFromMetadata,
   extractDomain, decodeHtmlEntities,
-} = require('../lib/supabase');
+} = require('../lib/common');
 const storage = require('../lib/storage');
 
 /**
