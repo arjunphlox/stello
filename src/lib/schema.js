@@ -18,7 +18,7 @@ export function splitSql(sql) {
 }
 
 export function ensureSchema(env) {
-  if (!env.DB) throw new Error('D1 binding DB is missing');
+  if (!env.DB) throw new Error('D1 binding DB is missing (bindings: ' + Object.keys(env).join(',') + ')');
   if (!ready) {
     ready = env.DB.batch(splitSql(INIT_SQL).map(s => env.DB.prepare(s)))
       .catch(err => { ready = null; throw err; });
