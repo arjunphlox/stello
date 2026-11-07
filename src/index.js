@@ -68,10 +68,10 @@ app.all('/api/batch-status', route(batchStatus));
 
 // Guarded manual enrichment drain — clears a deep 'text_done' backlog on
 // demand instead of waiting days for the daily cron. Gated by ADMIN_TOKEN as
-// a bearer (falls back to the Supabase service-role key until it's deleted). `?limit=N` (1–75) bounds how many items one invocation processes.
+// a bearer (unset = off). `?limit=N` (1–75) bounds how many items one invocation processes.
 app.post('/api/cron/drain-enrichment', async (c) => {
   const auth = c.req.header('authorization') || '';
-  const want = c.env.ADMIN_TOKEN || c.env.SUPABASE_SERVICE_ROLE_KEY;
+  const want = c.env.ADMIN_TOKEN;
   if (!want || auth !== `Bearer ${want}`) {
     return c.json({ error: 'unauthorized' }, 401);
   }
