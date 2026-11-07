@@ -149,9 +149,17 @@
   });
 
   // Apple sign in
+  // One redirect per tap: a second tap while Apple's page is loading would
+  // start a second sign-in and orphan the first.
   $appleBtn.addEventListener('click', () => {
+    if ($appleBtn.disabled) return;
+    $appleBtn.disabled = true;
+    $appleBtn.style.opacity = '0.6';
     Stello.signInWithApple();
+    // Re-enable if the page comes back (Back button / bfcache) without leaving.
+    setTimeout(() => { $appleBtn.disabled = false; $appleBtn.style.opacity = ''; }, 8000);
   });
+  window.addEventListener('pageshow', () => { $appleBtn.disabled = false; $appleBtn.style.opacity = ''; });
 
   // Toggle sign in / sign up
   $switch.addEventListener('click', () => {
