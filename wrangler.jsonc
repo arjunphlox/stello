@@ -21,12 +21,10 @@
     { "binding": "BUCKET", "bucket_name": "stello-item-images" }
   ],
 
-  // Items, accounts and sessions (replaces Supabase). No database_id on
-  // purpose: wrangler finds the database by name, and creates it on the first
-  // build if it doesn't exist yet. Schema is applied by the Worker itself
-  // (src/lib/schema.js ← migrations/0001_init.sql).
+  // Items, accounts and sessions (replaces Supabase). Schema is applied by
+  // the Worker itself (src/lib/schema.js ← migrations/0001_init.sql).
   "d1_databases": [
-    { "binding": "DB", "database_name": "stello" }
+    { "binding": "DB", "database_name": "stello", "database_id": "acfb6760-4a81-4606-aeee-359c16a8719e" }
   ],
 
   // Lets the Worker import migrations/*.sql as text.
