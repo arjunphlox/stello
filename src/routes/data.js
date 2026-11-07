@@ -184,14 +184,52 @@ module.exports = function mountData(app) {
     return c.json({ url: `${new URL(c.req.url).origin}/api/auth/magic?token=${token}`, expires_in_min: 30 });
   });
 
+  // One-off before deleting Supabase: copy enrichment-candidate images that
+  // still point at Supabase Storage into R2 (same key) and rewrite them to
+  // /img/<key>. Idempotent; remove once it has run.
+  app.post('/api/admin/rehost-candidates', async (c) => {
+    if (!isAdmin(c)) return c.json({ error: 'unauthorized' }, 401);
+    const re = /https:\/\/[a-z0-9]+\.supabase\.co\/storage\/v1\/object\/public\/item-images\/([^"?\s]+)/g;
+    const { results } = await c.env.DB.prepare(
+      "SELECT id, enrichment_candidates FROM items WHERE enrichment_candidates LIKE '%supabase.co/storage%'"
+    ).all();
+    let copied = 0, failed = 0, updated = 0;
+    const admin = db.admin(c.env);
+    for (const row of results) {
+      const keys = [...new Set([...row.enrichment_candidates.matchAll(re)].map(m => decodeURIComponent(m[1])))];
+      let text = row.enrichment_candidates;
+      for (const key of keys) {
+        const src = `${String(c.env.SUPABASE_URL).replace(/\/$/, '')}/storage/v1/object/public/item-images/${key}`;
+        const exists = await c.env.BUCKET.head(key);
+        if (!exists) {
+          const r = await fetch(src);
+          if (!r.ok) { failed++; continue; }
+          await c.env.BUCKET.put(key, await r.arrayBuffer(), {
+            httpMetadata: { contentType: r.headers.get('content-type') || 'image/webp' },
+          });
+          copied++;
+        }
+        text = text.split(src).join(`/img/${key}`);
+      }
+      if (text !== row.enrichment_candidates) {
+        const { error } = await admin.from('items').update({ enrichment_candidates: text }).eq('id', row.id);
+        if (!error) updated++;
+      }
+    }
+    return c.json({ items: results.length, copied, failed, updated });
+  });
+
   app.get('/api/admin/stats', async (c) => {
     if (!isAdmin(c)) return c.json({ error: 'unauthorized' }, 401);
     const r = await c.env.DB.prepare(
       `SELECT (SELECT COUNT(*) FROM users) AS users,
               (SELECT COUNT(*) FROM items) AS items,
               (SELECT COUNT(*) FROM items WHERE deleted_at IS NOT NULL) AS deleted,
-              (SELECT COUNT(*) FROM identities WHERE provider = 'apple') AS apple_links`
-    ).first();
+              (SELECT COUNT(*) FROM identities WHERE provider = 'apple') AS apple_links,
+              (SELECT COUNT(*) FROM items WHERE deleted_at IS NULL) AS live_items,
+              (SELECT COUNT(*) FROM items WHERE updated_at > ?) AS updated_last_15m,
+              (SELECT MAX(sync_seq) FROM users) AS max_sync_seq`
+    ).bind(Date.now() - 15 * 60 * 1000).first();
     // Sign-in diagnostics: unfinished Apple sign-ins (callback never arrived),
     // recent sessions and identity links, newest first. No tokens returned.
     const [{ results: pending }, { results: sessions }, { results: links }] = await c.env.DB.batch([
