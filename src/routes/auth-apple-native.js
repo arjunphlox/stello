@@ -33,8 +33,8 @@ export default async function appleNative(c) {
   }
 
   const account = await resolveAppleAccount(c.env, claims);
-  const userId = typeof account === 'string' ? account : account?.id ?? account?.userId;
-  if (!userId) return c.json({ error: 'no account for this Apple ID' }, 403);
+  if (account?.error || !account?.userId) return c.json({ error: account?.error || 'No account for this Apple ID' }, 403);
+  const { userId } = account;
 
   const label = typeof body.deviceName === 'string' ? body.deviceName.slice(0, 80) : 'Apple device';
   const { token, expiresAt } = await createSession(c.env, userId, { kind: 'device', label });

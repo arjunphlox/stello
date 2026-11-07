@@ -152,6 +152,7 @@ export function mergeChange(row, change, now = Date.now()) {
   if (!row) {
     if (write.slug === undefined || write.slug === '') write.slug = change.id;
     if (write.title === undefined) write.title = '';
+    if (write.added_at === undefined) write.added_at = new Date(now).toISOString(); // NOT NULL in 0001
   }
   if (Object.keys(write).length === 0) return { status: 'unchanged' };
   return { status: 'applied', write, clock: nextClock };
