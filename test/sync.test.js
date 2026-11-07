@@ -128,3 +128,17 @@ test('snapshot writes gzipped JSON of every row', async () => {
   const json = JSON.parse(text);
   assert.deepEqual(json.items.map((i) => i.title).sort(), ['one', 'two']);
 });
+
+test('a full push of 100 items fits D1 limits', async () => {
+  const db = makeD1(SCHEMA);
+  const ids = Array.from({ length: 100 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+  const fields = {
+    slug: 's', title: 't', source_url: 'https://x', domain: 'x', author: 'a', summary: 's', body_markdown: 'b',
+    status: 'active', needs_review: false, kind: 'link', enrichment_status: 'done', added_at: '2026-11-07T00:00:00Z',
+    analyzed_at: null, cover_aspect: 1.5, metadata: { a: 1 }, tags: [], images: [], snippets: [],
+  };
+  const r = await applyChanges(db, 'u1', ids.map((id) => full(id, fields, 10)));
+  assert.equal(r.results.filter((x) => x.status === 'applied').length, 100);
+  const again = await applyChanges(db, 'u1', ids.map((id) => ({ id, fields: { title: 'u' }, clock: 20 })));
+  assert.equal(again.results.filter((x) => x.status === 'applied').length, 100);
+});

@@ -43,7 +43,7 @@ export const FIELDS = {
 };
 
 const FIELD_NAMES = Object.keys(FIELDS);
-export const MAX_PUSH = 100; // D1 binds ≤100 params per statement; keeps the IN (...) read in one query
+export const MAX_PUSH = 100; // ids are read back in chunks of READ_CHUNK (D1: ≤100 bound values per statement)
 export const MAX_PULL = 500;
 export const MAX_FUTURE_MS = 5 * 60 * 1000;
 export const RESTORE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -247,13 +247,21 @@ function writeStatement(db, userId, { change, row, merged }, offset) {
     .bind(...vals, clock, userId, offset, Date.now(), change.id, userId, row.seq);
 }
 
+// D1 allows at most 100 bound values per statement; user_id takes one.
+const READ_CHUNK = 50;
+
 async function readRows(db, userId, ids) {
-  const marks = ids.map(() => '?').join(', ');
-  const { results } = await db
-    .prepare(`SELECT * FROM ${T.items} WHERE user_id = ? AND id IN (${marks})`)
-    .bind(userId, ...ids)
-    .all();
-  return new Map((results || []).map((r) => [r.id, r]));
+  const rows = new Map();
+  for (let i = 0; i < ids.length; i += READ_CHUNK) {
+    const chunk = ids.slice(i, i + READ_CHUNK);
+    const marks = chunk.map(() => '?').join(', ');
+    const { results } = await db
+      .prepare(`SELECT * FROM ${T.items} WHERE user_id = ? AND id IN (${marks})`)
+      .bind(userId, ...chunk)
+      .all();
+    for (const r of results || []) rows.set(r.id, r);
+  }
+  return rows;
 }
 
 export async function headSeq(db, userId) {
