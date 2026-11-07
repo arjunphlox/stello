@@ -494,6 +494,8 @@ struct CardSubcards: View {
             input.identityRow = (Self.musicIdentityLabel(meta.subtype), meta.cleanTitle?.nilIfEmpty ?? item.title)
             input.facts = [
                 (artistNames.count > 1 ? "Artists" : "Artist", artistsRow),
+                ("Album", meta.subtype == "album" ? nil : meta.album?.nilIfEmpty),
+                ("Album artist", Self.musicAlbumArtistRow(meta)),
                 ("Type", meta.subtype?.capitalized),
                 ("Edition", meta.edition),
                 ("Year", meta.releaseYear),
@@ -1266,6 +1268,15 @@ struct CardSubcards: View {
         }
 
         linksCard(layout)
+    }
+
+    /// The album's credited artist, hidden when it is the same name as the track's artist(s)
+    /// (Arjun's call, 2026-11-07) — so it shows on e.g. "Various Artists" compilations.
+    static func musicAlbumArtistRow(_ meta: MusicMeta) -> String? {
+        guard meta.subtype != "album", let albumArtist = meta.albumArtist?.nilIfEmpty else { return nil }
+        let artists = meta.artists.map(\.name).compactMap(\.nilIfEmpty)
+        let same = artists.joined(separator: ", ").caseInsensitiveCompare(albumArtist) == .orderedSame
+        return same ? nil : albumArtist
     }
 
     /// The Summary's identity label from the subtype: Album / Track / Playlist / Artist / Mix.

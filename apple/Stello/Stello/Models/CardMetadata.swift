@@ -193,6 +193,12 @@ nonisolated struct MusicMeta: Codable, Sendable {
     /// A "(Remastered 2004)"-style suffix split off the raw title.
     var edition: String?
     var artists: [EntityRef] = []
+    /// Tracks only: the album the track belongs to (Deezer track lookup, Apple Music
+    /// `inAlbum` / album JSON-LD, or a YouTube "Provided to YouTube" description).
+    var album: String?
+    /// Tracks only: the album's credited artist, which can differ from the track artist
+    /// (e.g. "Various Artists" on a compilation, or a featured-artist track).
+    var albumArtist: String?
     var curator: EntityRef?
     var isOwnPlaylist: Bool?
     var platform: String?
