@@ -24,7 +24,7 @@ enum SyncWire {
     ]
 
     /// One row from `/api/sync/pull`. Values stay as parsed JSON (`NSNull` for null).
-    struct Row: @unchecked Sendable {
+    nonisolated struct Row: @unchecked Sendable {
         let id: UUID
         let seq: Int
         let values: [String: Any]
@@ -133,8 +133,8 @@ enum SyncWire {
         if let b = v["needs_review"] as? Bool { set("needs_review", \.needsReview, b) }
         if let s = str("kind"), let s { set("kind", \.kind, s) }
         if let s = str("enrichment_status"), let s { set("enrichment_status", \.enrichmentStatus, s) }
-        if let s = str("added_at"), let d = s.flatMap(date) { set("added_at", \.addedAt, d) }
-        if let s = str("analyzed_at") { set("analyzed_at", \.analyzedAt, s.flatMap(date)) }
+        if let s = str("added_at"), let d = s.flatMap(date), !sameInstant(d, item.addedAt) { set("added_at", \.addedAt, d) }
+        if let s = str("analyzed_at"), !sameInstant(s.flatMap(date), item.analyzedAt) { set("analyzed_at", \.analyzedAt, s.flatMap(date)) }
         if let d = v["cover_aspect"] as? Double { set("cover_aspect", \.coverAspect, d) }
         if !skip.contains("metadata"), let m = v["metadata"] {
             let json = m is NSNull ? nil : encodeJSON(m)
@@ -220,6 +220,12 @@ enum SyncWire {
 
     static func iso(_ date: Date) -> String { isoFormatter.string(from: date) }
     static func date(_ s: String) -> Date? { isoFormatter.date(from: s) ?? isoPlain.date(from: s) }
+
+    /// Wire dates stop at milliseconds, so a finer local date isn't a change.
+    private static func sameInstant(_ a: Date?, _ b: Date?) -> Bool {
+        guard let a, let b else { return a == nil && b == nil }
+        return abs(a.timeIntervalSince(b)) < 0.001
+    }
 
     private static func parseJSON(_ s: String) -> Any? { try? JSONSerialization.jsonObject(with: Data(s.utf8)) }
     private static func encodeJSON(_ v: Any) -> String? {

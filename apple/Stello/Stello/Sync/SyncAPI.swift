@@ -9,7 +9,8 @@ nonisolated struct SyncAPI: Sendable {
     let token: String
     var session: URLSession = .shared
 
-    struct PullPage: Decodable, Sendable {
+    /// Rows keep raw JSON values, so this page is parsed by `pull`, not `Decodable`.
+    struct PullPage: Sendable {
         let items: [SyncWire.Row]
         let cursor: Int
         let more: Bool
@@ -31,7 +32,13 @@ nonisolated struct SyncAPI: Sendable {
     func pull(since: Int, limit: Int = 500) async throws -> PullPage {
         var url = URLComponents(url: Self.baseURL.appending(path: "api/sync/pull"), resolvingAgainstBaseURL: false)!
         url.queryItems = [.init(name: "since", value: String(since)), .init(name: "limit", value: String(limit))]
-        return try await send(URLRequest(url: url.url!))
+        let data = try await fetch(URLRequest(url: url.url!))
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = json["items"] as? [[String: Any]],
+              let cursor = json["cursor"] as? Int else {
+            throw Failure.server(200, "malformed pull page")
+        }
+        return PullPage(items: items.compactMap(SyncWire.Row.init), cursor: cursor, more: json["more"] as? Bool ?? false)
     }
 
     func push(_ changes: [SyncWire.Change]) async throws -> PushResult {
@@ -61,6 +68,10 @@ nonisolated struct SyncAPI: Sendable {
     }
 
     private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
+        try JSONDecoder().decode(T.self, from: await fetch(request))
+    }
+
+    private func fetch(_ request: URLRequest) async throws -> Data {
         var request = request
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 60
@@ -70,7 +81,7 @@ nonisolated struct SyncAPI: Sendable {
         guard (200..<300).contains(code) else {
             throw Failure.server(code, String(decoding: data.prefix(300), as: UTF8.self))
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        return data
     }
 }
 

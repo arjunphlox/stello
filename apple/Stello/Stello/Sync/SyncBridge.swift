@@ -330,7 +330,7 @@ final class SyncBridge {
                     if fields.isEmpty { continue }
                     note(id, fields: fields, time: time, isImport: isImport, into: &read) { _ in }
                 case .delete(let delete as DefaultHistoryDelete<Item>):
-                    guard let id = delete.tombstone[\.id] else { continue }
+                    guard let id = delete.tombstone[\.id] as? UUID else { continue }
                     note(id, fields: [], time: time, isImport: isImport, into: &read) { $0.deletedAt = time }
                 default:
                     continue // images/snippets show up through Item.imagesChangedAt/snippetsChangedAt
