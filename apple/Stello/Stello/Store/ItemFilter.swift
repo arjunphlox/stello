@@ -18,8 +18,8 @@ enum ItemFilter {
 
         if !selectedTagNames.isEmpty {
             result = result.filter { item in
-                let names = Set(item.tags?.map(\.name) ?? [])
-                return selectedTagNames.isSubset(of: names)
+                let tags = item.tags
+                return selectedTagNames.allSatisfy { name in tags.contains { $0.name == name } }
             }
         }
 

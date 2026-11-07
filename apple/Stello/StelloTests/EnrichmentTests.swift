@@ -12,10 +12,8 @@ struct EnrichmentServiceTests {
         let context = ModelContext(container)
 
         let item = Item(title: "Test", enrichmentStatus: "text_done")
-        let existing = Stello.Tag(name: "minimalist", category: "style", weight: 0.65, source: "rule")
         context.insert(item)
-        context.insert(existing)
-        existing.item = item
+        item.tags = [ItemTag(name: "minimalist", category: "style", weight: 0.65, source: "rule")]
 
         let result = EnrichmentResult(
             visionTags: [
@@ -28,7 +26,7 @@ struct EnrichmentServiceTests {
 
         try EnrichmentService.apply(result, to: item, context: context)
 
-        let tags = try context.fetch(FetchDescriptor<Stello.Tag>())
+        let tags = item.tags
         let minimalistTags = tags.filter { $0.name.lowercased() == "minimalist" }
         #expect(minimalistTags.count == 1)
         #expect(minimalistTags.first?.source == "rule")
@@ -69,7 +67,7 @@ struct EnrichmentServiceTests {
 
         try EnrichmentService.addIntentTag(name: "layout-reference", to: item, context: context)
 
-        let tags = try context.fetch(FetchDescriptor<Stello.Tag>())
+        let tags = item.tags
         let intent = tags.first { $0.category == "intent" }
         #expect(intent?.name == "layout-reference")
         #expect(intent?.weight == 0.9)
@@ -101,7 +99,7 @@ struct EnrichmentServiceTests {
         await EnrichmentService.enrich(item: item, context: context, enricher: enricher)
 
         #expect(item.enrichmentStatus == "candidates_done")
-        #expect((item.tags ?? []).isEmpty)
+        #expect(item.tags.isEmpty)
         #expect((item.snippets ?? []).isEmpty)
     }
 
@@ -120,7 +118,7 @@ struct EnrichmentServiceTests {
         await coordinator.enrichItem(item, context: context)
 
         #expect(item.enrichmentStatus == "candidates_done")
-        #expect((item.tags ?? []).contains { $0.source == "ai" })
+        #expect(item.tags.contains { $0.source == "ai" })
         #expect((item.snippets ?? []).contains { $0.source == "ai" })
         #expect(!EnrichmentService.decodeWhySavedSuggestions(from: item.whySavedSuggestionsJSON).isEmpty)
     }

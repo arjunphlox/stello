@@ -40,7 +40,7 @@ See `MacWindowConfigurator.swift`, `StelloHeaderView.swift`, `StelloLayout.swift
 
 ## Status (2026-06-26)
 
-Sprints 0–2 + refinement shipped. Pending: Sprint 3 (Supabase→native migration + cross-device sync verification), real-device AFM verification (sim uses mock only), Sprint 4 (full curation panel + App Intents/Spotlight/Visual Intelligence).
+Sprints 0–2 + refinement shipped. Pending: Sprint 3 (import the Supabase export file into iCloud + cross-device sync verification; see project_icloud_data.md), real-device AFM verification (sim uses mock only), Sprint 4 (full curation panel + App Intents/Spotlight/Visual Intelligence).
 
 ## UI overhaul lessons (2026-07-01, branch `cursor/native-visual-karst-zoom`)
 

@@ -1,5 +1,9 @@
 import SwiftUI
+import SwiftData
+import UniformTypeIdentifiers
 import PhotosUI
+import AuthenticationServices
+import CryptoKit
 
 /// Shared User Preferences body — profile row, appearance, and optional sections.
 struct UserPreferencesContent: View {
@@ -61,6 +65,9 @@ struct UserPreferencesContent: View {
                 }
             }
 
+            WebLibraryImportSection()
+            WebSyncSection()
+
             if showsAboutSection {
                 Section("About") {
                     LabeledContent("Version", value: "1.0")
@@ -70,6 +77,115 @@ struct UserPreferencesContent: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Web library import
+
+/// One-time import of the old web library (Supabase export JSON) into iCloud.
+private struct WebLibraryImportSection: View {
+    @Environment(\.appTheme) private var theme
+    @Environment(\.modelContext) private var context
+    @Environment(\.enrichmentCoordinator) private var coordinator
+
+    @State private var importer = WebLibraryImporter.shared
+    @State private var pickingFile = false
+    @State private var pilotOnly = true
+
+    var body: some View {
+        Section("Old web library") {
+            Toggle("Test with 50 items first", isOn: $pilotOnly)
+                .disabled(importer.isRunning)
+            if importer.isRunning {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text(importer.statusText)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.textSecondary)
+                    Spacer()
+                    Button("Stop") { importer.cancel() }
+                }
+            } else {
+                Button("Import export file…") { pickingFile = true }
+                if !importer.statusText.isEmpty {
+                    Text(importer.statusText)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            if let stage = importer.stageText {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text(stage)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.textSecondary)
+                }
+            }
+            Text("Brings items from the old Stello web app into this library. Items appear right away; covers and kinds fill in while Stello is open, and AI summaries follow slowly or when you open an item.")
+                .font(.karst(.caption))
+                .foregroundStyle(theme.textSecondary)
+        }
+        .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.json]) { result in
+            guard case .success(let url) = result else { return }
+            Task {
+                await importer.run(
+                    fileURL: url,
+                    context: context,
+                    limit: pilotOnly ? 50 : nil
+                )
+                if !WebInboxProcessor.isDisabled {
+                    await WebLibraryImporter.classifyPending(context: context, coordinator: coordinator)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Web sync
+
+/// Links this device to the Stello web account, so the web app gets its own copy of
+/// the library (see `SyncBridge`).
+private struct WebSyncSection: View {
+    @Environment(\.appTheme) private var theme
+    @State private var account = SyncAccount.shared
+    @State private var nonce = ""
+
+    var body: some View {
+        Section("Web app") {
+            if account.isSignedIn {
+                LabeledContent("Stello account", value: "Signed in")
+                Button("Sync now") { SyncBridge.requestSync(reason: "manual") }
+                Button("Sign out of the web account", role: .destructive) { account.signOut() }
+            } else {
+                SignInWithAppleButton(.signIn) { request in
+                    nonce = Self.randomNonce()
+                    request.requestedScopes = [.email]
+                    request.nonce = Self.sha256(nonce)
+                } onCompletion: { result in
+                    guard case .success(let auth) = result,
+                          let credential = auth.credential as? ASAuthorizationAppleIDCredential,
+                          let token = credential.identityToken
+                    else { return }
+                    let raw = nonce
+                    Task { await account.signIn(identityToken: token, nonce: raw) }
+                }
+                .frame(height: 36)
+            }
+            if let error = account.lastError {
+                Text(error).font(.karst(.caption)).foregroundStyle(.red)
+            }
+            Text("Keeps a second copy of your library on the Stello web app, under the same Apple ID. Changes go both ways while Stello is open, and in the background on iPhone.")
+                .font(.karst(.caption))
+                .foregroundStyle(theme.textSecondary)
+        }
+    }
+
+    private static func randomNonce() -> String {
+        (0..<32).map { _ in String(format: "%02x", UInt8.random(in: 0...255)) }.joined()
+    }
+
+    private static func sha256(_ s: String) -> String {
+        SHA256.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }
 

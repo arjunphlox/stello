@@ -144,8 +144,8 @@ struct CardSubcards: View {
             : [GridItem(.flexible(), alignment: .top)]
     }
 
-    private var sortedTags: [Tag] {
-        (item.tags ?? []).sorted { $0.weight > $1.weight }
+    private var sortedTags: [ItemTag] {
+        item.tags.sorted { $0.weight > $1.weight }
     }
 
     private var sortedSnippets: [Snippet] {
@@ -800,7 +800,7 @@ struct CardSubcards: View {
     }
 
     /// Tags minus those naming a value the panel already shows (never deleted from the item).
-    private func visibleTags(_ layout: PanelLayout) -> [Tag] {
+    private func visibleTags(_ layout: PanelLayout) -> [ItemTag] {
         let tags = sortedTags
         let kept = Set(PanelDedupe.filterTags(tags.map(\.name), shown: layout.tagShown))
         return tags.filter { kept.contains($0.name) }
@@ -908,11 +908,11 @@ struct CardSubcards: View {
     }
 
     @ViewBuilder
-    private func tagsSubCard(_ tags: [Tag]) -> some View {
+    private func tagsSubCard(_ tags: [ItemTag]) -> some View {
         if !tags.isEmpty {
             SubCard(title: "Tags") {
                 TagFlowLayout(spacing: 6) {
-                    ForEach(tags, id: \.persistentModelID) { tag in
+                    ForEach(Array(tags.enumerated()), id: \.offset) { _, tag in
                         HStack(spacing: 4) {
                             if tag.source == "ai" {
                                 Circle()
@@ -980,8 +980,8 @@ struct CardSubcards: View {
 
     // MARK: - Mutations
 
-    private func removeAITag(_ tag: Tag) {
-        context.delete(tag)
+    private func removeAITag(_ tag: ItemTag) {
+        item.tags.removeAll { $0 == tag }
         item.updatedAt = .now
         try? context.save()
     }
