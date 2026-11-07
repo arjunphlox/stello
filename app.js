@@ -21,6 +21,9 @@
     'sparkle': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128 20c6 50 28 74 80 80-52 6-74 28-80 80-6-52-28-74-80-80 52-6 74-30 80-80Z"/><path d="M204 156c3 22 12 31 32 34-20 3-29 12-32 34-3-22-12-31-32-34 20-3 29-12 32-34Z"/></svg>',
     'copy': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linejoin="round"><rect x="88" y="88" width="128" height="128" rx="12"/><path d="M168 88V52a12 12 0 0 0-12-12H52a12 12 0 0 0-12 12v104a12 12 0 0 0 12 12h36"/></svg>',
     'warning': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"><path d="M128 32 16 216h224Z"/><path d="M128 104v48"/><circle cx="128" cy="184" r="4" fill="currentColor"/></svg>',
+    'share': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M176 96h24a8 8 0 0 1 8 8v104a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V104a8 8 0 0 1 8-8h24"/><path d="M128 24v112M88 64l40-40 40 40"/></svg>',
+    'link': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round"><path d="M136 72l14-14a44 44 0 0 1 62 62l-30 30a44 44 0 0 1-62 0"/><path d="M120 184l-14 14a44 44 0 0 1-62-62l30-30a44 44 0 0 1 62 0"/></svg>',
+    'download': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="128" cy="128" r="96"/><path d="M128 80v88M92 132l36 36 36-36"/></svg>',
     'dots-three': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM48,116a12,12,0,1,0,12,12A12,12,0,0,0,48,116Zm160,0a12,12,0,1,0,12,12A12,12,0,0,0,208,116Z"/></svg>',
   };
   function icon(name) { return ICONS[name] || ''; }
@@ -270,6 +273,7 @@
     bindEvents();
     startGridColsObserver();   // sizes the columns, then renders the grid
     PanelManager.init();
+    CardMenu.init();
 
     // Background-stream remaining pages. Only runs if the first page hit the
     // limit — small libraries are done in a single round trip.
@@ -1608,20 +1612,7 @@
         try { await navigator.clipboard.writeText(copy.dataset.text); showToast('Prompt copied'); } catch { /* blocked */ }
         return;
       }
-      if (t.closest('.js-enrich')) {
-        showToast('Enriching…');
-        try {
-          const res = await apiFetch('/api/reenrich', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug }),
-          });
-          if (!res.ok) throw new Error('Enrich request failed');
-          pollForEnrichment(slug);
-        } catch (err) {
-          showToast('Enrich failed: ' + (err.message || 'unknown'));
-        }
-      }
+      if (t.closest('.js-enrich')) enrichItem(slug);
     });
 
     bodyEl.addEventListener('change', async (e) => {
@@ -1677,6 +1668,305 @@
       reader.readAsDataURL(file);
     });
   }
+
+  // ==== Card context menu — the Mac card's right-click menu ================
+  // Same items, same order as ItemCardView.swift `cardContextMenu`: Open,
+  // Enrich, Share, Copy Link, Copy ▸ (Title / Details (Markdown) / Image),
+  // Download ▸ (Markdown / Image / Full Item), Delete.
+
+  async function enrichItem(slug) {
+    showToast('Enriching…');
+    try {
+      const res = await apiFetch('/api/reenrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      if (!res.ok) throw new Error('Enrich request failed');
+      pollForEnrichment(slug);
+    } catch (err) {
+      showToast('Enrich failed: ' + (err.message || 'unknown'));
+    }
+  }
+
+  async function deleteItem(slug) {
+    try {
+      const res = await apiFetch('/api/item-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      if (PanelManager.getOpenSlug() === slug) PanelManager.close();
+      const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
+      if (card) card.remove();
+      const idx = allItems.findIndex(i => i.slug === slug);
+      if (idx >= 0) allItems.splice(idx, 1);
+      delete itemsBySlug[slug];
+      renderStats();
+      showToast('Deleted');
+    } catch (err) {
+      showToast('Delete failed: ' + (err.message || 'unknown'));
+    }
+  }
+
+  function exportBaseName(item) {
+    const base = (item.slug || item.title || '').replace(/\//g, '-').trim();
+    return base || 'item';
+  }
+
+  // The Mac `markdownExport()`: title, summary, URL / domain / saved / tags, notes.
+  function itemMarkdown(item) {
+    const lines = [];
+    if (item.title) lines.push(`# ${item.title}`, '');
+    if (item.summary) lines.push(item.summary, '');
+    const meta = [];
+    if (item.source_url) meta.push(`- **URL:** ${item.source_url}`);
+    if (item.domain) meta.push(`- **Domain:** ${item.domain}`);
+    const saved = item.added_at ? new Date(item.added_at) : null;
+    if (saved && !isNaN(saved)) {
+      meta.push(`- **Saved:** ${saved.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`);
+    }
+    const tagNames = (item.tags || []).map(t => t.tag).filter(Boolean);
+    if (tagNames.length) meta.push(`- **Tags:** ${tagNames.join(', ')}`);
+    if (meta.length) lines.push(...meta, '');
+    const snippets = (item.snippets || []).filter(s => s && s.text);
+    if (snippets.length) {
+      lines.push('## Notes', '');
+      for (const s of snippets) lines.push(`- ${s.text}`);
+    }
+    return lines.join('\n').trim();
+  }
+
+  async function copyText(text, label) {
+    try { await navigator.clipboard.writeText(text); showToast(`${label} copied`); }
+    catch { showToast('Copy failed'); }
+  }
+
+  async function fetchBlob(path) {
+    const res = await fetch(path, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error('Image fetch failed');
+    return res.blob();
+  }
+
+  // The clipboard takes PNG everywhere; other types are re-encoded through a canvas.
+  async function toPngBlob(blob) {
+    if (blob.type === 'image/png') return blob;
+    const bmp = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width; canvas.height = bmp.height;
+    canvas.getContext('2d').drawImage(bmp, 0, 0);
+    return new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('encode'))), 'image/png'));
+  }
+
+  async function copyImage(item) {
+    try {
+      const png = await toPngBlob(await fetchBlob(item.image_path));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      showToast('Image copied');
+    } catch { showToast('Copy image failed'); }
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function imageExt(blob) {
+    const t = ((blob.type || '').split('/')[1] || 'png').split('+')[0];
+    return t === 'jpeg' ? 'jpg' : t.replace(/[^a-z0-9]/gi, '') || 'png';
+  }
+
+  async function downloadImage(item) {
+    try {
+      const blob = await fetchBlob(item.image_path);
+      downloadBlob(blob, `${exportBaseName(item)}.${imageExt(blob)}`);
+    } catch { showToast('Download failed'); }
+  }
+
+  // ---- Minimal zip writer (stored, no compression) for "Download Full Item" ----
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zipFiles(files) {
+    const enc = new TextEncoder();
+    const parts = [];
+    const central = [];
+    let offset = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name);
+      const data = f.data;
+      const crc = crc32(data);
+      const local = new DataView(new ArrayBuffer(30));
+      local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true);
+      local.setUint32(14, crc, true); local.setUint32(18, data.length, true); local.setUint32(22, data.length, true);
+      local.setUint16(26, name.length, true);
+      parts.push(new Uint8Array(local.buffer), name, data);
+      const cen = new DataView(new ArrayBuffer(46));
+      cen.setUint32(0, 0x02014b50, true); cen.setUint16(4, 20, true); cen.setUint16(6, 20, true); cen.setUint16(8, 0x0800, true);
+      cen.setUint32(16, crc, true); cen.setUint32(20, data.length, true); cen.setUint32(24, data.length, true);
+      cen.setUint16(28, name.length, true); cen.setUint32(42, offset, true);
+      central.push(new Uint8Array(cen.buffer), name);
+      offset += 30 + name.length + data.length;
+    }
+    const cenSize = central.reduce((n, p) => n + p.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cenSize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+  }
+
+  // The Mac `ItemBundleExporter`: <name>/<name>.md, snippets/snippet-N.txt, images/image-N.ext.
+  async function downloadFullItem(item) {
+    const name = exportBaseName(item);
+    const enc = new TextEncoder();
+    const files = [{ name: `${name}/${name}.md`, data: enc.encode(itemMarkdown(item)) }];
+    (item.snippets || []).filter(s => s && s.text).forEach((s, i) =>
+      files.push({ name: `${name}/snippets/snippet-${i + 1}.txt`, data: enc.encode(s.text) }));
+    const paths = (item.images || []).map(i => i && i.path).filter(Boolean);
+    if (!paths.length && item.image_path) paths.push(item.image_path);
+    let n = 0;
+    for (const p of paths) {
+      try {
+        const blob = await fetchBlob(p);
+        n++;
+        files.push({ name: `${name}/images/image-${n}.${imageExt(blob)}`, data: new Uint8Array(await blob.arrayBuffer()) });
+      } catch { /* skip an image that won't load */ }
+    }
+    downloadBlob(zipFiles(files), `${name}.zip`);
+  }
+
+  const CardMenu = (function () {
+    let $menu = null;
+    let slug = null;
+
+    const ICON_FOR = {
+      open: 'arrow-up-right', enrich: 'sparkle', share: 'share', 'copy-link': 'link',
+      copy: 'copy', download: 'download', delete: 'trash',
+    };
+
+    function entries(item) {
+      const hasURL = !!item.source_url;
+      const hasImage = !!item.image_path;
+      const list = [
+        { id: 'open', label: 'Open' },
+        { id: 'enrich', label: 'Enrich' },
+      ];
+      if (hasURL && navigator.share) list.push({ id: 'share', label: 'Share' });
+      if (hasURL) list.push({ id: 'copy-link', label: 'Copy Link' });
+      list.push({ id: 'copy', label: 'Copy', sub: [
+        { id: 'copy-title', label: 'Copy Title' },
+        { id: 'copy-md', label: 'Copy Details (Markdown)' },
+        ...(hasImage ? [{ id: 'copy-image', label: 'Copy Image' }] : []),
+      ] });
+      list.push({ id: 'download', label: 'Download', sub: [
+        { id: 'dl-md', label: 'Download Markdown' },
+        ...(hasImage ? [{ id: 'dl-image', label: 'Download Image' }] : []),
+        { id: 'dl-full', label: 'Download Full Item' },
+      ] });
+      list.push({ divider: true }, { id: 'delete', label: 'Delete', danger: true });
+      return list;
+    }
+
+    function itemHTML(e) {
+      if (e.divider) return '<div class="card-menu-divider" role="separator"></div>';
+      const ic = ICON_FOR[e.id] ? `<span class="card-menu-icon">${icon(ICON_FOR[e.id])}</span>` : '<span class="card-menu-icon"></span>';
+      if (e.sub) {
+        return `<div class="card-menu-group">
+          <button type="button" class="card-menu-item has-sub" role="menuitem" aria-haspopup="true" data-action="${e.id}">${ic}<span>${escHtml(e.label)}</span><span class="card-menu-chevron">›</span></button>
+          <div class="card-menu card-menu-sub" role="menu">${e.sub.map(itemHTML).join('')}</div>
+        </div>`;
+      }
+      return `<button type="button" class="card-menu-item${e.danger ? ' is-danger' : ''}" role="menuitem" data-action="${e.id}">${ic}<span>${escHtml(e.label)}</span></button>`;
+    }
+
+    function close() {
+      if ($menu) { $menu.remove(); $menu = null; slug = null; }
+    }
+
+    function openAt(cardSlug, x, y) {
+      const item = itemsBySlug[cardSlug];
+      if (!item) return;
+      close();
+      slug = cardSlug;
+      $menu = document.createElement('div');
+      $menu.className = 'card-menu';
+      $menu.setAttribute('role', 'menu');
+      $menu.innerHTML = entries(item).map(itemHTML).join('');
+      document.body.appendChild($menu);
+      const r = $menu.getBoundingClientRect();
+      const left = Math.min(x, window.innerWidth - r.width - 8);
+      const top = Math.min(y, window.innerHeight - r.height - 8);
+      $menu.style.left = Math.max(8, left) + 'px';
+      $menu.style.top = Math.max(8, top) + 'px';
+      if (left + r.width * 2 > window.innerWidth) $menu.classList.add('subs-left');
+      $menu.querySelector('.card-menu-item')?.focus();
+      $menu.addEventListener('click', onClick);
+    }
+
+    async function onClick(e) {
+      const btn = e.target.closest('.card-menu-item');
+      if (!btn || btn.classList.contains('has-sub')) return;
+      const item = itemsBySlug[slug];
+      const action = btn.dataset.action;
+      close();
+      if (!item) return;
+      switch (action) {
+        case 'open': PanelManager.open(item.slug); break;
+        case 'enrich': enrichItem(item.slug); break;
+        case 'share': navigator.share({ title: item.title || '', url: item.source_url }).catch(() => {}); break;
+        case 'copy-link': copyText(item.source_url, 'Link'); break;
+        case 'copy-title': copyText(item.title || '', 'Title'); break;
+        case 'copy-md': copyText(itemMarkdown(item), 'Details'); break;
+        case 'copy-image': copyImage(item); break;
+        case 'dl-md': downloadBlob(new Blob([itemMarkdown(item)], { type: 'text/markdown' }), `${exportBaseName(item)}.md`); break;
+        case 'dl-image': downloadImage(item); break;
+        case 'dl-full': downloadFullItem(item); break;
+        case 'delete': deleteItem(item.slug); break;
+        default: break;
+      }
+    }
+
+    function init() {
+      document.addEventListener('contextmenu', (e) => {
+        const card = e.target.closest && e.target.closest('.card[data-slug]');
+        if (!card) { close(); return; }
+        e.preventDefault();
+        openAt(card.dataset.slug, e.clientX, e.clientY);
+      });
+      // Keyboard: the Menu key or Shift+F10 on a focused card.
+      document.addEventListener('keydown', (e) => {
+        if ($menu && e.key === 'Escape') { e.stopPropagation(); close(); return; }
+        if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+          const card = document.activeElement && document.activeElement.closest && document.activeElement.closest('.card[data-slug]');
+          if (!card) return;
+          e.preventDefault();
+          const r = card.getBoundingClientRect();
+          openAt(card.dataset.slug, r.left + 16, r.top + 16);
+        }
+      }, true);
+      document.addEventListener('mousedown', (e) => { if ($menu && !$menu.contains(e.target)) close(); });
+      window.addEventListener('scroll', close, true);
+      window.addEventListener('resize', close);
+      window.addEventListener('blur', close);
+    }
+
+    return { init, close };
+  })();
 
   // ---- Capture queue (sequential panel curation) ----
   // Slugs of freshly captured items that deserve a curation panel. We

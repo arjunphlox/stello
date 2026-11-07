@@ -2516,3 +2516,56 @@ button.sub-ref:hover { border-color: var(--accent); }
 .sub-notes h1, .sub-notes h2, .sub-notes h3, .sub-notes h4 {
   font-size: 0.9rem; font-weight: 600; color: var(--text); margin: 0.6em 0 0.2em;
 }
+
+/* === CARD CONTEXT MENU — the Mac card's right-click menu === */
+.card-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 200px;
+  padding: 5px;
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.card-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: default;
+  white-space: nowrap;
+}
+.card-menu-item:hover, .card-menu-item:focus-visible, .card-menu-group:hover > .card-menu-item {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  outline: none;
+}
+.card-menu-item.is-danger { color: #e5484d; }
+.card-menu-item.is-danger:hover, .card-menu-item.is-danger:focus-visible { background: #e5484d; color: #fff; }
+.card-menu-icon { width: 14px; height: 14px; display: inline-flex; flex-shrink: 0; }
+.card-menu-icon svg { width: 14px; height: 14px; }
+.card-menu-chevron { margin-left: auto; padding-left: 16px; opacity: 0.7; }
+.card-menu-divider { height: 1px; margin: 4px 6px; background: var(--border); }
+.card-menu-group { position: relative; }
+.card-menu-sub {
+  display: none;
+  position: absolute;
+  top: -5px;
+  left: calc(100% + 2px);
+}
+.card-menu.subs-left .card-menu-sub { left: auto; right: calc(100% + 2px); }
+.card-menu-group:hover > .card-menu-sub, .card-menu-group:focus-within > .card-menu-sub { display: flex; }
