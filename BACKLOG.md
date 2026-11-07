@@ -9,6 +9,7 @@
 | **Add new item from app** — URL input in UI, local Python server to fetch metadata + analyze + save to `_items/`; needs `scripts/serve.py` with Flask | Claude Code | Desktop | Opus | Open |
 | **Tag-based "more like this"** — dedicated panel showing related items for a selected item; relatedness index already exists, just needs UI | Claude Code | Desktop | Opus | Open |
 | **User notes on items** — editable text field on detail page, saved back to item.md; needs local server | Claude Code | Desktop | Opus | Open |
+| **Web ↔ Apple parity, pass 2** (found while porting the Mac panel, 2026-11-07) — (1) card right-click menu: Open, Enrich, Share, Copy link/title/details/image, Download, **Delete** (the web panel no longer has Delete, matching the Mac, so the web needs this menu); (2) grid card kind line under the hover title (`cardKindLine`, already in `panel-layout.js`); (3) `detail.html` full page still shows the old layout; (4) awaiting-review strip, revisit tracking, search over metadata; (5) Mac panel 2-column threshold vs the web panel's fixed width | Claude Code | Web | Opus | Open |
 
 ## Needs Planning
 

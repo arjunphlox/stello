@@ -18,6 +18,9 @@
     'crosshair': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232,120H215.63a88.13,88.13,0,0,0-79.63-79.63V24a8,8,0,0,0-16,0V40.37A88.13,88.13,0,0,0,40.37,120H24a8,8,0,0,0,0,16H40.37A88.13,88.13,0,0,0,120,215.63V232a8,8,0,0,0,16,0V215.63A88.13,88.13,0,0,0,215.63,136H232a8,8,0,0,0,0-16ZM128,200a72,72,0,1,1,72-72A72.08,72.08,0,0,1,128,200Zm0-112a40,40,0,1,0,40,40A40,40,0,0,0,128,88Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,152Z"/></svg>',
     'trash': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></svg>',
     'user-circle': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg>',
+    'sparkle': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128 20c6 50 28 74 80 80-52 6-74 28-80 80-6-52-28-74-80-80 52-6 74-30 80-80Z"/><path d="M204 156c3 22 12 31 32 34-20 3-29 12-32 34-3-22-12-31-32-34 20-3 29-12 32-34Z"/></svg>',
+    'copy': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linejoin="round"><rect x="88" y="88" width="128" height="128" rx="12"/><path d="M168 88V52a12 12 0 0 0-12-12H52a12 12 0 0 0-12 12v104a12 12 0 0 0 12 12h36"/></svg>',
+    'warning': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"><path d="M128 32 16 216h224Z"/><path d="M128 104v48"/><circle cx="128" cy="184" r="4" fill="currentColor"/></svg>',
     'dots-three': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM48,116a12,12,0,1,0,12,12A12,12,0,0,0,48,116Zm160,0a12,12,0,1,0,12,12A12,12,0,0,0,208,116Z"/></svg>',
   };
   function icon(name) { return ICONS[name] || ''; }
@@ -1318,208 +1321,228 @@
     return `W${String(getISOWeek(d)).padStart(2, '0')} ${d.getFullYear()}`;
   }
 
-  // Preset why-saved reasons. Suggested reasons from enrichment_candidates
-  // are merged alongside these at render time.
-  const PRESET_REASONS = [
-    { value: 'visual-inspiration', label: 'Visual inspiration' },
-    { value: 'useful-tool', label: 'Useful tool' },
-    { value: 'knowledge-reference', label: 'Knowledge reference' },
-    { value: 'style-catalog', label: 'Style catalog' },
-    { value: 'conceptual-reference', label: 'Conceptual reference' },
-    { value: 'practical-benchmark', label: 'Practical benchmark' },
-  ];
+  // ==== Item detail panel — exact copy of the Mac app's panel ==============
+  // Card for card, the same as apple/…/Views/CardSubcards.swift (Arjun's
+  // call, 2026-11-07: "exact Mac copy", no web-only extras). The layout and
+  // the "every value shows once" rules live in panel-layout.js
+  // (window.StelloPanel); this file only turns its cards into HTML and wires
+  // the few edits the Mac panel allows: set cover, add image, accept /
+  // dismiss a why-save suggestion, remove an AI tag, remove a snippet, Enrich.
 
-  // Builds the expanded-body HTML used inside a side panel.
-  // Order: slider → description (summary + markdown) → capture form
-  // (only for items still pending review) → snippets.
-  // `sharedTagSet`: optional Set<string> of "category:tag" keys to highlight with .tag-shared.
-  function buildPanelBodyHTML(item, sharedTagSet) {
-    return [
-      renderPanelSliderHTML(item),
-      `<div class="card-expanded-body">
-        ${item.summary ? `<div class="card-expanded-summary">${escHtml(cleanSummary(item.summary))}</div>` : ''}
-        <div class="card-expanded-md" data-slug="${item.slug}"></div>
-      </div>`,
-      renderPanelCaptureFormHTML(item),
-      renderPanelSnippetsHTML(item),
-    ].join('');
+  // Which image the open panel is previewing (client only; cover is server truth).
+  const panelPreview = { slug: null, path: null };
+
+  function panelLayoutFor(item) {
+    return window.StelloPanel.layout(item, { resolveSlug: (s) => !!itemsBySlug[s] });
   }
 
-  // ---- Panel slider (main image + thumbnails + upload tile) ----
-  // Two independent states:
-  //  - cover:   which image is item.images[*].is_primary (server truth)
-  //  - preview: which thumb is currently shown in the main area (client only)
-  // On load preview == cover. Clicking a thumb swaps preview only. Setting
-  // cover happens via (a) clicking an already-previewed thumb again OR
-  // (b) the "Set as cover" pill on the main image (only shown when
-  // preview != cover).
-  // Map a machine enrichment_error reason → a short human caption for the
-  // empty-image panel state, so a missing image is explainable, not mysterious.
-  function imageErrorLabel(err) {
-    if (!err) return '';
-    if (err.startsWith('image-download-failed')) return 'No image — couldn’t fetch the source image';
-    if (err.startsWith('image-store-failed')) return 'No image — storage error, will retry';
-    if (err.startsWith('vision:')) return 'Image analysis failed';
-    return 'No image available';
+  function subCardHTML(title, inner, extraClass) {
+    return `<section class="sub-card${extraClass ? ' ' + extraClass : ''}">
+      ${title ? `<h3 class="sub-card-title">${escHtml(title)}</h3>` : ''}
+      ${inner}
+    </section>`;
   }
 
-  function renderPanelSliderHTML(item) {
-    const images = Array.isArray(item.images) ? item.images : [];
-    const candidates = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.images))
-      ? item.enrichment_candidates.images : [];
+  function factsBodyHTML(rows) {
+    return `<dl class="sub-facts">${rows.map(r => `<div class="sub-fact">
+      <dt>${escHtml(r.label)}</dt>
+      <dd>${r.url
+        ? `<a href="${escAttr(r.url)}" target="_blank" rel="noopener" title="${escAttr(r.url)}">${escHtml(r.value)}</a>`
+        : escHtml(r.value)}</dd>
+    </div>`).join('')}</dl>`;
+  }
 
-    // Seed from og_image_path when images[] is empty (legacy items).
+  function chipsBodyHTML(chips, caption) {
+    return `${caption ? `<div class="sub-caption">${escHtml(caption)}</div>` : ''}
+      ${chips.length ? `<div class="sub-chips">${chips.map(c => `<span class="sub-chip">${escHtml(c)}</span>`).join('')}</div>` : ''}`;
+  }
+
+  function refsBodyHTML(refs) {
+    return `<div class="sub-chips">${refs.map(r => {
+      const target = r.slug && itemsBySlug[r.slug] ? r.slug : null;
+      return target
+        ? `<button type="button" class="sub-ref js-open-ref" data-slug="${escAttr(target)}">${escHtml(r.name)}</button>`
+        : `<span class="sub-ref">${escHtml(r.name)}</span>`;
+    }).join('')}</div>`;
+  }
+
+  function imagesWithRoles(item, roles) {
+    return (item.images || []).filter(i => i && i.path && roles.includes(i.role || 'cover'));
+  }
+
+  // Main image + thumbnails, no edits (typed panels' top media and galleries).
+  function galleryBodyHTML(item, images, height, showThumbs, key) {
+    const shown = (panelPreview.slug === item.slug && images.find(i => i.path === panelPreview.path)) || images[0];
+    return `<div class="sub-gallery" data-gallery="${escAttr(key)}">
+      <div class="sub-gallery-main" style="height:${height}px"><img src="${escAttr(shown.path)}" alt="${escAttr(shown.label || '')}"></div>
+      ${showThumbs && images.length > 1 ? `<div class="sub-thumbs">${images.map(img =>
+        `<button type="button" class="sub-thumb js-preview${img.path === shown.path ? ' is-active' : ''}" data-path="${escAttr(img.path)}"><img src="${escAttr(img.path)}" alt=""></button>`
+      ).join('')}</div>` : ''}
+    </div>`;
+  }
+
+  // The Mac DetailImageStrip: cover (or a tinted placeholder), "Set as cover"
+  // on a non-cover preview, thumbnails with a cover dot, and an Add tile.
+  function imageStripHTML(item) {
+    const images = (item.images || []).filter(i => i && i.path);
     const seeded = images.length === 0 && item.image_path
-      ? [{ path: item.image_path, source: 'og', is_primary: true }]
-      : images;
+      ? [{ path: item.image_path, source: 'og', is_primary: true }] : images;
+    const cover = seeded.find(i => i.is_primary) || seeded[0] || null;
+    const shown = (panelPreview.slug === item.slug && seeded.find(i => i.path === panelPreview.path)) || cover;
+    const hues = [18, 80, 38, 140, 25, 45, 12, 100];
+    let h = 0; for (const ch of item.slug || '') h = (h * 31 + ch.charCodeAt(0)) | 0;
+    const hue = hues[Math.abs(h) % hues.length];
+    const main = shown
+      ? `<img src="${escAttr(shown.path)}" alt="">`
+      : `<div class="sub-strip-placeholder" style="--hue:${hue}"></div>`;
+    const setCover = shown && cover && shown.path !== cover.path
+      ? `<button type="button" class="sub-set-cover js-set-cover" data-path="${escAttr(shown.path)}">${icon('crosshair')}Set as cover</button>` : '';
+    const thumbs = seeded.map(img => `<button type="button" class="sub-thumb js-preview${shown && img.path === shown.path ? ' is-active' : ''}" data-path="${escAttr(img.path)}" aria-label="${img === cover ? 'Cover image' : 'Image thumbnail'}">
+        <img src="${escAttr(img.path)}" alt="">${img === cover ? '<span class="sub-cover-dot"></span>' : ''}
+      </button>`).join('');
+    return `<div class="sub-strip">
+      <div class="sub-strip-main${shown ? '' : ' is-empty'}">${main}${setCover}</div>
+      <div class="sub-thumbs">${thumbs}
+        <label class="sub-thumb sub-add-tile" aria-label="Add image">${icon('plus')}<span>Add</span>
+          <input type="file" accept="image/*" class="sr-only">
+        </label>
+      </div>
+    </div>`;
+  }
 
-    const cover = seeded.find(i => i.is_primary) || seeded[0];
-    const coverPath = cover?.path || '';
-    // Preview defaults to cover on initial render; click handlers keep
-    // it in sync with whichever thumb the user chose.
-    const previewPath = coverPath;
+  function topImagesHTML(item, panel) {
+    const typed = panel.isTyped ? imagesWithRoles(item, panel.topRoles) : [];
+    const inner = typed.length
+      ? galleryBodyHTML(item, typed, 220, true, 'top')
+      : imageStripHTML(item);
+    return `<section class="sub-card is-bleed is-full">${inner}</section>`;
+  }
 
-    if (!coverPath && !candidates.length) {
-      const errNote = item.enrichment_error
-        ? `<div class="panel-image-note" title="${escAttr(item.enrichment_error)}">${escHtml(imageErrorLabel(item.enrichment_error))}</div>`
-        : '';
-      return `<div class="panel-image-slider" data-slug="${item.slug}" data-cover-path="">
-        <div class="panel-image-main">
-          <div class="panel-image-empty"></div>
-          ${errNote}
-        </div>
-        <div class="panel-image-thumbs">${renderUploadTileHTML()}</div>
-      </div>`;
+  function headerCardHTML(h) {
+    return subCardHTML('', `<div class="sub-header">
+      <h2 class="sub-header-title">${escHtml(h.title)}</h2>
+      ${h.kindLine ? `<div class="sub-kind-line">${escHtml(h.kindLine)}</div>` : ''}
+      ${h.showsAIArtBadge ? '<span class="sub-badge">AI art</span>' : ''}
+      ${h.mainText ? `<div class="sub-main-text">
+        ${h.mainIsAISummary ? '<div class="sub-ai-label">AI summary</div>' : ''}
+        <p>${escHtml(h.mainText)}</p>
+      </div>` : ''}
+      ${h.extraTexts.map(t => `<p class="sub-extra-text">${escHtml(t)}</p>`).join('')}
+    </div>`, 'is-full');
+  }
+
+  function notesBody(item) {
+    if (!item.body_markdown) return '';
+    const body = stripSections(item.body_markdown, [
+      'Summary', 'Key Details', 'Visual Assets', 'Key Snippets', 'What Makes It Work',
+    ]);
+    return body ? renderMarkdown(body) : '';
+  }
+
+  function cardHTML(item, c) {
+    switch (c.type) {
+      case 'facts':
+        return c.rows.length ? subCardHTML(c.title, factsBodyHTML(c.rows)) : '';
+      case 'chips':
+        return c.chips.length || c.caption ? subCardHTML(c.title, chipsBodyHTML(c.chips, c.caption)) : '';
+      case 'refs':
+        return subCardHTML(c.title, refsBodyHTML(c.refs));
+      case 'text':
+        return subCardHTML(c.title, `<p class="sub-text">${escHtml(c.text)}</p>`);
+      case 'gallery': {
+        const imgs = imagesWithRoles(item, c.roles);
+        return imgs.length ? subCardHTML(c.title, galleryBodyHTML(item, imgs, 140, false, c.title)) : '';
+      }
+      case 'faqs':
+        return subCardHTML(c.title, `<div class="sub-faqs">${c.items.map(f =>
+          `<details><summary>${escHtml(f.question)}</summary><p>${escHtml(f.answer)}</p></details>`).join('')}</div>`);
+      case 'chipsFacts':
+      case 'github':
+        return subCardHTML(c.title, (c.type === 'github'
+          ? factsBodyHTML(c.rows) + (c.chips.length ? chipsBodyHTML(c.chips) : '')
+          : (c.chips.length ? chipsBodyHTML(c.chips) : '') + (c.rows.length ? factsBodyHTML(c.rows) : '')));
+      case 'tracklist':
+        return subCardHTML(c.title, `<ol class="sub-tracks">${c.tracks.map(t =>
+          `<li><span>${escHtml(t.name)}</span>${t.duration ? `<span class="sub-track-time">${t.duration}</span>` : ''}</li>`).join('')}</ol>`);
+      case 'aiArt':
+        return subCardHTML(c.title, `<dl class="sub-facts">
+          ${c.model ? `<div class="sub-fact"><dt>Model</dt><dd>${escHtml(c.model)}</dd></div>` : ''}
+          ${c.prompt ? `<div class="sub-fact sub-fact-copy"><div><dt>${escHtml(c.promptLabel)}</dt><dd>${escHtml(c.prompt)}</dd></div>
+            <button type="button" class="sub-icon-btn js-copy-prompt" data-text="${escAttr(c.prompt)}" title="Copy prompt" aria-label="Copy prompt">${icon('copy')}</button></div>` : ''}
+        </dl>`);
+      case 'notes': {
+        const html = notesBody(item);
+        return html ? subCardHTML('Notes', `<div class="sub-notes">${html}</div>`) : '';
+      }
+      default: return '';
     }
-
-    const thumbs = [
-      ...seeded.map(img => renderThumbHTML(img, {
-        isPreview: img.path === previewPath,
-        isCover: img.path === coverPath,
-      })),
-      ...candidates
-        .filter(c => !seeded.some(i => i.path === c.path))
-        .map(c => renderCandidateThumbHTML(c)),
-      renderUploadTileHTML(),
-    ].join('');
-
-    return `<div class="panel-image-slider" data-slug="${item.slug}" data-cover-path="${escAttr(coverPath)}">
-      <div class="panel-image-main">
-        ${coverPath ? `<img src="${escAttr(previewPath)}" alt="${escAttr(cover?.label || '')}" data-preview-path="${escAttr(previewPath)}">` : ''}
-        ${renderPanelImageActionsHTML()}
-      </div>
-      <div class="panel-image-thumbs">${thumbs}</div>
-    </div>`;
-  }
-
-  function renderThumbHTML(img, state) {
-    const { isPreview, isCover } = state || {};
-    const cls = [
-      'panel-image-thumb',
-      isPreview && 'is-active',
-      isCover && 'is-cover',
-    ].filter(Boolean).join(' ');
-    return `<button type="button" class="${cls}" data-path="${escAttr(img.path)}" data-source="${escAttr(img.source || 'og')}" title="${escAttr(img.label || '')}"><img src="${escAttr(img.path)}" alt=""></button>`;
-  }
-
-  function renderCandidateThumbHTML(cand) {
-    const path = cand.path || cand.url || '';
-    if (!path) return '';
-    return `<button type="button" class="panel-image-thumb is-candidate" data-path="${escAttr(path)}" data-source="extracted" title="${escAttr(cand.label || 'Suggested image')}"><img src="${escAttr(path)}" alt=""><span class="panel-image-thumb-add">+</span></button>`;
-  }
-
-  // Action buttons at bottom-right of the main image: "Set as cover"
-  // (crosshair) and "Remove image" (trash, red). 20px circles, 16px
-  // icons, same translucent-dark backdrop as .card-url-pill.
-  function renderPanelImageActionsHTML() {
-    return `<div class="panel-image-actions">
-      <button type="button" class="panel-image-action-btn js-set-cover" title="Set as cover" aria-label="Set as cover">${icon('crosshair')}</button>
-      <button type="button" class="panel-image-action-btn is-danger js-remove-image" title="Remove Image" aria-label="Remove Image">${icon('trash')}</button>
-    </div>`;
-  }
-
-  function renderUploadTileHTML() {
-    // Use a <label> so the native file picker opens on click without a
-    // programmatic .click() (which can get flaky under event delegation).
-    return `<label class="panel-image-upload-tile" aria-label="Upload image">
-      <span>+</span>
-      <input type="file" accept="image/*" class="sr-only">
-    </label>`;
-  }
-
-  // ---- Capture form (why-saved + what-works) ----
-  // Only rendered while the item is still pending review. Once the user
-  // clicks Save (or Skip), the server flips needs_review=false and this
-  // section disappears on the next refresh.
-  function renderPanelCaptureFormHTML(item) {
-    if (item.needs_review !== true) return '';
-
-    const activeIntents = new Set(
-      (item.tags || []).filter(t => t.category === 'intent').map(t => t.tag)
-    );
-    const suggested = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.reasons))
-      ? item.enrichment_candidates.reasons : [];
-    const suggestedNotInPreset = suggested.filter(r =>
-      !PRESET_REASONS.some(p => p.value === r)
-    );
-
-    const whatWorks = extractSection(item.body_markdown, 'What Makes It Work');
-
-    const presetChips = PRESET_REASONS.map(r =>
-      `<button type="button" class="q-toggle${activeIntents.has(r.value) ? ' active' : ''}" data-value="${escAttr(r.value)}">${escHtml(r.label)}</button>`
-    ).join('');
-
-    const suggestedChips = suggestedNotInPreset.map(r =>
-      `<button type="button" class="q-toggle q-toggle-suggested${activeIntents.has(r) ? ' active' : ''}" data-value="${escAttr(r)}" title="Suggested">${escHtml(humanizeReason(r))}</button>`
-    ).join('');
-
-    return `<div class="panel-capture-form">
-      <p class="question-label">Why did you save this?</p>
-      <div class="question-options">
-        ${presetChips}
-        ${suggestedChips}
-        <input class="q-custom-reason" type="text" placeholder="Other reason…">
-      </div>
-      <p class="question-label">What makes it work?</p>
-      <textarea class="question-text" placeholder="Optional — what caught your eye?">${escHtml(whatWorks || '')}</textarea>
-      <div class="question-actions">
-        <button type="button" class="q-save">Save</button>
-        <button type="button" class="q-skip">Skip</button>
-      </div>
-    </div>`;
   }
 
   function humanizeReason(r) {
-    return String(r || '').replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
+    return String(r || '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  // ---- Snippets ----
-  function renderPanelSnippetsHTML(item) {
-    const snippets = Array.isArray(item.snippets) ? item.snippets : [];
-    const candidateSnippets = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.snippets))
-      ? item.enrichment_candidates.snippets : [];
-    const takenSet = new Set(snippets.map(s => s.text));
-    const addableCandidates = candidateSnippets.filter(s => !takenSet.has(s));
+  // Why save? — the enrichment's suggested reasons not yet accepted.
+  function whySavedSuggestions(item) {
+    const reasons = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.reasons))
+      ? item.enrichment_candidates.reasons : [];
+    const have = new Set((item.tags || []).map(t => String(t.tag).toLowerCase()));
+    return reasons.filter(r => r && !have.has(String(r).toLowerCase()));
+  }
 
-    const selected = snippets.map((s, i) =>
-      `<div class="panel-snippet-row" data-index="${i}">
-        <blockquote>${escHtml(s.text)}</blockquote>
-        <button type="button" class="panel-snippet-remove" aria-label="Remove snippet">&times;</button>
-      </div>`
-    ).join('');
+  function enrichmentCardsHTML(item, panel) {
+    const S = window.StelloPanel;
+    const tags = S.visibleTags(item.tags, panel);
+    const snippets = S.visibleSnippets(item.snippets, panel);
+    const suggestions = whySavedSuggestions(item);
+    let out = '';
 
-    const candidateChips = addableCandidates.map(text =>
-      `<button type="button" class="panel-snippet-candidate" data-text="${escAttr(text)}"><span class="plus">+</span>${escHtml(text)}</button>`
-    ).join('');
+    if (suggestions.length) {
+      out += subCardHTML('Why save?', `<div class="sub-chips">${suggestions.map(s => `<span class="sub-why">
+        <button type="button" class="js-accept-reason" data-reason="${escAttr(s)}" aria-label="Accept ${escAttr(humanizeReason(s))}">${escHtml(humanizeReason(s))}</button>
+        <button type="button" class="js-dismiss-reason" data-reason="${escAttr(s)}" aria-label="Dismiss suggestion">${icon('x')}</button>
+      </span>`).join('')}</div>`);
+    }
 
-    return `<div class="panel-snippets">
-      <p class="question-label">Key snippets</p>
-      <div class="panel-snippet-list">${selected || '<div class="panel-snippet-empty">No snippets yet.</div>'}</div>
-      ${candidateChips ? `<div class="panel-snippet-candidates">${candidateChips}</div>` : ''}
-      <div class="panel-snippet-add">
-        <textarea placeholder="Paste or type a snippet…"></textarea>
-        <button type="button" class="panel-snippet-add-btn">+ Add</button>
-      </div>
+    if (tags.length) {
+      out += subCardHTML('Tags', `<div class="sub-chips">${tags.map(t => {
+        const ai = t.source === 'ai';
+        return `<span class="sub-tag${ai ? ' is-ai' : ''}" style="opacity:${Math.max(0.55, Number(t.weight) || 0)}">
+          ${ai ? '<span class="sub-tag-dot"></span>' : ''}${escHtml(t.tag)}
+          ${ai ? `<button type="button" class="js-remove-tag" data-tag="${escAttr(t.tag)}" data-category="${escAttr(t.category)}" aria-label="Remove tag">${icon('x')}</button>` : ''}
+        </span>`;
+      }).join('')}</div>`);
+    }
+
+    if (panel.kind !== 'post') {
+      const linkEmpty = panel.kind === 'link' && !panel.header.mainText && !notesBody(item)
+        && !tags.length && !suggestions.length;
+      if (snippets.length) {
+        out += subCardHTML('Key snippets', `<div class="sub-snippets">${snippets.map(s => `<div class="sub-snippet" data-index="${s.index}">
+          <p>${escHtml(s.text)}</p>
+          <button type="button" class="js-remove-snippet" aria-label="Remove snippet">${icon('x')}</button>
+        </div>`).join('')}</div>`);
+      } else if (linkEmpty) {
+        out += subCardHTML('Key snippets', '<div class="sub-empty">No snippets yet.</div>');
+      }
+    }
+
+    if (item.enrichment_status !== 'pending') {
+      out += subCardHTML('Actions', `<button type="button" class="sub-enrich js-enrich">${icon('sparkle')}Enrich</button>
+        ${item.enrichment_error ? `<div class="sub-error">${icon('warning')}${escHtml(item.enrichment_error)}</div>` : ''}`);
+    }
+    return out;
+  }
+
+  // The whole panel body: top images, header, Summary, the kind's cards,
+  // then Why save? / Tags / Key snippets / Actions.
+  function buildPanelBodyHTML(item) {
+    const panel = panelLayoutFor(item);
+    return `<div class="sub-grid">
+      ${topImagesHTML(item, panel)}
+      ${headerCardHTML(panel.header)}
+      ${panel.cards.map(c => cardHTML(item, c)).join('')}
+      ${enrichmentCardsHTML(item, panel)}
     </div>`;
   }
 
@@ -1529,117 +1552,82 @@
     );
   }
 
-  function extractSection(md, heading) {
-    if (!md) return '';
-    const re = new RegExp(`(^|\\n)##\\s+${heading}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, 'i');
-    const m = md.match(re);
-    return m ? m[2].trim() : '';
+  // Re-render the open panel body from itemsBySlug, keeping scroll.
+  function rerenderPanelBody(bodyEl, item) {
+    const html = buildPanelBodyHTML(item);
+    if (bodyEl.dataset.html === html) return;
+    const top = bodyEl.scrollTop;
+    bodyEl.innerHTML = html;
+    bodyEl.dataset.html = html;
+    bodyEl.scrollTop = top;
   }
 
-  // Builds the sticky footer with tags (left) + date/week (right)
-  function buildPanelFooterHTML(item, sharedTagSet) {
-    const tagPills = item.tags
-      .slice()
-      .sort((a, b) => b.weight - a.weight)
-      .slice(0, 16)
-      .map(t => {
-        const shared = sharedTagSet && sharedTagSet.has(t.category + ':' + t.tag);
-        return renderTagPill(t.tag, t.category, shared);
-      }).join('');
+  // Wires the panel body once (delegated, so re-renders keep working).
+  function bindPanelBody(bodyEl, slug) {
+    if (!bodyEl || bodyEl.dataset.bound) return;
+    bodyEl.dataset.bound = '1';
+    const refresh = (updated) => { if (updated) rerenderPanelBody(bodyEl, updated); };
 
-    const date = formatHumanDate(item.added_at);
-    const week = formatWeekTag(item.added_at);
-
-    return `<div class="panel-footer-tags">${tagPills}</div>
-      <div class="panel-footer-date">
-        <div class="panel-footer-menu">
-          <button type="button" class="panel-footer-menu-trigger" aria-label="Item actions" aria-haspopup="true" aria-expanded="false">${icon('dots-three')}</button>
-          <div class="panel-footer-menu-popover" role="menu" hidden>
-            <button type="button" class="panel-footer-menu-item js-enrich" role="menuitem">Enrich</button>
-            <button type="button" class="panel-footer-menu-item is-danger js-delete" role="menuitem" data-step="0">Delete</button>
-          </div>
-        </div>
-        ${date ? `<div class="panel-footer-date-main">${date}</div>` : ''}
-        ${week ? `<div class="panel-footer-date-week">${week}</div>` : ''}
-      </div>`;
-  }
-
-  // Loads and renders the markdown body into a panel's .card-expanded-md element.
-  // Summary / snippets / what-makes-it-work are rendered elsewhere in the panel,
-  // so they're stripped from the raw markdown to avoid duplication.
-  function loadMarkdownInto(container) {
-    if (!container || container.dataset.loaded) return;
-    container.dataset.loaded = 'true';
-    const slug = container.dataset.slug;
-    const item = itemsBySlug[slug];
-    if (!item || !item.body_markdown) return;
-    const body = stripSections(item.body_markdown, [
-      'Summary', 'Key Details', 'Visual Assets', 'Key Snippets', 'What Makes It Work',
-    ]);
-    if (body) container.innerHTML = renderMarkdown(body);
-  }
-
-  // ---- Panel body binding (slider, capture form, snippets) ----
-  // Wires up interactions in a freshly-rendered .panel-body. Each mutation
-  // posts a delta to /api/item-update, then updates local itemsBySlug and
-  // refreshes the grid card. The panel body itself is only re-rendered on
-  // explicit refreshItem calls (from enrichment polling) to avoid stomping
-  // the user's in-flight form input.
-  function bindPanelBody(bodyEl, item) {
-    if (!bodyEl || !item) return;
-    const slug = item.slug;
-
-    // Compute cover-dot luminance after initial render so the dot sits
-    // in either black or white depending on the thumb's brightness.
-    updateCoverDotColor(bodyEl.querySelector('.panel-image-slider'));
-
-    // --- Slider: thumb click is always preview-only. Cover is set
-    // exclusively by the "Set as cover" pill. Candidate thumbs are
-    // silently promoted into images[] on click so they survive refresh. ---
     bodyEl.addEventListener('click', async (e) => {
-      const setCoverBtn = e.target.closest('.js-set-cover');
-      if (setCoverBtn) {
-        e.preventDefault();
-        const previewImg = bodyEl.querySelector('.panel-image-main img');
-        const path = previewImg?.dataset.previewPath;
-        if (path) await setAsCover(bodyEl, slug, path);
+      const item = itemsBySlug[slug];
+      if (!item) return;
+      const t = e.target;
+
+      const preview = t.closest('.js-preview');
+      if (preview) {
+        panelPreview.slug = slug; panelPreview.path = preview.dataset.path;
+        rerenderPanelBody(bodyEl, item);
         return;
       }
-
-      const removeBtn = e.target.closest('.js-remove-image');
-      if (removeBtn) {
-        e.preventDefault();
-        const previewImg = bodyEl.querySelector('.panel-image-main img');
-        const path = previewImg?.dataset.previewPath;
-        if (path) await removeImage(bodyEl, slug, path);
+      const setCover = t.closest('.js-set-cover');
+      if (setCover) {
+        refresh(await postItemUpdate(slug, { primary_image_path: setCover.dataset.path }));
         return;
       }
+      const ref = t.closest('.js-open-ref');
+      if (ref) { PanelManager.open(ref.dataset.slug); return; }
 
-      const thumb = e.target.closest('.panel-image-thumb');
-      if (!thumb) return;
-      if (thumb.classList.contains('panel-image-upload-tile')) return;
-      const path = thumb.dataset.path;
-      if (!path) return;
-      e.preventDefault();
+      const accept = t.closest('.js-accept-reason');
+      if (accept) { refresh(await postItemUpdate(slug, { add_intents: [accept.dataset.reason] })); return; }
+      const dismiss = t.closest('.js-dismiss-reason');
+      if (dismiss) { refresh(await postItemUpdate(slug, { dismiss_reasons: [dismiss.dataset.reason] })); return; }
 
-      // Swap preview only — never touch cover from a thumb click.
-      previewThumb(bodyEl, path);
-
-      // Promote candidates to images[] so they stick (without changing cover).
-      if (thumb.dataset.source === 'extracted') {
-        thumb.classList.remove('is-candidate');
-        const addBadge = thumb.querySelector('.panel-image-thumb-add');
-        if (addBadge) addBadge.remove();
-        postItemUpdate(slug, { add_image_paths: [path] });
+      const rmTag = t.closest('.js-remove-tag');
+      if (rmTag) {
+        refresh(await postItemUpdate(slug, { removed_tags: [{ tag: rmTag.dataset.tag, category: rmTag.dataset.category }] }));
+        return;
+      }
+      const rmSnip = t.closest('.js-remove-snippet');
+      if (rmSnip) {
+        const idx = Number(rmSnip.closest('.sub-snippet')?.dataset.index);
+        if (idx >= 0) refresh(await postItemUpdate(slug, { removed_snippet_ids: [idx] }));
+        return;
+      }
+      const copy = t.closest('.js-copy-prompt');
+      if (copy) {
+        try { await navigator.clipboard.writeText(copy.dataset.text); showToast('Prompt copied'); } catch { /* blocked */ }
+        return;
+      }
+      if (t.closest('.js-enrich')) {
+        showToast('Enriching…');
+        try {
+          const res = await apiFetch('/api/reenrich', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug }),
+          });
+          if (!res.ok) throw new Error('Enrich request failed');
+          pollForEnrichment(slug);
+        } catch (err) {
+          showToast('Enrich failed: ' + (err.message || 'unknown'));
+        }
       }
     });
 
-    // --- Upload: delegated change handler survives slider refreshes.
-    // Previously bound directly to the input, which was lost after
-    // refreshSliderFrom() replaced the slider's HTML. ---
     bodyEl.addEventListener('change', async (e) => {
-      if (!e.target.matches('.panel-image-upload-tile input[type="file"]')) return;
+      if (!e.target.matches('.sub-add-tile input[type="file"]')) return;
       const file = e.target.files && e.target.files[0];
+      e.target.value = '';
       if (!file) return;
       const base64 = await fileToBase64(file);
       if (!base64) return;
@@ -1647,90 +1635,11 @@
         manual_image_upload: { base64, mime: file.type || 'image/jpeg' },
       });
       if (updated) {
-        refreshSliderFrom(bodyEl, updated);
-        // Preview the newly uploaded image (not the cover) so the user
-        // immediately sees what they just added, without overriding cover.
-        const newestManual = [...updated.images].reverse()
-          .find(i => i.source === 'manual');
-        if (newestManual) previewThumb(bodyEl, newestManual.path);
+        const newest = [...updated.images].reverse().find(i => i.source === 'manual');
+        if (newest) { panelPreview.slug = slug; panelPreview.path = newest.path; }
+        rerenderPanelBody(bodyEl, updated);
       }
-      e.target.value = '';
     });
-
-    // --- Capture form: chips toggle locally; Save/Skip commit to server. ---
-    const form = bodyEl.querySelector('.panel-capture-form');
-    if (form) {
-      form.addEventListener('click', (e) => {
-        const btn = e.target.closest('.q-toggle');
-        if (btn) {
-          e.preventDefault();
-          btn.classList.toggle('active');
-          return;
-        }
-        const save = e.target.closest('.q-save');
-        if (save) { e.preventDefault(); commitCaptureForm(slug, form); return; }
-        const skip = e.target.closest('.q-skip');
-        if (skip) { e.preventDefault(); commitCaptureForm(slug, form, { skip: true }); return; }
-      });
-    }
-
-    // --- Snippets: candidate chip adds, ✕ removes, "+ Add" appends manual ---
-    const snipWrap = bodyEl.querySelector('.panel-snippets');
-    if (snipWrap) {
-      snipWrap.addEventListener('click', async (e) => {
-        const cand = e.target.closest('.panel-snippet-candidate');
-        if (cand) {
-          e.preventDefault();
-          const text = cand.dataset.text;
-          cand.remove();
-          const updated = await postItemUpdate(slug, { new_snippets: [text] });
-          if (updated) refreshSnippetsFrom(bodyEl, updated);
-          return;
-        }
-        const rm = e.target.closest('.panel-snippet-remove');
-        if (rm) {
-          e.preventDefault();
-          const row = rm.closest('.panel-snippet-row');
-          const idx = row ? Number(row.dataset.index) : -1;
-          if (idx >= 0) {
-            row.remove();
-            const updated = await postItemUpdate(slug, { removed_snippet_ids: [idx] });
-            if (updated) refreshSnippetsFrom(bodyEl, updated);
-          }
-          return;
-        }
-        const addBtn = e.target.closest('.panel-snippet-add-btn');
-        if (addBtn) {
-          e.preventDefault();
-          const ta = snipWrap.querySelector('.panel-snippet-add textarea');
-          const text = ta?.value.trim();
-          if (!text) return;
-          ta.value = '';
-          const updated = await postItemUpdate(slug, { new_snippets: [text] });
-          if (updated) refreshSnippetsFrom(bodyEl, updated);
-        }
-      });
-    }
-  }
-
-  // Explicit commit of the capture form (why_saved + what_works). Save
-  // persists whatever the user selected; Skip commits an empty intent so
-  // the server flips needs_review=false and the form stops appearing.
-  async function commitCaptureForm(slug, form, opts) {
-    const skip = opts && opts.skip;
-    let why_saved = [];
-    let what_works = '';
-    if (!skip) {
-      const activeBtns = form.querySelectorAll('.q-toggle.active');
-      why_saved = [...activeBtns].map(b => b.dataset.value);
-      const custom = form.querySelector('.q-custom-reason')?.value.trim();
-      if (custom) why_saved.push(custom.toLowerCase().replace(/\s+/g, '-'));
-      what_works = form.querySelector('.question-text')?.value || '';
-    }
-    const updated = await postItemUpdate(slug, { why_saved, what_works });
-    // After a commit the server will have flipped needs_review=false;
-    // refresh the panel so the capture form section disappears cleanly.
-    if (updated) PanelManager.refreshItem(slug);
   }
 
   async function postItemUpdate(slug, payload) {
@@ -1742,216 +1651,18 @@
       });
       if (!res.ok) return null;
       const data = await res.json();
-      // Merge server truth into local state and update the grid card.
-      const prev = itemsBySlug[slug];
-      const next = normalizeItem({
-        ...(prev || {}),
-        ...data,
-      });
+      const next = normalizeItem({ ...(itemsBySlug[slug] || {}), ...data });
       itemsBySlug[slug] = next;
-      // Update the grid card thumb if primary image changed.
+      const i = allItems.findIndex(x => x.slug === slug);
+      if (i >= 0) allItems[i] = next;
       const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
-      if (card) {
-        const newThumb = card.querySelector('.card-thumb');
-        if (newThumb && next.image_path) {
-          newThumb.src = next.image_path;
-        }
-      }
+      const thumb = card && card.querySelector('.card-thumb');
+      if (thumb && next.image_path) thumb.src = next.image_path;
       return next;
     } catch (err) {
       console.warn('postItemUpdate failed', slug, err.message);
       return null;
     }
-  }
-
-  function refreshSliderFrom(bodyEl, item) {
-    const slider = bodyEl.querySelector('.panel-image-slider');
-    if (!slider) return;
-    slider.outerHTML = renderPanelSliderHTML(item);
-    updateCoverDotColor(bodyEl.querySelector('.panel-image-slider'));
-  }
-
-  // Swap the main preview image locally (no server call). Marks the
-  // matching thumb .is-active. The "Set as cover" pill is always visible
-  // (even when previewing the current cover) so the action is consistent
-  // for every image in the slider.
-  function previewThumb(bodyEl, path) {
-    const slider = bodyEl.querySelector('.panel-image-slider');
-    if (!slider) return;
-    const main = slider.querySelector('.panel-image-main');
-    if (main) {
-      const img = main.querySelector('img');
-      if (img) {
-        img.src = path;
-        img.dataset.previewPath = path;
-      } else {
-        main.insertAdjacentHTML('afterbegin',
-          `<img src="${escAttr(path)}" alt="" data-preview-path="${escAttr(path)}">`);
-      }
-    }
-    slider.querySelectorAll('.panel-image-thumb').forEach(t =>
-      t.classList.toggle('is-active', t.dataset.path === path));
-  }
-
-  async function setAsCover(bodyEl, slug, path) {
-    const updated = await postItemUpdate(slug, { primary_image_path: path });
-    if (updated) refreshSliderFrom(bodyEl, updated);
-  }
-
-  async function removeImage(bodyEl, slug, path) {
-    const updated = await postItemUpdate(slug, { remove_image_paths: [path] });
-    if (updated) refreshSliderFrom(bodyEl, updated);
-  }
-
-  // ---- Cover-dot color: black on bright images, white on dark ones.
-  // Results are cached by image URL since thumbnails never change their
-  // pixel data, only their .is-cover membership.
-  const _brightnessCache = new Map();
-
-  function updateCoverDotColor(slider) {
-    if (!slider) return;
-    const coverThumb = slider.querySelector('.panel-image-thumb.is-cover');
-    if (!coverThumb) return;
-    const src = coverThumb.querySelector('img')?.src;
-    if (!src) return;
-
-    const apply = (luminance) => {
-      // WCAG says 128 on a 0-255 scale is the naive midpoint; in practice
-      // dot visibility flips a bit earlier against busy backgrounds, so
-      // err toward white at moderate brightness.
-      const color = luminance > 140 ? '#000' : '#fff';
-      coverThumb.style.setProperty('--dot-color', color);
-    };
-
-    if (_brightnessCache.has(src)) { apply(_brightnessCache.get(src)); return; }
-
-    // Use a fresh crossOrigin image so we can read canvas pixels. If the
-    // storage CDN doesn't send CORS headers, the load will fail and we
-    // just leave the default color.
-    const probe = new Image();
-    probe.crossOrigin = 'anonymous';
-    probe.onload = () => {
-      try {
-        const w = 16, h = 16;
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(probe, 0, 0, w, h);
-        const data = ctx.getImageData(0, 0, w, h).data;
-        let r = 0, g = 0, b = 0, n = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
-        }
-        // Rec. 601 luma coefficients — matches how the eye weights channels.
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / n;
-        _brightnessCache.set(src, luminance);
-        apply(luminance);
-      } catch { /* tainted canvas, leave default */ }
-    };
-    probe.onerror = () => { /* CORS or 404 — leave default */ };
-    probe.src = src;
-  }
-
-  // ---- Three-dot footer menu (Enrich + Delete) ----
-  function bindPanelFooterMenu(footerEl, item) {
-    const trigger = footerEl.querySelector('.panel-footer-menu-trigger');
-    const popover = footerEl.querySelector('.panel-footer-menu-popover');
-    const deleteBtn = footerEl.querySelector('.js-delete');
-    const enrichBtn = footerEl.querySelector('.js-enrich');
-    if (!trigger || !popover) return;
-
-    const slug = item.slug;
-
-    const closeMenu = () => {
-      popover.hidden = true;
-      trigger.setAttribute('aria-expanded', 'false');
-      // Reset the delete two-step any time the menu closes.
-      if (deleteBtn) {
-        deleteBtn.dataset.step = '0';
-        deleteBtn.textContent = 'Delete';
-      }
-    };
-
-    const openMenu = () => {
-      popover.hidden = false;
-      trigger.setAttribute('aria-expanded', 'true');
-    };
-
-    trigger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (popover.hidden) openMenu(); else closeMenu();
-    });
-
-    // Outside click / Escape dismiss the menu without firing destructive steps.
-    const outsideHandler = (e) => {
-      if (popover.hidden) return;
-      if (footerEl.contains(e.target)) return;
-      closeMenu();
-    };
-    document.addEventListener('click', outsideHandler);
-    document.addEventListener('keydown', (e) => {
-      if (!popover.hidden && e.key === 'Escape') closeMenu();
-    });
-
-    if (enrichBtn) {
-      enrichBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        closeMenu();
-        showToast('Enriching…');
-        try {
-          const res = await apiFetch('/api/reenrich', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug }),
-          });
-          if (!res.ok) throw new Error('Enrich request failed');
-          // Poll for enrichment completion so the panel + grid update live.
-          if (typeof pollForEnrichment === 'function') pollForEnrichment(slug);
-          showToast('Enriching in background…');
-        } catch (err) {
-          showToast('Enrich failed: ' + (err.message || 'unknown'));
-        }
-      });
-    }
-
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (deleteBtn.dataset.step !== '1') {
-          // First click -> arm for confirmation.
-          deleteBtn.dataset.step = '1';
-          deleteBtn.textContent = 'Confirm delete';
-          return;
-        }
-        // Second click -> execute.
-        try {
-          const res = await apiFetch('/api/item-delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug }),
-          });
-          if (!res.ok) throw new Error('Delete failed');
-          // Locally remove: card, lookups, open panel.
-          const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
-          if (card) card.remove();
-          const idx = allItems.findIndex(i => i.slug === slug);
-          if (idx >= 0) allItems.splice(idx, 1);
-          delete itemsBySlug[slug];
-          renderStats();
-          PanelManager.close();
-          showToast('Deleted');
-        } catch (err) {
-          showToast('Delete failed: ' + (err.message || 'unknown'));
-          closeMenu();
-        }
-      });
-    }
-  }
-
-  function refreshSnippetsFrom(bodyEl, item) {
-    const wrap = bodyEl.querySelector('.panel-snippets');
-    if (!wrap) return;
-    wrap.outerHTML = renderPanelSnippetsHTML(item);
   }
 
   function fileToBase64(file) {
@@ -1993,6 +1704,9 @@
   }
 
   function notifyCaptureSlugClosed(slug) {
+    // Mac parity: leaving an item's panel marks it reviewed.
+    const closedItem = itemsBySlug[slug];
+    if (closedItem && closedItem.needs_review === true) postItemUpdate(slug, { mark_reviewed: true });
     if (!captureFlowSlugs.has(slug)) return;
     captureFlowSlugs.delete(slug);
     if (captureFlowSlugs.size === 0) advanceCaptureQueue();
@@ -2827,97 +2541,33 @@
       const item = itemsBySlug[state.slug];
       if (!item) { syncHighlightsToOpenPanels([]); return; }
 
+      // Mac panel: no header bar. The cover bleeds to the top and a
+      // floating glass close button sits over it (top-right).
       const panel = document.createElement('aside');
-      panel.className = 'panel';
+      panel.className = 'panel panel-item';
       panel.dataset.slug = state.slug;
       panel.setAttribute('role', 'region');
       panel.setAttribute('aria-label', `Item detail: ${item.title || state.slug}`);
       panel.setAttribute('tabindex', '-1');
       panel.style.setProperty('--panel-width', computePanelWidth() + 'px');
 
-      const header = document.createElement('header');
-      header.className = 'panel-header';
-
-      const info = document.createElement('div');
-      info.className = 'panel-header-info';
-      const titleEl = document.createElement('div');
-      titleEl.className = 'panel-header-title';
-      titleEl.textContent = item.title || '';
-      info.appendChild(titleEl);
-      if (item.domain) {
-        const sourceEl = document.createElement('div');
-        sourceEl.className = 'panel-header-source';
-        sourceEl.textContent = item.domain;
-        info.appendChild(sourceEl);
-      }
-      header.appendChild(info);
-
-      const actions = document.createElement('div');
-      actions.className = 'panel-header-actions';
-
-      const shuffleBtn = document.createElement('button');
-      shuffleBtn.className = 'panel-shuffle';
-      shuffleBtn.type = 'button';
-      shuffleBtn.setAttribute('aria-label', 'Shuffle to related item');
-      shuffleBtn.title = 'Shuffle to related item';
-      shuffleBtn.innerHTML = icon('shuffle');
-      shuffleBtn.addEventListener('click', shuffle);
-      actions.appendChild(shuffleBtn);
-
-      if (item.source_url) {
-        const openBtn = document.createElement('button');
-        openBtn.className = 'panel-open-source';
-        openBtn.type = 'button';
-        openBtn.setAttribute('aria-label', 'Open source in new tab');
-        openBtn.title = 'Open source';
-        openBtn.innerHTML = icon('arrow-up-right');
-        openBtn.addEventListener('click', () => {
-          window.open(item.source_url, '_blank', 'noopener');
-        });
-        actions.appendChild(openBtn);
-      }
-
-      const expandBtn = document.createElement('button');
-      expandBtn.className = 'panel-expand';
-      expandBtn.type = 'button';
-      expandBtn.setAttribute('aria-label', 'Open full page');
-      expandBtn.title = 'Full page';
-      expandBtn.innerHTML = icon('frame-corners');
-      expandBtn.addEventListener('click', () => {
-        syncToStorage();
-        window.location.href = 'detail.html?slug=' + encodeURIComponent(state.slug);
-      });
-      actions.appendChild(expandBtn);
-
       const closeBtn = document.createElement('button');
-      closeBtn.className = 'panel-close';
+      closeBtn.className = 'panel-float-close';
       closeBtn.type = 'button';
       closeBtn.setAttribute('aria-label', 'Close panel');
       closeBtn.title = 'Close';
       closeBtn.innerHTML = icon('x');
       closeBtn.addEventListener('click', close);
-      actions.appendChild(closeBtn);
-
-      header.appendChild(actions);
-      panel.appendChild(header);
+      panel.appendChild(closeBtn);
 
       const body = document.createElement('div');
       body.className = 'panel-body';
-      body.innerHTML = buildPanelBodyHTML(item, null);
       panel.appendChild(body);
-
-      const footer = document.createElement('div');
-      footer.className = 'panel-footer';
-      footer.innerHTML = buildPanelFooterHTML(item, null);
-      panel.appendChild(footer);
-
       $container.appendChild(panel);
 
-      const mdEl = body.querySelector('.card-expanded-md');
-      loadMarkdownInto(mdEl);
-
-      bindPanelBody(body, item);
-      bindPanelFooterMenu(footer, item);
+      if (panelPreview.slug !== state.slug) { panelPreview.slug = state.slug; panelPreview.path = null; }
+      rerenderPanelBody(body, item);
+      bindPanelBody(body, state.slug);
 
       syncHighlightsToOpenPanels([state.slug]);
     }
@@ -3077,39 +2727,6 @@
       if (state.slug) close();
     }
 
-    function replace(newSlug) {
-      if (!state.slug || !itemsBySlug[newSlug]) return;
-      state.slug = newSlug;
-      syncToURL(false);
-      syncToStorage();
-      render();
-      updateActiveCards();
-      announce(`Panel shuffled to: ${itemsBySlug[newSlug].title || newSlug}`);
-    }
-
-    // Find a random slug that shares ≥1 tag with the open item.
-    function randomRelatedSlug(currentSlug) {
-      const item = itemsBySlug[currentSlug];
-      if (!item) return null;
-      const tagKeys = new Set(item.tags.map(t => t.category + ':' + t.tag));
-      const candidates = [];
-      for (const other of allItems) {
-        if (other.slug === currentSlug) continue;
-        for (const t of other.tags) {
-          if (tagKeys.has(t.category + ':' + t.tag)) { candidates.push(other.slug); break; }
-        }
-      }
-      if (candidates.length === 0) return null;
-      return candidates[Math.floor(Math.random() * candidates.length)];
-    }
-
-    function shuffle() {
-      if (!state.slug) return;
-      const next = randomRelatedSlug(state.slug);
-      if (!next) { announce('No related items available to shuffle to'); return; }
-      replace(next);
-    }
-
     function focus() {
       const panel = $container && $container.querySelector('.panel');
       if (panel) panel.focus({ preventScroll: false });
@@ -3188,99 +2805,12 @@
     function refreshItem(slug) {
       if (!$container || state.slug !== slug) return;
       const item = itemsBySlug[slug];
-      if (!item) return;
-      const panel = $container.querySelector('.panel');
-      if (!panel) return;
-      const body = panel.querySelector('.panel-body');
-      const footer = panel.querySelector('.panel-footer');
-
-      // Diff-aware refresh: don't stomp sections the user is actively
-      // editing. The slider, the candidate chips, and the footer tags are
-      // safe to re-render whenever the data changes. The capture form
-      // (q-toggle chips, q-custom-reason, question-text) holds in-flight
-      // input — only re-render it if it doesn't exist yet.
-      if (body) {
-        // Slider: rebuild whenever images[] or candidate images change.
-        const slider = body.querySelector('.panel-image-slider');
-        if (slider) {
-          const nextHtml = renderPanelSliderHTML(item);
-          if (slider.outerHTML !== nextHtml) slider.outerHTML = nextHtml;
-        } else {
-          // First render didn't have a slider (no image + no candidates).
-          // Prepend one if we now have something to show.
-          const nextHtml = renderPanelSliderHTML(item);
-          if (nextHtml) body.insertAdjacentHTML('afterbegin', nextHtml);
-        }
-
-        // Capture form: only shown while needs_review=true. Remove it
-        // when the item no longer needs review; merge suggested chips in
-        // when the form is already present and enrichment adds more.
-        const form = body.querySelector('.panel-capture-form');
-        if (item.needs_review !== true) {
-          if (form) form.remove();
-        } else if (!form) {
-          const snipWrap = body.querySelector('.panel-snippets');
-          const html = renderPanelCaptureFormHTML(item);
-          if (html) {
-            if (snipWrap) snipWrap.insertAdjacentHTML('beforebegin', html);
-            else body.insertAdjacentHTML('beforeend', html);
-          }
-        } else {
-          mergeSuggestedReasonChips(form, item);
-        }
-
-        // Snippets: re-render list + candidate chips. The "add" textarea
-        // gets wiped — capture its value first and restore.
-        const snipWrap = body.querySelector('.panel-snippets');
-        if (snipWrap) {
-          const pendingDraft = snipWrap.querySelector('.panel-snippet-add textarea')?.value || '';
-          snipWrap.outerHTML = renderPanelSnippetsHTML(item);
-          const restored = body.querySelector('.panel-snippet-add textarea');
-          if (restored && pendingDraft) restored.value = pendingDraft;
-        } else {
-          body.insertAdjacentHTML('beforeend', renderPanelSnippetsHTML(item));
-        }
-
-        // Markdown body: re-load if the raw markdown changed.
-        const mdEl = body.querySelector('.card-expanded-md');
-        if (mdEl && !mdEl.dataset.loaded) loadMarkdownInto(mdEl);
-
-        // Re-bind handlers because we replaced DOM nodes.
-        bindPanelBody(body, item);
-      }
-      if (footer) {
-        footer.innerHTML = buildPanelFooterHTML(item, null);
-      }
-    }
-
-    // Merge any reason chips from enrichment_candidates.reasons that
-    // aren't already shown in the form. Preserves the active state of
-    // existing chips and any text typed into q-custom-reason / textarea.
-    function mergeSuggestedReasonChips(form, item) {
-      const reasons = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.reasons))
-        ? item.enrichment_candidates.reasons : [];
-      if (!reasons.length) return;
-      const options = form.querySelector('.question-options');
-      if (!options) return;
-      const have = new Set(
-        [...options.querySelectorAll('.q-toggle')].map(b => b.dataset.value)
-      );
-      const customInput = options.querySelector('.q-custom-reason');
-      for (const r of reasons) {
-        if (have.has(r)) continue;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'q-toggle q-toggle-suggested';
-        btn.dataset.value = r;
-        btn.title = 'Suggested';
-        btn.textContent = humanizeReason(r);
-        if (customInput) options.insertBefore(btn, customInput);
-        else options.appendChild(btn);
-      }
+      const body = $container.querySelector('.panel-item .panel-body');
+      if (item && body) rerenderPanelBody(body, item);
     }
 
     return {
-      init, open, close, focus, shuffle, applyWidth,
+      init, open, close, focus, applyWidth,
       openTool, closeTool,
       getOpenSlug,
       refreshAfterGridRender, refreshItem,
