@@ -24,7 +24,7 @@ enum SyncWire {
     ]
 
     /// One row from `/api/sync/pull`. Values stay as parsed JSON (`NSNull` for null).
-    struct Row: @unchecked Sendable {
+    nonisolated struct Row: @unchecked Sendable {
         let id: UUID
         let seq: Int
         let values: [String: Any]
