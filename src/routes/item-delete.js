@@ -1,8 +1,7 @@
-const { authenticateRequest, jsonResponse, handleCors } = require('../lib/supabase');
-const storage = require('../lib/storage');
+const { authenticateRequest, jsonResponse, handleCors } = require('../lib/common');
 
 /**
- * Delete an item and the R2 objects it owns.
+ * Delete an item (soft delete, restorable for 30 days).
  * Body: { slug }
  */
 module.exports = async function handler(req, res) {
@@ -25,16 +24,9 @@ module.exports = async function handler(req, res) {
     .single();
   if (fetchErr || !item) return jsonResponse(res, 404, { error: 'Item not found' });
 
-  // Best-effort storage cleanup: everything under {user_id}/{slug}/.
-  // A remove failure doesn't block the row delete (orphaned objects can be
-  // GC'd later; an undeletable row is worse).
-  try {
-    const keys = await storage.list(req.env, `${user.id}/${slug}/`);
-    if (keys.length) await storage.remove(req.env, keys);
-  } catch (err) {
-    console.warn('item-delete: storage cleanup threw', slug, err.message);
-  }
-
+  // Soft delete (db.js turns delete() on items into deleted_at = now). The
+  // row and its R2 images stay for 30 days so a delete can be restored and
+  // the Apple apps learn about it through sync; the daily purge clears them.
   const { error: deleteErr } = await client
     .from('items')
     .delete()

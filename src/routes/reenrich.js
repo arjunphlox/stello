@@ -2,7 +2,7 @@ const {
   authenticateRequest, jsonResponse, handleCors,
   fetchOGMetadata, downloadImage, extractDomain,
   generateTagsFromMetadata,
-} = require('../lib/supabase');
+} = require('../lib/common');
 const storage = require('../lib/storage');
 const { enrichCore } = require('./enrich');
 
@@ -111,10 +111,9 @@ module.exports = async function handler(req, res) {
   if (updateErr) return jsonResponse(res, 500, { error: 'Update failed', detail: updateErr.message });
 
   // --- Phase 2: vision + candidates via waitUntil (no self-subrequest) ---
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
-  if (req.ctx && token) {
+  if (req.ctx) {
     req.ctx.waitUntil(
-      enrichCore(env, token, { slug, itemId: item.id }).catch(() => {})
+      enrichCore(env, user.id, { slug, itemId: item.id }).catch(() => {})
     );
   }
 

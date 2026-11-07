@@ -1,6 +1,6 @@
 const {
-  authenticateRequest, userClientFromToken, jsonResponse, handleCors, downloadImage,
-} = require('../lib/supabase');
+  authenticateRequest, userClient, jsonResponse, handleCors, downloadImage,
+} = require('../lib/common');
 const storage = require('../lib/storage');
 const Anthropic = require('@anthropic-ai/sdk');
 
@@ -44,8 +44,7 @@ module.exports = async function handler(req, res) {
   const { slug, itemId } = req.body || {};
   if (!slug && !itemId) return jsonResponse(res, 400, { error: 'Missing slug or itemId' });
 
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
-  const result = await enrichCore(req.env, token, { slug, itemId });
+  const result = await enrichCore(req.env, user.id, { slug, itemId });
   return jsonResponse(res, 200, result);
 };
 
@@ -54,10 +53,10 @@ module.exports = async function handler(req, res) {
  * from capture / upload-image / reenrich (no self-subrequest). Builds its own
  * user-scoped client from the bearer token.
  */
-async function enrichCore(env, accessToken, { slug, itemId }) {
-  const client = userClientFromToken(env, accessToken);
-  const { data: { user } = {}, error: authErr } = await client.auth.getUser(accessToken);
-  if (authErr || !user) return { error: 'unauthorized' };
+async function enrichCore(env, userId, { slug, itemId }) {
+  if (!userId) return { error: 'unauthorized' };
+  const client = userClient(env, userId);
+  const user = { id: userId };
 
   // Fetch the item
   let query = client.from('items').select('*');

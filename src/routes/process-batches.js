@@ -1,7 +1,7 @@
 const {
   getAdminClient, normalizeUrl, fetchOGMetadata, downloadImage,
   generateSlug, generateTagsFromMetadata, extractDomain,
-} = require('../lib/supabase');
+} = require('../lib/common');
 const storage = require('../lib/storage');
 const { reprocessItem } = require('./reprocess');
 const { enrichItem, getApiKey } = require('./enrich');

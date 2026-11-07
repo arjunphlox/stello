@@ -206,8 +206,7 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-client.js?v=1"></script>
+    <script src="auth-client.js?v=1"></script>
   <script>
   (function () {
     'use strict';
@@ -317,15 +316,8 @@
         return;
       }
 
-      // Load item from Supabase
-      const client = Stello.getClient();
-      const { data, error } = await client
-        .from('items')
-        .select('*')
-        .eq('slug', slug)
-        .eq('user_id', Stello.getUserId())
-        .single();
-      if (error) console.error('Supabase item fetch error:', error.message);
+      // Load the item from the Worker
+      const data = (await Stello.apiGet(`/api/item?slug=${encodeURIComponent(slug)}`))?.item;
       const item = data ? normalizeItem(data) : null;
 
       if (!item) {
@@ -376,7 +368,7 @@
 
       document.getElementById('detail-right').innerHTML = html;
 
-      // Render markdown body from the Supabase row
+      // Render markdown body from the item row
       const body = item.body_markdown
         ? stripSections(item.body_markdown, ['Summary', 'Key Details', 'Visual Assets'])
         : '';
