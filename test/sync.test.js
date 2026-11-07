@@ -142,3 +142,29 @@ test('a full push of 100 items fits D1 limits', async () => {
   const again = await applyChanges(db, 'u1', ids.map((id) => ({ id, fields: { title: 'u' }, clock: 20 })));
   assert.equal(again.results.filter((x) => x.status === 'applied').length, 100);
 });
+
+test('duplicate links merge into the richest row and the rest are soft-deleted', async () => {
+  const { mergeDuplicates } = await import('../src/lib/dedupe.js');
+  const db = makeD1(SCHEMA);
+  const C = '33333333-3333-4333-8333-333333333333';
+  await applyChanges(db, 'u1', [
+    full(A, { title: 'old', source_url: 'https://www.kargul.studio/', added_at: '2026-01-01T00:00:00Z',
+      tags: [{ tag: 'studio', category: 'subject', weight: 0.5 }], snippets: [{ text: 'a' }] }, 1),
+    full(B, { title: 'new', source_url: 'https://kargul.studio', added_at: '2026-11-04T00:00:00Z', summary: 'S',
+      images: [{ path: '/img/x.webp', is_primary: true }], tags: [{ tag: 'Studio', category: 'subject', weight: 0.9 }] }, 1),
+    full(C, { title: 'other', source_url: 'https://example.com', added_at: '2026-02-01T00:00:00Z' }, 1),
+  ]);
+  const preview = await mergeDuplicates(db, 'u1');
+  assert.equal(preview.applied, false);
+  assert.equal(preview.groups, 1);
+  assert.equal(preview.plans[0].keep, B);
+  const done = await mergeDuplicates(db, 'u1', { apply: true, now: 1000 });
+  assert.equal(done.statuses.applied, 2);
+  const items = Object.fromEntries((await pullChanges(db, 'u1', 0)).items.map((i) => [i.id, i]));
+  assert.equal(items[A].deleted_at, 1000);
+  assert.equal(items[B].added_at, '2026-01-01T00:00:00Z');
+  assert.deepEqual(items[B].snippets.map((s) => s.text), ['a']);
+  assert.equal(items[B].tags.length, 1);
+  assert.equal(items[B].tags[0].weight, 0.9);
+  assert.equal(items[C].deleted_at, null);
+});

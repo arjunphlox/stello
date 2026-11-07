@@ -30,6 +30,7 @@ import auth from './lib/auth.js';
 import syncRoutes from './routes/sync.js';
 import appleNative from './routes/auth-apple-native.js';
 import { runDailySync } from './lib/sync-cron.js';
+import { mergeDuplicates } from './lib/dedupe.js';
 import processBatchesMod from './routes/process-batches.js';
 
 const app = new Hono();
@@ -46,6 +47,17 @@ mountData(app);
 // Apple app <-> web copy sync (docs/plans/apple-web-sync.md).
 app.post('/api/auth/apple/native', appleNative);
 app.route('/api/sync', syncRoutes({ requireUser: auth.requireUser }));
+
+// One-off: merge items saved more than once (same link). Admin only.
+// Body { email, apply }: without apply: true it only returns the plan.
+app.post('/api/admin/merge-duplicates', async (c) => {
+  const want = c.env.ADMIN_TOKEN;
+  if (!want || c.req.header('authorization') !== `Bearer ${want}`) return c.json({ error: 'unauthorized' }, 401);
+  const { email, apply } = await c.req.json().catch(() => ({}));
+  const user = await auth.findUserByEmail(c.env, email);
+  if (!user) return c.json({ error: 'no such user' }, 404);
+  return c.json(await mergeDuplicates(c.env.DB, user.id, { apply: apply === true }));
+});
 
 app.onError((err, c) => {
   console.error('worker error', c.req.path, err && err.stack || err);
