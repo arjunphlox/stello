@@ -168,3 +168,15 @@ test('duplicate links merge into the richest row and the rest are soft-deleted',
   assert.equal(items[B].tags[0].weight, 0.9);
   assert.equal(items[C].deleted_at, null);
 });
+
+test('a merged item always has a primary image when it has images', async () => {
+  const { planMerges } = await import('../src/lib/dedupe.js');
+  const rows = [
+    { id: A, source_url: 'https://a.com', added_at: '2026-01-01', title: 'x', tags: '[]', snippets: '[{"text":"s"},{"text":"t"},{"text":"u"}]', images: '[]' },
+    { id: B, source_url: 'https://a.com/', added_at: '2026-02-01', title: 'y', tags: '[]', snippets: '[]', images: '[{"path":"/img/k.webp","is_primary":true}]' },
+  ];
+  rows[1].images = '[{"path":"/img/k.webp","is_primary":true}]';
+  const [plan] = planMerges(rows);
+  assert.equal(plan.keep, A);
+  assert.equal(plan.fields.images.filter((i) => i.is_primary).length, 1);
+});
