@@ -4,8 +4,7 @@
  * Save first, sort second. Capture inserts the item, answers the client, and only then
  * sorts it (ctx.waitUntil), so a page that is slow or runs past the Workers CPU limit
  * never loses the save. An item the rules can't type stays a plain link with no kind
- * and no metadata: the Mac app's web-inbox fill-in (SyncWire.needsClassify) and, later,
- * the Jev second opinion pick those up.
+ * and no metadata: the Mac app's web-inbox fill-in (SyncWire.needsClassify) picks those up.
  */
 import { readPage, makeNet } from './pipeline.js';
 

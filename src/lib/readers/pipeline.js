@@ -246,7 +246,7 @@ export async function readPage({ url, html = null, status = null, finalURL = nul
 /**
  * How sure the rules are, 0 to 1, with the signal that decided it. A plain `link` that
  * the page could not be read for (bot wall, timeout) is the least sure — those are the
- * cases a second opinion (Jev) or Needs review is for.
+ * cases Needs review (and the Mac fill-in) is for.
  */
 export function confidenceFor(kind, page, metadata) {
   if (!page) return { confidence: kind === 'link' ? 0.2 : 0.7, signal: 'url-only' };
