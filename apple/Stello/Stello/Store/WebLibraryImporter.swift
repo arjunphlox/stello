@@ -116,7 +116,6 @@ final class WebLibraryImporter {
             return
         }
 
-        await Self.assignKindsFromLabels(context: context)
         // Full imports only: against a partial library the catalog would add rows the
         // rest of the export already has, and those URLs would then be skipped.
         if !cancelled, limit == nil {

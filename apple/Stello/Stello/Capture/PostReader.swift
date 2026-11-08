@@ -112,6 +112,7 @@ nonisolated enum PostReader {
     /// `--sref 123`, `--v 6`) or it ends the line / text (`--niji`) — never prose such as
     /// "the --sref's" or "--sref,".
     static let midjourneyParamPattern =
+        #"(?im)(?:^|\s)(?:--|—)(?:ar|v|style|sref|niji|chaos|stylize)(?=[ \t]+[^\s\-—]|[ \t]*$)"#
 
     /// "Gen AI" / "gen_ai" / "GEN-AI" → "gen-ai".
     static func normalizedLabel(_ label: String) -> String {

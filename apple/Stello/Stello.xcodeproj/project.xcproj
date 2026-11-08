@@ -263,6 +263,7 @@
         { "path": "StelloTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ToolKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "WhySavedIntentTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "WorkerSorterTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
       ],
     }, {
       "kind": "group",

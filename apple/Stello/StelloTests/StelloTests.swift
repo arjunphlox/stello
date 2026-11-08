@@ -471,10 +471,11 @@ struct WebImportClassifyTests {
         #expect(row.data == nil)
         #expect(row.sourceURL == "https://images.example.com/img/u/a/og.png")
 
-        // The URL alone settles this one, and an empty row asks the page pass for a cover.
+        // The Worker sorts even URL-only cases later (readPages); an empty row asks the page
+        // pass for a cover.
         let noImage = try #require(items.first { $0.slug == "no-image" })
-        #expect(noImage.kind == ItemKind.post.rawValue)
-        #expect(noImage.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
+        #expect(noImage.kind == ItemKind.link.rawValue)
+        #expect(noImage.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus)
         #expect(noImage.images?.first?.coverPending == true)
         #expect(noImage.images?.first?.sourceURL == nil)
 
@@ -529,23 +530,6 @@ struct WebImportClassifyTests {
         return item
     }
 
-    @Test("Labels pass settles what the URL and labels decide and leaves the rest queued")
-    func labelsPass() async throws {
-        let context = try makeContext()
-        let post = queued("post", url: "https://x.com/someone/status/123", in: context)
-        let tool = queued("tool", url: "https://example.com/app", label: "digital-tools", in: context)
-        let plain = queued("plain", url: "https://example.com/about", in: context)
-        try context.save()
-
-        await WebLibraryImporter.assignKindsFromLabels(context: context)
-
-        #expect(post.kind == ItemKind.post.rawValue)
-        #expect(post.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
-        #expect(tool.kind == ItemKind.tool.rawValue)
-        #expect(plain.kind == ItemKind.link.rawValue)
-        #expect(plain.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus)
-    }
-
     @Test("Page pass reads kinds and covers, flags gone pages, and moves failures on as links")
     func pagesPass() async throws {
         let context = try makeContext()
@@ -573,7 +557,13 @@ struct WebImportClassifyTests {
             default:
                 return nil
             }
-        }, thumbnail: { _ in ImportThumbnail(data: Data([9]), width: 10, height: 10) })
+        }, thumbnail: { _ in ImportThumbnail(data: Data([9]), width: 10, height: 10) },
+        canSort: { true },
+        classify: { url, _, _, _ in
+            // The Worker's answer: an article for the readable page, a plain link otherwise
+            // (an unreadable page is decided from its URL alone).
+            WorkerRead(json: ["kind": url.lastPathComponent == "how-kerning-works" ? "article" : "link"])
+        })
 
         await WebLibraryImporter.readPages(context: context, network: network, concurrency: 2)
 
@@ -606,11 +596,65 @@ struct WebImportClassifyTests {
             try? await Task.sleep(for: .milliseconds(20))
             await gauge.leave()
             return nil
-        }, thumbnail: { _ in nil })
+        }, thumbnail: { _ in nil }, canSort: { true }, classify: { _, _, _, _ in WorkerRead(json: ["kind": "link"]) })
         await WebLibraryImporter.readPages(context: context, network: network, concurrency: 3)
         let peak = await gauge.peak
         #expect(peak > 1)
         #expect(peak <= 3)
+    }
+
+    @Test("Page pass: an unreachable Worker leaves items queued; signed out, nothing is fetched")
+    func pagesPassUnsorted() async throws {
+        let context = try makeContext()
+        let item = queued("offline", url: "https://example.com/offline", in: context)
+        try context.save()
+
+        let fetches = Counter()
+        let unreachable = ImportNetwork(
+            page: { _ in await fetches.bump(); return nil },
+            thumbnail: { _ in nil },
+            canSort: { true },
+            classify: { _, _, _, _ in nil }
+        )
+        await WebLibraryImporter.readPages(context: context, network: unreachable, concurrency: 1)
+        #expect(await fetches.value == 1)
+        #expect(item.kind == ItemKind.link.rawValue)
+        #expect(item.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus)
+
+        let signedOut = ImportNetwork(
+            page: { _ in await fetches.bump(); return nil },
+            thumbnail: { _ in nil },
+            canSort: { false },
+            classify: { _, _, _, _ in Issue.record("classify called while signed out"); return nil }
+        )
+        await WebLibraryImporter.readPages(context: context, network: signedOut, concurrency: 1)
+        #expect(await fetches.value == 1)
+        #expect(item.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus)
+    }
+
+    @Test("Page pass: a small queue gets the Worker's fields; kind only is not asked")
+    func pagesPassFields() async throws {
+        let context = try makeContext()
+        let item = queued("tool", url: "https://example.com/app", label: "digital-tools", in: context)
+        try context.save()
+
+        let asked = Counter()
+        let network = ImportNetwork(
+            page: { _ in PageFetchResult(html: "<html></html>", og: OGResult(), statusCode: 200) },
+            thumbnail: { _ in nil },
+            canSort: { true },
+            classify: { _, _, labels, kindOnly in
+                #expect(labels == ["digital-tools"])
+                #expect(!kindOnly)
+                await asked.bump()
+                return WorkerRead(json: ["kind": "tool", "metadata": ["name": "Acme", "platforms": [String](), "platformsAreGuess": false, "pricingIsGuess": false, "topics": [String]()]])
+            }
+        )
+        await WebLibraryImporter.readPages(context: context, network: network, concurrency: 1)
+        #expect(await asked.value == 1)
+        #expect(item.kind == ItemKind.tool.rawValue)
+        #expect(item.metadataJSON?.contains("Acme") == true)
+        #expect(item.enrichmentStatus == WebLibraryImporter.awaitingAIStatus)
     }
 
     @Test("Items with a summary skip the background pass but stay queued for opening")
@@ -669,4 +713,10 @@ struct WebImportClassifyTests {
         await WebLibraryImporter.enrichAwaitingAI(context: context, pause: { .zero }) { _ in }
         #expect(try pendingCount(context) == 0)
     }
+}
+
+/// Counts calls from `@Sendable` fakes.
+private actor Counter {
+    var value = 0
+    func bump() { value += 1 }
 }

@@ -568,18 +568,23 @@ struct StoreIntegrationTests {
     func captureURLOffline() async throws {
         let container = try StelloStore.makeInMemoryContainer()
         let context = ModelContext(container)
-        // 127.0.0.1:19999 — connection refused immediately, no DNS wait
+        // 127.0.0.1:19999 — connection refused immediately, no DNS wait. No Worker token:
+        // the test host never asks the live Worker; the save stays a queued plain link.
+        WorkerSorter.token = { nil }
         let url = URL(string: "http://127.0.0.1:19999/")!
         try await CaptureService.captureURL(url, context: context)
         let items = try context.fetch(FetchDescriptor<Item>())
         #expect(items.count == 1)
         #expect(items[0].domain == "127.0.0.1")
+        #expect(items[0].kind == ItemKind.link.rawValue)
+        #expect(items[0].enrichmentStatus == WorkerSorter.unsortedStatus)
     }
 
     @Test("captureURL deduplicates by normalized URL")
     func captureURLDedup() async throws {
         let container = try StelloStore.makeInMemoryContainer()
         let context = ModelContext(container)
+        WorkerSorter.token = { nil }
         let url = URL(string: "http://127.0.0.1:19999/dedup")!
         try await CaptureService.captureURL(url, context: context)
         try await CaptureService.captureURL(url, context: context)
