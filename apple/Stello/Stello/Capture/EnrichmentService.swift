@@ -435,13 +435,16 @@ enum EnrichmentService {
     /// fields belong to `applyPostAIArtIfNeeded`; a post title the user edited is kept.
     static func applyFreshRead(_ read: WorkerRead, to item: Item, context: ModelContext) async {
         guard read.kind != .music, canApply(read, to: item) else { return }
+        // A migration (product → resource, …) starts fresh: the old kind's dossier is a
+        // different shape and must not leak into the new one.
+        let sameKind = item.kind == read.kind.rawValue
         switch read.kind {
         case .product:
             guard let fresh = read.meta(ProductMeta.self) else { return }
-            item.setMetadata(mergeProduct(fresh: fresh, previous: item.productMeta()))
+            item.setMetadata(mergeProduct(fresh: fresh, previous: sameKind ? item.productMeta() : nil))
         case .post:
             guard let fresh = read.meta(PostMeta.self) else { return }
-            let previous = item.postMeta()
+            let previous = sameKind ? item.postMeta() : nil
             let meta = mergePost(fresh: fresh, previous: previous)
             // The title this rule would have written from the old dossier: if the item still
             // carries it, the user hasn't edited it and it may follow the new reading.
@@ -458,19 +461,19 @@ enum EnrichmentService {
             item.setMetadata(meta)
         case .tool:
             guard let fresh = read.meta(ToolMeta.self) else { return }
-            item.setMetadata(ToolReader.merge(fresh: fresh, previous: item.toolMeta()))
+            item.setMetadata(ToolReader.merge(fresh: fresh, previous: sameKind ? item.toolMeta() : nil))
         case .resource:
             guard let fresh = read.meta(ResourceMeta.self) else { return }
-            item.setMetadata(ResourceReader.merge(fresh: fresh, previous: item.resourceMeta()))
+            item.setMetadata(ResourceReader.merge(fresh: fresh, previous: sameKind ? item.resourceMeta() : nil))
         case .book:
             guard let fresh = read.meta(BookMeta.self) else { return }
-            item.setMetadata(BookReader.merge(fresh: fresh, previous: item.bookMeta()))
+            item.setMetadata(BookReader.merge(fresh: fresh, previous: sameKind ? item.bookMeta() : nil))
         case .course:
             guard let fresh = read.meta(CourseMeta.self) else { return }
-            item.setMetadata(CourseReader.merge(fresh: fresh, previous: item.courseMeta()))
+            item.setMetadata(CourseReader.merge(fresh: fresh, previous: sameKind ? item.courseMeta() : nil))
         case .article:
             guard let fresh = read.meta(ArticleMeta.self) else { return }
-            item.setMetadata(ArticleReader.merge(fresh: fresh, previous: item.articleMeta()))
+            item.setMetadata(ArticleReader.merge(fresh: fresh, previous: sameKind ? item.articleMeta() : nil))
         default:
             return
         }

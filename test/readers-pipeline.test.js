@@ -181,3 +181,34 @@ test('asKind keeps the earlier-build migrations: Framer product → resource, Fi
   const figma = await readPage({ url: 'https://www.figma.com/community/plugin/123/autoflow', html: '<html></html>', status: 200, asKind: 'tool', net });
   eq(figma.kind, 'resource');
 });
+
+// The Swift meta structs decode with synthesized Codable: every non-optional field must be
+// present, or the app drops the whole read. Keep in step with Models/CardMetadata.swift.
+const SWIFT_REQUIRED = {
+  music: ['artists', 'genres', 'trackList'],
+  post: ['isAIArt', 'promptIsGuess'],
+  tool: ['platforms', 'platformsAreGuess', 'pricingIsGuess', 'topics'],
+  resource: ['worksWith'],
+  article: ['summaryIsGuess', 'isTutorial', 'techStack'],
+  course: ['formatIsGuess', 'lessonsIsGuess', 'durationIsGuess', 'topics', 'topicsAreGuess'],
+  book: ['authors', 'subjects', 'authorsAreGuess'],
+  product: [],
+};
+
+test('metadata carries every key the Swift meta structs require', async () => {
+  const net = makeNet({ fetchImpl: fakeFetch({}).impl });
+  const pages = [
+    ['https://example.com/blog/a', 'article'],
+    ['https://www.framer.com/marketplace/templates/nova/', 'resource'],
+    ['https://example.com/motion-basics', 'course', '<script type="application/ld+json">{"@type":"Course","name":"M"}</script>'],
+    ['https://example.com/p', 'book', '<meta property="og:type" content="book">'],
+    ['https://x.com/someone/status/1234567890', 'post'],
+    ['https://open.spotify.com/album/abc', 'music'],
+    ['https://example.com/blog/my-cli', 'tool', '', 'tool'],
+  ];
+  for (const [url, kind, html = '<html></html>', asKind = null] of pages) {
+    const r = await readPage({ url, html, status: 200, asKind, net });
+    eq([url, r.kind], [url, kind]);
+    for (const key of SWIFT_REQUIRED[kind]) eq([kind, key, key in r.metadata], [kind, key, true]);
+  }
+});
