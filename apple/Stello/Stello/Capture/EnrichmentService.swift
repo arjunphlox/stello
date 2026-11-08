@@ -5,10 +5,14 @@ enum EnrichmentService {
 
     // MARK: - Apply result to item
 
+    /// `replaceAISnippets` (a user-run Enrich that produced new snippets) drops the snippets
+    /// an earlier AI run picked, so a card can shed ones read from site menus; snippets the
+    /// user added are never touched.
     static func apply(
         _ result: EnrichmentResult,
         to item: Item,
-        context: ModelContext
+        context: ModelContext,
+        replaceAISnippets: Bool = false
     ) throws {
         var tags = item.tags
         var names = Set(tags.map { $0.name.lowercased() })
@@ -23,7 +27,13 @@ enum EnrichmentService {
 
         item.enrichmentStatus = "vision_done"
 
-        let existingSnippets = Set((item.snippets ?? []).map { $0.text.lowercased() })
+        if replaceAISnippets, !result.snippets.isEmpty {
+            for snippet in item.snippets ?? [] where snippet.source == "ai" {
+                context.delete(snippet)
+            }
+        }
+        let existingSnippets = Set((item.snippets ?? []).filter { !(replaceAISnippets && $0.source == "ai") }
+            .map { $0.text.lowercased() })
         for text in result.snippets {
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, !existingSnippets.contains(trimmed.lowercased()) else { continue }
@@ -189,7 +199,7 @@ enum EnrichmentService {
                 coverImageData: coverData,
                 pageText: item.extractedText
             )
-            try apply(result, to: item, context: context)
+            try apply(result, to: item, context: context, replaceAISnippets: force)
         } catch EnricherError.unavailable {
             try? markTerminalWithoutAI(item: item, context: context)
             if let refetchError {

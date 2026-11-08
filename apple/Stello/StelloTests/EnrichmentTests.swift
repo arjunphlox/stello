@@ -54,6 +54,42 @@ struct EnrichmentServiceTests {
         #expect(snippets[0].text == "A notable quote from the page.")
     }
 
+    @Test("A user-run Enrich replaces AI snippets and keeps the user's own")
+    func enrichReplacesAISnippets() throws {
+        let container = try StelloStore.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let item = Item(title: "Test", enrichmentStatus: "text_done")
+        context.insert(item)
+        for (text, source) in [("You must be signed in to star a repository", "ai"), ("My own note", "manual")] {
+            let snippet = Snippet(text: text, source: source)
+            context.insert(snippet)
+            snippet.item = item
+        }
+        try context.save()
+
+        // Auto enrichment adds; it never removes.
+        try EnrichmentService.apply(
+            EnrichmentResult(visionTags: [], snippets: ["Fresh one"], whySavedSuggestions: []),
+            to: item, context: context
+        )
+        #expect(try context.fetch(FetchDescriptor<Snippet>()).count == 3)
+
+        // A user-run Enrich with new snippets swaps out the AI ones only.
+        try EnrichmentService.apply(
+            EnrichmentResult(visionTags: [], snippets: ["A fast alternative to find"], whySavedSuggestions: []),
+            to: item, context: context, replaceAISnippets: true
+        )
+        let texts = Set(try context.fetch(FetchDescriptor<Snippet>()).map(\.text))
+        #expect(texts == ["My own note", "A fast alternative to find"])
+
+        // No new snippets: nothing is dropped.
+        try EnrichmentService.apply(
+            EnrichmentResult(visionTags: [], snippets: [], whySavedSuggestions: []),
+            to: item, context: context, replaceAISnippets: true
+        )
+        #expect(try context.fetch(FetchDescriptor<Snippet>()).count == 2)
+    }
+
     @Test("whySaved suggestion adds intent tag at weight 0.9")
     func whySavedAddsIntentTag() throws {
         let container = try StelloStore.makeInMemoryContainer()
