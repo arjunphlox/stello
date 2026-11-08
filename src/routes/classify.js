@@ -5,13 +5,18 @@
  * and send the HTML; the Worker answers with the kind and typed metadata, so the
  * Swift readers can go. Web saves use the same pipeline through capture.
  *
- * Body: one page `{ url, html?, status?, finalURL?, collectionLabels? }`, or
+ * Body: one page `{ url, html?, status?, finalURL?, collectionLabels?, asKind?, kindOnly? }`, or
  * `{ pages: [...] }` up to CLASSIFY_BATCH_MAX (default 1: on the Workers Free plan a
  * request has 10 ms of CPU, and a long page alone can use most of it).
  * Answer: the readPage result, or `{ results: [...] }` for `pages`. A page that fails
  * comes back as `{ url, error }` so the app keeps its own fallback.
+ *
+ * `html: ""` means the app couldn't read the page: the URL and labels decide, and the
+ * Worker never fetches it itself. `asKind` reads an already-typed item as that kind
+ * (Enrich), `kindOnly` skips the readers (import). The apps send the body raw-deflated
+ * with `X-Stello-Encoding: deflate-raw`, which cuts an import's upload several times over.
  */
-import { readPage, makeNet, MAX_HTML_BYTES } from '../lib/readers/pipeline.js';
+import { readPage, makeNet, MAX_HTML_BYTES, READ_AS_KINDS } from '../lib/readers/pipeline.js';
 
 export const MAX_LABELS = 50;
 
@@ -28,12 +33,15 @@ export function pageInput(p) {
   const labels = Array.isArray(p.collectionLabels) ? p.collectionLabels.filter((l) => typeof l === 'string').slice(0, MAX_LABELS) : [];
   return {
     url: p.url,
-    html: p.html != null ? p.html.slice(0, MAX_HTML_BYTES) : null,
+    html: p.html ? p.html.slice(0, MAX_HTML_BYTES) : null,
     status: Number.isInteger(p.status) ? p.status : null,
     finalURL: typeof p.finalURL === 'string' ? p.finalURL : null,
     collectionLabels: labels,
-    // HTML from the app: never refetch the page from Cloudflare's IP.
+    // HTML (or "" for an unreadable page) from the app: never refetch the page from
+    // Cloudflare's IP.
     fetchPage: p.html == null,
+    asKind: READ_AS_KINDS.has(p.asKind) ? p.asKind : null,
+    kindOnly: p.kindOnly === true,
   };
 }
 
@@ -59,13 +67,22 @@ export async function classifyPages(body, env, { net = makeNet(), now = new Date
   return { status: one.error ? 400 : 200, body: one };
 }
 
+/** JSON body, raw-deflated when the app says so (`X-Stello-Encoding: deflate-raw`). */
+export async function readBody(request) {
+  if (request.headers.get('X-Stello-Encoding') === 'deflate-raw') {
+    const stream = request.body.pipeThrough(new DecompressionStream('deflate-raw'));
+    return JSON.parse(await new Response(stream).text());
+  }
+  return request.json();
+}
+
 /** Hono handler factory (auth injected so tests can run without D1). */
 export default function classifyRoute({ requireUser }) {
   return async (c) => {
     const userId = await requireUser(c);
     if (!userId) return c.json({ error: 'Not signed in' }, 401);
     let body;
-    try { body = await c.req.json(); } catch { return c.json({ error: 'Body must be JSON' }, 400); }
+    try { body = await readBody(c.req.raw); } catch { return c.json({ error: 'Body must be JSON' }, 400); }
     const out = await classifyPages(body, c.env);
     return c.json(out.body, out.status);
   };

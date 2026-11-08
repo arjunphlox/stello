@@ -37,6 +37,10 @@ struct StelloApp: App {
             print("⚠️ App Group container failed (\(error)); falling back to local store")
             container = try! StelloStore.makeLocalContainer()
         }
+        // Sorting asks the Worker with the web account's device token (tests and screenshot
+        // runs returned above, so they never reach the network).
+        WorkerSorter.token = { SyncAccount.readToken() }
+        WorkerSorter.tokenRejected = { SyncAccount.tokenRejected() }
         SeedData.prepareSyncedStore(in: container.mainContext)
         _ = SyncChildTracking.install
     }

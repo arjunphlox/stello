@@ -56,12 +56,6 @@
             { "path": "FoundationModelsEnricher.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "MockEnricher.swift", "target-membership": [ "Stello/compile-sources" ] },
             {
-              "path": "PageClassifier.swift",
-              "target-membership": [
-                "Stello/compile-sources",
-                "StelloShare/compile-sources",
-              ],
-            }, {
               "path": "PostReader.swift",
               "target-membership": [
                 "Stello/compile-sources",
@@ -89,6 +83,12 @@
               ],
             }, {
               "path": "ToolReader.swift",
+              "target-membership": [
+                "Stello/compile-sources",
+                "StelloShare/compile-sources",
+              ],
+            }, {
+              "path": "WorkerSorter.swift",
               "target-membership": [
                 "Stello/compile-sources",
                 "StelloShare/compile-sources",
@@ -253,7 +253,6 @@
         { "path": "ItemTagTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "MasonryLayoutTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "MusicEnrichmentTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
-        { "path": "PageClassifierTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "PanelDedupeTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "PostKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ProductKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
@@ -264,6 +263,7 @@
         { "path": "StelloTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ToolKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "WhySavedIntentTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "WorkerSorterTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
       ],
     }, {
       "kind": "group",

@@ -138,3 +138,77 @@ test('/api/classify: batch size follows CLASSIFY_BATCH_MAX (default 1); bad page
   eq((await classifyPages({ url: 'javascript:alert(1)' }, {})).status, 400);
   eq(pageInput({ url: 'https://x.com/a', collectionLabels: ['gen-ai', 5] }).collectionLabels, ['gen-ai']);
 });
+
+test('asKind: Enrich reads an already-typed item as its kind; kindOnly skips the readers', async () => {
+  const f = fakeFetch({});
+  const net = makeNet({ fetchImpl: f.impl });
+  // A plain blog URL classifies as article; an item already filed as a tool stays a tool.
+  const asTool = await readPage({ url: 'https://example.com/blog/my-cli', html: '<html><head><meta property="og:title" content="My CLI"></head></html>', status: 200, asKind: 'tool', net });
+  eq(asTool.kind, 'tool');
+  eq(asTool.metadata != null, true);
+  // asKind post only applies when the URL is a social post.
+  const notPost = await readPage({ url: 'https://example.com/blog/a', html: '<html></html>', status: 200, asKind: 'post', net });
+  eq(notPost.kind, 'article');
+  const only = await readPage({ url: 'https://example.com/blog/a', html: '<html></html>', status: 200, kindOnly: true, net });
+  eq(only.kind, 'article');
+  eq(only.metadata, null);
+  eq(only.images, undefined);
+  eq(f.calls, []);
+});
+
+test('/api/classify: html "" is URL-only (never fetched); asKind and kindOnly pass through; deflated bodies read', async () => {
+  const f = fakeFetch({});
+  const out = await classifyPages({ url: 'https://example.com/blog/a', html: '' }, {}, { net: makeNet({ fetchImpl: f.impl }) });
+  eq(out.body.kind, 'article');
+  eq(out.body.signal, 'url-only');
+  eq(f.calls, []);
+  eq(pageInput({ url: 'https://a.com/x', asKind: 'tool', kindOnly: true }).asKind, 'tool');
+  eq(pageInput({ url: 'https://a.com/x', asKind: 'typeface' }).asKind, null);
+  eq(pageInput({ url: 'https://a.com/x' }).kindOnly, false);
+
+  const { readBody } = await import('../src/routes/classify.js');
+  const json = JSON.stringify({ url: 'https://a.com/x', html: '<p>hi</p>' });
+  const deflated = await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer();
+  const req = new Request('https://w/api/classify', { method: 'POST', headers: { 'X-Stello-Encoding': 'deflate-raw' }, body: deflated });
+  eq((await readBody(req)).html, '<p>hi</p>');
+  eq((await readBody(new Request('https://w/', { method: 'POST', body: json }))).url, 'https://a.com/x');
+});
+
+test('asKind keeps the earlier-build migrations: Framer product → resource, Figma tool → resource', async () => {
+  const net = makeNet({ fetchImpl: fakeFetch({}).impl });
+  const framer = await readPage({ url: 'https://www.framer.com/marketplace/templates/nova/', html: '<html></html>', status: 200, asKind: 'product', net });
+  eq(framer.kind, 'resource');
+  const figma = await readPage({ url: 'https://www.figma.com/community/plugin/123/autoflow', html: '<html></html>', status: 200, asKind: 'tool', net });
+  eq(figma.kind, 'resource');
+});
+
+// The Swift meta structs decode with synthesized Codable: every non-optional field must be
+// present, or the app drops the whole read. Keep in step with Models/CardMetadata.swift.
+const SWIFT_REQUIRED = {
+  music: ['artists', 'genres', 'trackList'],
+  post: ['isAIArt', 'promptIsGuess'],
+  tool: ['platforms', 'platformsAreGuess', 'pricingIsGuess', 'topics'],
+  resource: ['worksWith'],
+  article: ['summaryIsGuess', 'isTutorial', 'techStack'],
+  course: ['formatIsGuess', 'lessonsIsGuess', 'durationIsGuess', 'topics', 'topicsAreGuess'],
+  book: ['authors', 'subjects', 'authorsAreGuess'],
+  product: [],
+};
+
+test('metadata carries every key the Swift meta structs require', async () => {
+  const net = makeNet({ fetchImpl: fakeFetch({}).impl });
+  const pages = [
+    ['https://example.com/blog/a', 'article'],
+    ['https://www.framer.com/marketplace/templates/nova/', 'resource'],
+    ['https://example.com/motion-basics', 'course', '<script type="application/ld+json">{"@type":"Course","name":"M"}</script>'],
+    ['https://example.com/p', 'book', '<meta property="og:type" content="book">'],
+    ['https://x.com/someone/status/1234567890', 'post'],
+    ['https://open.spotify.com/album/abc', 'music'],
+    ['https://example.com/blog/my-cli', 'tool', '', 'tool'],
+  ];
+  for (const [url, kind, html = '<html></html>', asKind = null] of pages) {
+    const r = await readPage({ url, html, status: 200, asKind, net });
+    eq([url, r.kind], [url, kind]);
+    for (const key of SWIFT_REQUIRED[kind]) eq([kind, key, key in r.metadata], [kind, key, true]);
+  }
+});

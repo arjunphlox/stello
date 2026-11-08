@@ -1479,7 +1479,7 @@ struct CardSubcards: View {
     private func toolWebsiteURL(_ meta: ToolMeta) -> String? {
         let savedFromAppStore = item.sourceURL
             .flatMap { URL(string: $0) }
-            .map { PageClassifier.isAppStoreAppURL($0) } ?? false
+            .map { ToolReader.isAppStoreAppURL($0) } ?? false
         guard meta.repoURL != nil || savedFromAppStore else {
             return meta.canonicalURL?.nilIfEmpty == nil ? meta.homepageURL : nil
         }

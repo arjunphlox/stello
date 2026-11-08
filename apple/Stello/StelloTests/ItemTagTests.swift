@@ -176,7 +176,7 @@ struct ItemTagTests {
         #expect(plain.tagsJSON == nil)
     }
 
-    @Test("Collection labels come from the item's tags and drive classification")
+    @Test("Collection labels come from the item's tags; the item waits for the Worker to sort it")
     func collectionLabels() async throws {
         let context = try makeContext()
         _ = try await importLibrary(library, into: context)
@@ -184,7 +184,9 @@ struct ItemTagTests {
         let items = try context.fetch(FetchDescriptor<Item>())
         let tool = try #require(items.first { $0.slug == "tool" })
         #expect(EnrichmentService.collectionLabels(for: tool) == ["digital-tools"])
-        #expect(tool.kind == ItemKind.tool.rawValue)
+        // The labels go to the Worker with the page (readPages); the import itself sorts nothing.
+        #expect(tool.kind == ItemKind.link.rawValue)
+        #expect(tool.enrichmentStatus == WorkerSorter.unsortedStatus)
     }
 
     @Test("Filter and search find imported tags")
