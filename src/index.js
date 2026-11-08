@@ -32,6 +32,7 @@ import appleNative from './routes/auth-apple-native.js';
 import { runDailySync } from './lib/sync-cron.js';
 import { mergeDuplicates } from './lib/dedupe.js';
 import processBatchesMod from './routes/process-batches.js';
+import classifyRoute from './routes/classify.js';
 
 const app = new Hono();
 
@@ -47,6 +48,10 @@ mountData(app);
 // Apple app <-> web copy sync (docs/plans/apple-web-sync.md).
 app.post('/api/auth/apple/native', appleNative);
 app.route('/api/sync', syncRoutes({ requireUser: auth.requireUser }));
+
+// Page readers for the Apple apps: they send the HTML they fetched, the Worker
+// answers with the kind + typed metadata (src/lib/readers/).
+app.post('/api/classify', classifyRoute({ requireUser: auth.requireUser }));
 
 // Merge items saved more than once (same link), for the signed-in user only.
 //   GET  /api/me/duplicates   → the plan (nothing changes)
