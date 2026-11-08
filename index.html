@@ -29,6 +29,9 @@
 
   <!-- Tool-panel content templates (hidden; content moved into tool panel on open) -->
   <template id="tpl-filters">
+    <button type="button" id="filter-needs-review" class="filter-review-toggle" aria-pressed="false">
+      <span class="filter-review-check" aria-hidden="true"></span>Needs review
+    </button>
     <div class="filter-search-wrap">
       <input type="text" id="filter-search" class="filter-search" placeholder="Search tags...">
     </div>
@@ -51,6 +54,17 @@
         <button class="accent-swatch" data-accent="amber" type="button" aria-label="Amber accent"></button>
         <button class="accent-swatch" data-accent="iris" type="button" aria-label="Iris accent"></button>
       </div>
+    </fieldset>
+    <fieldset class="settings-theme settings-grid">
+      <legend>Grid</legend>
+      <div class="settings-theme-row grid-columns" id="grid-columns">
+        <span class="settings-theme-label grid-columns-label">Auto</span>
+        <div class="grid-columns-stepper">
+          <button type="button" data-step="-1" aria-label="Fewer columns">&minus;</button>
+          <button type="button" data-step="1" aria-label="More columns">+</button>
+        </div>
+      </div>
+      <p class="settings-hint">Pinch the grid to zoom, or set columns here.</p>
     </fieldset>
     <div class="settings-field">
       <label>Profile name</label>
@@ -132,6 +146,7 @@
 <script src="auth-client.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script src="desktop-context.js?v=1"></script>
-<script src="app.js?v=48"></script>
+<script src="panel-layout.js?v=2"></script>
+<script src="app.js?v=53"></script>
 </body>
 </html>

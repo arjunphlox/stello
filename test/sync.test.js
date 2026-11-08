@@ -180,3 +180,18 @@ test('a merged item always has a primary image when it has images', async () => 
   assert.equal(plan.keep, A);
   assert.equal(plan.fields.images.filter((i) => i.is_primary).length, 1);
 });
+
+test('revisit tracking syncs: open count and last opened', async () => {
+  const db = makeD1(SCHEMA);
+  await applyChanges(db, 'u1', [full(A, { title: 'x' }, 100)]);
+  let [item] = (await pullChanges(db, 'u1', 0)).items;
+  assert.equal(item.open_count, 0);
+  assert.equal(item.last_opened_at, null);
+  await applyChanges(db, 'u1', [{ id: A, fields: { open_count: 3, last_opened_at: '2026-11-08T00:00:00Z' }, clock: 200 }]);
+  [item] = (await pullChanges(db, 'u1', 0)).items;
+  assert.equal(item.open_count, 3);
+  assert.equal(item.last_opened_at, '2026-11-08T00:00:00Z');
+  // A null count never breaks the NOT NULL column.
+  const r = await applyChanges(db, 'u1', [{ id: A, fields: { open_count: null }, clock: 300 }]);
+  assert.equal(r.results[0].status, 'applied');
+});

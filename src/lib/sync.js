@@ -35,6 +35,8 @@ export const FIELDS = {
   added_at: 'iso', // ISO-8601 text, as in the Supabase export
   analyzed_at: 'iso',
   cover_aspect: 'real',
+  last_opened_at: 'iso',
+  open_count: 'int',
   metadata: 'json',
   tags: 'json',
   images: 'json',
@@ -65,6 +67,7 @@ export function stableStringify(value) {
 /** API value → D1 value. Returns undefined for a value of the wrong type. */
 export function toDb(field, value) {
   if (value === null || value === undefined) {
+    if (field === 'open_count') return 0;
     return field === 'title' || field === 'slug' ? '' : null;
   }
   switch (FIELDS[field]) {

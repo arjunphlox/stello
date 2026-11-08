@@ -64,6 +64,13 @@ struct ContentView: View {
                 await WebLibraryImporter.classifyPending(context: context, coordinator: enrichmentCoordinator)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: SyncBridge.webSavesQueued)) { _ in
+            // New web saves arrived as plain links: give them kinds now, not next launch.
+            guard !WebInboxProcessor.isDisabled else { return }
+            Task(priority: .background) {
+                await WebLibraryImporter.classifyPending(context: context, coordinator: enrichmentCoordinator)
+            }
+        }
         .onAppear {
             applyScreenshotLaunchState()
             scheduleScreenshotLaunchStateRetryIfNeeded()

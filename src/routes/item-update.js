@@ -27,6 +27,15 @@ module.exports = async function handler(req, res) {
     .single();
   if (fetchErr || !item) return jsonResponse(res, 404, { error: 'Item not found' });
 
+  // Revisit tracking (Apple: StelloStore.recordOpen). Activity, not an edit,
+  // so nothing else on the row is touched.
+  if (body.record_open === true) {
+    const open = { open_count: (Number(item.open_count) || 0) + 1, last_opened_at: new Date().toISOString() };
+    const { error: openErr } = await client.from('items').update(open).eq('id', item.id);
+    if (openErr) return jsonResponse(res, 500, { error: 'Update failed', detail: openErr.message });
+    return jsonResponse(res, 200, { slug, ...open });
+  }
+
   const existingTags = parseJsonField(item.tags, []);
   const existingImages = parseJsonField(item.images, []);
   const existingSnippets = parseJsonField(item.snippets, []);
@@ -152,11 +161,38 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // --- Mac-panel edits: accept / dismiss a "Why save?" suggestion, remove an
+  // AI tag, and mark reviewed when the panel closes (all mirror the Apple app).
+  let reasons = Array.isArray(candidates.reasons) ? candidates.reasons.slice() : null;
+  const dropReason = (r) => {
+    if (!reasons) return;
+    const key = String(r || '').toLowerCase();
+    reasons = reasons.filter(x => String(x).toLowerCase() !== key);
+  };
+  if (Array.isArray(body.add_intents)) {
+    for (const raw of body.add_intents) {
+      const name = String(raw || '').trim();
+      if (!name) continue;
+      if (!tags.some(t => String(t.tag).toLowerCase() === name.toLowerCase())) {
+        tags.push({ tag: name, category: 'intent', weight: 0.9, source: 'manual' });
+      }
+      dropReason(name);
+    }
+  }
+  if (Array.isArray(body.dismiss_reasons)) body.dismiss_reasons.forEach(dropReason);
+  if (Array.isArray(body.removed_tags) && body.removed_tags.length) {
+    const drop = new Set(body.removed_tags.map(t => `${t && t.category}:${t && t.tag}`));
+    tags = tags.filter(t => !drop.has(`${t.category}:${t.tag}`));
+  }
+
   // --- body_markdown: rebuild Key Snippets + What Makes It Work sections ---
-  let bodyMarkdown = stripSections(item.body_markdown || '', [
-    'Key Snippets', 'What Makes It Work',
-  ]);
-  if (snippets.length) {
+  // Only rewritten when the snippets or the what-works note change, so other
+  // edits (cover, tags, mark reviewed) never drop the What Makes It Work note.
+  const rewriteBody = Array.isArray(body.removed_snippet_ids) || Array.isArray(body.new_snippets)
+    || typeof body.what_works === 'string';
+  let bodyMarkdown = !rewriteBody ? (item.body_markdown || '') : stripSections(item.body_markdown || '',
+    typeof body.what_works === 'string' ? ['Key Snippets', 'What Makes It Work'] : ['Key Snippets']);
+  if (rewriteBody && snippets.length) {
     const lines = snippets.map(s => `> ${s.text}`).join('\n\n');
     bodyMarkdown = bodyMarkdown.replace(/\s+$/, '') + `\n\n## Key Snippets\n${lines}`;
   }
@@ -184,6 +220,9 @@ module.exports = async function handler(req, res) {
       snippets: (nextCandidates.snippets || candidates.snippets).filter(s => !added.has(s)),
     };
   }
+  if (reasons && (Array.isArray(body.add_intents) || Array.isArray(body.dismiss_reasons))) {
+    nextCandidates = { ...nextCandidates, reasons };
+  }
   if (body.resolve_candidates) {
     nextCandidates = {};
   }
@@ -197,7 +236,10 @@ module.exports = async function handler(req, res) {
     enrichment_candidates: JSON.stringify(nextCandidates),
   };
   let needsReview = item.needs_review;
-  if (Array.isArray(body.why_saved)) {
+  // Reviewed: the old why-saved form, the panel closing, or the last
+  // suggestion dismissed (the Apple app's rule).
+  const lastDismissed = Array.isArray(body.dismiss_reasons) && reasons && reasons.length === 0;
+  if (Array.isArray(body.why_saved) || body.mark_reviewed === true || lastDismissed) {
     needsReview = false;
     updates.needs_review = false;
   }

@@ -50,6 +50,42 @@ struct SyncWireTests {
         #expect(item.summary == "old summary")
     }
 
+    @Test func revisitTrackingOnlyMovesForward() throws {
+        let context = try makeContext()
+        let item = Item(title: "x")
+        context.insert(item)
+        item.openCount = 5
+        let opened = Date(timeIntervalSince1970: 1_800_000_000)
+        item.lastOpenedAt = opened
+        #expect(SyncWire.values(of: item)["open_count"] as? Int == 5)
+        // A row the web never opened can't wipe local history.
+        SyncWire.apply(row(item, overriding: ["open_count": 0, "last_opened_at": NSNull()]), to: item, skipping: [])
+        #expect(item.openCount == 5)
+        #expect(item.lastOpenedAt == opened)
+        // A newer web open wins.
+        SyncWire.apply(row(item, overriding: ["open_count": 6, "last_opened_at": "2027-06-01T00:00:00.000Z"]), to: item, skipping: [])
+        #expect(item.openCount == 6)
+        #expect(item.lastOpenedAt.map(SyncWire.iso) == "2027-06-01T00:00:00.000Z")
+    }
+
+    @Test func plainWebSavesJoinTheClassifyQueue() throws {
+        let context = try makeContext()
+        func wire(_ fields: [String: Any]) -> SyncWire.Row {
+            var json: [String: Any] = ["id": UUID().uuidString.lowercased(), "seq": 1, "clock": [String: Int](), "deleted_at": NSNull(),
+                                       "title": "x", "slug": "x", "kind": "link", "metadata": NSNull(), "enrichment_status": "done"]
+            for (k, v) in fields { json[k] = v }
+            return SyncWire.Row(json)!
+        }
+        let plain = SyncWire.makeItem(from: wire(["source_url": "https://shop.example/lamp"]), in: context, queueClassify: true).0
+        #expect(plain.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus)
+        let typed = SyncWire.makeItem(from: wire(["source_url": "https://shop.example/a", "kind": "product", "metadata": ["price": "10"]]), in: context, queueClassify: true).0
+        #expect(typed.enrichmentStatus == "done")
+        let note = SyncWire.makeItem(from: wire([:]), in: context, queueClassify: true).0
+        #expect(note.enrichmentStatus == "done")
+        let firstPull = SyncWire.makeItem(from: wire(["source_url": "https://shop.example/b"]), in: context, queueClassify: false).0
+        #expect(firstPull.enrichmentStatus == "done")
+    }
+
     @Test func snippetsAndImagesFollowTheRow() throws {
         let context = try makeContext()
         let item = Item(title: "x")

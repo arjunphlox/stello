@@ -49,7 +49,7 @@ CREATE TABLE items (
   source_url TEXT, domain TEXT, author TEXT, summary TEXT, body_markdown TEXT,
   status TEXT DEFAULT 'active', needs_review INTEGER DEFAULT 1, kind TEXT NOT NULL DEFAULT 'link',
   enrichment_status TEXT DEFAULT 'pending', added_at TEXT, analyzed_at TEXT, updated_at INTEGER,
-  cover_aspect REAL NOT NULL DEFAULT 0, metadata TEXT, tags TEXT DEFAULT '[]', images TEXT DEFAULT '[]',
+  cover_aspect REAL NOT NULL DEFAULT 0, last_opened_at TEXT, open_count INTEGER NOT NULL DEFAULT 0, metadata TEXT, tags TEXT DEFAULT '[]', images TEXT DEFAULT '[]',
   snippets TEXT DEFAULT '[]', seq INTEGER NOT NULL DEFAULT 0, field_clock TEXT, deleted_at INTEGER,
   purged_at INTEGER
 );

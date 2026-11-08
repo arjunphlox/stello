@@ -23,6 +23,7 @@ const FILES = [
   'reset-password.html',
   'app.js',
   'desktop-context.js',
+  'panel-layout.js',
   'auth-client.js',
   'style.css',
   'theme.css',

@@ -18,6 +18,15 @@
     'crosshair': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232,120H215.63a88.13,88.13,0,0,0-79.63-79.63V24a8,8,0,0,0-16,0V40.37A88.13,88.13,0,0,0,40.37,120H24a8,8,0,0,0,0,16H40.37A88.13,88.13,0,0,0,120,215.63V232a8,8,0,0,0,16,0V215.63A88.13,88.13,0,0,0,215.63,136H232a8,8,0,0,0,0-16ZM128,200a72,72,0,1,1,72-72A72.08,72.08,0,0,1,128,200Zm0-112a40,40,0,1,0,40,40A40,40,0,0,0,128,88Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,152Z"/></svg>',
     'trash': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></svg>',
     'user-circle': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg>',
+    'sparkle': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128 20c6 50 28 74 80 80-52 6-74 28-80 80-6-52-28-74-80-80 52-6 74-30 80-80Z"/><path d="M204 156c3 22 12 31 32 34-20 3-29 12-32 34-3-22-12-31-32-34 20-3 29-12 32-34Z"/></svg>',
+    'copy': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linejoin="round"><rect x="88" y="88" width="128" height="128" rx="12"/><path d="M168 88V52a12 12 0 0 0-12-12H52a12 12 0 0 0-12 12v104a12 12 0 0 0 12 12h36"/></svg>',
+    'warning': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"><path d="M128 32 16 216h224Z"/><path d="M128 104v48"/><circle cx="128" cy="184" r="4" fill="currentColor"/></svg>',
+    'share': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M176 96h24a8 8 0 0 1 8 8v104a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V104a8 8 0 0 1 8-8h24"/><path d="M128 24v112M88 64l40-40 40 40"/></svg>',
+    'link': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round"><path d="M136 72l14-14a44 44 0 0 1 62 62l-30 30a44 44 0 0 1-62 0"/><path d="M120 184l-14 14a44 44 0 0 1-62-62l30-30a44 44 0 0 1 62 0"/></svg>',
+    'download': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="128" cy="128" r="96"/><path d="M128 80v88M92 132l36 36 36-36"/></svg>',
+    'eye': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M247.31 124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57 61.26 162.88 48 128 48S61.43 61.26 36.34 86.35C17.51 105.18 9 124 8.69 124.76a8 8 0 0 0 0 6.5c.35.79 8.82 19.57 27.65 38.4C61.43 194.74 93.12 208 128 208s66.57-13.26 91.66-38.34c18.83-18.83 27.3-37.61 27.65-38.4a8 8 0 0 0 0-6.5ZM128 168a40 40 0 1 1 40-40 40 40 0 0 1-40 40Z"/></svg>',
+    'play': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232.4 114.49 88.32 26.35a16 16 0 0 0-16.2-.3A15.86 15.86 0 0 0 64 39.87v176.26a15.94 15.94 0 0 0 16 15.87 16.12 16.12 0 0 0 8.32-2.35l144.08-88.14a15.68 15.68 0 0 0 0-27Z"/></svg>',
+    'stack': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linejoin="round"><rect x="72" y="72" width="144" height="144" rx="16"/><path d="M184 40H56a16 16 0 0 0-16 16v128"/></svg>',
     'dots-three': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM48,116a12,12,0,1,0,12,12A12,12,0,0,0,48,116Zm160,0a12,12,0,1,0,12,12A12,12,0,0,0,208,116Z"/></svg>',
   };
   function icon(name) { return ICONS[name] || ''; }
@@ -26,6 +35,7 @@
   let allItems = [];
   let itemsBySlug = {};      // slug -> item lookup
   let activeTags = [];      // [{tag, category}]
+  let needsReviewOnly = false;
   let searchQuery = '';
   let relatedIndex = {};     // slug -> Set of related slugs
 
@@ -267,6 +277,7 @@
     bindEvents();
     startGridColsObserver();   // sizes the columns, then renders the grid
     PanelManager.init();
+    CardMenu.init();
 
     // Background-stream remaining pages. Only runs if the first page hit the
     // limit — small libraries are done in a single round trip.
@@ -692,16 +703,44 @@
     }).join('');
   }
 
+  // --- Search + review (the Mac's ItemSearchBlob / AwaitingReviewFilter) ---
+  // Every text the item holds, metadata included, lowercased once per item
+  // object (normalizeItem makes a new object on change, so the cache never
+  // goes stale).
+  const _searchBlobs = new WeakMap();
+  function collectStrings(v, out) {
+    if (v == null) return;
+    if (typeof v === 'string') { if (v) out.push(v); return; }
+    if (typeof v === 'number') return;
+    if (Array.isArray(v)) { for (const x of v) collectStrings(x, out); return; }
+    if (typeof v === 'object') for (const k in v) collectStrings(v[k], out);
+  }
+  function searchBlob(item) {
+    let b = _searchBlobs.get(item);
+    if (b !== undefined) return b;
+    const parts = [item.title, item.summary, item.author, item.domain, item.body_markdown];
+    for (const t of item.tags || []) parts.push(t.tag);
+    for (const sn of item.snippets || []) parts.push(sn && sn.text);
+    collectStrings(item.enrichment_candidates && item.enrichment_candidates.reasons, parts);
+    collectStrings(window.StelloPanel.metaOf(item), parts);
+    b = parts.filter(Boolean).join(' ').toLowerCase();
+    _searchBlobs.set(item, b);
+    return b;
+  }
+
+  // Awaiting review: enrichment has run, the item still needs review, and
+  // there is something to review (why-save suggestions, or text-only results).
+  function isAwaitingReview(item) {
+    if (item.needs_review !== true || item.enrichment_status === 'pending') return false;
+    if (item.enrichment_status === 'text_done') return true;
+    return whySavedSuggestions(item).length > 0;
+  }
+
   // --- Grid ---
   function getFilteredItems() {
     return allItems.filter(item => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const inTitle = item.title.toLowerCase().includes(q);
-        const inSummary = (item.summary || '').toLowerCase().includes(q);
-        const inTags = item.tags.some(t => t.tag.toLowerCase().includes(q));
-        if (!inTitle && !inSummary && !inTags) return false;
-      }
+      if (searchQuery && !searchBlob(item).includes(searchQuery.toLowerCase())) return false;
+      if (needsReviewOnly && !isAwaitingReview(item)) return false;
       if (selectedWeek && getWeekKey(item.added_at) !== selectedWeek) return false;
       if (activeTags.length > 0) {
         return activeTags.every(at =>
@@ -1006,6 +1045,14 @@
     updateGridCols();
   }
   function stepZoom(delta) { setZoomCols(currentBaseCols() + delta); }
+  // Settings stepper (Mac: Grid section, 0 = Auto, 1…12 columns).
+  function setGridColumns(n) {
+    if (n <= 0) {
+      zoomCols = 0;
+      try { localStorage.removeItem(ZOOM_KEY); } catch { /* silent */ }
+      updateGridCols();
+    } else setZoomCols(n);
+  }
 
   function bindPinchZoom() {
     const mc = document.querySelector('.main-content');
@@ -1195,7 +1242,7 @@
 
   function updateFilterButtonState() {
     const btn = document.getElementById('filter-panel-btn');
-    if (btn) btn.classList.toggle('has-filters', activeTags.length > 0 || !!selectedWeek);
+    if (btn) btn.classList.toggle('has-filters', activeTags.length > 0 || !!selectedWeek || needsReviewOnly);
   }
 
   function sortItemsByAddedAt(arr) {
@@ -1246,7 +1293,27 @@
       item.title || '', item.domain || '',
       item.has_image ? '' : (item.summary || '').slice(0, 200),
       dominantColor(item),
+      cardExtrasSig(item),
     ].join('|'));
+  }
+
+  // Post marks (top-right of an image card), as on the Mac: play for a
+  // video, "GIF", a count for a carousel, "AI" for AI art.
+  function postBadgesHTML(item) {
+    if (item.kind !== 'post') return '';
+    const m = window.StelloPanel.metaOf(item);
+    if (!m) return '';
+    const count = m.mediaCount || 0;
+    const b = [];
+    if (m.mediaType === 'video') b.push(`<span class="card-badge" aria-label="Video">${icon('play')}</span>`);
+    if (m.mediaType === 'gif') b.push('<span class="card-badge">GIF</span>');
+    if (count > 1) b.push(`<span class="card-badge" aria-label="${count} media">${icon('stack')}${count}</span>`);
+    if (m.isAIArt === true) b.push('<span class="card-badge" aria-label="AI art">AI</span>');
+    return b.length ? `<div class="card-badges">${b.join('')}</div>` : '';
+  }
+  function cardExtrasSig(item) {
+    const m = item.metadata ? JSON.stringify(item.metadata).length : 0;
+    return [item.kind || '', m, isAwaitingReview(item) ? 'r' : ''].join(':');
   }
 
   function renderCard(item, idx) {
@@ -1286,8 +1353,13 @@
     const pillBg = hasColorTag ? hexToRgba(pillColor, 0.2) : 'rgba(255, 255, 255, 0.2)';
     const pillBgHover = '#ffffff';
     const pillColorHover = hasColorTag ? pillColor : '#1a1a17';
-    const urlPill = item.domain
-      ? `<a class="card-url-pill"${item.source_url ? ` href="${escHtml(item.source_url).replace(/"/g, '&quot;')}" target="_blank" rel="noopener"` : ''} style="--pill-bg:${pillBg};--pill-bg-hover:${pillBgHover};--pill-color-hover:${pillColorHover}" onclick="event.stopPropagation()">${escHtml(item.domain)}</a>`
+    const linkLabel = window.StelloPanel.displayLink(item);
+    const urlPill = linkLabel
+      ? `<a class="card-url-pill"${item.source_url ? ` href="${escHtml(item.source_url).replace(/"/g, '&quot;')}" target="_blank" rel="noopener"` : ''} style="--pill-bg:${pillBg};--pill-bg-hover:${pillBgHover};--pill-color-hover:${pillColorHover}" onclick="event.stopPropagation()">${escHtml(linkLabel)}</a>`
+      : '';
+    const kindLine = window.StelloPanel.kindLineFor(item);
+    const reviewBadge = isAwaitingReview(item)
+      ? `<span class="card-review-badge" style="--pill-bg:${pillBg}" title="Awaiting review" aria-label="Awaiting review">${icon('eye')}<span class="card-review-label">Review</span></span>`
       : '';
 
     const cardClass = hasImage ? ' card-visual' : (hasTextContent ? ' card-text' : '');
@@ -1295,7 +1367,9 @@
     return `<div class="card${cardClass}" data-slug="${item.slug}" data-render-sig="${cardRenderSig(item)}" tabindex="-1">
       <div class="card-visual-area">
         ${thumbHtml}
-        <div class="card-title-badge">${escHtml(item.title || '')}</div>
+        <div class="card-title-badge">${escHtml(item.title || '')}${kindLine ? `<span class="card-kind-line">${escHtml(kindLine)}</span>` : ''}</div>
+        ${hasImage ? postBadgesHTML(item) : ''}
+        ${reviewBadge}
         ${urlPill}
       </div>
     </div>`;
@@ -1318,208 +1392,228 @@
     return `W${String(getISOWeek(d)).padStart(2, '0')} ${d.getFullYear()}`;
   }
 
-  // Preset why-saved reasons. Suggested reasons from enrichment_candidates
-  // are merged alongside these at render time.
-  const PRESET_REASONS = [
-    { value: 'visual-inspiration', label: 'Visual inspiration' },
-    { value: 'useful-tool', label: 'Useful tool' },
-    { value: 'knowledge-reference', label: 'Knowledge reference' },
-    { value: 'style-catalog', label: 'Style catalog' },
-    { value: 'conceptual-reference', label: 'Conceptual reference' },
-    { value: 'practical-benchmark', label: 'Practical benchmark' },
-  ];
+  // ==== Item detail panel — exact copy of the Mac app's panel ==============
+  // Card for card, the same as apple/…/Views/CardSubcards.swift (Arjun's
+  // call, 2026-11-07: "exact Mac copy", no web-only extras). The layout and
+  // the "every value shows once" rules live in panel-layout.js
+  // (window.StelloPanel); this file only turns its cards into HTML and wires
+  // the few edits the Mac panel allows: set cover, add image, accept /
+  // dismiss a why-save suggestion, remove an AI tag, remove a snippet, Enrich.
 
-  // Builds the expanded-body HTML used inside a side panel.
-  // Order: slider → description (summary + markdown) → capture form
-  // (only for items still pending review) → snippets.
-  // `sharedTagSet`: optional Set<string> of "category:tag" keys to highlight with .tag-shared.
-  function buildPanelBodyHTML(item, sharedTagSet) {
-    return [
-      renderPanelSliderHTML(item),
-      `<div class="card-expanded-body">
-        ${item.summary ? `<div class="card-expanded-summary">${escHtml(cleanSummary(item.summary))}</div>` : ''}
-        <div class="card-expanded-md" data-slug="${item.slug}"></div>
-      </div>`,
-      renderPanelCaptureFormHTML(item),
-      renderPanelSnippetsHTML(item),
-    ].join('');
+  // Which image the open panel is previewing (client only; cover is server truth).
+  const panelPreview = { slug: null, path: null };
+
+  function panelLayoutFor(item) {
+    return window.StelloPanel.layout(item, { resolveSlug: (s) => !!itemsBySlug[s] });
   }
 
-  // ---- Panel slider (main image + thumbnails + upload tile) ----
-  // Two independent states:
-  //  - cover:   which image is item.images[*].is_primary (server truth)
-  //  - preview: which thumb is currently shown in the main area (client only)
-  // On load preview == cover. Clicking a thumb swaps preview only. Setting
-  // cover happens via (a) clicking an already-previewed thumb again OR
-  // (b) the "Set as cover" pill on the main image (only shown when
-  // preview != cover).
-  // Map a machine enrichment_error reason → a short human caption for the
-  // empty-image panel state, so a missing image is explainable, not mysterious.
-  function imageErrorLabel(err) {
-    if (!err) return '';
-    if (err.startsWith('image-download-failed')) return 'No image — couldn’t fetch the source image';
-    if (err.startsWith('image-store-failed')) return 'No image — storage error, will retry';
-    if (err.startsWith('vision:')) return 'Image analysis failed';
-    return 'No image available';
+  function subCardHTML(title, inner, extraClass) {
+    return `<section class="sub-card${extraClass ? ' ' + extraClass : ''}">
+      ${title ? `<h3 class="sub-card-title">${escHtml(title)}</h3>` : ''}
+      ${inner}
+    </section>`;
   }
 
-  function renderPanelSliderHTML(item) {
-    const images = Array.isArray(item.images) ? item.images : [];
-    const candidates = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.images))
-      ? item.enrichment_candidates.images : [];
+  function factsBodyHTML(rows) {
+    return `<dl class="sub-facts">${rows.map(r => `<div class="sub-fact">
+      <dt>${escHtml(r.label)}</dt>
+      <dd>${r.url
+        ? `<a href="${escAttr(r.url)}" target="_blank" rel="noopener" title="${escAttr(r.url)}">${escHtml(r.value)}</a>`
+        : escHtml(r.value)}</dd>
+    </div>`).join('')}</dl>`;
+  }
 
-    // Seed from og_image_path when images[] is empty (legacy items).
+  function chipsBodyHTML(chips, caption) {
+    return `${caption ? `<div class="sub-caption">${escHtml(caption)}</div>` : ''}
+      ${chips.length ? `<div class="sub-chips">${chips.map(c => `<span class="sub-chip">${escHtml(c)}</span>`).join('')}</div>` : ''}`;
+  }
+
+  function refsBodyHTML(refs) {
+    return `<div class="sub-chips">${refs.map(r => {
+      const target = r.slug && itemsBySlug[r.slug] ? r.slug : null;
+      return target
+        ? `<button type="button" class="sub-ref js-open-ref" data-slug="${escAttr(target)}">${escHtml(r.name)}</button>`
+        : `<span class="sub-ref">${escHtml(r.name)}</span>`;
+    }).join('')}</div>`;
+  }
+
+  function imagesWithRoles(item, roles) {
+    return (item.images || []).filter(i => i && i.path && roles.includes(i.role || 'cover'));
+  }
+
+  // Main image + thumbnails, no edits (typed panels' top media and galleries).
+  function galleryBodyHTML(item, images, height, showThumbs, key) {
+    const shown = (panelPreview.slug === item.slug && images.find(i => i.path === panelPreview.path)) || images[0];
+    return `<div class="sub-gallery" data-gallery="${escAttr(key)}">
+      <div class="sub-gallery-main" style="height:${height}px"><img src="${escAttr(shown.path)}" alt="${escAttr(shown.label || '')}"></div>
+      ${showThumbs && images.length > 1 ? `<div class="sub-thumbs">${images.map(img =>
+        `<button type="button" class="sub-thumb js-preview${img.path === shown.path ? ' is-active' : ''}" data-path="${escAttr(img.path)}"><img src="${escAttr(img.path)}" alt=""></button>`
+      ).join('')}</div>` : ''}
+    </div>`;
+  }
+
+  // The Mac DetailImageStrip: cover (or a tinted placeholder), "Set as cover"
+  // on a non-cover preview, thumbnails with a cover dot, and an Add tile.
+  function imageStripHTML(item) {
+    const images = (item.images || []).filter(i => i && i.path);
     const seeded = images.length === 0 && item.image_path
-      ? [{ path: item.image_path, source: 'og', is_primary: true }]
-      : images;
+      ? [{ path: item.image_path, source: 'og', is_primary: true }] : images;
+    const cover = seeded.find(i => i.is_primary) || seeded[0] || null;
+    const shown = (panelPreview.slug === item.slug && seeded.find(i => i.path === panelPreview.path)) || cover;
+    const hues = [18, 80, 38, 140, 25, 45, 12, 100];
+    let h = 0; for (const ch of item.slug || '') h = (h * 31 + ch.charCodeAt(0)) | 0;
+    const hue = hues[Math.abs(h) % hues.length];
+    const main = shown
+      ? `<img src="${escAttr(shown.path)}" alt="">`
+      : `<div class="sub-strip-placeholder" style="--hue:${hue}"></div>`;
+    const setCover = shown && cover && shown.path !== cover.path
+      ? `<button type="button" class="sub-set-cover js-set-cover" data-path="${escAttr(shown.path)}">${icon('crosshair')}Set as cover</button>` : '';
+    const thumbs = seeded.map(img => `<button type="button" class="sub-thumb js-preview${shown && img.path === shown.path ? ' is-active' : ''}" data-path="${escAttr(img.path)}" aria-label="${img === cover ? 'Cover image' : 'Image thumbnail'}">
+        <img src="${escAttr(img.path)}" alt="">${img === cover ? '<span class="sub-cover-dot"></span>' : ''}
+      </button>`).join('');
+    return `<div class="sub-strip">
+      <div class="sub-strip-main${shown ? '' : ' is-empty'}">${main}${setCover}</div>
+      <div class="sub-thumbs">${thumbs}
+        <label class="sub-thumb sub-add-tile" aria-label="Add image">${icon('plus')}<span>Add</span>
+          <input type="file" accept="image/*" class="sr-only">
+        </label>
+      </div>
+    </div>`;
+  }
 
-    const cover = seeded.find(i => i.is_primary) || seeded[0];
-    const coverPath = cover?.path || '';
-    // Preview defaults to cover on initial render; click handlers keep
-    // it in sync with whichever thumb the user chose.
-    const previewPath = coverPath;
+  function topImagesHTML(item, panel) {
+    const typed = panel.isTyped ? imagesWithRoles(item, panel.topRoles) : [];
+    const inner = typed.length
+      ? galleryBodyHTML(item, typed, 220, true, 'top')
+      : imageStripHTML(item);
+    return `<section class="sub-card is-bleed is-full">${inner}</section>`;
+  }
 
-    if (!coverPath && !candidates.length) {
-      const errNote = item.enrichment_error
-        ? `<div class="panel-image-note" title="${escAttr(item.enrichment_error)}">${escHtml(imageErrorLabel(item.enrichment_error))}</div>`
-        : '';
-      return `<div class="panel-image-slider" data-slug="${item.slug}" data-cover-path="">
-        <div class="panel-image-main">
-          <div class="panel-image-empty"></div>
-          ${errNote}
-        </div>
-        <div class="panel-image-thumbs">${renderUploadTileHTML()}</div>
-      </div>`;
+  function headerCardHTML(h) {
+    return subCardHTML('', `<div class="sub-header">
+      <h2 class="sub-header-title">${escHtml(h.title)}</h2>
+      ${h.kindLine ? `<div class="sub-kind-line">${escHtml(h.kindLine)}</div>` : ''}
+      ${h.showsAIArtBadge ? '<span class="sub-badge">AI art</span>' : ''}
+      ${h.mainText ? `<div class="sub-main-text">
+        ${h.mainIsAISummary ? '<div class="sub-ai-label">AI summary</div>' : ''}
+        <p>${escHtml(h.mainText)}</p>
+      </div>` : ''}
+      ${h.extraTexts.map(t => `<p class="sub-extra-text">${escHtml(t)}</p>`).join('')}
+    </div>`, 'is-full');
+  }
+
+  function notesBody(item) {
+    if (!item.body_markdown) return '';
+    const body = stripSections(item.body_markdown, [
+      'Summary', 'Key Details', 'Visual Assets', 'Key Snippets', 'What Makes It Work',
+    ]);
+    return body ? renderMarkdown(body) : '';
+  }
+
+  function cardHTML(item, c) {
+    switch (c.type) {
+      case 'facts':
+        return c.rows.length ? subCardHTML(c.title, factsBodyHTML(c.rows)) : '';
+      case 'chips':
+        return c.chips.length || c.caption ? subCardHTML(c.title, chipsBodyHTML(c.chips, c.caption)) : '';
+      case 'refs':
+        return subCardHTML(c.title, refsBodyHTML(c.refs));
+      case 'text':
+        return subCardHTML(c.title, `<p class="sub-text">${escHtml(c.text)}</p>`);
+      case 'gallery': {
+        const imgs = imagesWithRoles(item, c.roles);
+        return imgs.length ? subCardHTML(c.title, galleryBodyHTML(item, imgs, 140, false, c.title)) : '';
+      }
+      case 'faqs':
+        return subCardHTML(c.title, `<div class="sub-faqs">${c.items.map(f =>
+          `<details><summary>${escHtml(f.question)}</summary><p>${escHtml(f.answer)}</p></details>`).join('')}</div>`);
+      case 'chipsFacts':
+      case 'github':
+        return subCardHTML(c.title, (c.type === 'github'
+          ? factsBodyHTML(c.rows) + (c.chips.length ? chipsBodyHTML(c.chips) : '')
+          : (c.chips.length ? chipsBodyHTML(c.chips) : '') + (c.rows.length ? factsBodyHTML(c.rows) : '')));
+      case 'tracklist':
+        return subCardHTML(c.title, `<ol class="sub-tracks">${c.tracks.map(t =>
+          `<li><span>${escHtml(t.name)}</span>${t.duration ? `<span class="sub-track-time">${t.duration}</span>` : ''}</li>`).join('')}</ol>`);
+      case 'aiArt':
+        return subCardHTML(c.title, `<dl class="sub-facts">
+          ${c.model ? `<div class="sub-fact"><dt>Model</dt><dd>${escHtml(c.model)}</dd></div>` : ''}
+          ${c.prompt ? `<div class="sub-fact sub-fact-copy"><div><dt>${escHtml(c.promptLabel)}</dt><dd>${escHtml(c.prompt)}</dd></div>
+            <button type="button" class="sub-icon-btn js-copy-prompt" data-text="${escAttr(c.prompt)}" title="Copy prompt" aria-label="Copy prompt">${icon('copy')}</button></div>` : ''}
+        </dl>`);
+      case 'notes': {
+        const html = notesBody(item);
+        return html ? subCardHTML('Notes', `<div class="sub-notes">${html}</div>`) : '';
+      }
+      default: return '';
     }
-
-    const thumbs = [
-      ...seeded.map(img => renderThumbHTML(img, {
-        isPreview: img.path === previewPath,
-        isCover: img.path === coverPath,
-      })),
-      ...candidates
-        .filter(c => !seeded.some(i => i.path === c.path))
-        .map(c => renderCandidateThumbHTML(c)),
-      renderUploadTileHTML(),
-    ].join('');
-
-    return `<div class="panel-image-slider" data-slug="${item.slug}" data-cover-path="${escAttr(coverPath)}">
-      <div class="panel-image-main">
-        ${coverPath ? `<img src="${escAttr(previewPath)}" alt="${escAttr(cover?.label || '')}" data-preview-path="${escAttr(previewPath)}">` : ''}
-        ${renderPanelImageActionsHTML()}
-      </div>
-      <div class="panel-image-thumbs">${thumbs}</div>
-    </div>`;
-  }
-
-  function renderThumbHTML(img, state) {
-    const { isPreview, isCover } = state || {};
-    const cls = [
-      'panel-image-thumb',
-      isPreview && 'is-active',
-      isCover && 'is-cover',
-    ].filter(Boolean).join(' ');
-    return `<button type="button" class="${cls}" data-path="${escAttr(img.path)}" data-source="${escAttr(img.source || 'og')}" title="${escAttr(img.label || '')}"><img src="${escAttr(img.path)}" alt=""></button>`;
-  }
-
-  function renderCandidateThumbHTML(cand) {
-    const path = cand.path || cand.url || '';
-    if (!path) return '';
-    return `<button type="button" class="panel-image-thumb is-candidate" data-path="${escAttr(path)}" data-source="extracted" title="${escAttr(cand.label || 'Suggested image')}"><img src="${escAttr(path)}" alt=""><span class="panel-image-thumb-add">+</span></button>`;
-  }
-
-  // Action buttons at bottom-right of the main image: "Set as cover"
-  // (crosshair) and "Remove image" (trash, red). 20px circles, 16px
-  // icons, same translucent-dark backdrop as .card-url-pill.
-  function renderPanelImageActionsHTML() {
-    return `<div class="panel-image-actions">
-      <button type="button" class="panel-image-action-btn js-set-cover" title="Set as cover" aria-label="Set as cover">${icon('crosshair')}</button>
-      <button type="button" class="panel-image-action-btn is-danger js-remove-image" title="Remove Image" aria-label="Remove Image">${icon('trash')}</button>
-    </div>`;
-  }
-
-  function renderUploadTileHTML() {
-    // Use a <label> so the native file picker opens on click without a
-    // programmatic .click() (which can get flaky under event delegation).
-    return `<label class="panel-image-upload-tile" aria-label="Upload image">
-      <span>+</span>
-      <input type="file" accept="image/*" class="sr-only">
-    </label>`;
-  }
-
-  // ---- Capture form (why-saved + what-works) ----
-  // Only rendered while the item is still pending review. Once the user
-  // clicks Save (or Skip), the server flips needs_review=false and this
-  // section disappears on the next refresh.
-  function renderPanelCaptureFormHTML(item) {
-    if (item.needs_review !== true) return '';
-
-    const activeIntents = new Set(
-      (item.tags || []).filter(t => t.category === 'intent').map(t => t.tag)
-    );
-    const suggested = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.reasons))
-      ? item.enrichment_candidates.reasons : [];
-    const suggestedNotInPreset = suggested.filter(r =>
-      !PRESET_REASONS.some(p => p.value === r)
-    );
-
-    const whatWorks = extractSection(item.body_markdown, 'What Makes It Work');
-
-    const presetChips = PRESET_REASONS.map(r =>
-      `<button type="button" class="q-toggle${activeIntents.has(r.value) ? ' active' : ''}" data-value="${escAttr(r.value)}">${escHtml(r.label)}</button>`
-    ).join('');
-
-    const suggestedChips = suggestedNotInPreset.map(r =>
-      `<button type="button" class="q-toggle q-toggle-suggested${activeIntents.has(r) ? ' active' : ''}" data-value="${escAttr(r)}" title="Suggested">${escHtml(humanizeReason(r))}</button>`
-    ).join('');
-
-    return `<div class="panel-capture-form">
-      <p class="question-label">Why did you save this?</p>
-      <div class="question-options">
-        ${presetChips}
-        ${suggestedChips}
-        <input class="q-custom-reason" type="text" placeholder="Other reason…">
-      </div>
-      <p class="question-label">What makes it work?</p>
-      <textarea class="question-text" placeholder="Optional — what caught your eye?">${escHtml(whatWorks || '')}</textarea>
-      <div class="question-actions">
-        <button type="button" class="q-save">Save</button>
-        <button type="button" class="q-skip">Skip</button>
-      </div>
-    </div>`;
   }
 
   function humanizeReason(r) {
-    return String(r || '').replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
+    return String(r || '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  // ---- Snippets ----
-  function renderPanelSnippetsHTML(item) {
-    const snippets = Array.isArray(item.snippets) ? item.snippets : [];
-    const candidateSnippets = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.snippets))
-      ? item.enrichment_candidates.snippets : [];
-    const takenSet = new Set(snippets.map(s => s.text));
-    const addableCandidates = candidateSnippets.filter(s => !takenSet.has(s));
+  // Why save? — the enrichment's suggested reasons not yet accepted.
+  function whySavedSuggestions(item) {
+    const reasons = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.reasons))
+      ? item.enrichment_candidates.reasons : [];
+    const have = new Set((item.tags || []).map(t => String(t.tag).toLowerCase()));
+    return reasons.filter(r => r && !have.has(String(r).toLowerCase()));
+  }
 
-    const selected = snippets.map((s, i) =>
-      `<div class="panel-snippet-row" data-index="${i}">
-        <blockquote>${escHtml(s.text)}</blockquote>
-        <button type="button" class="panel-snippet-remove" aria-label="Remove snippet">&times;</button>
-      </div>`
-    ).join('');
+  function enrichmentCardsHTML(item, panel) {
+    const S = window.StelloPanel;
+    const tags = S.visibleTags(item.tags, panel);
+    const snippets = S.visibleSnippets(item.snippets, panel);
+    const suggestions = whySavedSuggestions(item);
+    let out = '';
 
-    const candidateChips = addableCandidates.map(text =>
-      `<button type="button" class="panel-snippet-candidate" data-text="${escAttr(text)}"><span class="plus">+</span>${escHtml(text)}</button>`
-    ).join('');
+    if (suggestions.length) {
+      out += subCardHTML('Why save?', `<div class="sub-chips">${suggestions.map(s => `<span class="sub-why">
+        <button type="button" class="js-accept-reason" data-reason="${escAttr(s)}" aria-label="Accept ${escAttr(humanizeReason(s))}">${escHtml(humanizeReason(s))}</button>
+        <button type="button" class="js-dismiss-reason" data-reason="${escAttr(s)}" aria-label="Dismiss suggestion">${icon('x')}</button>
+      </span>`).join('')}</div>`);
+    }
 
-    return `<div class="panel-snippets">
-      <p class="question-label">Key snippets</p>
-      <div class="panel-snippet-list">${selected || '<div class="panel-snippet-empty">No snippets yet.</div>'}</div>
-      ${candidateChips ? `<div class="panel-snippet-candidates">${candidateChips}</div>` : ''}
-      <div class="panel-snippet-add">
-        <textarea placeholder="Paste or type a snippet…"></textarea>
-        <button type="button" class="panel-snippet-add-btn">+ Add</button>
-      </div>
+    if (tags.length) {
+      out += subCardHTML('Tags', `<div class="sub-chips">${tags.map(t => {
+        const ai = t.source === 'ai';
+        return `<span class="sub-tag${ai ? ' is-ai' : ''}" style="opacity:${Math.max(0.55, Number(t.weight) || 0)}">
+          ${ai ? '<span class="sub-tag-dot"></span>' : ''}${escHtml(t.tag)}
+          ${ai ? `<button type="button" class="js-remove-tag" data-tag="${escAttr(t.tag)}" data-category="${escAttr(t.category)}" aria-label="Remove tag">${icon('x')}</button>` : ''}
+        </span>`;
+      }).join('')}</div>`);
+    }
+
+    if (panel.kind !== 'post') {
+      const linkEmpty = panel.kind === 'link' && !panel.header.mainText && !notesBody(item)
+        && !tags.length && !suggestions.length;
+      if (snippets.length) {
+        out += subCardHTML('Key snippets', `<div class="sub-snippets">${snippets.map(s => `<div class="sub-snippet" data-index="${s.index}">
+          <p>${escHtml(s.text)}</p>
+          <button type="button" class="js-remove-snippet" aria-label="Remove snippet">${icon('x')}</button>
+        </div>`).join('')}</div>`);
+      } else if (linkEmpty) {
+        out += subCardHTML('Key snippets', '<div class="sub-empty">No snippets yet.</div>');
+      }
+    }
+
+    if (item.enrichment_status !== 'pending') {
+      out += subCardHTML('Actions', `<button type="button" class="sub-enrich js-enrich">${icon('sparkle')}Enrich</button>
+        ${item.enrichment_error ? `<div class="sub-error">${icon('warning')}${escHtml(item.enrichment_error)}</div>` : ''}`);
+    }
+    return out;
+  }
+
+  // The whole panel body: top images, header, Summary, the kind's cards,
+  // then Why save? / Tags / Key snippets / Actions.
+  function buildPanelBodyHTML(item) {
+    const panel = panelLayoutFor(item);
+    return `<div class="sub-grid">
+      ${topImagesHTML(item, panel)}
+      ${headerCardHTML(panel.header)}
+      ${panel.cards.map(c => cardHTML(item, c)).join('')}
+      ${enrichmentCardsHTML(item, panel)}
     </div>`;
   }
 
@@ -1529,117 +1623,69 @@
     );
   }
 
-  function extractSection(md, heading) {
-    if (!md) return '';
-    const re = new RegExp(`(^|\\n)##\\s+${heading}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, 'i');
-    const m = md.match(re);
-    return m ? m[2].trim() : '';
+  // Re-render the open panel body from itemsBySlug, keeping scroll.
+  function rerenderPanelBody(bodyEl, item) {
+    const html = buildPanelBodyHTML(item);
+    if (bodyEl.dataset.html === html) return;
+    const top = bodyEl.scrollTop;
+    bodyEl.innerHTML = html;
+    bodyEl.dataset.html = html;
+    bodyEl.scrollTop = top;
   }
 
-  // Builds the sticky footer with tags (left) + date/week (right)
-  function buildPanelFooterHTML(item, sharedTagSet) {
-    const tagPills = item.tags
-      .slice()
-      .sort((a, b) => b.weight - a.weight)
-      .slice(0, 16)
-      .map(t => {
-        const shared = sharedTagSet && sharedTagSet.has(t.category + ':' + t.tag);
-        return renderTagPill(t.tag, t.category, shared);
-      }).join('');
+  // Wires the panel body once (delegated, so re-renders keep working).
+  function bindPanelBody(bodyEl, slug) {
+    if (!bodyEl || bodyEl.dataset.bound) return;
+    bodyEl.dataset.bound = '1';
+    const refresh = (updated) => { if (updated) rerenderPanelBody(bodyEl, updated); };
 
-    const date = formatHumanDate(item.added_at);
-    const week = formatWeekTag(item.added_at);
-
-    return `<div class="panel-footer-tags">${tagPills}</div>
-      <div class="panel-footer-date">
-        <div class="panel-footer-menu">
-          <button type="button" class="panel-footer-menu-trigger" aria-label="Item actions" aria-haspopup="true" aria-expanded="false">${icon('dots-three')}</button>
-          <div class="panel-footer-menu-popover" role="menu" hidden>
-            <button type="button" class="panel-footer-menu-item js-enrich" role="menuitem">Enrich</button>
-            <button type="button" class="panel-footer-menu-item is-danger js-delete" role="menuitem" data-step="0">Delete</button>
-          </div>
-        </div>
-        ${date ? `<div class="panel-footer-date-main">${date}</div>` : ''}
-        ${week ? `<div class="panel-footer-date-week">${week}</div>` : ''}
-      </div>`;
-  }
-
-  // Loads and renders the markdown body into a panel's .card-expanded-md element.
-  // Summary / snippets / what-makes-it-work are rendered elsewhere in the panel,
-  // so they're stripped from the raw markdown to avoid duplication.
-  function loadMarkdownInto(container) {
-    if (!container || container.dataset.loaded) return;
-    container.dataset.loaded = 'true';
-    const slug = container.dataset.slug;
-    const item = itemsBySlug[slug];
-    if (!item || !item.body_markdown) return;
-    const body = stripSections(item.body_markdown, [
-      'Summary', 'Key Details', 'Visual Assets', 'Key Snippets', 'What Makes It Work',
-    ]);
-    if (body) container.innerHTML = renderMarkdown(body);
-  }
-
-  // ---- Panel body binding (slider, capture form, snippets) ----
-  // Wires up interactions in a freshly-rendered .panel-body. Each mutation
-  // posts a delta to /api/item-update, then updates local itemsBySlug and
-  // refreshes the grid card. The panel body itself is only re-rendered on
-  // explicit refreshItem calls (from enrichment polling) to avoid stomping
-  // the user's in-flight form input.
-  function bindPanelBody(bodyEl, item) {
-    if (!bodyEl || !item) return;
-    const slug = item.slug;
-
-    // Compute cover-dot luminance after initial render so the dot sits
-    // in either black or white depending on the thumb's brightness.
-    updateCoverDotColor(bodyEl.querySelector('.panel-image-slider'));
-
-    // --- Slider: thumb click is always preview-only. Cover is set
-    // exclusively by the "Set as cover" pill. Candidate thumbs are
-    // silently promoted into images[] on click so they survive refresh. ---
     bodyEl.addEventListener('click', async (e) => {
-      const setCoverBtn = e.target.closest('.js-set-cover');
-      if (setCoverBtn) {
-        e.preventDefault();
-        const previewImg = bodyEl.querySelector('.panel-image-main img');
-        const path = previewImg?.dataset.previewPath;
-        if (path) await setAsCover(bodyEl, slug, path);
+      const item = itemsBySlug[slug];
+      if (!item) return;
+      const t = e.target;
+
+      const preview = t.closest('.js-preview');
+      if (preview) {
+        panelPreview.slug = slug; panelPreview.path = preview.dataset.path;
+        rerenderPanelBody(bodyEl, item);
         return;
       }
-
-      const removeBtn = e.target.closest('.js-remove-image');
-      if (removeBtn) {
-        e.preventDefault();
-        const previewImg = bodyEl.querySelector('.panel-image-main img');
-        const path = previewImg?.dataset.previewPath;
-        if (path) await removeImage(bodyEl, slug, path);
+      const setCover = t.closest('.js-set-cover');
+      if (setCover) {
+        refresh(await postItemUpdate(slug, { primary_image_path: setCover.dataset.path }));
         return;
       }
+      const ref = t.closest('.js-open-ref');
+      if (ref) { PanelManager.open(ref.dataset.slug); return; }
 
-      const thumb = e.target.closest('.panel-image-thumb');
-      if (!thumb) return;
-      if (thumb.classList.contains('panel-image-upload-tile')) return;
-      const path = thumb.dataset.path;
-      if (!path) return;
-      e.preventDefault();
+      const accept = t.closest('.js-accept-reason');
+      if (accept) { refresh(await postItemUpdate(slug, { add_intents: [accept.dataset.reason] })); return; }
+      const dismiss = t.closest('.js-dismiss-reason');
+      if (dismiss) { refresh(await postItemUpdate(slug, { dismiss_reasons: [dismiss.dataset.reason] })); return; }
 
-      // Swap preview only — never touch cover from a thumb click.
-      previewThumb(bodyEl, path);
-
-      // Promote candidates to images[] so they stick (without changing cover).
-      if (thumb.dataset.source === 'extracted') {
-        thumb.classList.remove('is-candidate');
-        const addBadge = thumb.querySelector('.panel-image-thumb-add');
-        if (addBadge) addBadge.remove();
-        postItemUpdate(slug, { add_image_paths: [path] });
+      const rmTag = t.closest('.js-remove-tag');
+      if (rmTag) {
+        refresh(await postItemUpdate(slug, { removed_tags: [{ tag: rmTag.dataset.tag, category: rmTag.dataset.category }] }));
+        return;
       }
+      const rmSnip = t.closest('.js-remove-snippet');
+      if (rmSnip) {
+        const idx = Number(rmSnip.closest('.sub-snippet')?.dataset.index);
+        if (idx >= 0) refresh(await postItemUpdate(slug, { removed_snippet_ids: [idx] }));
+        return;
+      }
+      const copy = t.closest('.js-copy-prompt');
+      if (copy) {
+        try { await navigator.clipboard.writeText(copy.dataset.text); showToast('Prompt copied'); } catch { /* blocked */ }
+        return;
+      }
+      if (t.closest('.js-enrich')) enrichItem(slug);
     });
 
-    // --- Upload: delegated change handler survives slider refreshes.
-    // Previously bound directly to the input, which was lost after
-    // refreshSliderFrom() replaced the slider's HTML. ---
     bodyEl.addEventListener('change', async (e) => {
-      if (!e.target.matches('.panel-image-upload-tile input[type="file"]')) return;
+      if (!e.target.matches('.sub-add-tile input[type="file"]')) return;
       const file = e.target.files && e.target.files[0];
+      e.target.value = '';
       if (!file) return;
       const base64 = await fileToBase64(file);
       if (!base64) return;
@@ -1647,90 +1693,11 @@
         manual_image_upload: { base64, mime: file.type || 'image/jpeg' },
       });
       if (updated) {
-        refreshSliderFrom(bodyEl, updated);
-        // Preview the newly uploaded image (not the cover) so the user
-        // immediately sees what they just added, without overriding cover.
-        const newestManual = [...updated.images].reverse()
-          .find(i => i.source === 'manual');
-        if (newestManual) previewThumb(bodyEl, newestManual.path);
+        const newest = [...updated.images].reverse().find(i => i.source === 'manual');
+        if (newest) { panelPreview.slug = slug; panelPreview.path = newest.path; }
+        rerenderPanelBody(bodyEl, updated);
       }
-      e.target.value = '';
     });
-
-    // --- Capture form: chips toggle locally; Save/Skip commit to server. ---
-    const form = bodyEl.querySelector('.panel-capture-form');
-    if (form) {
-      form.addEventListener('click', (e) => {
-        const btn = e.target.closest('.q-toggle');
-        if (btn) {
-          e.preventDefault();
-          btn.classList.toggle('active');
-          return;
-        }
-        const save = e.target.closest('.q-save');
-        if (save) { e.preventDefault(); commitCaptureForm(slug, form); return; }
-        const skip = e.target.closest('.q-skip');
-        if (skip) { e.preventDefault(); commitCaptureForm(slug, form, { skip: true }); return; }
-      });
-    }
-
-    // --- Snippets: candidate chip adds, ✕ removes, "+ Add" appends manual ---
-    const snipWrap = bodyEl.querySelector('.panel-snippets');
-    if (snipWrap) {
-      snipWrap.addEventListener('click', async (e) => {
-        const cand = e.target.closest('.panel-snippet-candidate');
-        if (cand) {
-          e.preventDefault();
-          const text = cand.dataset.text;
-          cand.remove();
-          const updated = await postItemUpdate(slug, { new_snippets: [text] });
-          if (updated) refreshSnippetsFrom(bodyEl, updated);
-          return;
-        }
-        const rm = e.target.closest('.panel-snippet-remove');
-        if (rm) {
-          e.preventDefault();
-          const row = rm.closest('.panel-snippet-row');
-          const idx = row ? Number(row.dataset.index) : -1;
-          if (idx >= 0) {
-            row.remove();
-            const updated = await postItemUpdate(slug, { removed_snippet_ids: [idx] });
-            if (updated) refreshSnippetsFrom(bodyEl, updated);
-          }
-          return;
-        }
-        const addBtn = e.target.closest('.panel-snippet-add-btn');
-        if (addBtn) {
-          e.preventDefault();
-          const ta = snipWrap.querySelector('.panel-snippet-add textarea');
-          const text = ta?.value.trim();
-          if (!text) return;
-          ta.value = '';
-          const updated = await postItemUpdate(slug, { new_snippets: [text] });
-          if (updated) refreshSnippetsFrom(bodyEl, updated);
-        }
-      });
-    }
-  }
-
-  // Explicit commit of the capture form (why_saved + what_works). Save
-  // persists whatever the user selected; Skip commits an empty intent so
-  // the server flips needs_review=false and the form stops appearing.
-  async function commitCaptureForm(slug, form, opts) {
-    const skip = opts && opts.skip;
-    let why_saved = [];
-    let what_works = '';
-    if (!skip) {
-      const activeBtns = form.querySelectorAll('.q-toggle.active');
-      why_saved = [...activeBtns].map(b => b.dataset.value);
-      const custom = form.querySelector('.q-custom-reason')?.value.trim();
-      if (custom) why_saved.push(custom.toLowerCase().replace(/\s+/g, '-'));
-      what_works = form.querySelector('.question-text')?.value || '';
-    }
-    const updated = await postItemUpdate(slug, { why_saved, what_works });
-    // After a commit the server will have flipped needs_review=false;
-    // refresh the panel so the capture form section disappears cleanly.
-    if (updated) PanelManager.refreshItem(slug);
   }
 
   async function postItemUpdate(slug, payload) {
@@ -1742,216 +1709,18 @@
       });
       if (!res.ok) return null;
       const data = await res.json();
-      // Merge server truth into local state and update the grid card.
-      const prev = itemsBySlug[slug];
-      const next = normalizeItem({
-        ...(prev || {}),
-        ...data,
-      });
+      const next = normalizeItem({ ...(itemsBySlug[slug] || {}), ...data });
       itemsBySlug[slug] = next;
-      // Update the grid card thumb if primary image changed.
+      const i = allItems.findIndex(x => x.slug === slug);
+      if (i >= 0) allItems[i] = next;
       const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
-      if (card) {
-        const newThumb = card.querySelector('.card-thumb');
-        if (newThumb && next.image_path) {
-          newThumb.src = next.image_path;
-        }
-      }
+      const thumb = card && card.querySelector('.card-thumb');
+      if (thumb && next.image_path) thumb.src = next.image_path;
       return next;
     } catch (err) {
       console.warn('postItemUpdate failed', slug, err.message);
       return null;
     }
-  }
-
-  function refreshSliderFrom(bodyEl, item) {
-    const slider = bodyEl.querySelector('.panel-image-slider');
-    if (!slider) return;
-    slider.outerHTML = renderPanelSliderHTML(item);
-    updateCoverDotColor(bodyEl.querySelector('.panel-image-slider'));
-  }
-
-  // Swap the main preview image locally (no server call). Marks the
-  // matching thumb .is-active. The "Set as cover" pill is always visible
-  // (even when previewing the current cover) so the action is consistent
-  // for every image in the slider.
-  function previewThumb(bodyEl, path) {
-    const slider = bodyEl.querySelector('.panel-image-slider');
-    if (!slider) return;
-    const main = slider.querySelector('.panel-image-main');
-    if (main) {
-      const img = main.querySelector('img');
-      if (img) {
-        img.src = path;
-        img.dataset.previewPath = path;
-      } else {
-        main.insertAdjacentHTML('afterbegin',
-          `<img src="${escAttr(path)}" alt="" data-preview-path="${escAttr(path)}">`);
-      }
-    }
-    slider.querySelectorAll('.panel-image-thumb').forEach(t =>
-      t.classList.toggle('is-active', t.dataset.path === path));
-  }
-
-  async function setAsCover(bodyEl, slug, path) {
-    const updated = await postItemUpdate(slug, { primary_image_path: path });
-    if (updated) refreshSliderFrom(bodyEl, updated);
-  }
-
-  async function removeImage(bodyEl, slug, path) {
-    const updated = await postItemUpdate(slug, { remove_image_paths: [path] });
-    if (updated) refreshSliderFrom(bodyEl, updated);
-  }
-
-  // ---- Cover-dot color: black on bright images, white on dark ones.
-  // Results are cached by image URL since thumbnails never change their
-  // pixel data, only their .is-cover membership.
-  const _brightnessCache = new Map();
-
-  function updateCoverDotColor(slider) {
-    if (!slider) return;
-    const coverThumb = slider.querySelector('.panel-image-thumb.is-cover');
-    if (!coverThumb) return;
-    const src = coverThumb.querySelector('img')?.src;
-    if (!src) return;
-
-    const apply = (luminance) => {
-      // WCAG says 128 on a 0-255 scale is the naive midpoint; in practice
-      // dot visibility flips a bit earlier against busy backgrounds, so
-      // err toward white at moderate brightness.
-      const color = luminance > 140 ? '#000' : '#fff';
-      coverThumb.style.setProperty('--dot-color', color);
-    };
-
-    if (_brightnessCache.has(src)) { apply(_brightnessCache.get(src)); return; }
-
-    // Use a fresh crossOrigin image so we can read canvas pixels. If the
-    // storage CDN doesn't send CORS headers, the load will fail and we
-    // just leave the default color.
-    const probe = new Image();
-    probe.crossOrigin = 'anonymous';
-    probe.onload = () => {
-      try {
-        const w = 16, h = 16;
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(probe, 0, 0, w, h);
-        const data = ctx.getImageData(0, 0, w, h).data;
-        let r = 0, g = 0, b = 0, n = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
-        }
-        // Rec. 601 luma coefficients — matches how the eye weights channels.
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / n;
-        _brightnessCache.set(src, luminance);
-        apply(luminance);
-      } catch { /* tainted canvas, leave default */ }
-    };
-    probe.onerror = () => { /* CORS or 404 — leave default */ };
-    probe.src = src;
-  }
-
-  // ---- Three-dot footer menu (Enrich + Delete) ----
-  function bindPanelFooterMenu(footerEl, item) {
-    const trigger = footerEl.querySelector('.panel-footer-menu-trigger');
-    const popover = footerEl.querySelector('.panel-footer-menu-popover');
-    const deleteBtn = footerEl.querySelector('.js-delete');
-    const enrichBtn = footerEl.querySelector('.js-enrich');
-    if (!trigger || !popover) return;
-
-    const slug = item.slug;
-
-    const closeMenu = () => {
-      popover.hidden = true;
-      trigger.setAttribute('aria-expanded', 'false');
-      // Reset the delete two-step any time the menu closes.
-      if (deleteBtn) {
-        deleteBtn.dataset.step = '0';
-        deleteBtn.textContent = 'Delete';
-      }
-    };
-
-    const openMenu = () => {
-      popover.hidden = false;
-      trigger.setAttribute('aria-expanded', 'true');
-    };
-
-    trigger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (popover.hidden) openMenu(); else closeMenu();
-    });
-
-    // Outside click / Escape dismiss the menu without firing destructive steps.
-    const outsideHandler = (e) => {
-      if (popover.hidden) return;
-      if (footerEl.contains(e.target)) return;
-      closeMenu();
-    };
-    document.addEventListener('click', outsideHandler);
-    document.addEventListener('keydown', (e) => {
-      if (!popover.hidden && e.key === 'Escape') closeMenu();
-    });
-
-    if (enrichBtn) {
-      enrichBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        closeMenu();
-        showToast('Enriching…');
-        try {
-          const res = await apiFetch('/api/reenrich', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug }),
-          });
-          if (!res.ok) throw new Error('Enrich request failed');
-          // Poll for enrichment completion so the panel + grid update live.
-          if (typeof pollForEnrichment === 'function') pollForEnrichment(slug);
-          showToast('Enriching in background…');
-        } catch (err) {
-          showToast('Enrich failed: ' + (err.message || 'unknown'));
-        }
-      });
-    }
-
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (deleteBtn.dataset.step !== '1') {
-          // First click -> arm for confirmation.
-          deleteBtn.dataset.step = '1';
-          deleteBtn.textContent = 'Confirm delete';
-          return;
-        }
-        // Second click -> execute.
-        try {
-          const res = await apiFetch('/api/item-delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug }),
-          });
-          if (!res.ok) throw new Error('Delete failed');
-          // Locally remove: card, lookups, open panel.
-          const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
-          if (card) card.remove();
-          const idx = allItems.findIndex(i => i.slug === slug);
-          if (idx >= 0) allItems.splice(idx, 1);
-          delete itemsBySlug[slug];
-          renderStats();
-          PanelManager.close();
-          showToast('Deleted');
-        } catch (err) {
-          showToast('Delete failed: ' + (err.message || 'unknown'));
-          closeMenu();
-        }
-      });
-    }
-  }
-
-  function refreshSnippetsFrom(bodyEl, item) {
-    const wrap = bodyEl.querySelector('.panel-snippets');
-    if (!wrap) return;
-    wrap.outerHTML = renderPanelSnippetsHTML(item);
   }
 
   function fileToBase64(file) {
@@ -1966,6 +1735,305 @@
       reader.readAsDataURL(file);
     });
   }
+
+  // ==== Card context menu — the Mac card's right-click menu ================
+  // Same items, same order as ItemCardView.swift `cardContextMenu`: Open,
+  // Enrich, Share, Copy Link, Copy ▸ (Title / Details (Markdown) / Image),
+  // Download ▸ (Markdown / Image / Full Item), Delete.
+
+  async function enrichItem(slug) {
+    showToast('Enriching…');
+    try {
+      const res = await apiFetch('/api/reenrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      if (!res.ok) throw new Error('Enrich request failed');
+      pollForEnrichment(slug);
+    } catch (err) {
+      showToast('Enrich failed: ' + (err.message || 'unknown'));
+    }
+  }
+
+  async function deleteItem(slug) {
+    try {
+      const res = await apiFetch('/api/item-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      if (PanelManager.getOpenSlug() === slug) PanelManager.close();
+      const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
+      if (card) card.remove();
+      const idx = allItems.findIndex(i => i.slug === slug);
+      if (idx >= 0) allItems.splice(idx, 1);
+      delete itemsBySlug[slug];
+      renderStats();
+      showToast('Deleted');
+    } catch (err) {
+      showToast('Delete failed: ' + (err.message || 'unknown'));
+    }
+  }
+
+  function exportBaseName(item) {
+    const base = (item.slug || item.title || '').replace(/\//g, '-').trim();
+    return base || 'item';
+  }
+
+  // The Mac `markdownExport()`: title, summary, URL / domain / saved / tags, notes.
+  function itemMarkdown(item) {
+    const lines = [];
+    if (item.title) lines.push(`# ${item.title}`, '');
+    if (item.summary) lines.push(item.summary, '');
+    const meta = [];
+    if (item.source_url) meta.push(`- **URL:** ${item.source_url}`);
+    if (item.domain) meta.push(`- **Domain:** ${item.domain}`);
+    const saved = item.added_at ? new Date(item.added_at) : null;
+    if (saved && !isNaN(saved)) {
+      meta.push(`- **Saved:** ${saved.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`);
+    }
+    const tagNames = (item.tags || []).map(t => t.tag).filter(Boolean);
+    if (tagNames.length) meta.push(`- **Tags:** ${tagNames.join(', ')}`);
+    if (meta.length) lines.push(...meta, '');
+    const snippets = (item.snippets || []).filter(s => s && s.text);
+    if (snippets.length) {
+      lines.push('## Notes', '');
+      for (const s of snippets) lines.push(`- ${s.text}`);
+    }
+    return lines.join('\n').trim();
+  }
+
+  async function copyText(text, label) {
+    try { await navigator.clipboard.writeText(text); showToast(`${label} copied`); }
+    catch { showToast('Copy failed'); }
+  }
+
+  async function fetchBlob(path) {
+    const res = await fetch(path, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error('Image fetch failed');
+    return res.blob();
+  }
+
+  // The clipboard takes PNG everywhere; other types are re-encoded through a canvas.
+  async function toPngBlob(blob) {
+    if (blob.type === 'image/png') return blob;
+    const bmp = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width; canvas.height = bmp.height;
+    canvas.getContext('2d').drawImage(bmp, 0, 0);
+    return new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('encode'))), 'image/png'));
+  }
+
+  async function copyImage(item) {
+    try {
+      const png = await toPngBlob(await fetchBlob(item.image_path));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      showToast('Image copied');
+    } catch { showToast('Copy image failed'); }
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function imageExt(blob) {
+    const t = ((blob.type || '').split('/')[1] || 'png').split('+')[0];
+    return t === 'jpeg' ? 'jpg' : t.replace(/[^a-z0-9]/gi, '') || 'png';
+  }
+
+  async function downloadImage(item) {
+    try {
+      const blob = await fetchBlob(item.image_path);
+      downloadBlob(blob, `${exportBaseName(item)}.${imageExt(blob)}`);
+    } catch { showToast('Download failed'); }
+  }
+
+  // ---- Minimal zip writer (stored, no compression) for "Download Full Item" ----
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zipFiles(files) {
+    const enc = new TextEncoder();
+    const parts = [];
+    const central = [];
+    let offset = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name);
+      const data = f.data;
+      const crc = crc32(data);
+      const local = new DataView(new ArrayBuffer(30));
+      local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true);
+      local.setUint32(14, crc, true); local.setUint32(18, data.length, true); local.setUint32(22, data.length, true);
+      local.setUint16(26, name.length, true);
+      parts.push(new Uint8Array(local.buffer), name, data);
+      const cen = new DataView(new ArrayBuffer(46));
+      cen.setUint32(0, 0x02014b50, true); cen.setUint16(4, 20, true); cen.setUint16(6, 20, true); cen.setUint16(8, 0x0800, true);
+      cen.setUint32(16, crc, true); cen.setUint32(20, data.length, true); cen.setUint32(24, data.length, true);
+      cen.setUint16(28, name.length, true); cen.setUint32(42, offset, true);
+      central.push(new Uint8Array(cen.buffer), name);
+      offset += 30 + name.length + data.length;
+    }
+    const cenSize = central.reduce((n, p) => n + p.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cenSize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+  }
+
+  // The Mac `ItemBundleExporter`: <name>/<name>.md, snippets/snippet-N.txt, images/image-N.ext.
+  async function downloadFullItem(item) {
+    const name = exportBaseName(item);
+    const enc = new TextEncoder();
+    const files = [{ name: `${name}/${name}.md`, data: enc.encode(itemMarkdown(item)) }];
+    (item.snippets || []).filter(s => s && s.text).forEach((s, i) =>
+      files.push({ name: `${name}/snippets/snippet-${i + 1}.txt`, data: enc.encode(s.text) }));
+    const paths = (item.images || []).map(i => i && i.path).filter(Boolean);
+    if (!paths.length && item.image_path) paths.push(item.image_path);
+    let n = 0;
+    for (const p of paths) {
+      try {
+        const blob = await fetchBlob(p);
+        n++;
+        files.push({ name: `${name}/images/image-${n}.${imageExt(blob)}`, data: new Uint8Array(await blob.arrayBuffer()) });
+      } catch { /* skip an image that won't load */ }
+    }
+    downloadBlob(zipFiles(files), `${name}.zip`);
+  }
+
+  const CardMenu = (function () {
+    let $menu = null;
+    let slug = null;
+
+    const ICON_FOR = {
+      open: 'arrow-up-right', enrich: 'sparkle', share: 'share', 'copy-link': 'link',
+      copy: 'copy', download: 'download', delete: 'trash',
+    };
+
+    function entries(item) {
+      const hasURL = !!item.source_url;
+      const hasImage = !!item.image_path;
+      const list = [
+        { id: 'open', label: 'Open' },
+        { id: 'enrich', label: 'Enrich' },
+      ];
+      if (hasURL && navigator.share) list.push({ id: 'share', label: 'Share' });
+      if (hasURL) list.push({ id: 'copy-link', label: 'Copy Link' });
+      list.push({ id: 'copy', label: 'Copy', sub: [
+        { id: 'copy-title', label: 'Copy Title' },
+        { id: 'copy-md', label: 'Copy Details (Markdown)' },
+        ...(hasImage ? [{ id: 'copy-image', label: 'Copy Image' }] : []),
+      ] });
+      list.push({ id: 'download', label: 'Download', sub: [
+        { id: 'dl-md', label: 'Download Markdown' },
+        ...(hasImage ? [{ id: 'dl-image', label: 'Download Image' }] : []),
+        { id: 'dl-full', label: 'Download Full Item' },
+      ] });
+      list.push({ divider: true }, { id: 'delete', label: 'Delete', danger: true });
+      return list;
+    }
+
+    function itemHTML(e) {
+      if (e.divider) return '<div class="card-menu-divider" role="separator"></div>';
+      const ic = ICON_FOR[e.id] ? `<span class="card-menu-icon">${icon(ICON_FOR[e.id])}</span>` : '<span class="card-menu-icon"></span>';
+      if (e.sub) {
+        return `<div class="card-menu-group">
+          <button type="button" class="card-menu-item has-sub" role="menuitem" aria-haspopup="true" data-action="${e.id}">${ic}<span>${escHtml(e.label)}</span><span class="card-menu-chevron">›</span></button>
+          <div class="card-menu card-menu-sub" role="menu">${e.sub.map(itemHTML).join('')}</div>
+        </div>`;
+      }
+      return `<button type="button" class="card-menu-item${e.danger ? ' is-danger' : ''}" role="menuitem" data-action="${e.id}">${ic}<span>${escHtml(e.label)}</span></button>`;
+    }
+
+    function close() {
+      if ($menu) { $menu.remove(); $menu = null; slug = null; }
+    }
+
+    function openAt(cardSlug, x, y) {
+      const item = itemsBySlug[cardSlug];
+      if (!item) return;
+      close();
+      slug = cardSlug;
+      $menu = document.createElement('div');
+      $menu.className = 'card-menu';
+      $menu.setAttribute('role', 'menu');
+      $menu.innerHTML = entries(item).map(itemHTML).join('');
+      document.body.appendChild($menu);
+      const r = $menu.getBoundingClientRect();
+      const left = Math.min(x, window.innerWidth - r.width - 8);
+      const top = Math.min(y, window.innerHeight - r.height - 8);
+      $menu.style.left = Math.max(8, left) + 'px';
+      $menu.style.top = Math.max(8, top) + 'px';
+      if (left + r.width * 2 > window.innerWidth) $menu.classList.add('subs-left');
+      $menu.querySelector('.card-menu-item')?.focus();
+      $menu.addEventListener('click', onClick);
+    }
+
+    async function onClick(e) {
+      const btn = e.target.closest('.card-menu-item');
+      if (!btn || btn.classList.contains('has-sub')) return;
+      const item = itemsBySlug[slug];
+      const action = btn.dataset.action;
+      close();
+      if (!item) return;
+      switch (action) {
+        case 'open': PanelManager.open(item.slug); break;
+        case 'enrich': enrichItem(item.slug); break;
+        case 'share': navigator.share({ title: item.title || '', url: item.source_url }).catch(() => {}); break;
+        case 'copy-link': copyText(item.source_url, 'Link'); break;
+        case 'copy-title': copyText(item.title || '', 'Title'); break;
+        case 'copy-md': copyText(itemMarkdown(item), 'Details'); break;
+        case 'copy-image': copyImage(item); break;
+        case 'dl-md': downloadBlob(new Blob([itemMarkdown(item)], { type: 'text/markdown' }), `${exportBaseName(item)}.md`); break;
+        case 'dl-image': downloadImage(item); break;
+        case 'dl-full': downloadFullItem(item); break;
+        case 'delete': deleteItem(item.slug); break;
+        default: break;
+      }
+    }
+
+    function init() {
+      document.addEventListener('contextmenu', (e) => {
+        const card = e.target.closest && e.target.closest('.card[data-slug]');
+        if (!card) { close(); return; }
+        e.preventDefault();
+        openAt(card.dataset.slug, e.clientX, e.clientY);
+      });
+      // Keyboard: the Menu key or Shift+F10 on a focused card.
+      document.addEventListener('keydown', (e) => {
+        if ($menu && e.key === 'Escape') { e.stopPropagation(); close(); return; }
+        if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+          const card = document.activeElement && document.activeElement.closest && document.activeElement.closest('.card[data-slug]');
+          if (!card) return;
+          e.preventDefault();
+          const r = card.getBoundingClientRect();
+          openAt(card.dataset.slug, r.left + 16, r.top + 16);
+        }
+      }, true);
+      document.addEventListener('mousedown', (e) => { if ($menu && !$menu.contains(e.target)) close(); });
+      window.addEventListener('scroll', close, true);
+      window.addEventListener('resize', close);
+      window.addEventListener('blur', close);
+    }
+
+    return { init, close };
+  })();
 
   // ---- Capture queue (sequential panel curation) ----
   // Slugs of freshly captured items that deserve a curation panel. We
@@ -1993,6 +2061,9 @@
   }
 
   function notifyCaptureSlugClosed(slug) {
+    // Mac parity: leaving an item's panel marks it reviewed.
+    const closedItem = itemsBySlug[slug];
+    if (closedItem && closedItem.needs_review === true) postItemUpdate(slug, { mark_reviewed: true });
     if (!captureFlowSlugs.has(slug)) return;
     captureFlowSlugs.delete(slug);
     if (captureFlowSlugs.size === 0) advanceCaptureQueue();
@@ -2001,14 +2072,17 @@
   // --- Active filter pills ---
   function renderActiveFilters() {
     updateFilterButtonState();
-    if (activeTags.length === 0 && !selectedWeek) {
+    if (activeTags.length === 0 && !selectedWeek && !needsReviewOnly) {
       $activeFilters.innerHTML = '';
       return;
     }
+    const reviewPill = needsReviewOnly
+      ? `<span class="active-filter-pill active-filter-review" data-review="1">Needs review <span class="x">&times;</span></span>`
+      : '';
     const weekPill = selectedWeek
       ? `<span class="active-filter-pill active-filter-week" data-week="${selectedWeek}">${escHtml(weekLabelFor(selectedWeek))} <span class="x">&times;</span></span>`
       : '';
-    $activeFilters.innerHTML = weekPill + activeTags.map((at, i) =>
+    $activeFilters.innerHTML = reviewPill + weekPill + activeTags.map((at, i) =>
       `<span class="active-filter-pill" data-idx="${i}">${escHtml(at.tag)} <span class="x">&times;</span></span>`
     ).join('') + `<button class="clear-filters-btn" id="clear-filters">Clear all</button>`;
   }
@@ -2167,6 +2241,8 @@
     $activeFilters.addEventListener('click', function (e) {
       if (e.target.id === 'clear-filters' || e.target.closest('#clear-filters')) {
         activeTags = [];
+        needsReviewOnly = false;
+        syncReviewToggle();
         renderTagDrawer();
         if (selectedWeek) { setWeekFilter(null); return; }
         renderActiveFilters();
@@ -2176,6 +2252,7 @@
       const pill = e.target.closest('.active-filter-pill');
       if (!pill) return;
       if (pill.dataset.week) { setWeekFilter(null); return; }
+      if (pill.dataset.review) { setNeedsReview(false); return; }
       const idx = parseInt(pill.dataset.idx, 10);
       activeTags.splice(idx, 1);
       renderTagDrawer();
@@ -2522,7 +2599,25 @@
 
   // --- Import tool panel body (wired when the panel opens) ---
   // --- Filters tool panel body (wire the search input when the panel opens) ---
+  function setNeedsReview(on) {
+    needsReviewOnly = !!on;
+    syncReviewToggle();
+    renderActiveFilters();
+    renderGrid();
+  }
+  function syncReviewToggle() {
+    const t = document.getElementById('filter-needs-review');
+    if (!t) return;
+    t.classList.toggle('is-on', needsReviewOnly);
+    t.setAttribute('aria-pressed', needsReviewOnly ? 'true' : 'false');
+  }
+
   function bindFilterPanelBody() {
+    const $review = document.getElementById('filter-needs-review');
+    if ($review) {
+      syncReviewToggle();
+      $review.addEventListener('click', () => setNeedsReview(!needsReviewOnly));
+    }
     const $search = document.getElementById('filter-search');
     if (!$search) return;
     $search.value = tagSearchQuery;
@@ -2665,6 +2760,24 @@
         );
       });
     });
+
+    // Grid columns stepper.
+    const $cols = $panel.querySelector('#grid-columns');
+    if ($cols) {
+      const $label = $cols.querySelector('.grid-columns-label');
+      const paint = () => {
+        $label.textContent = zoomCols === 0 ? 'Auto' : `${zoomCols} column${zoomCols === 1 ? '' : 's'}`;
+        $cols.querySelector('[data-step="-1"]').disabled = zoomCols === 0;
+        $cols.querySelector('[data-step="1"]').disabled = zoomCols === MAX_COLS;
+      };
+      paint();
+      $cols.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-step]');
+        if (!b) return;
+        setGridColumns(Math.max(0, Math.min(MAX_COLS, zoomCols + Number(b.dataset.step))));
+        paint();
+      });
+    }
 
     // Account: which sign-in methods are linked, link Apple ID.
     (async () => {
@@ -2827,97 +2940,33 @@
       const item = itemsBySlug[state.slug];
       if (!item) { syncHighlightsToOpenPanels([]); return; }
 
+      // Mac panel: no header bar. The cover bleeds to the top and a
+      // floating glass close button sits over it (top-right).
       const panel = document.createElement('aside');
-      panel.className = 'panel';
+      panel.className = 'panel panel-item';
       panel.dataset.slug = state.slug;
       panel.setAttribute('role', 'region');
       panel.setAttribute('aria-label', `Item detail: ${item.title || state.slug}`);
       panel.setAttribute('tabindex', '-1');
       panel.style.setProperty('--panel-width', computePanelWidth() + 'px');
 
-      const header = document.createElement('header');
-      header.className = 'panel-header';
-
-      const info = document.createElement('div');
-      info.className = 'panel-header-info';
-      const titleEl = document.createElement('div');
-      titleEl.className = 'panel-header-title';
-      titleEl.textContent = item.title || '';
-      info.appendChild(titleEl);
-      if (item.domain) {
-        const sourceEl = document.createElement('div');
-        sourceEl.className = 'panel-header-source';
-        sourceEl.textContent = item.domain;
-        info.appendChild(sourceEl);
-      }
-      header.appendChild(info);
-
-      const actions = document.createElement('div');
-      actions.className = 'panel-header-actions';
-
-      const shuffleBtn = document.createElement('button');
-      shuffleBtn.className = 'panel-shuffle';
-      shuffleBtn.type = 'button';
-      shuffleBtn.setAttribute('aria-label', 'Shuffle to related item');
-      shuffleBtn.title = 'Shuffle to related item';
-      shuffleBtn.innerHTML = icon('shuffle');
-      shuffleBtn.addEventListener('click', shuffle);
-      actions.appendChild(shuffleBtn);
-
-      if (item.source_url) {
-        const openBtn = document.createElement('button');
-        openBtn.className = 'panel-open-source';
-        openBtn.type = 'button';
-        openBtn.setAttribute('aria-label', 'Open source in new tab');
-        openBtn.title = 'Open source';
-        openBtn.innerHTML = icon('arrow-up-right');
-        openBtn.addEventListener('click', () => {
-          window.open(item.source_url, '_blank', 'noopener');
-        });
-        actions.appendChild(openBtn);
-      }
-
-      const expandBtn = document.createElement('button');
-      expandBtn.className = 'panel-expand';
-      expandBtn.type = 'button';
-      expandBtn.setAttribute('aria-label', 'Open full page');
-      expandBtn.title = 'Full page';
-      expandBtn.innerHTML = icon('frame-corners');
-      expandBtn.addEventListener('click', () => {
-        syncToStorage();
-        window.location.href = 'detail.html?slug=' + encodeURIComponent(state.slug);
-      });
-      actions.appendChild(expandBtn);
-
       const closeBtn = document.createElement('button');
-      closeBtn.className = 'panel-close';
+      closeBtn.className = 'panel-float-close';
       closeBtn.type = 'button';
       closeBtn.setAttribute('aria-label', 'Close panel');
       closeBtn.title = 'Close';
       closeBtn.innerHTML = icon('x');
       closeBtn.addEventListener('click', close);
-      actions.appendChild(closeBtn);
-
-      header.appendChild(actions);
-      panel.appendChild(header);
+      panel.appendChild(closeBtn);
 
       const body = document.createElement('div');
       body.className = 'panel-body';
-      body.innerHTML = buildPanelBodyHTML(item, null);
       panel.appendChild(body);
-
-      const footer = document.createElement('div');
-      footer.className = 'panel-footer';
-      footer.innerHTML = buildPanelFooterHTML(item, null);
-      panel.appendChild(footer);
-
       $container.appendChild(panel);
 
-      const mdEl = body.querySelector('.card-expanded-md');
-      loadMarkdownInto(mdEl);
-
-      bindPanelBody(body, item);
-      bindPanelFooterMenu(footer, item);
+      if (panelPreview.slug !== state.slug) { panelPreview.slug = state.slug; panelPreview.path = null; }
+      rerenderPanelBody(body, item);
+      bindPanelBody(body, state.slug);
 
       syncHighlightsToOpenPanels([state.slug]);
     }
@@ -3049,6 +3098,15 @@
       focus();
 
       if (previousSlug && previousSlug !== slug) notifyCaptureSlugClosed(previousSlug);
+      recordOpen(slug);
+    }
+
+    // Revisit tracking, once per item per page load (Apple: StelloStore.recordOpen).
+    const openedThisSession = new Set();
+    function recordOpen(slug) {
+      if (openedThisSession.has(slug)) return;
+      openedThisSession.add(slug);
+      postItemUpdate(slug, { record_open: true });
     }
 
     function close() {
@@ -3075,39 +3133,6 @@
     function closeFocused() {
       if (state.tool) { closeTool(); return; }
       if (state.slug) close();
-    }
-
-    function replace(newSlug) {
-      if (!state.slug || !itemsBySlug[newSlug]) return;
-      state.slug = newSlug;
-      syncToURL(false);
-      syncToStorage();
-      render();
-      updateActiveCards();
-      announce(`Panel shuffled to: ${itemsBySlug[newSlug].title || newSlug}`);
-    }
-
-    // Find a random slug that shares ≥1 tag with the open item.
-    function randomRelatedSlug(currentSlug) {
-      const item = itemsBySlug[currentSlug];
-      if (!item) return null;
-      const tagKeys = new Set(item.tags.map(t => t.category + ':' + t.tag));
-      const candidates = [];
-      for (const other of allItems) {
-        if (other.slug === currentSlug) continue;
-        for (const t of other.tags) {
-          if (tagKeys.has(t.category + ':' + t.tag)) { candidates.push(other.slug); break; }
-        }
-      }
-      if (candidates.length === 0) return null;
-      return candidates[Math.floor(Math.random() * candidates.length)];
-    }
-
-    function shuffle() {
-      if (!state.slug) return;
-      const next = randomRelatedSlug(state.slug);
-      if (!next) { announce('No related items available to shuffle to'); return; }
-      replace(next);
     }
 
     function focus() {
@@ -3188,99 +3213,12 @@
     function refreshItem(slug) {
       if (!$container || state.slug !== slug) return;
       const item = itemsBySlug[slug];
-      if (!item) return;
-      const panel = $container.querySelector('.panel');
-      if (!panel) return;
-      const body = panel.querySelector('.panel-body');
-      const footer = panel.querySelector('.panel-footer');
-
-      // Diff-aware refresh: don't stomp sections the user is actively
-      // editing. The slider, the candidate chips, and the footer tags are
-      // safe to re-render whenever the data changes. The capture form
-      // (q-toggle chips, q-custom-reason, question-text) holds in-flight
-      // input — only re-render it if it doesn't exist yet.
-      if (body) {
-        // Slider: rebuild whenever images[] or candidate images change.
-        const slider = body.querySelector('.panel-image-slider');
-        if (slider) {
-          const nextHtml = renderPanelSliderHTML(item);
-          if (slider.outerHTML !== nextHtml) slider.outerHTML = nextHtml;
-        } else {
-          // First render didn't have a slider (no image + no candidates).
-          // Prepend one if we now have something to show.
-          const nextHtml = renderPanelSliderHTML(item);
-          if (nextHtml) body.insertAdjacentHTML('afterbegin', nextHtml);
-        }
-
-        // Capture form: only shown while needs_review=true. Remove it
-        // when the item no longer needs review; merge suggested chips in
-        // when the form is already present and enrichment adds more.
-        const form = body.querySelector('.panel-capture-form');
-        if (item.needs_review !== true) {
-          if (form) form.remove();
-        } else if (!form) {
-          const snipWrap = body.querySelector('.panel-snippets');
-          const html = renderPanelCaptureFormHTML(item);
-          if (html) {
-            if (snipWrap) snipWrap.insertAdjacentHTML('beforebegin', html);
-            else body.insertAdjacentHTML('beforeend', html);
-          }
-        } else {
-          mergeSuggestedReasonChips(form, item);
-        }
-
-        // Snippets: re-render list + candidate chips. The "add" textarea
-        // gets wiped — capture its value first and restore.
-        const snipWrap = body.querySelector('.panel-snippets');
-        if (snipWrap) {
-          const pendingDraft = snipWrap.querySelector('.panel-snippet-add textarea')?.value || '';
-          snipWrap.outerHTML = renderPanelSnippetsHTML(item);
-          const restored = body.querySelector('.panel-snippet-add textarea');
-          if (restored && pendingDraft) restored.value = pendingDraft;
-        } else {
-          body.insertAdjacentHTML('beforeend', renderPanelSnippetsHTML(item));
-        }
-
-        // Markdown body: re-load if the raw markdown changed.
-        const mdEl = body.querySelector('.card-expanded-md');
-        if (mdEl && !mdEl.dataset.loaded) loadMarkdownInto(mdEl);
-
-        // Re-bind handlers because we replaced DOM nodes.
-        bindPanelBody(body, item);
-      }
-      if (footer) {
-        footer.innerHTML = buildPanelFooterHTML(item, null);
-      }
-    }
-
-    // Merge any reason chips from enrichment_candidates.reasons that
-    // aren't already shown in the form. Preserves the active state of
-    // existing chips and any text typed into q-custom-reason / textarea.
-    function mergeSuggestedReasonChips(form, item) {
-      const reasons = (item.enrichment_candidates && Array.isArray(item.enrichment_candidates.reasons))
-        ? item.enrichment_candidates.reasons : [];
-      if (!reasons.length) return;
-      const options = form.querySelector('.question-options');
-      if (!options) return;
-      const have = new Set(
-        [...options.querySelectorAll('.q-toggle')].map(b => b.dataset.value)
-      );
-      const customInput = options.querySelector('.q-custom-reason');
-      for (const r of reasons) {
-        if (have.has(r)) continue;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'q-toggle q-toggle-suggested';
-        btn.dataset.value = r;
-        btn.title = 'Suggested';
-        btn.textContent = humanizeReason(r);
-        if (customInput) options.insertBefore(btn, customInput);
-        else options.appendChild(btn);
-      }
+      const body = $container.querySelector('.panel-item .panel-body');
+      if (item && body) rerenderPanelBody(body, item);
     }
 
     return {
-      init, open, close, focus, shuffle, applyWidth,
+      init, open, close, focus, applyWidth,
       openTool, closeTool,
       getOpenSlug,
       refreshAfterGridRender, refreshItem,

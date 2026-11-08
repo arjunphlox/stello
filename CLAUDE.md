@@ -50,6 +50,7 @@ Vanilla HTML/CSS/JS frontend, a single Cloudflare Worker (Hono) for accounts, da
 | `index.html` | Main grid view with search, tag filtering, import modal |
 | `detail.html` | Item detail page |
 | `app.js` | All frontend logic — filtering, masonry layout, tag system, related items index |
+| `panel-layout.js` | Item detail panel layout: web port of the Mac `CardSubcards.swift` + `PanelDedupe.swift` (all kinds); `app.js` renders its cards. Keep in step with the Mac panel |
 | `desktop-context.js` | Localhost-only bridge to the desktop-context daemon (`window.stelloDesktop.fetchRelated`) |
 | `style.css` | All styles |
 | `auth-client.js` | Client-side auth + session helpers (`window.Stello`) |
