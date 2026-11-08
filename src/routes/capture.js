@@ -5,6 +5,7 @@ const {
 } = require('../lib/common');
 const storage = require('../lib/storage');
 const { enrichCore } = require('./enrich');
+const { sortSavedItem } = require('../lib/readers/sort-item.js');
 
 module.exports = async function handler(req, res) {
   if (handleCors(req, res)) return;
@@ -135,12 +136,14 @@ async function handleUrlCapture(req, client, user, url, res) {
     return jsonResponse(res, 500, { error: 'Insert failed', detail: insertErr.message });
   }
 
-  // Background enrichment — run after the response via waitUntil (no
-  // self-subrequest; call the enrich core directly with the user's token).
+  // After the response (waitUntil): sort the item (kind + typed metadata from the
+  // page readers), then the background enrichment. Saved first, so a page that runs
+  // past the CPU limit costs only the sort; the cron drain still enriches it later.
   if (req.ctx) {
-    req.ctx.waitUntil(
-      enrichCore(env, user.id, { slug, itemId: inserted.id }).catch(() => {})
-    );
+    req.ctx.waitUntil((async () => {
+      await sortSavedItem({ client, item: inserted });
+      await enrichCore(env, user.id, { slug, itemId: inserted.id });
+    })().catch(() => {}));
   }
 
   return jsonResponse(res, 201, {
