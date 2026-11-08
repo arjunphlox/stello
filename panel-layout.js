@@ -999,8 +999,24 @@
     return out;
   }
 
+  // Grid card helpers: the Mac card's kind line and URL pill host.
+  const CANONICAL_HOST_KINDS = new Set(['tool', 'resource', 'article', 'course', 'book']);
+  function kindLineFor(item) {
+    const kind = panelKind(item);
+    if (kind === 'link') return null;
+    const m = metaOf(item);
+    const line = m ? cardKindLine(kind, m) : null;
+    return line ? decodeEntities(line) : null;
+  }
+  function displayLink(item) {
+    const kind = panelKind(item);
+    const m = kind === 'link' ? null : metaOf(item);
+    const h = CANONICAL_HOST_KINDS.has(kind) && m && nb(m.canonicalURL) ? hostOf(m.canonicalURL) : '';
+    return (h || item.domain || '').replace(/^www\./, '');
+  }
+
   const api = {
-    layout, visibleTags, visibleSnippets, panelKind, metaOf,
+    layout, visibleTags, kindLineFor, displayLink, visibleSnippets, panelKind, metaOf,
     // exposed for tests
     normalize, isRedundant, isSameValue, factKey, filterTags, namesSameSite,
     formattedPrice, compactCount, weekLabel, toDate, cardKindLine,

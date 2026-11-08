@@ -2569,3 +2569,113 @@ button.sub-ref:hover { border-color: var(--accent); }
 }
 .card-menu.subs-left .card-menu-sub { left: auto; right: calc(100% + 2px); }
 .card-menu-group:hover > .card-menu-sub, .card-menu-group:focus-within > .card-menu-sub { display: flex; }
+
+/* ---- Needs review filter (Mac: AwaitingReviewFilter) ---- */
+.filter-review-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: left;
+}
+.filter-review-toggle:hover { border-color: var(--text); }
+.filter-review-check {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border);
+  flex: none;
+  position: relative;
+}
+.filter-review-toggle.is-on .filter-review-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.filter-review-toggle.is-on .filter-review-check::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 0.5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--accent-contrast);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* ---- Grid card extras (Mac: MasonryGridView card) ---- */
+.card-kind-line {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted, var(--text));
+  opacity: 0.75;
+}
+.card-badges {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 3;
+  pointer-events: none;
+  transition: opacity 0.18s ease-out;
+}
+.card:hover .card-badges { opacity: 0; }
+.card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.card-badge svg { width: 10px; height: 10px; }
+.card-review-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 18px;
+  min-width: 18px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--pill-bg, rgba(255, 255, 255, 0.2));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 500;
+  overflow: hidden;
+  transition: gap 0.15s;
+}
+.card-review-badge svg { width: 11px; height: 11px; flex: none; }
+.card-review-label {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.18s ease-out;
+}
+.card:hover .card-review-badge { gap: 4px; padding: 0 7px 0 5px; }
+.card:hover .card-review-label { max-width: 60px; }
+.card:has(.card-review-badge) .card-url-pill { max-width: calc(100% - 44px); }
+.active-filter-review { background: var(--text); color: var(--bg); }

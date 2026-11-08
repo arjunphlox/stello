@@ -24,6 +24,9 @@
     'share': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M176 96h24a8 8 0 0 1 8 8v104a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V104a8 8 0 0 1 8-8h24"/><path d="M128 24v112M88 64l40-40 40 40"/></svg>',
     'link': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round"><path d="M136 72l14-14a44 44 0 0 1 62 62l-30 30a44 44 0 0 1-62 0"/><path d="M120 184l-14 14a44 44 0 0 1-62-62l30-30a44 44 0 0 1 62 0"/></svg>',
     'download': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="128" cy="128" r="96"/><path d="M128 80v88M92 132l36 36 36-36"/></svg>',
+    'eye': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M247.31 124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57 61.26 162.88 48 128 48S61.43 61.26 36.34 86.35C17.51 105.18 9 124 8.69 124.76a8 8 0 0 0 0 6.5c.35.79 8.82 19.57 27.65 38.4C61.43 194.74 93.12 208 128 208s66.57-13.26 91.66-38.34c18.83-18.83 27.3-37.61 27.65-38.4a8 8 0 0 0 0-6.5ZM128 168a40 40 0 1 1 40-40 40 40 0 0 1-40 40Z"/></svg>',
+    'play': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232.4 114.49 88.32 26.35a16 16 0 0 0-16.2-.3A15.86 15.86 0 0 0 64 39.87v176.26a15.94 15.94 0 0 0 16 15.87 16.12 16.12 0 0 0 8.32-2.35l144.08-88.14a15.68 15.68 0 0 0 0-27Z"/></svg>',
+    'stack': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linejoin="round"><rect x="72" y="72" width="144" height="144" rx="16"/><path d="M184 40H56a16 16 0 0 0-16 16v128"/></svg>',
     'dots-three': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM48,116a12,12,0,1,0,12,12A12,12,0,0,0,48,116Zm160,0a12,12,0,1,0,12,12A12,12,0,0,0,208,116Z"/></svg>',
   };
   function icon(name) { return ICONS[name] || ''; }
@@ -32,6 +35,7 @@
   let allItems = [];
   let itemsBySlug = {};      // slug -> item lookup
   let activeTags = [];      // [{tag, category}]
+  let needsReviewOnly = false;
   let searchQuery = '';
   let relatedIndex = {};     // slug -> Set of related slugs
 
@@ -699,16 +703,44 @@
     }).join('');
   }
 
+  // --- Search + review (the Mac's ItemSearchBlob / AwaitingReviewFilter) ---
+  // Every text the item holds, metadata included, lowercased once per item
+  // object (normalizeItem makes a new object on change, so the cache never
+  // goes stale).
+  const _searchBlobs = new WeakMap();
+  function collectStrings(v, out) {
+    if (v == null) return;
+    if (typeof v === 'string') { if (v) out.push(v); return; }
+    if (typeof v === 'number') return;
+    if (Array.isArray(v)) { for (const x of v) collectStrings(x, out); return; }
+    if (typeof v === 'object') for (const k in v) collectStrings(v[k], out);
+  }
+  function searchBlob(item) {
+    let b = _searchBlobs.get(item);
+    if (b !== undefined) return b;
+    const parts = [item.title, item.summary, item.author, item.domain, item.body_markdown];
+    for (const t of item.tags || []) parts.push(t.tag);
+    for (const sn of item.snippets || []) parts.push(sn && sn.text);
+    collectStrings(item.enrichment_candidates && item.enrichment_candidates.reasons, parts);
+    collectStrings(window.StelloPanel.metaOf(item), parts);
+    b = parts.filter(Boolean).join(' ').toLowerCase();
+    _searchBlobs.set(item, b);
+    return b;
+  }
+
+  // Awaiting review: enrichment has run, the item still needs review, and
+  // there is something to review (why-save suggestions, or text-only results).
+  function isAwaitingReview(item) {
+    if (item.needs_review !== true || item.enrichment_status === 'pending') return false;
+    if (item.enrichment_status === 'text_done') return true;
+    return whySavedSuggestions(item).length > 0;
+  }
+
   // --- Grid ---
   function getFilteredItems() {
     return allItems.filter(item => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const inTitle = item.title.toLowerCase().includes(q);
-        const inSummary = (item.summary || '').toLowerCase().includes(q);
-        const inTags = item.tags.some(t => t.tag.toLowerCase().includes(q));
-        if (!inTitle && !inSummary && !inTags) return false;
-      }
+      if (searchQuery && !searchBlob(item).includes(searchQuery.toLowerCase())) return false;
+      if (needsReviewOnly && !isAwaitingReview(item)) return false;
       if (selectedWeek && getWeekKey(item.added_at) !== selectedWeek) return false;
       if (activeTags.length > 0) {
         return activeTags.every(at =>
@@ -1202,7 +1234,7 @@
 
   function updateFilterButtonState() {
     const btn = document.getElementById('filter-panel-btn');
-    if (btn) btn.classList.toggle('has-filters', activeTags.length > 0 || !!selectedWeek);
+    if (btn) btn.classList.toggle('has-filters', activeTags.length > 0 || !!selectedWeek || needsReviewOnly);
   }
 
   function sortItemsByAddedAt(arr) {
@@ -1253,7 +1285,27 @@
       item.title || '', item.domain || '',
       item.has_image ? '' : (item.summary || '').slice(0, 200),
       dominantColor(item),
+      cardExtrasSig(item),
     ].join('|'));
+  }
+
+  // Post marks (top-right of an image card), as on the Mac: play for a
+  // video, "GIF", a count for a carousel, "AI" for AI art.
+  function postBadgesHTML(item) {
+    if (item.kind !== 'post') return '';
+    const m = window.StelloPanel.metaOf(item);
+    if (!m) return '';
+    const count = m.mediaCount || 0;
+    const b = [];
+    if (m.mediaType === 'video') b.push(`<span class="card-badge" aria-label="Video">${icon('play')}</span>`);
+    if (m.mediaType === 'gif') b.push('<span class="card-badge">GIF</span>');
+    if (count > 1) b.push(`<span class="card-badge" aria-label="${count} media">${icon('stack')}${count}</span>`);
+    if (m.isAIArt === true) b.push('<span class="card-badge" aria-label="AI art">AI</span>');
+    return b.length ? `<div class="card-badges">${b.join('')}</div>` : '';
+  }
+  function cardExtrasSig(item) {
+    const m = item.metadata ? JSON.stringify(item.metadata).length : 0;
+    return [item.kind || '', m, isAwaitingReview(item) ? 'r' : ''].join(':');
   }
 
   function renderCard(item, idx) {
@@ -1293,8 +1345,13 @@
     const pillBg = hasColorTag ? hexToRgba(pillColor, 0.2) : 'rgba(255, 255, 255, 0.2)';
     const pillBgHover = '#ffffff';
     const pillColorHover = hasColorTag ? pillColor : '#1a1a17';
-    const urlPill = item.domain
-      ? `<a class="card-url-pill"${item.source_url ? ` href="${escHtml(item.source_url).replace(/"/g, '&quot;')}" target="_blank" rel="noopener"` : ''} style="--pill-bg:${pillBg};--pill-bg-hover:${pillBgHover};--pill-color-hover:${pillColorHover}" onclick="event.stopPropagation()">${escHtml(item.domain)}</a>`
+    const linkLabel = window.StelloPanel.displayLink(item);
+    const urlPill = linkLabel
+      ? `<a class="card-url-pill"${item.source_url ? ` href="${escHtml(item.source_url).replace(/"/g, '&quot;')}" target="_blank" rel="noopener"` : ''} style="--pill-bg:${pillBg};--pill-bg-hover:${pillBgHover};--pill-color-hover:${pillColorHover}" onclick="event.stopPropagation()">${escHtml(linkLabel)}</a>`
+      : '';
+    const kindLine = window.StelloPanel.kindLineFor(item);
+    const reviewBadge = isAwaitingReview(item)
+      ? `<span class="card-review-badge" style="--pill-bg:${pillBg}" title="Awaiting review" aria-label="Awaiting review">${icon('eye')}<span class="card-review-label">Review</span></span>`
       : '';
 
     const cardClass = hasImage ? ' card-visual' : (hasTextContent ? ' card-text' : '');
@@ -1302,7 +1359,9 @@
     return `<div class="card${cardClass}" data-slug="${item.slug}" data-render-sig="${cardRenderSig(item)}" tabindex="-1">
       <div class="card-visual-area">
         ${thumbHtml}
-        <div class="card-title-badge">${escHtml(item.title || '')}</div>
+        <div class="card-title-badge">${escHtml(item.title || '')}${kindLine ? `<span class="card-kind-line">${escHtml(kindLine)}</span>` : ''}</div>
+        ${hasImage ? postBadgesHTML(item) : ''}
+        ${reviewBadge}
         ${urlPill}
       </div>
     </div>`;
@@ -2005,14 +2064,17 @@
   // --- Active filter pills ---
   function renderActiveFilters() {
     updateFilterButtonState();
-    if (activeTags.length === 0 && !selectedWeek) {
+    if (activeTags.length === 0 && !selectedWeek && !needsReviewOnly) {
       $activeFilters.innerHTML = '';
       return;
     }
+    const reviewPill = needsReviewOnly
+      ? `<span class="active-filter-pill active-filter-review" data-review="1">Needs review <span class="x">&times;</span></span>`
+      : '';
     const weekPill = selectedWeek
       ? `<span class="active-filter-pill active-filter-week" data-week="${selectedWeek}">${escHtml(weekLabelFor(selectedWeek))} <span class="x">&times;</span></span>`
       : '';
-    $activeFilters.innerHTML = weekPill + activeTags.map((at, i) =>
+    $activeFilters.innerHTML = reviewPill + weekPill + activeTags.map((at, i) =>
       `<span class="active-filter-pill" data-idx="${i}">${escHtml(at.tag)} <span class="x">&times;</span></span>`
     ).join('') + `<button class="clear-filters-btn" id="clear-filters">Clear all</button>`;
   }
@@ -2171,6 +2233,8 @@
     $activeFilters.addEventListener('click', function (e) {
       if (e.target.id === 'clear-filters' || e.target.closest('#clear-filters')) {
         activeTags = [];
+        needsReviewOnly = false;
+        syncReviewToggle();
         renderTagDrawer();
         if (selectedWeek) { setWeekFilter(null); return; }
         renderActiveFilters();
@@ -2180,6 +2244,7 @@
       const pill = e.target.closest('.active-filter-pill');
       if (!pill) return;
       if (pill.dataset.week) { setWeekFilter(null); return; }
+      if (pill.dataset.review) { setNeedsReview(false); return; }
       const idx = parseInt(pill.dataset.idx, 10);
       activeTags.splice(idx, 1);
       renderTagDrawer();
@@ -2526,7 +2591,25 @@
 
   // --- Import tool panel body (wired when the panel opens) ---
   // --- Filters tool panel body (wire the search input when the panel opens) ---
+  function setNeedsReview(on) {
+    needsReviewOnly = !!on;
+    syncReviewToggle();
+    renderActiveFilters();
+    renderGrid();
+  }
+  function syncReviewToggle() {
+    const t = document.getElementById('filter-needs-review');
+    if (!t) return;
+    t.classList.toggle('is-on', needsReviewOnly);
+    t.setAttribute('aria-pressed', needsReviewOnly ? 'true' : 'false');
+  }
+
   function bindFilterPanelBody() {
+    const $review = document.getElementById('filter-needs-review');
+    if ($review) {
+      syncReviewToggle();
+      $review.addEventListener('click', () => setNeedsReview(!needsReviewOnly));
+    }
     const $search = document.getElementById('filter-search');
     if (!$search) return;
     $search.value = tagSearchQuery;

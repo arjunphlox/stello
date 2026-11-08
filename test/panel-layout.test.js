@@ -182,3 +182,13 @@ test('kind without metadata falls back to the link panel', () => {
   assert.equal(P.layout(base({ kind: 'music', metadata: null })).kind, 'link');
   assert.equal(P.layout(base({ kind: 'music', metadata: '{"subtype":"track"}' })).kind, 'music');
 });
+
+test('grid card helpers: kind line and URL pill host', () => {
+  const tool = base({ kind: 'tool', domain: 'www.github.com', source_url: 'https://github.com/o/r',
+    metadata: { pricing: 'open source', stars: 12400, repoURL: 'https://github.com/o/r', canonicalURL: 'https://www.repo.dev/' } });
+  assert.equal(P.kindLineFor(tool), 'Open source · ★ 12.4k');
+  assert.equal(P.displayLink(tool), 'repo.dev');
+  const link = base({ domain: 'www.example.com', source_url: 'https://example.com' });
+  assert.equal(P.kindLineFor(link), null);
+  assert.equal(P.displayLink(link), 'example.com');
+});
