@@ -67,104 +67,72 @@ enum EnrichmentService {
             guard item.enrichmentStatus == "text_done" else { return }
         }
 
-        // Music items run a dedicated pipeline (deterministic dossier + vision-only AI)
-        // that never touches the generic snippets/why-saved text jobs — there is no prose
-        // on a platform shell page, and even title+summary text produced junk suggestions.
-        // Any item already classified `kind == music` (from capture-time classification)
-        // routes here on every call; `force` also attempts the upgrade for an item whose
-        // sourceURL classifies as music but that predates this classifier (kind == link).
-        if item.kind == ItemKind.music.rawValue {
-            _ = await enrichMusic(item: item, context: context, enricher: enricher, refetch: force)
-            return
-        }
-        if force, await enrichMusic(item: item, context: context, enricher: enricher, refetch: true) {
-            return
-        }
-
-        // Force (user-invoked) Enrich re-fetches the source page first: it backfills a
-        // missing cover image and refreshes `extractedText` so the AI jobs see richer text
-        // than the ~200-char summary captured at save time. Auto-enrichment (force=false)
-        // must not hit the network beyond what capture already did.
+        // Force (user-invoked) Enrich re-fetches the source page and asks the Worker's page
+        // readers again (an already-typed item is read as its kind): it refreshes the
+        // dossier, backfills a missing cover and refreshes `extractedText` so the AI jobs see
+        // richer text than the ~200-char summary captured at save time. Auto-enrichment
+        // (force=false) must not hit the network beyond what capture already did.
         var refetchError: String? = nil
         if force, let sourceURLString = item.sourceURL, let url = URL(string: sourceURLString) {
             print("[refetch] \(item.slug): fetching \(url.absoluteString)")
-            if let page = await CaptureService.fetchPage(url: url) {
-                let imageSources = (item.images ?? []).map {
-                    "\($0.source)/primary:\($0.isPrimary)/renderable:\($0.hasRenderableCoverData)"
-                }
-                print("[refetch] \(item.slug): images=[\(imageSources.joined(separator: ", "))] ogImage=\(page.og.imageURL?.absoluteString ?? "nil")")
-                if page.isGone, item.status != "gone" {
-                    item.status = "gone"
-                    item.updatedAt = .now
-                }
-                // Post readers first (kind order: post → product), then product readers: a
-                // link item may now classify as either (collection labels can decide — a
-                // wishlisted post is a product), and a post/product refreshes its dossier.
-                let postPlatform = await refreshPostIfClassified(
-                    item: item, context: context, url: url, page: page
-                )
-                // Resource readers next (kind order: post → resource → book → product → tool) —
-                // ahead of product, since Framer Marketplace pages carry Product JSON-LD with
-                // offers.
-                var isResource = false
-                if postPlatform == nil {
-                    isResource = await refreshResourceIfClassified(
-                        item: item, context: context, url: url, page: page
+            let page = await CaptureService.fetchPage(url: url)
+            if page == nil {
+                print("[refetch] \(item.slug): page fetch FAILED")
+                refetchError = "page re-fetch failed: unable to fetch page"
+            }
+            if let page, page.isGone, item.status != "gone" {
+                item.status = "gone"
+                item.updatedAt = .now
+            }
+            // Without the page the URL and labels still decide (and music reads its oEmbed).
+            let read = await WorkerSorter.read(
+                url: url, page: page, labels: collectionLabels(for: item),
+                asKind: WorkerSorter.asKind(for: item.kind)
+            )
+            if let read {
+                if applyMusicRead(read, to: item) {
+                    await upgradeCoverIfNeeded(
+                        item: item, context: context,
+                        primaryURL: read.imageURLs.first, fallbackURL: read.fallbackImageURLs.first,
+                        source: "music"
                     )
+                } else {
+                    await applyFreshRead(read, to: item, context: context)
                 }
-                // Book readers next — ahead of product, since an Amazon ISBN page is a book.
-                var isBook = false
-                if postPlatform == nil, !isResource {
-                    isBook = await refreshBookIfClassified(item: item, context: context, url: url, page: page)
-                }
-                var productSource: String? = nil
-                if postPlatform == nil, !isResource, !isBook {
-                    productSource = await refreshProductIfClassified(
-                        item: item, context: context, url: url, page: page
-                    )
-                }
-                // Tool readers next (kind order: post → resource → book → product → tool →
-                // course → article).
-                var isTool = false
-                if postPlatform == nil, !isResource, !isBook, productSource == nil {
-                    isTool = await refreshToolIfClassified(item: item, context: context, url: url, page: page)
-                }
-                // Course readers next — ahead of article, since course pages often set
-                // og:type article.
-                var isCourse = false
-                if postPlatform == nil, !isResource, !isBook, productSource == nil, !isTool {
-                    isCourse = await refreshCourseIfClassified(item: item, context: context, url: url, page: page)
-                }
-                // Article readers last.
-                if postPlatform == nil, !isResource, !isBook, productSource == nil, !isTool, !isCourse {
-                    await refreshArticleIfClassified(item: item, context: context, url: url, page: page)
-                }
+            }
+            if item.kind != ItemKind.music.rawValue, let page {
                 await upgradeCoverIfNeeded(
                     item: item, context: context, primaryURL: page.og.imageURL, fallbackURL: nil, source: "og"
                 )
-                if postPlatform != nil {
+                if item.kind == ItemKind.post.rawValue {
                     // Social shell pages have no prose — the post text is it.
                     if let text = item.postMeta()?.text {
                         item.extractedText = text
                         item.updatedAt = .now
                     }
-                } else if productSource == nil || productSource == "page" {
-                    if let extracted = CaptureService.extractText(html: page.html), !extracted.isEmpty {
-                        print("[refetch] \(item.slug): extractedText \(extracted.count) chars")
-                        item.extractedText = extracted
+                } else if item.kind == ItemKind.product.rawValue, let meta = item.productMeta(), meta.source != "page" {
+                    // Instagram shell pages / image bytes have no prose — the caption is it.
+                    if let caption = meta.caption {
+                        item.extractedText = caption
                         item.updatedAt = .now
                     }
-                } else if let caption = item.productMeta()?.caption {
-                    // Instagram shell pages / image bytes have no prose — the caption is it.
-                    item.extractedText = caption
+                } else if let extracted = read?.extractedText ?? CaptureService.extractText(html: page.html),
+                          !extracted.isEmpty {
+                    print("[refetch] \(item.slug): extractedText \(extracted.count) chars")
+                    item.extractedText = extracted
                     item.updatedAt = .now
                 }
-            } else {
-                print("[refetch] \(item.slug): page fetch FAILED")
-                refetchError = "page re-fetch failed: unable to fetch page"
             }
         } else if force {
             print("[refetch] \(item.slug): skipped — sourceURL=\(item.sourceURL ?? "nil")")
+        }
+
+        // Music items run a dedicated pipeline (deterministic dossier + vision-only AI)
+        // that never touches the generic snippets/why-saved text jobs — there is no prose
+        // on a platform shell page, and even title+summary text produced junk suggestions.
+        if item.kind == ItemKind.music.rawValue {
+            _ = await finishMusicEnrichment(item: item, context: context, enricher: enricher)
+            return
         }
 
         // Instagram / bare-image products have no structured name or brand — guess them
@@ -367,53 +335,20 @@ enum EnrichmentService {
         return moods
     }
 
-    /// Runs the dedicated music pipeline. For an item already `kind == "music"`, `refetch`
-    /// controls whether MusicMeta is rebuilt over the network (force only) or reuses what
-    /// capture already stored (auto path — no extra network beyond capture time). For an
-    /// item not yet classified as music, this attempts the upgrade (always fetches) and
-    /// returns `false` without side effects if the URL doesn't confirm as music, so the
-    /// caller falls through to the generic pipeline. Returns `true` when the music pipeline
-    /// ran to completion (item is left at a terminal enrichmentStatus either way).
-    @discardableResult
-    static func enrichMusic(
-        item: Item,
-        context: ModelContext,
-        enricher: Enricher,
-        refetch: Bool
-    ) async -> Bool {
-        let wasAlreadyMusic = item.kind == ItemKind.music.rawValue
-
-        if refetch || !wasAlreadyMusic {
-            guard let sourceURLString = item.sourceURL, let url = URL(string: sourceURLString) else {
-                if !wasAlreadyMusic { return false }
-                return await finishMusicEnrichment(item: item, context: context, enricher: enricher)
-            }
-            let dom = CaptureService.domain(from: url)
-            let looksLikeMusic = wasAlreadyMusic
-                || (dom.map { PageClassifier.musicPlatform(forHost: $0) != nil || PageClassifier.isPlainYouTubeHost($0) } ?? false)
-            guard looksLikeMusic else { return false }
-
-            let page = await CaptureService.fetchPage(url: url)
-            guard let result = await CaptureService.classifyAndExtractMusic(
-                sourceURL: url, domain: dom, title: page?.og.title ?? item.title,
-                ogType: page?.og.ogType, page: page
-            ) else {
-                return false
-            }
-
-            item.setMetadata(result.meta)
-            item.kind = ItemKind.music.rawValue
-            await upgradeCoverIfNeeded(
-                item: item, context: context,
-                primaryURL: result.coverImageURL, fallbackURL: result.coverFallbackURL,
-                source: "music"
-            )
-        }
-
-        return await finishMusicEnrichment(item: item, context: context, enricher: enricher)
+    /// Stores a Worker read that confirmed music (a `link` or `music` item only; the
+    /// music readers rebuild the whole dossier). Returns whether it applied.
+    static func applyMusicRead(_ read: WorkerRead, to item: Item) -> Bool {
+        guard read.kind == .music, let meta = read.metadataJSON,
+              item.kind == ItemKind.music.rawValue || item.kind == ItemKind.link.rawValue || item.kind.isEmpty
+        else { return false }
+        item.metadataJSON = meta
+        item.kind = ItemKind.music.rawValue
+        item.updatedAt = .now
+        return true
     }
 
-    private static func finishMusicEnrichment(
+    @discardableResult
+    static func finishMusicEnrichment(
         item: Item, context: ModelContext, enricher: Enricher
     ) async -> Bool {
         guard item.kind == ItemKind.music.rawValue else { return false }
@@ -476,76 +411,156 @@ enum EnrichmentService {
         return true
     }
 
+    // MARK: - Fresh read (force Enrich)
+
+    /// Moves an earlier build's filing on: the Worker answers these only under its
+    /// migration rules (Framer Marketplace product, Figma Community tool, course page filed
+    /// as an article).
+    private static let migrations: Set<String> = ["product>resource", "tool>resource", "article>course"]
+
+    /// Whether a fresh read may be stored on the item: the same kind, a plain link becoming
+    /// a reader kind, or a migration. Curated kinds (typeface, website, individual, …) are
+    /// never flipped.
+    static func canApply(_ read: WorkerRead, to item: Item) -> Bool {
+        let current = item.kind.isEmpty ? ItemKind.link.rawValue : item.kind
+        guard read.kind != .link, read.metadataJSON != nil else { return false }
+        if read.kind.rawValue == current { return true }
+        if current == ItemKind.link.rawValue { return WorkerSorter.linkKinds.contains(read.kind) }
+        return migrations.contains("\(current)>\(read.kind.rawValue)")
+    }
+
+    /// Stores a fresh read over what the item has. A refetch that reads less (bot wall,
+    /// rate-limited GitHub, tombstone) never erases what was read before; guesses survive
+    /// until a value is read in their place; "price when saved" is a snapshot; the AI-art
+    /// fields belong to `applyPostAIArtIfNeeded`; a post title the user edited is kept.
+    static func applyFreshRead(_ read: WorkerRead, to item: Item, context: ModelContext) async {
+        guard read.kind != .music, canApply(read, to: item) else { return }
+        switch read.kind {
+        case .product:
+            guard let fresh = read.meta(ProductMeta.self) else { return }
+            item.setMetadata(mergeProduct(fresh: fresh, previous: item.productMeta()))
+        case .post:
+            guard let fresh = read.meta(PostMeta.self) else { return }
+            let previous = item.postMeta()
+            let meta = mergePost(fresh: fresh, previous: previous)
+            // The title this rule would have written from the old dossier: if the item still
+            // carries it, the user hasn't edited it and it may follow the new reading.
+            let previousRuleTitle = previous.flatMap {
+                PostReader.postTitle(currentTitle: nil, handle: $0.authorHandle, authorName: $0.author?.name, text: $0.text)
+            }
+            let titleIsOurs = PostReader.isGenericPostTitle(item.title) || item.title == previousRuleTitle
+            if titleIsOurs, let newTitle = PostReader.postTitle(
+                currentTitle: nil, handle: meta.authorHandle, authorName: meta.author?.name, text: meta.text
+            ) {
+                item.title = newTitle
+            }
+            if read.isGone, item.status != "gone" { item.status = "gone" }
+            item.setMetadata(meta)
+        case .tool:
+            guard let fresh = read.meta(ToolMeta.self) else { return }
+            item.setMetadata(ToolReader.merge(fresh: fresh, previous: item.toolMeta()))
+        case .resource:
+            guard let fresh = read.meta(ResourceMeta.self) else { return }
+            item.setMetadata(ResourceReader.merge(fresh: fresh, previous: item.resourceMeta()))
+        case .book:
+            guard let fresh = read.meta(BookMeta.self) else { return }
+            item.setMetadata(BookReader.merge(fresh: fresh, previous: item.bookMeta()))
+        case .course:
+            guard let fresh = read.meta(CourseMeta.self) else { return }
+            item.setMetadata(CourseReader.merge(fresh: fresh, previous: item.courseMeta()))
+        case .article:
+            guard let fresh = read.meta(ArticleMeta.self) else { return }
+            item.setMetadata(ArticleReader.merge(fresh: fresh, previous: item.articleMeta()))
+        default:
+            return
+        }
+        item.kind = read.kind.rawValue
+        if let domain = read.domain { item.domain = domain }
+
+        switch read.kind {
+        case .product, .post:
+            await upgradeCoverIfNeeded(
+                item: item, context: context,
+                primaryURL: read.imageURLs.first, fallbackURL: nil, source: read.imageSource
+            )
+            let hasGallery = (item.images ?? []).contains { $0.role == ItemImageRole.gallery.rawValue }
+            if !hasGallery {
+                let downloads = await CaptureService.downloadImages(Array(read.imageURLs.dropFirst()))
+                for (data, w, h) in downloads.compactMap({ $0 }) {
+                    let image = ItemImage(
+                        data: data, source: read.imageSource, isPrimary: false, width: w, height: h,
+                        role: ItemImageRole.gallery.rawValue
+                    )
+                    context.insert(image)
+                    image.item = item
+                }
+            }
+        case .book:
+            // og:image first (each call is a no-op once a real cover exists), then the book covers.
+            await upgradeCoverIfNeeded(
+                item: item, context: context, primaryURL: read.imageURLs.first, fallbackURL: nil, source: "og"
+            )
+            let fallbacks = read.fallbackImageURLs
+            await upgradeCoverIfNeeded(
+                item: item, context: context,
+                primaryURL: fallbacks.first, fallbackURL: fallbacks.dropFirst().first, source: "book"
+            )
+        default:
+            break
+        }
+        item.updatedAt = .now
+    }
+
+    /// "Price when saved" is a snapshot (an existing price / date is never rewritten), and a
+    /// read (non-guess) name or brand is never replaced by a guess.
+    static func mergeProduct(fresh: ProductMeta, previous: ProductMeta?) -> ProductMeta {
+        var meta = fresh
+        guard let previous else { return meta }
+        if previous.price != nil {
+            meta.price = previous.price
+            meta.priceMin = previous.priceMin
+            meta.priceMax = previous.priceMax
+            meta.currency = previous.currency
+            meta.pricedAt = previous.pricedAt
+        }
+        if previous.productName != nil, meta.productName == nil || meta.productNameIsGuess == true {
+            meta.productName = previous.productName
+            meta.productNameIsGuess = previous.productNameIsGuess
+        }
+        if previous.brand != nil, meta.brand == nil || meta.brandIsGuess == true {
+            meta.brand = previous.brand
+            meta.brandIsGuess = previous.brandIsGuess
+        }
+        return meta
+    }
+
+    /// A refetch that reads less never erases what capture read; the AI-art fields are kept
+    /// for `applyPostAIArtIfNeeded`.
+    static func mergePost(fresh: PostMeta, previous: PostMeta?) -> PostMeta {
+        var meta = fresh
+        guard let previous else { return meta }
+        if meta.text == nil { meta.text = previous.text }
+        if meta.author == nil { meta.author = previous.author }
+        if meta.authorHandle == nil { meta.authorHandle = previous.authorHandle }
+        if meta.postedAt == nil { meta.postedAt = previous.postedAt }
+        if meta.mediaType == nil {
+            meta.mediaType = previous.mediaType
+            meta.mediaCount = previous.mediaCount
+        }
+        if meta.embedURL == nil { meta.embedURL = previous.embedURL }
+        meta.isAIArt = previous.isAIArt
+        meta.aiModel = previous.aiModel
+        meta.prompt = previous.prompt
+        meta.promptIsGuess = previous.promptIsGuess
+        return meta
+    }
+
     // MARK: - Product enrichment
 
     /// Collection labels (`category == "collection"` tags: wishlist, digital-tools, …) —
     /// hints that break classification ties; imported items carry them, fresh captures don't.
     static func collectionLabels(for item: Item) -> [String] {
         item.tags.filter { $0.category == "collection" }.map(\.name)
-    }
-
-    /// Force-Enrich hook: when a `link` or `product` item's refetched page classifies as a
-    /// product, (re)runs the product readers and stores the dossier. "Price when saved" is a
-    /// snapshot — an existing price/date is never rewritten — and a read (non-guess)
-    /// name/brand is never replaced by a guess. Returns the product source, or nil when the
-    /// item isn't (or can't become) a product. Curated kinds (typeface, website, …) are
-    /// never flipped.
-    @discardableResult
-    static func refreshProductIfClassified(
-        item: Item,
-        context: ModelContext,
-        url: URL,
-        page: PageFetchResult
-    ) async -> String? {
-        guard item.kind == ItemKind.link.rawValue || item.kind == ItemKind.product.rawValue else { return nil }
-        guard let source = PageClassifier.productSource(
-            url: url, ogType: page.og.ogType, html: page.html, collectionLabels: collectionLabels(for: item)
-        ) else { return nil }
-
-        let extraction = await CaptureService.extractProduct(sourceURL: url, page: page, source: source)
-        var meta = extraction.meta
-        if let previous = item.productMeta() {
-            if previous.price != nil {
-                meta.price = previous.price
-                meta.priceMin = previous.priceMin
-                meta.priceMax = previous.priceMax
-                meta.currency = previous.currency
-                meta.pricedAt = previous.pricedAt
-            }
-            if previous.productName != nil, meta.productName == nil || meta.productNameIsGuess == true {
-                meta.productName = previous.productName
-                meta.productNameIsGuess = previous.productNameIsGuess
-            }
-            if previous.brand != nil, meta.brand == nil || meta.brandIsGuess == true {
-                meta.brand = previous.brand
-                meta.brandIsGuess = previous.brandIsGuess
-            }
-        }
-
-        item.kind = ItemKind.product.rawValue
-        item.setMetadata(meta)
-        if let finalURL = page.finalURL, let landed = CaptureService.domain(from: finalURL) {
-            item.domain = landed
-        }
-
-        await upgradeCoverIfNeeded(
-            item: item, context: context,
-            primaryURL: extraction.imageURLs.first, fallbackURL: nil, source: "product"
-        )
-        let hasGallery = (item.images ?? []).contains { $0.role == ItemImageRole.gallery.rawValue }
-        if !hasGallery {
-            let downloads = await CaptureService.downloadImages(Array(extraction.imageURLs.dropFirst()))
-            for (data, w, h) in downloads.compactMap({ $0 }) {
-                let image = ItemImage(
-                    data: data, source: "product", isPrimary: false, width: w, height: h,
-                    role: ItemImageRole.gallery.rawValue
-                )
-                context.insert(image)
-                image.item = item
-            }
-        }
-        item.updatedAt = .now
-        return source
     }
 
     /// Instagram / bare-image products: guess name + brand from the caption or filename
@@ -587,82 +602,6 @@ enum EnrichmentService {
 
     // MARK: - Post enrichment
 
-    /// Force-Enrich hook: when a `link` or `post` item's refetched URL is a single social
-    /// post (and not wishlisted — that's a product), (re)runs the post readers and stores the
-    /// dossier. A refetch that reads less (bot wall, tombstone) never erases what capture
-    /// read, and the AI-art fields are left to `applyPostAIArtIfNeeded`. The title rule only
-    /// replaces a generic platform title or the title this rule wrote before — a title the
-    /// user edited is kept. Returns the platform, or nil when the item isn't (or can't
-    /// become) a post. Curated kinds (typeface, website, product, …) are never flipped.
-    @discardableResult
-    static func refreshPostIfClassified(
-        item: Item,
-        context: ModelContext,
-        url: URL,
-        page: PageFetchResult
-    ) async -> String? {
-        guard item.kind == ItemKind.link.rawValue || item.kind == ItemKind.post.rawValue else { return nil }
-        guard let platform = PageClassifier.postPlatform(
-            url: url, collectionLabels: collectionLabels(for: item)
-        ) else { return nil }
-
-        let extraction = await CaptureService.extractPost(sourceURL: url, page: page, platform: platform)
-        var meta = extraction.meta
-        let previous = item.postMeta()
-        if let previous {
-            if meta.text == nil { meta.text = previous.text }
-            if meta.author == nil { meta.author = previous.author }
-            if meta.authorHandle == nil { meta.authorHandle = previous.authorHandle }
-            if meta.postedAt == nil { meta.postedAt = previous.postedAt }
-            if meta.mediaType == nil {
-                meta.mediaType = previous.mediaType
-                meta.mediaCount = previous.mediaCount
-            }
-            if meta.embedURL == nil { meta.embedURL = previous.embedURL }
-            meta.isAIArt = previous.isAIArt
-            meta.aiModel = previous.aiModel
-            meta.prompt = previous.prompt
-            meta.promptIsGuess = previous.promptIsGuess
-        }
-
-        // The title this rule would have written from the old dossier — if the item still
-        // carries it, the user hasn't edited it and it may follow the new reading.
-        let previousRuleTitle = previous.flatMap {
-            PostReader.postTitle(currentTitle: nil, handle: $0.authorHandle, authorName: $0.author?.name, text: $0.text)
-        }
-        let titleIsOurs = PostReader.isGenericPostTitle(item.title) || item.title == previousRuleTitle
-        if titleIsOurs, let newTitle = PostReader.postTitle(
-            currentTitle: nil, handle: meta.authorHandle, authorName: meta.author?.name, text: meta.text
-        ) {
-            item.title = newTitle
-        }
-
-        if extraction.isGone, item.status != "gone" {
-            item.status = "gone"
-        }
-        item.kind = ItemKind.post.rawValue
-        item.setMetadata(meta)
-
-        await upgradeCoverIfNeeded(
-            item: item, context: context,
-            primaryURL: extraction.imageURLs.first, fallbackURL: nil, source: "post"
-        )
-        let hasGallery = (item.images ?? []).contains { $0.role == ItemImageRole.gallery.rawValue }
-        if !hasGallery {
-            let downloads = await CaptureService.downloadImages(Array(extraction.imageURLs.dropFirst()))
-            for (data, w, h) in downloads.compactMap({ $0 }) {
-                let image = ItemImage(
-                    data: data, source: "post", isPrimary: false, width: w, height: h,
-                    role: ItemImageRole.gallery.rawValue
-                )
-                context.insert(image)
-                image.item = item
-            }
-        }
-        item.updatedAt = .now
-        return platform
-    }
-
     /// Posts: recompute the AI-art flag + model from collection labels, tags and Midjourney
     /// params in the text, then fill the prompt — rule-read first (`promptIsGuess == false`),
     /// else the on-device guess (`promptIsGuess == true`; the Mock / rule-based fallbacks
@@ -687,125 +626,9 @@ enum EnrichmentService {
 
     // MARK: - Tool enrichment
 
-    /// Force-Enrich hook: when a `link` or `tool` item's refetched page classifies as a tool
-    /// (after post and product — the caller only runs this when neither claimed it), (re)runs
-    /// the tool readers and stores the dossier. A refetch that reads less (rate-limited
-    /// GitHub, bot wall) never erases what capture read, and an earlier guess survives until
-    /// something is read in its place. Returns whether the item is a tool. Curated kinds
-    /// (typeface, website, product, post, …) are never flipped.
-    @discardableResult
-    static func refreshToolIfClassified(
-        item: Item,
-        context: ModelContext,
-        url: URL,
-        page: PageFetchResult
-    ) async -> Bool {
-        let wasTool = item.kind == ItemKind.tool.rawValue
-        guard wasTool || item.kind == ItemKind.link.rawValue else { return false }
-        guard wasTool || PageClassifier.isTool(
-            url: url, ogType: page.og.ogType, html: page.html, collectionLabels: collectionLabels(for: item)
-        ) else { return false }
-
-        let extraction = await CaptureService.extractTool(sourceURL: url, page: page)
-        let meta = ToolReader.merge(fresh: extraction.meta, previous: item.toolMeta())
-
-        item.kind = ItemKind.tool.rawValue
-        item.setMetadata(meta)
-        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
-           let host = CaptureService.domain(from: canonical) {
-            item.domain = host
-        }
-        item.updatedAt = .now
-        return true
-    }
-
     // MARK: - Resource enrichment
 
-    /// Force-Enrich hook: when a `link` or `resource` item's refetched page classifies as a
-    /// resource (after post — the caller runs this before product and tool), (re)runs the
-    /// resource readers and stores the dossier. A refetch that reads less never erases what
-    /// capture read. Returns whether the item is a resource.
-    ///
-    /// Two earlier-build migrations are also allowed: a `product` item whose URL is a Framer
-    /// Marketplace item (those pages carry Product JSON-LD with offers, so builds before the
-    /// Resource kind filed them as products), and a `tool` item whose URL is a Figma Community
-    /// plugin / widget / file (filed as a tool by label or SoftwareApplication JSON-LD). Every
-    /// other curated kind (typeface, website, post, …) is never flipped. No on-device guess.
-    @discardableResult
-    static func refreshResourceIfClassified(
-        item: Item,
-        context: ModelContext,
-        url: URL,
-        page: PageFetchResult
-    ) async -> Bool {
-        let wasResource = item.kind == ItemKind.resource.rawValue
-        let isFlippable = item.kind == ItemKind.link.rawValue
-            || (item.kind == ItemKind.product.rawValue && PageClassifier.framerMarketplaceSegment(from: url) != nil)
-            || (item.kind == ItemKind.tool.rawValue && PageClassifier.figmaCommunityResourceType(from: url) != nil)
-        guard wasResource || isFlippable else { return false }
-
-        let labels = collectionLabels(for: item)
-        guard wasResource || PageClassifier.isResource(
-            url: url, ogType: page.og.ogType, html: page.html, collectionLabels: labels
-        ) else { return false }
-
-        let extraction = CaptureService.extractResource(sourceURL: url, page: page, collectionLabels: labels)
-        let meta = ResourceReader.merge(fresh: extraction.meta, previous: item.resourceMeta())
-
-        item.kind = ItemKind.resource.rawValue
-        item.setMetadata(meta)
-        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
-           let host = CaptureService.domain(from: canonical) {
-            item.domain = host
-        }
-        item.updatedAt = .now
-        return true
-    }
-
     // MARK: - Book enrichment
-
-    /// Force-Enrich hook: when a `link` or `book` item's refetched page classifies as a book
-    /// (after post and resource — the caller only runs this when neither claimed it), (re)runs
-    /// the book readers + the Open Library lookup and stores the dossier. A refetch that reads
-    /// less never erases what capture read, and a guessed author list survives until one is
-    /// read. Backfills a missing cover (og:image, then the JSON-LD / Open Library cover).
-    /// Returns whether the item is a book. Curated kinds (product, typeface, website, post,
-    /// tool, resource, course, article, …) are never flipped.
-    @discardableResult
-    static func refreshBookIfClassified(
-        item: Item,
-        context: ModelContext,
-        url: URL,
-        page: PageFetchResult,
-        lookUpOpenLibrary: Bool = true
-    ) async -> Bool {
-        let wasBook = item.kind == ItemKind.book.rawValue
-        guard wasBook || item.kind == ItemKind.link.rawValue else { return false }
-        guard wasBook || PageClassifier.isBook(url: url, ogType: page.og.ogType, html: page.html) else { return false }
-
-        let extraction = await CaptureService.extractBook(
-            sourceURL: url, page: page, lookUpOpenLibrary: lookUpOpenLibrary
-        )
-        let meta = BookReader.merge(fresh: extraction.meta, previous: item.bookMeta())
-
-        item.kind = ItemKind.book.rawValue
-        item.setMetadata(meta)
-        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
-           let host = CaptureService.domain(from: canonical) {
-            item.domain = host
-        }
-        // og:image first (each call is a no-op once a real cover exists), then the book covers.
-        let fallbacks = extraction.coverFallbackURLs
-        await upgradeCoverIfNeeded(
-            item: item, context: context, primaryURL: page.og.imageURL, fallbackURL: nil, source: "og"
-        )
-        await upgradeCoverIfNeeded(
-            item: item, context: context,
-            primaryURL: fallbacks.first, fallbackURL: fallbacks.dropFirst().first, source: "book"
-        )
-        item.updatedAt = .now
-        return true
-    }
 
     /// Books: when the readers (page, JSON-LD, Open Library) left no author, guess the authors
     /// — and an empty year — from the page text (on-device model; Mock / rule-based give
@@ -823,49 +646,6 @@ enum EnrichmentService {
     }
 
     // MARK: - Course enrichment
-
-    /// Force-Enrich hook: when a `link` or `course` item's refetched page classifies as a
-    /// course (after post, resource, product and tool — the caller only runs this when none
-    /// claimed it), (re)runs the course readers and stores the dossier. A refetch that reads
-    /// less never erases what capture read, and earlier guesses survive until a value is read.
-    /// Returns whether the item is a course.
-    ///
-    /// One earlier-build migration is also allowed: an `article` item whose URL is a course
-    /// page on a known course host (`PageClassifier.isCourseHostURL`) or whose page carries a
-    /// Course JSON-LD node — builds before the Course kind filed those as articles (Motion
-    /// Design School course pages set og:type article with an author). An article that is a
-    /// course only by the `education` label + title tie-breaker (LABASAD) is not migrated:
-    /// the label alone shouldn't move an article. Every other curated kind (typeface, website,
-    /// product, post, tool, resource, …) is never flipped.
-    @discardableResult
-    static func refreshCourseIfClassified(
-        item: Item,
-        context: ModelContext,
-        url: URL,
-        page: PageFetchResult
-    ) async -> Bool {
-        let wasCourse = item.kind == ItemKind.course.rawValue
-        let isFlippable = item.kind == ItemKind.link.rawValue
-            || (item.kind == ItemKind.article.rawValue
-                && (PageClassifier.isCourseHostURL(url) || PageClassifier.hasCourseNode(html: page.html)))
-        guard wasCourse || isFlippable else { return false }
-        guard wasCourse || PageClassifier.isCourse(
-            url: url, ogType: page.og.ogType, html: page.html, title: page.og.title,
-            collectionLabels: collectionLabels(for: item)
-        ) else { return false }
-
-        let extraction = CaptureService.extractCourse(sourceURL: url, page: page)
-        let meta = CourseReader.merge(fresh: extraction.meta, previous: item.courseMeta())
-
-        item.kind = ItemKind.course.rawValue
-        item.setMetadata(meta)
-        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
-           let host = CaptureService.domain(from: canonical) {
-            item.domain = host
-        }
-        item.updatedAt = .now
-        return true
-    }
 
     /// Courses: when the readers left the format, length or topics empty, guess them from the
     /// page text (on-device model; the rule-based keyword pass when the model is unavailable,
@@ -887,38 +667,6 @@ enum EnrichmentService {
     }
 
     // MARK: - Article enrichment
-
-    /// Force-Enrich hook: when a `link` or `article` item's refetched page classifies as an
-    /// article (after post, resource, product and tool — the caller only runs this when none
-    /// claimed it), (re)runs the article readers and stores the dossier. A refetch that reads
-    /// less never erases what capture read, and the on-device summary / tech stack are kept.
-    /// Returns whether the item is an article. Curated kinds (typeface, website, product,
-    /// post, tool, resource, …) are never flipped.
-    @discardableResult
-    static func refreshArticleIfClassified(
-        item: Item,
-        context: ModelContext,
-        url: URL,
-        page: PageFetchResult
-    ) async -> Bool {
-        let wasArticle = item.kind == ItemKind.article.rawValue
-        guard wasArticle || item.kind == ItemKind.link.rawValue else { return false }
-        guard wasArticle || PageClassifier.isArticle(
-            url: url, ogType: page.og.ogType, html: page.html, collectionLabels: collectionLabels(for: item)
-        ) else { return false }
-
-        let fresh = CaptureService.extractArticle(sourceURL: url, page: page)
-        let meta = ArticleReader.merge(fresh: fresh, previous: item.articleMeta())
-
-        item.kind = ItemKind.article.rawValue
-        item.setMetadata(meta)
-        if let canonical = meta.canonicalURL.flatMap({ URL(string: $0) }),
-           let host = CaptureService.domain(from: canonical) {
-            item.domain = host
-        }
-        item.updatedAt = .now
-        return true
-    }
 
     /// Articles: when the summary is still empty (or a tutorial has no tech stack), run the
     /// on-device digest over the page text. The summary is stored with `summaryIsGuess`; a

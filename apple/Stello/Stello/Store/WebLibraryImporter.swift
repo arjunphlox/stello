@@ -26,7 +26,7 @@ final class WebLibraryImporter {
 
     /// `enrichmentStatus` of an imported item whose kind isn't settled yet.
     /// Stored on the item, so the queue survives quits and syncs.
-    nonisolated static let awaitingClassifyStatus = "awaiting_classify"
+    nonisolated static let awaitingClassifyStatus = WorkerSorter.unsortedStatus
     /// Kind is settled. The background pass will write a summary if it's missing one.
     nonisolated static let awaitingAIStatus = "awaiting_ai"
     /// Nothing left for the background: full Enrich (snippets, why-saved, extra tags)
@@ -130,11 +130,12 @@ final class WebLibraryImporter {
     /// Runs the deferred work on imported items, cheapest and most visible first. Every
     /// stage keeps its queue on the rows themselves, so it's safe to stop anywhere: the
     /// next launch picks up what's left.
-    /// 1. Kinds from URL and collection labels (no network).
-    /// 2. Thumbnails for images whose URL the export already gave.
-    /// 3. Pages for items still needing a kind or a cover (rules only, no AI).
-    /// 4. The sample catalog, after a full import.
-    /// 5. Summaries for items without one. Full Enrich waits until an item is opened.
+    /// 1. Thumbnails for images whose URL the export already gave.
+    /// 2. Pages for items still needing a kind or a cover: the Worker's rules decide the
+    ///    kind (kind only, no readers, no AI). Imports, web saves and saves made while the
+    ///    Worker was out of reach all wait here.
+    /// 3. The sample catalog, after a full import.
+    /// 4. Summaries for items without one. Full Enrich waits until an item is opened.
     static func classifyPending(
         context: ModelContext,
         coordinator: EnrichmentCoordinator,
@@ -152,7 +153,6 @@ final class WebLibraryImporter {
         let work = ModelContext(context.container)
         work.autosaveEnabled = false
 
-        await assignKindsFromLabels(context: work)
         await downloadKnownCovers(context: work, network: network)
         await readPages(context: work, network: network)
 
@@ -202,7 +202,7 @@ final class WebLibraryImporter {
         try? context.save()
     }
 
-    /// The kinds Enrich can reach from a `link`, so the fast stages agree with it.
+    /// The kinds Enrich can reach from a `link`, so the import agrees with it.
     private nonisolated static let assignableKinds: Set<ItemKind> = [
         .post, .resource, .book, .product, .tool, .course, .article,
     ]
@@ -216,28 +216,6 @@ final class WebLibraryImporter {
     private static func pendingCovers(in context: ModelContext) -> [ItemImage] {
         let descriptor = FetchDescriptor<ItemImage>(predicate: #Predicate<ItemImage> { $0.coverPending == true })
         return (try? context.fetch(descriptor)) ?? []
-    }
-
-    /// Stage 1. Decides what the URL and labels alone can. The rest stay queued.
-    static func assignKindsFromLabels(context: ModelContext) async {
-        for (index, item) in itemsAwaitingClassify(in: context).enumerated() {
-            if Task.isCancelled { break }
-            if let raw = item.sourceURL, let url = URL(string: raw) {
-                let result = PageClassifier.classify(
-                    html: "", baseURL: url, domain: item.domain, title: item.title, ogDescription: nil,
-                    collectionLabels: EnrichmentService.collectionLabels(for: item)
-                )
-                if assignableKinds.contains(result.kind) {
-                    item.kind = result.kind.rawValue
-                    item.enrichmentStatus = awaitingAIStatus
-                }
-            }
-            if index % 500 == 499 {
-                try? context.save()
-                await Task.yield()
-            }
-        }
-        try? context.save()
     }
 
     // MARK: Network pool
@@ -316,7 +294,7 @@ final class WebLibraryImporter {
         try? context.save()
     }
 
-    // MARK: Stage 2: known covers
+    // MARK: Stage 1: known covers
 
     private struct CoverJob: Sendable {
         var itemID: PersistentIdentifier
@@ -353,7 +331,7 @@ final class WebLibraryImporter {
         )
     }
 
-    // MARK: Stage 3: pages
+    // MARK: Stage 2: pages
 
     private struct PageJob: Sendable {
         var itemID: PersistentIdentifier
@@ -362,34 +340,44 @@ final class WebLibraryImporter {
         var domain: String?
         var title: String?
         var labels: [String]
+        /// Read the fields too (a small queue); an import asks for the kind only.
+        var withFields = false
     }
 
     private struct PageOutcome: Sendable {
         var job: PageJob
         var kind: ItemKind?
+        /// Only for a small queue (share-sheet and offline saves): an import is kind only.
+        var metadataJSON: String?
         var isGone = false
+        /// The Worker couldn't be reached: the item stays queued for the next launch.
+        var unsorted = false
         var imageURL: URL?
         var thumbnail: ImportThumbnail?
     }
 
     private nonisolated static func readPage(_ job: PageJob, network: ImportNetwork) async -> PageOutcome {
-        guard let page = await network.page(job.url) else { return PageOutcome(job: job) }
-        let result = PageClassifier.classify(
-            html: page.html, baseURL: job.url, domain: job.domain, title: job.title,
-            ogDescription: page.og.description, ogType: page.og.ogType, collectionLabels: job.labels
-        )
+        // An unreadable page still goes to the Worker: the URL and labels decide.
+        let page = await network.page(job.url)
+        let read = await network.classify(job.url, page, job.labels, !job.withFields)
+        let kind = read.flatMap { assignableKinds.contains($0.kind) ? $0.kind : nil }
         var outcome = PageOutcome(
-            job: job, kind: assignableKinds.contains(result.kind) ? result.kind : nil, isGone: page.isGone
+            job: job,
+            kind: kind,
+            metadataJSON: kind == nil ? nil : read?.metadataJSON,
+            isGone: page?.isGone ?? false,
+            unsorted: read == nil
         )
-        if job.coverRowID != nil, let imageURL = page.og.imageURL {
+        if job.coverRowID != nil, let imageURL = page?.og.imageURL {
             outcome.imageURL = imageURL
             outcome.thumbnail = await network.thumbnail(imageURL)
         }
         return outcome
     }
 
-    /// One fetch per item that still needs a kind or a cover. Rules only, no AI. An item
-    /// whose page can't be read moves on as a `link`; Enrich tries it again later.
+    /// One fetch per item that still needs a kind or a cover, then the Worker's kind rules
+    /// (kind only, no AI). An item whose page can't be read is decided from its URL and
+    /// labels; Enrich reads it again later.
     static func readPages(
         context: ModelContext,
         network: ImportNetwork,
@@ -402,7 +390,10 @@ final class WebLibraryImporter {
             coverRows[item.persistentModelID] = image
         }
         var seen = Set<PersistentIdentifier>()
-        let candidates = itemsAwaitingClassify(in: context) + coverRows.values.compactMap(\.item)
+        // Signed out of the web account the Worker can't sort: those items stay queued (no
+        // page fetches) until a launch that's signed in.
+        let sortable = network.canSort() ? itemsAwaitingClassify(in: context) : []
+        let candidates = sortable + coverRows.values.compactMap(\.item)
         var jobs: [PageJob] = []
         for item in candidates where seen.insert(item.persistentModelID).inserted {
             let id = item.persistentModelID
@@ -418,6 +409,9 @@ final class WebLibraryImporter {
         }
         try? context.save()
         guard !jobs.isEmpty else { return }
+        // A handful of saves (share sheet, offline) get their fields now; an import's
+        // thousands get the kind only, so it stays within the import time budget.
+        if jobs.count <= 50 { for i in jobs.indices { jobs[i].withFields = true } }
 
         shared.setStage("Reading pages", total: jobs.count)
         await runPool(
@@ -425,8 +419,12 @@ final class WebLibraryImporter {
             work: { job in await readPage(job, network: network) },
             apply: { outcome in
                 if let item = context.model(for: outcome.job.itemID) as? Item {
-                    if item.enrichmentStatus == awaitingClassifyStatus {
+                    // An item the Worker couldn't answer for stays queued for the next launch.
+                    if item.enrichmentStatus == awaitingClassifyStatus, !outcome.unsorted {
                         if let kind = outcome.kind { item.kind = kind.rawValue }
+                        if let metadataJSON = outcome.metadataJSON, item.metadataJSON == nil {
+                            item.metadataJSON = metadataJSON
+                        }
                         item.enrichmentStatus = awaitingAIStatus
                     }
                     if outcome.isGone { item.status = "gone" }
@@ -444,7 +442,7 @@ final class WebLibraryImporter {
         )
     }
 
-    /// Stage 5. One item at a time: cards on screen first, then the newest saves. An item
+    /// Stage 4. One item at a time: cards on screen first, then the newest saves. An item
     /// moves on to `awaitingOpenStatus` either way, so this can't loop on one it can't help.
     static func enrichAwaitingAI(
         context: ModelContext,
@@ -687,6 +685,13 @@ extension ItemImage {
 struct ImportNetwork: Sendable {
     var page: @Sendable (URL) async -> PageFetchResult?
     var thumbnail: @Sendable (URL) async -> ImportThumbnail?
+    /// Whether the Worker can be asked at all (signed in to the web account).
+    var canSort: @Sendable () -> Bool = { WorkerSorter.canSort }
+    /// The Worker's rules for a page (nil page = couldn't be read; `kindOnly` skips the
+    /// field readers); nil when the Worker can't be reached.
+    var classify: @Sendable (URL, PageFetchResult?, [String], Bool) async -> WorkerRead? = { url, page, labels, kindOnly in
+        await WorkerSorter.read(url: url, page: page, labels: labels, kindOnly: kindOnly)
+    }
 
     nonisolated static let live = ImportNetwork(
         page: { url in
