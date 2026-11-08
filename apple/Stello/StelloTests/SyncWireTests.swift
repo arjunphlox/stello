@@ -63,9 +63,9 @@ struct SyncWireTests {
         #expect(item.openCount == 5)
         #expect(item.lastOpenedAt == opened)
         // A newer web open wins.
-        SyncWire.apply(row(item, overriding: ["open_count": 6, "last_opened_at": "2027-01-01T00:00:00.000Z"]), to: item, skipping: [])
+        SyncWire.apply(row(item, overriding: ["open_count": 6, "last_opened_at": "2027-06-01T00:00:00.000Z"]), to: item, skipping: [])
         #expect(item.openCount == 6)
-        #expect(item.lastOpenedAt.map(SyncWire.iso) == "2027-01-01T00:00:00.000Z")
+        #expect(item.lastOpenedAt.map(SyncWire.iso) == "2027-06-01T00:00:00.000Z")
     }
 
     @Test func plainWebSavesJoinTheClassifyQueue() throws {
