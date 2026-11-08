@@ -297,17 +297,51 @@ enum CaptureService {
     /// `limit: nil` returns the whole text (article reading time counts every word).
     static func extractText(html: String, limit: Int? = 4_000) -> String? {
         guard !html.isEmpty else { return nil }
-        var text = html
         // Prefer body content: everything before <body> is metadata/CSS/JS, never prose.
-        if let bodyRange = text.range(of: "<body", options: .caseInsensitive) {
-            text = String(text[bodyRange.lowerBound...])
+        var page = html
+        if let bodyRange = page.range(of: "<body", options: .caseInsensitive) {
+            page = String(page[bodyRange.lowerBound...])
         }
-        // Strip container blocks whose CONTENT is never prose. The trailing `|$` variant
-        // also swallows unterminated blocks (a truncated page once leaked raw Tailwind CSS
-        // into snippets because its </style> was cut off).
+        // The page's own prose lives in <article>, else <main>: reading only that keeps
+        // site menus, sign-in prompts and sidebars out of the text the snippets are picked
+        // from. A region with too little prose (a card on a home page) falls back to the
+        // whole body. Same rules as the Worker's `extractText` (src/lib/readers/html.js).
+        for tag in ["article", "main"] {
+            guard let region = between(page, tag: tag), let text = proseText(region),
+                  text.split(separator: " ").count >= minRegionWords else { continue }
+            return limit.map { String(text.prefix($0)) } ?? text
+        }
+        guard let text = proseText(page) else { return nil }
+        return limit.map { String(text.prefix($0)) } ?? text
+    }
+
+    /// A region under this many words isn't the page's prose.
+    static let minRegionWords = 60
+
+    /// From the first `<tag` to the last `</tag>` (spans nested and sibling elements).
+    private static func between(_ html: String, tag: String) -> String? {
+        guard let start = html.range(of: "<\(tag)[\\s>]", options: [.regularExpression, .caseInsensitive]),
+              let end = html.range(of: "</\(tag)>", options: [.backwards, .caseInsensitive]),
+              start.lowerBound < end.lowerBound else { return nil }
+        return String(html[start.lowerBound..<end.lowerBound])
+    }
+
+    /// Tag-stripped prose: code blocks and page chrome (menus, headers and footers,
+    /// sidebars, forms, buttons) dropped, entities decoded, code-like tokens filtered.
+    private static func proseText(_ html: String) -> String? {
+        var text = html
+        // The trailing `|$` variant also swallows unterminated blocks (a truncated page
+        // once leaked raw Tailwind CSS into snippets because its </style> was cut off).
         for tag in ["script", "style", "noscript", "svg", "template"] {
             text = text.replacingOccurrences(
                 of: "<\(tag)[^>]*>[\\s\\S]*?(</\(tag)>|$)",
+                with: " ", options: [.regularExpression, .caseInsensitive]
+            )
+        }
+        // Chrome: only whole elements go, so an unclosed <header> never eats the page.
+        for tag in ["nav", "header", "footer", "aside", "form", "button", "dialog", "select"] {
+            text = text.replacingOccurrences(
+                of: "<\(tag)[\\s>][\\s\\S]*?</\(tag)>",
                 with: " ", options: [.regularExpression, .caseInsensitive]
             )
         }
@@ -327,9 +361,7 @@ enum CaptureService {
                 && !word.contains(";") && !word.contains("=") && !word.hasPrefix("--")
         }
         text = words.joined(separator: " ")
-        guard !text.isEmpty else { return nil }
-        guard let limit else { return text }
-        return String(text.prefix(limit))
+        return text.isEmpty ? nil : text
     }
 
     nonisolated private static let basicEntities: [(String, String)] = [
