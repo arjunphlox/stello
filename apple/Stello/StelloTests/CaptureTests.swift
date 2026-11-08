@@ -489,6 +489,30 @@ struct ExtractTextTests {
         #expect(text!.count <= 4_000)
     }
 
+    @Test("Reads the article / main prose, not the site chrome")
+    func prefersArticleOverChrome() {
+        let prose = (0..<80).map { "word\($0)" }.joined(separator: " ")
+        let github = """
+        <html><body><header><a>Sign in</a></header><main>
+        <div class="repo-head"><span>You must be signed in to change notification settings</span>
+        <button>Star</button><nav>Code Issues Pull requests</nav></div>
+        <article class="markdown-body"><h1>fd</h1><p>A simple, fast and user-friendly alternative to find. \(prose)</p></article>
+        <aside>About Contributions Security policy</aside></main><footer>Terms Privacy</footer></body></html>
+        """
+        let text = CaptureService.extractText(html: github) ?? ""
+        #expect(text.hasPrefix("fd A simple, fast"))
+        #expect(!text.contains("signed in"))
+        #expect(!text.contains("Security policy"))
+        #expect(!text.contains("Terms"))
+
+        // A tiny <article> (a card on a home page) is not the page's prose: read the body.
+        let home = "<body><nav>Menu</nav><article>Short card</article><p>\(prose)</p></body>"
+        #expect(CaptureService.extractText(html: home)?.hasPrefix("Short card word0") == true)
+
+        // An unclosed <header> never swallows the rest of the page.
+        #expect(CaptureService.extractText(html: "<body><header>Top \(prose)</body>")?.contains("word79") == true)
+    }
+
     @Test("Empty HTML returns nil")
     func emptyReturnsNil() {
         #expect(CaptureService.extractText(html: "") == nil)
