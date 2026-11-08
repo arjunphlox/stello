@@ -11,7 +11,7 @@
  * through `makeNet`, which caps time and subrequests.
  */
 import { parseOG, extractText, clipChars, decodeBasicEntities, domainOf, normalizeURL, toURL } from './html.js';
-import { classify } from './classifier.js';
+import { classify, postPlatform, productSource, framerMarketplaceSegment, figmaCommunityResourceType, isCourseHostURL, hasCourseNode } from './classifier.js';
 import * as Product from './product.js';
 import * as Post from './post.js';
 import * as Resource from './resource.js';
@@ -102,12 +102,15 @@ function decodeBody(bytes) {
  * @param {number} [input.status]           HTTP status of that fetch
  * @param {string} [input.finalURL]         URL after redirects
  * @param {string[]} [input.collectionLabels] import / force-Enrich labels (fresh saves: none)
+ * @param {string} [input.asKind]           the kind the item already has (Apple apps' Enrich):
+ *   read it as that kind when the page still fits, instead of classifying from scratch
+ * @param {boolean} [input.kindOnly]        classify only, skip the readers (import path)
  * @param {object} [input.net]              makeNet() instance
  * @param {Date}   [input.now]
  * @returns {Promise<object>} { kind, title, summary, extractedText, domain, status, metadata,
  *   images: { urls, source, fallbacks }, confidence, signals }
  */
-export async function readPage({ url, html = null, status = null, finalURL = null, collectionLabels = [], net = makeNet(), now = new Date(), fetchPage = true }) {
+export async function readPage({ url, html = null, status = null, finalURL = null, collectionLabels = [], net = makeNet(), now = new Date(), fetchPage = true, asKind = null, kindOnly = false }) {
   const source = toURL(url);
   if (!source) throw new Error('readPage: invalid url');
 
@@ -125,10 +128,24 @@ export async function readPage({ url, html = null, status = null, finalURL = nul
   const summary = og.description != null ? [...decodeBasicEntities(og.description)].slice(0, 200).join('') : null;
   const dom = domainOf(source);
   const finalU = page?.finalURL ? toURL(page.finalURL) : null;
+
+  let c = classify({ html: pageHTML, baseURL: source, domain: dom, title: ogTitle, ogDescription: og.description, ogType: og.ogType, collectionLabels });
+  if (asKind && asKind !== c.kind) c = readAs(asKind, c, { url: source, ogType: og.ogType, html: pageHTML, collectionLabels });
+  let kind = c.kind;
   const isGonePage = page?.status === 404 || page?.status === 410;
 
-  const c = classify({ html: pageHTML, baseURL: source, domain: dom, title: ogTitle, ogDescription: og.description, ogType: og.ogType, collectionLabels });
-  let kind = c.kind;
+  if (kindOnly) {
+    return {
+      kind,
+      title: ogTitle,
+      domain: dom,
+      sourceURL: normalizeURL(source),
+      status: isGonePage ? 'gone' : 'active',
+      metadata: null,
+      fetched: page != null,
+      ...confidenceFor(kind, page, kind === 'link' ? null : {}),
+    };
+  }
   const ogImage = og.imageURL ?? null;
   const common = { sourceURL: source, finalURL: finalU, html: pageHTML, ogTitle: og.title };
 
@@ -241,6 +258,34 @@ export async function readPage({ url, html = null, status = null, finalURL = nul
     fetched: page != null,
     ...confidenceFor(kind, page, metadata),
   };
+}
+
+/** Kinds an item can be read as again (Enrich on an already-typed item). */
+export const READ_AS_KINDS = new Set(['post', 'product', 'resource', 'book', 'tool', 'course', 'article', 'music']);
+
+/**
+ * Enrich on an item that already has a kind reads the page as that kind, as long as the
+ * page still fits it, so a later rule change never flips a curated item. Music goes
+ * through the music detection (kind `link` here), which confirms it or gives up.
+ */
+export function readAs(asKind, c, { url, ogType, html, collectionLabels }) {
+  if (!READ_AS_KINDS.has(asKind)) return c;
+  // Earlier builds' filings that move on: Framer Marketplace items filed as products and
+  // Figma Community plugins / files filed as tools are resources; course pages filed as
+  // articles (known course host, or a Course JSON-LD node) are courses.
+  if (c.kind === 'resource' && asKind === 'product' && framerMarketplaceSegment(url) != null) return c;
+  if (c.kind === 'resource' && asKind === 'tool' && figmaCommunityResourceType(url) != null) return c;
+  if (c.kind === 'course' && asKind === 'article' && (isCourseHostURL(url) || hasCourseNode(html))) return c;
+  if (asKind === 'post') {
+    const platform = postPlatform(url, collectionLabels);
+    return platform ? { kind: 'post', individualMeta: null, postPlatform: platform } : c;
+  }
+  if (asKind === 'product') {
+    const source = productSource(url, ogType, html, collectionLabels);
+    return source ? { kind: 'product', individualMeta: null, productSource: source } : c;
+  }
+  if (asKind === 'music') return { kind: 'link', individualMeta: null };
+  return { kind: asKind, individualMeta: null };
 }
 
 /**
