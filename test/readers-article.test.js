@@ -259,3 +259,22 @@ test('A refetch that reads less never erases what capture read; AI fields are ke
   eq(m.techStack, ['CSS']);
   eq(m.isTutorial, true);
 });
+
+test('extractText reads the article / main prose, not the site chrome', () => {
+  const prose = Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ');
+  const github = `<html><body><header><a>Sign in</a></header><main>
+    <div class="repo-head"><span>You must be signed in to change notification settings</span>
+    <button>Star</button><nav>Code Issues Pull requests</nav></div>
+    <article class="markdown-body"><h1>fd</h1><p>A simple, fast and user-friendly alternative to find. ${prose}</p></article>
+    <aside>About Contributions Security policy</aside></main><footer>Terms Privacy</footer></body></html>`;
+  const t = extractText(github);
+  eq(t.startsWith('fd A simple, fast'), true);
+  eq(/signed in|Star|Security policy|Terms/.test(t), false);
+
+  // A tiny <article> (a card on a home page) is not the page's prose: read the body.
+  const home = `<body><nav>Menu</nav><article>Short card</article><p>${prose}</p></body>`;
+  eq(extractText(home).startsWith('Short card word0'), true);
+
+  // An unclosed <header> never swallows the rest of the page.
+  eq(extractText(`<body><header>Top ${prose}</body>`).includes('word79'), true);
+});

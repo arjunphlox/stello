@@ -101,11 +101,51 @@ export function decodeBasicEntities(s) {
  */
 export function extractText(html, limit = 4000) {
   if (!html) return null;
+  const body = html.search(/<body/i);
+  const page = body >= 0 ? html.slice(body) : html;
+  // The page's own prose lives in <article>, else <main>: reading only that keeps site
+  // menus, sign-in prompts and sidebars ("You must be signed in to star a repository")
+  // out of the text the snippets are picked from. A region with too little prose (a
+  // card on a home page) falls back to the whole body.
+  for (const region of [between(page, 'article'), between(page, 'main')]) {
+    if (region == null) continue;
+    const text = proseText(region);
+    if (text && wordCount(text) >= MIN_REGION_WORDS) return limit == null ? text : clipChars(text, limit);
+  }
+  const text = proseText(page);
+  if (!text) return null;
+  return limit == null ? text : clipChars(text, limit);
+}
+
+/** A region under this many words isn't the page's prose. */
+export const MIN_REGION_WORDS = 60;
+
+/** Blocks whose content is never prose. An unterminated one (a page cut at 2 MB) runs to the end. */
+const CODE_TAGS = ['script', 'style', 'noscript', 'svg', 'template'];
+/** Page chrome: menus, headers and footers, sidebars, forms, buttons. Only whole elements go. */
+const CHROME_TAGS = ['nav', 'header', 'footer', 'aside', 'form', 'button', 'dialog', 'select'];
+
+/** From the first `<tag` to the last `</tag>` (spans nested and sibling elements). */
+function between(html, tag) {
+  const start = html.search(new RegExp(`<${tag}[\\s>]`, 'i'));
+  if (start < 0) return null;
+  const end = Math.max(html.lastIndexOf(`</${tag}>`), html.lastIndexOf(`</${tag.toUpperCase()}>`));
+  return end > start ? html.slice(start, end) : null;
+}
+
+function wordCount(text) {
+  let n = 1;
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 32) n++;
+  return n;
+}
+
+function proseText(html) {
   let text = html;
-  const body = text.search(/<body/i);
-  if (body >= 0) text = text.slice(body);
-  for (const tag of ['script', 'style', 'noscript', 'svg', 'template']) {
+  for (const tag of CODE_TAGS) {
     text = text.replace(new RegExp(`<${tag}[^>]*>[\\s\\S]*?(</${tag}>|$)`, 'gi'), ' ');
+  }
+  for (const tag of CHROME_TAGS) {
+    text = text.replace(new RegExp(`<${tag}[\\s>][\\s\\S]*?</${tag}>`, 'gi'), ' ');
   }
   text = text.replace(/<!--[\s\S]*?-->/g, ' ');
   text = text.replace(/<[^>]+>/g, ' ');
@@ -113,9 +153,7 @@ export function extractText(html, limit = 4000) {
   text = text.replace(/--[A-Za-z0-9_-]+\s*:[^;{}]{0,120};?/g, ' ');
   const words = text.trim().split(/\s+/).filter((w) =>
     (w.length <= 40 || [...w].length <= 40) && !CODE_CHARS_RE.test(w) && !w.startsWith('--'));
-  text = words.join(' ');
-  if (!text) return null;
-  return limit == null ? text : clipChars(text, limit);
+  return words.join(' ') || null;
 }
 
 /** The first `limit` characters (code points, as Swift's `prefix`). */
