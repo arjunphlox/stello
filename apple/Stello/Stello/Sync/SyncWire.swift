@@ -9,7 +9,7 @@ enum SyncWire {
     static let allFields: [String] = [
         "slug", "title", "source_url", "domain", "author", "summary", "body_markdown", "status",
         "needs_review", "kind", "enrichment_status", "added_at", "analyzed_at", "cover_aspect",
-        "metadata", "tags", "images", "snippets",
+        "last_opened_at", "open_count", "metadata", "tags", "images", "snippets",
     ]
 
     /// Item attribute → wire field, for reading SwiftData change history.
@@ -19,6 +19,7 @@ enum SyncWire {
         \Item.status: "status", \Item.needsReview: "needs_review", \Item.kind: "kind",
         \Item.enrichmentStatus: "enrichment_status", \Item.addedAt: "added_at",
         \Item.analyzedAt: "analyzed_at", \Item.coverAspect: "cover_aspect",
+        \Item.lastOpenedAt: "last_opened_at", \Item.openCount: "open_count",
         \Item.metadataJSON: "metadata", \Item.tagsJSON: "tags",
         \Item.imagesChangedAt: "images", \Item.snippetsChangedAt: "snippets",
     ]
@@ -77,6 +78,8 @@ enum SyncWire {
         if want("added_at") { out["added_at"] = iso(item.addedAt) }
         if want("analyzed_at") { out["analyzed_at"] = opt(item.analyzedAt.map(iso)) }
         if want("cover_aspect") { out["cover_aspect"] = item.coverAspect }
+        if want("last_opened_at") { out["last_opened_at"] = opt(item.lastOpenedAt.map(iso)) }
+        if want("open_count") { out["open_count"] = item.openCount }
         if want("metadata") { out["metadata"] = item.metadataJSON.flatMap(parseJSON) ?? NSNull() }
         if want("tags") {
             out["tags"] = item.tags.map {
@@ -136,6 +139,13 @@ enum SyncWire {
         if let s = str("added_at"), let d = s.flatMap(date), !sameInstant(d, item.addedAt) { set("added_at", \.addedAt, d) }
         if let s = str("analyzed_at"), !sameInstant(s.flatMap(date), item.analyzedAt) { set("analyzed_at", \.analyzedAt, s.flatMap(date)) }
         if let d = v["cover_aspect"] as? Double { set("cover_aspect", \.coverAspect, d) }
+        // Revisit tracking only moves forward: keep the later open and the higher count,
+        // so a row the web never opened (count 0) can't wipe the Mac's history.
+        if let s = str("last_opened_at"), let d = s.flatMap(date), d > (item.lastOpenedAt ?? .distantPast),
+           !sameInstant(d, item.lastOpenedAt) {
+            set("last_opened_at", \.lastOpenedAt, Optional(d))
+        }
+        if let n = v["open_count"] as? Int, n > item.openCount { set("open_count", \.openCount, n) }
         if !skip.contains("metadata"), let m = v["metadata"] {
             let json = m is NSNull ? nil : encodeJSON(m)
             // Compare parsed, so key order from the server never counts as a change.
@@ -201,12 +211,23 @@ enum SyncWire {
     }
 
     /// A new item for a row the device doesn't have (made or restored on the web).
-    static func makeItem(from row: Row, in context: ModelContext) -> (Item, [(ItemImage, String)]) {
+    /// With `queueClassify`, a plain web save joins the import queue, so the background
+    /// readers give it a kind (and Enrich its fields when it's opened), same as an import.
+    static func makeItem(from row: Row, in context: ModelContext, queueClassify: Bool = false) -> (Item, [(ItemImage, String)]) {
         let item = Item(id: row.id, enrichmentStatus: "candidates_done")
         context.insert(item)
         apply(row, to: item, skipping: [])
+        if queueClassify, needsClassify(item) {
+            item.enrichmentStatus = WebLibraryImporter.awaitingClassifyStatus
+        }
         let downloads = applyImages(row, to: item)
         return (item, downloads)
+    }
+
+    /// A web save the web couldn't type: a page link with no kind and no metadata.
+    static func needsClassify(_ item: Item) -> Bool {
+        guard let url = item.sourceURL, url.hasPrefix("http") else { return false }
+        return (item.kind.isEmpty || item.kind == ItemKind.link.rawValue) && item.metadataJSON == nil
     }
 
     // MARK: Helpers

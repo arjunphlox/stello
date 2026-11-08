@@ -3098,6 +3098,15 @@
       focus();
 
       if (previousSlug && previousSlug !== slug) notifyCaptureSlugClosed(previousSlug);
+      recordOpen(slug);
+    }
+
+    // Revisit tracking, once per item per page load (Apple: StelloStore.recordOpen).
+    const openedThisSession = new Set();
+    function recordOpen(slug) {
+      if (openedThisSession.has(slug)) return;
+      openedThisSession.add(slug);
+      postItemUpdate(slug, { record_open: true });
     }
 
     function close() {

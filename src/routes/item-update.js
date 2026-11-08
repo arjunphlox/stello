@@ -27,6 +27,15 @@ module.exports = async function handler(req, res) {
     .single();
   if (fetchErr || !item) return jsonResponse(res, 404, { error: 'Item not found' });
 
+  // Revisit tracking (Apple: StelloStore.recordOpen). Activity, not an edit,
+  // so nothing else on the row is touched.
+  if (body.record_open === true) {
+    const open = { open_count: (Number(item.open_count) || 0) + 1, last_opened_at: new Date().toISOString() };
+    const { error: openErr } = await client.from('items').update(open).eq('id', item.id);
+    if (openErr) return jsonResponse(res, 500, { error: 'Update failed', detail: openErr.message });
+    return jsonResponse(res, 200, { slug, ...open });
+  }
+
   const existingTags = parseJsonField(item.tags, []);
   const existingImages = parseJsonField(item.images, []);
   const existingSnippets = parseJsonField(item.snippets, []);

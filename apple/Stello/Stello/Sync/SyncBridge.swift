@@ -226,6 +226,9 @@ final class SyncBridge {
 
     private func pull(api: SyncAPI, context: ModelContext) async throws {
         var cursor = UserDefaults.standard.integer(forKey: Self.cursorKey)
+        // The first pull brings the whole web library; only later pulls carry new web saves.
+        let queueClassify = cursor > 0
+        var queued = 0
         // Edits made since the push (here, or arriving from another Apple device) are
         // newer than anything the server sent before them.
         let pendingIDs = Set(try readHistory(context: context, after: loadToken()).changes.keys)
@@ -236,7 +239,7 @@ final class SyncBridge {
             for start in stride(from: 0, to: page.items.count, by: Self.batch) {
                 for row in page.items[start..<min(start + Self.batch, page.items.count)] {
                     if pendingIDs.contains(row.id) || row.purged { continue }
-                    downloads += apply(row, context: context)
+                    downloads += apply(row, context: context, queueClassify: queueClassify, queued: &queued)
                 }
                 try context.save()
                 await Task.yield()
@@ -247,9 +250,13 @@ final class SyncBridge {
             if !page.more { break }
         }
         pruneLocalFieldTimes()
+        if queued > 0 { NotificationCenter.default.post(name: Self.webSavesQueued, object: nil) }
     }
 
-    private func apply(_ row: SyncWire.Row, context: ModelContext) -> [(ItemImage, String)] {
+    /// Posted after a pull queues web saves for the background readers.
+    static let webSavesQueued = Notification.Name("SyncBridge.webSavesQueued")
+
+    private func apply(_ row: SyncWire.Row, context: ModelContext, queueClassify: Bool = false, queued: inout Int) -> [(ItemImage, String)] {
         let existing = fetchItem(row.id, context)
         if let deletedAt = row.deletedAt {
             // Deleted on the web, unless this device changed the item since.
@@ -259,7 +266,9 @@ final class SyncBridge {
             return []
         }
         guard let item = existing else {
-            return SyncWire.makeItem(from: row, in: context).1
+            let (item, downloads) = SyncWire.makeItem(from: row, in: context, queueClassify: queueClassify)
+            if item.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus { queued += 1 }
+            return downloads
         }
         let serverClock = row.values["clock"] as? [String: Int] ?? [:]
         let local = localFieldTimes[row.id] ?? [:]
