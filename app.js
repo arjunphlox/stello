@@ -1045,6 +1045,14 @@
     updateGridCols();
   }
   function stepZoom(delta) { setZoomCols(currentBaseCols() + delta); }
+  // Settings stepper (Mac: Grid section, 0 = Auto, 1…12 columns).
+  function setGridColumns(n) {
+    if (n <= 0) {
+      zoomCols = 0;
+      try { localStorage.removeItem(ZOOM_KEY); } catch { /* silent */ }
+      updateGridCols();
+    } else setZoomCols(n);
+  }
 
   function bindPinchZoom() {
     const mc = document.querySelector('.main-content');
@@ -2752,6 +2760,24 @@
         );
       });
     });
+
+    // Grid columns stepper.
+    const $cols = $panel.querySelector('#grid-columns');
+    if ($cols) {
+      const $label = $cols.querySelector('.grid-columns-label');
+      const paint = () => {
+        $label.textContent = zoomCols === 0 ? 'Auto' : `${zoomCols} column${zoomCols === 1 ? '' : 's'}`;
+        $cols.querySelector('[data-step="-1"]').disabled = zoomCols === 0;
+        $cols.querySelector('[data-step="1"]').disabled = zoomCols === MAX_COLS;
+      };
+      paint();
+      $cols.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-step]');
+        if (!b) return;
+        setGridColumns(Math.max(0, Math.min(MAX_COLS, zoomCols + Number(b.dataset.step))));
+        paint();
+      });
+    }
 
     // Account: which sign-in methods are linked, link Apple ID.
     (async () => {

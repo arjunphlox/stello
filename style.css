@@ -2679,3 +2679,27 @@ button.sub-ref:hover { border-color: var(--accent); }
 .card:hover .card-review-label { max-width: 60px; }
 .card:has(.card-review-badge) .card-url-pill { max-width: calc(100% - 44px); }
 .active-filter-review { background: var(--text); color: var(--bg); }
+
+/* ---- Settings: grid columns (Mac: Grid stepper) ---- */
+.grid-columns { justify-content: space-between; }
+.grid-columns .grid-columns-label { color: var(--text); font-size: 0.78rem; }
+.grid-columns-stepper {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--card-bg);
+}
+.grid-columns-stepper button {
+  width: 30px;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.grid-columns-stepper button + button { border-left: 1px solid var(--border); }
+.grid-columns-stepper button:hover:not(:disabled) { background: var(--border); }
+.grid-columns-stepper button:disabled { opacity: 0.35; cursor: default; }
+.settings-hint { margin: 0; font-size: 0.7rem; color: var(--text-dim); }

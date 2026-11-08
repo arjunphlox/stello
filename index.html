@@ -55,6 +55,17 @@
         <button class="accent-swatch" data-accent="iris" type="button" aria-label="Iris accent"></button>
       </div>
     </fieldset>
+    <fieldset class="settings-theme settings-grid">
+      <legend>Grid</legend>
+      <div class="settings-theme-row grid-columns" id="grid-columns">
+        <span class="settings-theme-label grid-columns-label">Auto</span>
+        <div class="grid-columns-stepper">
+          <button type="button" data-step="-1" aria-label="Fewer columns">&minus;</button>
+          <button type="button" data-step="1" aria-label="More columns">+</button>
+        </div>
+      </div>
+      <p class="settings-hint">Pinch the grid to zoom, or set columns here.</p>
+    </fieldset>
     <div class="settings-field">
       <label>Profile name</label>
       <input type="text" class="settings-profile" value="personal" placeholder="Profile name">
@@ -136,6 +147,6 @@
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script src="desktop-context.js?v=1"></script>
 <script src="panel-layout.js?v=2"></script>
-<script src="app.js?v=51"></script>
+<script src="app.js?v=52"></script>
 </body>
 </html>
