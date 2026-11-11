@@ -10,11 +10,13 @@ struct TagFilterContent: View {
     @State private var searchText = ""
     @State private var expandedCategories: Set<String> = ["intent"]
 
-    private let categories = ["intent", "format", "domain", "style", "subject", "tool", "location", "mood", "color"]
+    /// Same order as the web drawer (Arjun, 11 Nov 2026: Why saved, then Collections).
+    private let categories = ["intent", "collection", "format", "domain", "style", "subject", "tool", "location", "mood", "color"]
 
     private func categoryLabel(_ category: String) -> String {
         switch category {
         case "intent": "Why saved"
+        case "collection": "Collections"
         default: category.capitalized
         }
     }
@@ -76,6 +78,13 @@ struct TagFilterContent: View {
                 }
             }
             .padding(16)
+        }
+        .onAppear {
+            // Expand the first category shown (Why saved, when present), as on the web.
+            if let first = categories.first(where: { !tags(in: $0).isEmpty }),
+               expandedCategories == ["intent"] {
+                expandedCategories = [first]
+            }
         }
     }
 

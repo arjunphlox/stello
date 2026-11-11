@@ -908,13 +908,11 @@ html.arriving-from-login .header {
    the same pixels that draw the image also get darkened — no
    alignment to manage. */
 .card-thumb,
-.card-text-content,
 .card-placeholder,
 .card-glyph-tile {
   transition: filter 0.18s ease-out;
 }
 .card:hover .card-thumb,
-.card:hover .card-text-content,
 .card:hover .card-placeholder,
 .card:hover .card-glyph-tile {
   filter: brightness(0.175);
@@ -997,12 +995,10 @@ html.arriving-from-login .header {
   aspect-ratio: auto 1200 / 630;
 }
 
-/* Placeholder + text-card tints: one hue per card (--ph-hue, set inline),
+/* Placeholder tint: one hue per card (--ph-hue, set inline),
    lightness by mode so a theme switch repaints without a re-render. */
 .card-placeholder { background: hsl(var(--ph-hue, 40), 20%, 16%); }
-.card-text-content { background: hsl(var(--ph-hue, 40), 15%, 13%); }
 [data-theme="light"] .card-placeholder { background: hsl(var(--ph-hue, 40), 10%, 93%); }
-[data-theme="light"] .card-text-content { background: hsl(var(--ph-hue, 40), 12%, 92%); color: var(--text); }
 
 /* Imageless Tool / Resource: a neutral tile with the type glyph centred at
    32px (the title shows on hover, like every card). */
@@ -1036,20 +1032,6 @@ html.arriving-from-login .header {
   font-size: 3rem;
   font-weight: 700;
   color: var(--placeholder-text);
-  border-radius: 4px;
-}
-
-/* Text content card — long-form text displayed typographically */
-.card-text-content {
-  padding: 16px 14px;
-  font-family: 'Platypi', Georgia, serif;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #fff;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 10;
-  -webkit-box-orient: vertical;
   border-radius: 4px;
 }
 

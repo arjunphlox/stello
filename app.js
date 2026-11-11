@@ -42,6 +42,7 @@
   // --- Category colors (for pills) ---
   const CAT_CLASS = {
     format: 'tag-format',
+    intent: 'tag-subject',
     collection: 'tag-domain',
     domain: 'tag-domain',
     style: 'tag-style',
@@ -53,7 +54,6 @@
   };
 
   // Warm earthy hues for placeholders
-  const PLACEHOLDER_HUES = [18, 80, 38, 140, 25, 45, 12, 100];
 
   // Color name → CSS color for tag swatches
   const COLOR_MAP = {
@@ -691,12 +691,12 @@
     return map;
   }
 
-  // Default: only the first category (collection) is expanded; everything else collapsed.
-  let expandedCategories = new Set(['collection']);
+  // Default: only the first category shown (Why saved, when present) is expanded.
+  let expandedCategories = null;
   let tagSearchQuery = '';
 
   const CATEGORY_LABELS = {
-    collection: 'Collections', domain: 'Domains', subject: 'Subjects', format: 'Formats',
+    intent: 'Why saved', collection: 'Collections', domain: 'Domains', subject: 'Subjects', format: 'Formats',
     tool: 'Tools', style: 'Styles', mood: 'Moods',
     location: 'Locations', color: 'Colors',
   };
@@ -705,9 +705,11 @@
     const el = $drawer();
     if (!el) return;
     const map = collectTags();
-    const order = ['collection', 'domain', 'subject', 'format', 'tool', 'style', 'mood', 'location', 'color'];
+    // Same order as the Mac's TagFilterSheet (Arjun, 11 Nov 2026: Why saved, then Collections).
+    const order = ['intent', 'collection', 'format', 'domain', 'style', 'subject', 'tool', 'location', 'mood', 'color'];
     const categories = order.filter(c => map[c]);
     Object.keys(map).forEach(c => { if (!categories.includes(c)) categories.push(c); });
+    if (!expandedCategories) expandedCategories = new Set(categories.slice(0, 1));
 
     const q = tagSearchQuery.trim().toLowerCase();
 
@@ -1329,25 +1331,6 @@
     });
   }
 
-  function cleanSummary(text) {
-    if (!text) return text;
-    // Strip leading/trailing quotes and whitespace first
-    let cleaned = text.replace(/^[''""\s]+/, '').replace(/[''""\s]+$/, '');
-    // Strip Instagram pattern: "14K likes, 35 comments - username on Date: 'actual content"
-    cleaned = cleaned.replace(/^\d[\d,.KkMm]*\s*likes?,\s*\d[\d,.KkMm]*\s*comments?\s*-\s*\S+\s+on\s+\w+\s+\d{1,2},?\s+\d{4}[\s\u200E:]*[''""]?\s*/i, '');
-    // Strip "Saved from domain:" prefix
-    cleaned = cleaned.replace(/^Saved from \S+:\s*/i, '');
-    // Strip any remaining leading quotes/whitespace
-    cleaned = cleaned.replace(/^[''""\s]+/, '');
-    return cleaned.trim();
-  }
-
-  function truncateWords(text, maxWords) {
-    const words = text.split(/\s+/);
-    if (words.length <= maxWords) return text;
-    return words.slice(0, maxWords).join(' ') + '...';
-  }
-
   function cssSlug(slug) {
     return slug.replace(/[^a-zA-Z0-9-]/g, '-');
   }
@@ -1401,6 +1384,7 @@
     'app-window': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM80,84A12,12,0,1,1,68,72,12,12,0,0,1,80,84Zm40,0a12,12,0,1,1-12-12A12,12,0,0,1,120,84Z"/></svg>',
     'globe': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24h0A104,104,0,1,0,232,128,104.12,104.12,0,0,0,128,24Zm88,104a87.61,87.61,0,0,1-3.33,24H174.16a157.44,157.44,0,0,0,0-48h38.51A87.61,87.61,0,0,1,216,128ZM102,168H154a115.11,115.11,0,0,1-26,45A115.27,115.27,0,0,1,102,168Zm-3.9-16a140.84,140.84,0,0,1,0-48h59.88a140.84,140.84,0,0,1,0,48ZM40,128a87.61,87.61,0,0,1,3.33-24H81.84a157.44,157.44,0,0,0,0,48H43.33A87.61,87.61,0,0,1,40,128ZM154,88H102a115.11,115.11,0,0,1,26-45A115.27,115.27,0,0,1,154,88Zm52.33,0H170.71a135.28,135.28,0,0,0-22.3-45.6A88.29,88.29,0,0,1,206.37,88ZM107.59,42.4A135.28,135.28,0,0,0,85.29,88H49.63A88.29,88.29,0,0,1,107.59,42.4ZM49.63,168H85.29a135.28,135.28,0,0,0,22.3,45.6A88.29,88.29,0,0,1,49.63,168Zm98.78,45.6a135.28,135.28,0,0,0,22.3-45.6h35.66A88.29,88.29,0,0,1,148.41,213.6Z"/></svg>',
     'squares-four': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48v48Zm-96,32H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48v48Z"/></svg>',
+    'file-text': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-32-80a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,136Zm0,32a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,168Z"/></svg>',
     'file': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg>',
     'layout': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16V96H40V56ZM40,112H96v88H40Zm176,88H112V112H216v88Z"/></svg>',
     'copy': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg>',
@@ -1428,7 +1412,7 @@
     component: 'copy', pen: 'code', mockup: 'image', 'icon set': 'star',
     'reading list': 'books', library: 'package',
   };
-  // Every other imageless card without text: its kind's glyph (Mac kindGlyph).
+  // Every other imageless card, text-only ones included: its kind's glyph (Mac kindGlyph).
   const KIND_GLYPH = {
     typeface: 'text-aa', website: 'globe', individual: 'user', studio: 'users-three',
     foundry: 'text-t', place: 'map-pin', music: 'music-note', product: 'shopping-bag',
@@ -1454,11 +1438,6 @@
     const hasImage = item.has_image && item.image_path;
     const vtName = `card-${cssSlug(item.slug)}`;
 
-    const glyph = hasImage ? null : glyphTileFor(item);
-    const hasTextContent = !hasImage && item.summary
-      && item.summary.length > 30
-      && !item.summary.startsWith('Saved from');
-
     if (hasImage) {
       // Emit width/height when known so the browser reserves the exact slot
       // before the image loads — eliminates the column-count reflow that
@@ -1468,14 +1447,12 @@
       const dims = (item.image_width && item.image_height)
         ? ` width="${item.image_width}" height="${item.image_height}"` : '';
       thumbHtml = `<img class="card-thumb" src="${item.image_path}" alt=""${dims} loading="lazy" style="view-transition-name:${vtName}" onerror="this.parentElement.classList.add('img-error')">`;
-    } else if (glyph) {
-      thumbHtml = glyphTileHTML(glyph.icon, vtName);
-    } else if (hasTextContent) {
-      const hue = PLACEHOLDER_HUES[idx % PLACEHOLDER_HUES.length];
-      const truncated = escHtml(truncateWords(cleanSummary(item.summary), 200));
-      thumbHtml = `<div class="card-text-content" style="view-transition-name:${vtName};--ph-hue:${hue}">${truncated}</div>`;
     } else {
-      thumbHtml = glyphTileHTML(KIND_GLYPH[item.kind] || 'link', vtName);
+      // Every imageless card, text-only ones included (Arjun, 11 Nov 2026): one neutral
+      // tile with its dominant category glyph. Link-less notes get a note glyph.
+      const glyph = glyphTileFor(item);
+      const isNote = (!item.kind || item.kind === 'link') && !item.source_url;
+      thumbHtml = glyphTileHTML(glyph ? glyph.icon : (isNote ? 'file-text' : (KIND_GLYPH[item.kind] || 'link')), vtName);
     }
 
     // URL pill — bottom-right. Default: 20% color bg + white text.
@@ -1494,7 +1471,7 @@
       ? `<span class="card-review-badge" style="--pill-bg:${pillBg}" title="Awaiting review" aria-label="Awaiting review">${icon('eye')}<span class="card-review-label">Review</span></span>`
       : '';
 
-    const cardClass = hasImage ? ' card-visual' : (hasTextContent && !glyph ? ' card-text' : ' card-glyph-card');
+    const cardClass = hasImage ? ' card-visual' : ' card-glyph-card';
 
     return `<div class="card${cardClass}" data-slug="${item.slug}" data-render-sig="${cardRenderSig(item)}" tabindex="-1">
       <div class="card-visual-area">
