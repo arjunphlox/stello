@@ -207,13 +207,13 @@ struct ItemCardView: View {
         } else if isVideoCard {
             videoCard
         } else if let toolMeta = item.toolMeta() {
-            glyphTile(glyph: Self.toolGlyph(toolMeta.subtype))
+            glyphTile(glyph: Self.toolGlyph(toolMeta.subtype), name: toolMeta.name ?? item.title)
         } else if let resourceMeta = item.resourceMeta() {
-            glyphTile(glyph: Self.resourceGlyph(resourceMeta.subtype))
+            glyphTile(glyph: Self.resourceGlyph(resourceMeta.subtype), name: resourceMeta.name ?? item.title)
         } else if hasText {
             textCard
         } else {
-            glyphTile(glyph: Self.kindGlyph(item.kind))
+            placeholderCard
         }
     }
 
@@ -281,20 +281,22 @@ struct ItemCardView: View {
         }
     }
 
-    /// Imageless card: the neutral card surface with one type glyph centred in a 32pt
-    /// square (Arjun, 11 Nov 2026: the accent tile was too loud). Tools and resources use
-    /// their subtype glyph; everything else its kind's glyph. The title shows on hover.
-    private func glyphTile(glyph: String) -> some View {
+    /// Imageless tool / resource: an accent tile with a type glyph and the item's name. (No
+    /// favicon is stored per item yet, so the glyph stands in for the site icon.)
+    private func glyphTile(glyph: String, name: String) -> some View {
         hoverDim(
             ZStack {
-                // Sand 3 in dark; sand 4 in light, where sand 3 is nearly the page tone.
-                (theme.mode == .light ? theme.borderSubtle : theme.surfaceRaised)
-                Image(systemName: glyph)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 32, height: 32)
-                    .font(.system(size: 32, weight: .regular))
-                    .foregroundStyle(theme.textDim)
+                theme.accentColor
+                VStack(spacing: 8) {
+                    Image(systemName: glyph)
+                        .font(.system(size: 26, weight: .regular))
+                    Text(name)
+                        .font(.karst(.subheadline, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+                .foregroundStyle(theme.accentContrast)
+                .padding(.horizontal, 12)
             }
             .frame(maxWidth: .infinity, minHeight: 140)
         )
@@ -327,27 +329,6 @@ struct ItemCardView: View {
         }
     }
 
-    /// Kind glyph for an imageless card with no text (web app: same set, Phosphor icons).
-    static func kindGlyph(_ kind: String) -> String {
-        switch kind {
-        case "typeface": return "textformat"
-        case "website": return "globe"
-        case "individual": return "person"
-        case "studio": return "person.3"
-        case "foundry": return "character.textbox"
-        case "place": return "mappin.and.ellipse"
-        case "music": return "music.note"
-        case "product": return "bag"
-        case "post": return "text.bubble"
-        case "book": return "book"
-        case "course": return "graduationcap"
-        case "article": return "doc.richtext"
-        case "tool": return "globe"
-        case "resource": return "square.stack.3d.up"
-        default: return "link"
-        }
-    }
-
     private static func resourceGlyph(_ subtype: String?) -> String {
         switch subtype {
         case "plugin": return "puzzlepiece.extension"
@@ -370,6 +351,35 @@ struct ItemCardView: View {
                   saturation: theme.mode == .dark ? 0.15 : 0.12,
                   brightness: theme.mode == .dark ? 0.14 : 0.92)
             .frame(maxWidth: .infinity, minHeight: 140)
+        )
+        .overlay(alignment: .bottomTrailing) {
+            if showCardOverlays {
+                domainPill.padding(10)
+            }
+        }
+        .overlay(alignment: .bottomLeading) {
+            if showCardOverlays {
+                reviewBadge.padding(10)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            #if os(macOS)
+            if showCardOverlays {
+                macTitleBadge
+            }
+            #endif
+        }
+    }
+
+    private var placeholderCard: some View {
+        hoverDim(
+            ZStack {
+                placeholderGradient
+                Text(String(item.title.first ?? "?").uppercased())
+                    .font(.karst(size: 46, weight: .light))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            .frame(height: 140)
         )
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {

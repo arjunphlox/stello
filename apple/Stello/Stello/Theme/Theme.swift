@@ -312,7 +312,6 @@ struct AppTheme: Equatable {
     var surfaceRaised:    Color { sand[3] }
     var borderSubtle:     Color { sand[4] }
     var border:           Color { sand[6] }
-    var textDim:          Color { sand[9] }
     var textSecondary:    Color { sand[11] }
     var textPrimary:      Color { sand[12] }
 
