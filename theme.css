@@ -1,5 +1,5 @@
 /* === Stello Theme — Radix Colors integration === */
-/* Scales: Sand (neutral), Lime, Amber, Iris — light & dark modes */
+/* Scales: Sand (neutral) + the 12 Mac accents — light & dark modes */
 
 /* -------------------------------------------------------
    A. Radix raw scale values (copied from @radix-ui/colors)
@@ -93,7 +93,7 @@
   --status-broken-fg: #c47a7a;
 }
 [data-theme="light"] {
-  --bg: var(--sand-1);
+  --bg: #f2f1ee; /* the Mac's off-white light background (AppTheme.background) */
   --bg-secondary: var(--sand-2);
   --card-bg: var(--sand-3);
   --card-hover: var(--sand-4);
@@ -113,29 +113,47 @@
   --status-broken-fg: #943e3e;
 }
 
-/* Accent tokens — Lime */
-[data-accent="lime"] {
-  --accent: var(--lime-9);
-  --accent-hover: var(--lime-10);
-  --accent-subtle: var(--lime-a3);
-  --accent-contrast: #37401c; /* always dark — lime-9 is bright in both modes */
-}
-
-/* Accent tokens — Amber (default) */
-[data-accent="amber"] {
-  --accent: var(--amber-9);
-  --accent-hover: var(--amber-10);
-  --accent-subtle: var(--amber-a3);
-  --accent-contrast: #4f3422; /* always dark — amber-9 is bright in both modes */
-}
-
-/* Accent tokens — Iris */
-[data-accent="iris"] {
-  --accent: var(--iris-9);
-  --accent-hover: var(--iris-10);
-  --accent-subtle: var(--iris-a3);
-  --accent-contrast: #fff;
-}
+/* Accent tokens — the Mac's 12 accents (Theme.swift AccentColor). Step 9 / 10 /
+   alpha-3 per mode; contrast text is fixed per accent. Dark mode offers the six
+   bright accents and light mode the six muted ones (app.js ThemeManager keeps the
+   stored accent in the current mode's set); every pair is defined so a stale
+   choice still paints. */
+[data-accent="amber"] { --accent-contrast: #4f3422; }
+[data-theme="dark"][data-accent="amber"] { --accent: #ffc53d; --accent-hover: #ffd60a; --accent-subtle: #fa820022; }
+[data-theme="light"][data-accent="amber"] { --accent: #ffc53d; --accent-hover: #ffba18; --accent-subtle: #ffde003d; }
+[data-accent="lime"] { --accent-contrast: #37401c; }
+[data-theme="dark"][data-accent="lime"] { --accent: #bdee63; --accent-hover: #d4ff70; --accent-subtle: #9bfd4c1a; }
+[data-theme="light"][data-accent="lime"] { --accent: #bdee63; --accent-hover: #b0e64c; --accent-subtle: #96c80029; }
+[data-accent="yellow"] { --accent-contrast: #473b1f; }
+[data-theme="dark"][data-accent="yellow"] { --accent: #ffe629; --accent-hover: #ffff57; --accent-subtle: #ffaa001e; }
+[data-theme="light"][data-accent="yellow"] { --accent: #ffe629; --accent-hover: #ffdc00; --accent-subtle: #ffee0047; }
+[data-accent="grass"] { --accent-contrast: #ffffff; }
+[data-theme="dark"][data-accent="grass"] { --accent: #46a758; --accent-hover: #53b365; --accent-subtle: #70fe8c1b; }
+[data-theme="light"][data-accent="grass"] { --accent: #46a758; --accent-hover: #3e9b4f; --accent-subtle: #00970016; }
+[data-accent="cyan"] { --accent-contrast: #ffffff; }
+[data-theme="dark"][data-accent="cyan"] { --accent: #00a2c7; --accent-hover: #23afd0; --accent-subtle: #00befd28; }
+[data-theme="light"][data-accent="cyan"] { --accent: #00a2c7; --accent-hover: #0797b9; --accent-subtle: #00c2d121; }
+[data-accent="orange"] { --accent-contrast: #ffffff; }
+[data-theme="dark"][data-accent="orange"] { --accent: #f76b15; --accent-hover: #ff801f; --accent-subtle: #fb6a0025; }
+[data-theme="light"][data-accent="orange"] { --accent: #f76b15; --accent-hover: #ef5f00; --accent-subtle: #ff9c0029; }
+[data-accent="iris"] { --accent-contrast: #ffffff; }
+[data-theme="dark"][data-accent="iris"] { --accent: #5b5bd6; --accent-hover: #6e6ade; --accent-subtle: #525bff3b; }
+[data-theme="light"][data-accent="iris"] { --accent: #5b5bd6; --accent-hover: #5151cd; --accent-subtle: #0011ee0f; }
+[data-accent="violet"] { --accent-contrast: #ffffff; }
+[data-theme="dark"][data-accent="violet"] { --accent: #6e56cf; --accent-hover: #7d66d9; --accent-subtle: #8354fe36; }
+[data-theme="light"][data-accent="violet"] { --accent: #6e56cf; --accent-hover: #654dc4; --accent-subtle: #4400ee0f; }
+[data-accent="plum"] { --accent-contrast: #ffffff; }
+[data-theme="dark"][data-accent="plum"] { --accent: #ab4aba; --accent-hover: #b658c4; --accent-subtle: #fd4cfd27; }
+[data-theme="light"][data-accent="plum"] { --accent: #ab4aba; --accent-hover: #a144af; --accent-subtle: #cc00cc14; }
+[data-accent="indigo"] { --accent-contrast: #ffffff; }
+[data-theme="dark"][data-accent="indigo"] { --accent: #3e63dd; --accent-hover: #5472e4; --accent-subtle: #2f62ff3c; }
+[data-theme="light"][data-accent="indigo"] { --accent: #3e63dd; --accent-hover: #3358d4; --accent-subtle: #0047f112; }
+[data-accent="teal"] { --accent-contrast: #ffffff; }
+[data-theme="dark"][data-accent="teal"] { --accent: #12a594; --accent-hover: #0eb39e; --accent-subtle: #00ffe61e; }
+[data-theme="light"][data-accent="teal"] { --accent: #12a594; --accent-hover: #0d9b8a; --accent-subtle: #00c69d1f; }
+[data-accent="bronze"] { --accent-contrast: #43302b; }
+[data-theme="dark"][data-accent="bronze"] { --accent: #a18072; --accent-hover: #ae8c7e; --accent-subtle: #faceb817; }
+[data-theme="light"][data-accent="bronze"] { --accent: #a18072; --accent-hover: #957468; --accent-subtle: #92250015; }
 
 /* -------------------------------------------------------
    C. Tag category palette — mode-dependent
