@@ -1004,34 +1004,19 @@ html.arriving-from-login .header {
 [data-theme="light"] .card-placeholder { background: hsl(var(--ph-hue, 40), 10%, 93%); }
 [data-theme="light"] .card-text-content { background: hsl(var(--ph-hue, 40), 12%, 92%); color: var(--text); }
 
-/* Imageless Tool / Resource: accent tile with a type glyph + the name
-   (Mac ItemCardView.glyphTile). */
+/* Imageless Tool / Resource: a neutral tile with the type glyph centred at
+   32px (the title shows on hover, like every card). */
 .card-glyph-tile {
   width: 100%;
   min-height: 140px;
-  padding: 16px 12px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--card-bg);
+  color: var(--text-dim);
   border-radius: 4px;
-  text-align: center;
 }
-.card-glyph svg { width: 26px; height: 26px; display: block; }
-.card-glyph-name {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.25;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+.card-glyph svg { width: 32px; height: 32px; display: block; }
 
 /* Past 9 columns the card overlays hide, as on the Mac. */
 .cards-dense .card-title-badge,

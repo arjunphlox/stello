@@ -1391,8 +1391,8 @@
     return [item.kind || '', m, isAwaitingReview(item) ? 'r' : ''].join(':');
   }
 
-  // Imageless Tool / Resource cards: an accent tile with a type glyph and the
-  // item's name, as on the Mac (ItemCardView.glyphTile; SF Symbols → Phosphor).
+  // Imageless Tool / Resource cards: a neutral tile with the type glyph
+  // (Arjun, 11 Nov: the Mac's accent tile was too loud; SF Symbols → Phosphor).
   const GLYPH_SVG = {
     'code': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M69.12,94.15,28.5,128l40.62,33.85a8,8,0,1,1-10.24,12.29l-48-40a8,8,0,0,1,0-12.29l48-40a8,8,0,0,1,10.24,12.3Zm176,27.7-48-40a8,8,0,1,0-10.24,12.3L227.5,128l-40.62,33.85a8,8,0,1,0,10.24,12.29l48-40a8,8,0,0,0,0-12.29ZM162.73,32.48a8,8,0,0,0-10.25,4.79l-64,176a8,8,0,0,0,4.79,10.26A8.14,8.14,0,0,0,96,224a8,8,0,0,0,7.52-5.27l64-176A8,8,0,0,0,162.73,32.48Z"/></svg>',
     'puzzle-piece': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M220.27,158.54a8,8,0,0,0-7.7-.46,20,20,0,1,1,0-36.16A8,8,0,0,0,224,114.69V72a16,16,0,0,0-16-16H171.78a35.36,35.36,0,0,0,.22-4,36.11,36.11,0,0,0-11.36-26.24,36,36,0,0,0-60.55,23.62,36.56,36.56,0,0,0,.14,6.62H64A16,16,0,0,0,48,72v32.22a35.36,35.36,0,0,0-4-.22,36.12,36.12,0,0,0-26.24,11.36,35.7,35.7,0,0,0-9.69,27,36.08,36.08,0,0,0,33.31,33.6,35.68,35.68,0,0,0,6.62-.14V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V165.31A8,8,0,0,0,220.27,158.54ZM208,208H64V165.31a8,8,0,0,0-11.43-7.23,20,20,0,1,1,0-36.16A8,8,0,0,0,64,114.69V72h46.69a8,8,0,0,0,7.23-11.43,20,20,0,1,1,36.16,0A8,8,0,0,0,161.31,72H208v32.23a35.68,35.68,0,0,0-6.62-.14A36,36,0,0,0,204,176a35.36,35.36,0,0,0,4-.22Z"/></svg>',
@@ -1446,7 +1446,7 @@
         ? ` width="${item.image_width}" height="${item.image_height}"` : '';
       thumbHtml = `<img class="card-thumb" src="${item.image_path}" alt=""${dims} loading="lazy" style="view-transition-name:${vtName}" onerror="this.parentElement.classList.add('img-error')">`;
     } else if (glyph) {
-      thumbHtml = `<div class="card-glyph-tile" style="view-transition-name:${vtName}"><span class="card-glyph" aria-hidden="true">${GLYPH_SVG[glyph.icon] || ''}</span><span class="card-glyph-name">${escHtml(glyph.name)}</span></div>`;
+      thumbHtml = `<div class="card-glyph-tile" style="view-transition-name:${vtName}"><span class="card-glyph" aria-hidden="true">${GLYPH_SVG[glyph.icon] || ''}</span></div>`;
     } else if (hasTextContent) {
       const hue = PLACEHOLDER_HUES[idx % PLACEHOLDER_HUES.length];
       const truncated = escHtml(truncateWords(cleanSummary(item.summary), 200));
