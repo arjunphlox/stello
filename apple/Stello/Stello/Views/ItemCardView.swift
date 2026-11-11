@@ -93,13 +93,6 @@ struct ItemCardView: View {
         return 1200.0 / 630.0
     }
 
-    private var hasText: Bool {
-        guard !hasImage else { return false }
-        if item.hasVideoAttachment { return false }
-        guard let s = item.summary else { return false }
-        return s.count > 30 && !s.hasPrefix("Saved from")
-    }
-
     private var isVideoCard: Bool {
         item.hasVideoAttachment || item.coverImage?.label == "video"
     }
@@ -206,14 +199,8 @@ struct ItemCardView: View {
                 .frame(maxWidth: .infinity)
         } else if isVideoCard {
             videoCard
-        } else if let toolMeta = item.toolMeta() {
-            glyphTile(glyph: Self.toolGlyph(toolMeta.subtype))
-        } else if let resourceMeta = item.resourceMeta() {
-            glyphTile(glyph: Self.resourceGlyph(resourceMeta.subtype))
-        } else if hasText {
-            textCard
         } else {
-            glyphTile(glyph: Self.kindGlyph(item.kind))
+            glyphTile(glyph: fallbackGlyph)
         }
     }
 
@@ -285,19 +272,7 @@ struct ItemCardView: View {
     /// square (Arjun, 11 Nov 2026: the accent tile was too loud). Tools and resources use
     /// their subtype glyph; everything else its kind's glyph. The title shows on hover.
     private func glyphTile(glyph: String) -> some View {
-        hoverDim(
-            ZStack {
-                // Sand 3 in dark; sand 4 in light, where sand 3 is nearly the page tone.
-                (theme.mode == .light ? theme.borderSubtle : theme.surfaceRaised)
-                Image(systemName: glyph)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 32, height: 32)
-                    .font(.system(size: 32, weight: .regular))
-                    .foregroundStyle(theme.textDim)
-            }
-            .frame(maxWidth: .infinity, minHeight: 140)
-        )
+        hoverDim(glyphSurface(glyph: glyph))
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {
                 domainPill.padding(10)
@@ -315,6 +290,29 @@ struct ItemCardView: View {
             }
             #endif
         }
+    }
+
+    private func glyphSurface(glyph: String) -> some View {
+        ZStack {
+            // Sand 3 in dark; sand 4 in light, where sand 3 is nearly the page tone.
+            (theme.mode == .light ? theme.borderSubtle : theme.surfaceRaised)
+            Image(systemName: glyph)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 32, height: 32)
+                .font(.system(size: 32, weight: .regular))
+                .foregroundStyle(theme.textDim)
+        }
+        .frame(maxWidth: .infinity, minHeight: 140)
+    }
+
+    /// The one glyph an imageless card shows, text-only cards included (Arjun, 11 Nov
+    /// 2026): Tool/Resource subtype, else the kind, else a note glyph for link-less notes.
+    private var fallbackGlyph: String {
+        if let toolMeta = item.toolMeta() { return Self.toolGlyph(toolMeta.subtype) }
+        if let resourceMeta = item.resourceMeta() { return Self.resourceGlyph(resourceMeta.subtype) }
+        if item.kind.isEmpty || item.kind == "link", (item.sourceURL ?? "").isEmpty { return "doc.text" }
+        return Self.kindGlyph(item.kind)
     }
 
     private static func toolGlyph(_ subtype: String?) -> String {
@@ -364,32 +362,6 @@ struct ItemCardView: View {
         }
     }
 
-    private var textCard: some View {
-        hoverDim(
-            Color(hue: coverHue,
-                  saturation: theme.mode == .dark ? 0.15 : 0.12,
-                  brightness: theme.mode == .dark ? 0.14 : 0.92)
-            .frame(maxWidth: .infinity, minHeight: 140)
-        )
-        .overlay(alignment: .bottomTrailing) {
-            if showCardOverlays {
-                domainPill.padding(10)
-            }
-        }
-        .overlay(alignment: .bottomLeading) {
-            if showCardOverlays {
-                reviewBadge.padding(10)
-            }
-        }
-        .overlay(alignment: .topLeading) {
-            #if os(macOS)
-            if showCardOverlays {
-                macTitleBadge
-            }
-            #endif
-        }
-    }
-
     private var placeholderGradient: some View {
         let hash = abs(stableHash(item.slug))
         let hueShift = Double(hash % 360) / 360.0
@@ -428,23 +400,10 @@ struct ItemCardView: View {
                 .aspectRatio(aspect, contentMode: .fit)
                 .overlay(alignment: .top) { previewTitleOverlay }
                 .overlay(alignment: .bottomTrailing) { domainPill.padding(10) }
-        } else if hasText {
-            Color(hue: coverHue,
-                  saturation: theme.mode == .dark ? 0.15 : 0.12,
-                  brightness: theme.mode == .dark ? 0.14 : 0.92)
-            .frame(maxWidth: .infinity, minHeight: 140)
-            .overlay(alignment: .top) { previewTitleOverlay }
-            .overlay(alignment: .bottomTrailing) { domainPill.padding(10) }
         } else {
-            ZStack {
-                placeholderGradient
-                Text(String(item.title.first ?? "?").uppercased())
-                    .font(.karst(size: 46, weight: .light))
-                    .foregroundStyle(theme.textSecondary)
-            }
-            .frame(height: 140)
-            .overlay(alignment: .top) { previewTitleOverlay }
-            .overlay(alignment: .bottomTrailing) { domainPill.padding(10) }
+            glyphSurface(glyph: fallbackGlyph)
+                .overlay(alignment: .top) { previewTitleOverlay }
+                .overlay(alignment: .bottomTrailing) { domainPill.padding(10) }
         }
     }
 
