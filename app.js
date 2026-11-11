@@ -314,6 +314,7 @@
     startGridColsObserver();   // sizes the columns, then renders the grid
     PanelManager.init();
     CardMenu.init();
+    DropManager.init();
 
     // Background-stream remaining pages. Only runs if the first page hit the
     // limit — small libraries are done in a single round trip.
@@ -2519,12 +2520,13 @@
     }
   }
 
-  async function captureImage(file) {
+  async function captureImage(file, title) {
     const id = 'ph-' + Date.now() + Math.random();
     insertPlaceholder(id);
     try {
       const buf = await file.arrayBuffer();
-      const res = await apiFetch('/api/upload-image', {
+      const q = title ? `?title=${encodeURIComponent(title)}` : '';
+      const res = await apiFetch('/api/upload-image' + q, {
         method: 'POST',
         headers: { 'Content-Type': file.type },
         body: buf,
@@ -2540,14 +2542,14 @@
     }
   }
 
-  async function captureText(text) {
-    const id = 'ph-' + Date.now();
+  async function captureText(text, title) {
+    const id = 'ph-' + Date.now() + Math.random();
     insertPlaceholder(id);
     try {
       const res = await apiFetch('/api/capture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'text', content: text }),
+        body: JSON.stringify({ type: 'text', content: text, ...(title ? { title } : {}) }),
       });
       const item = await res.json();
       if (!res.ok) { removePlaceholder(id); showToast('Text capture failed'); return; }
@@ -2805,12 +2807,25 @@
       });
     }
 
+    // Choose Photo (Mac CaptureSheet): each picked image becomes an item.
+    const $photoInput = document.querySelector('.panel-tool[data-tool="import"] .import-photo-input');
+    if ($photoInput) {
+      $photoInput.addEventListener('change', (e) => {
+        const files = [...(e.target.files || [])];
+        e.target.value = '';
+        if (!files.length) return;
+        PanelManager.closeTool();
+        DropManager.importFiles(files);
+      });
+    }
+
     const $dropZone = document.querySelector('.panel-tool[data-tool="import"] .import-drop-zone');
     if ($dropZone) {
       $dropZone.addEventListener('dragover', (e) => { e.preventDefault(); $dropZone.classList.add('drag-over'); });
       $dropZone.addEventListener('dragleave', () => $dropZone.classList.remove('drag-over'));
       $dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
+        e.stopPropagation(); // a list file here imports its URLs, not a new note
         $dropZone.classList.remove('drag-over');
         const file = e.dataTransfer.files[0];
         if (file) {
@@ -3375,6 +3390,156 @@
       refreshAfterGridRender, refreshItem,
       state, // expose for debugging
     };
+  })();
+
+
+  // ==== Drag and drop — the Mac's DropImportService ========================
+  // Window: images, .md and .txt files become new items (a file's name is its
+  // title); dropped links are saved, other dropped text becomes a note.
+  // Card or the panel's image strip: images join the item's images, and text
+  // (.md / .txt files or plain text) becomes a snippet. Videos stay on the
+  // Mac app (they live on the device there). Same limits as the Mac: text up
+  // to 5,000 characters.
+  const DropManager = (() => {
+    const MAX_TEXT = 5000;
+    const IMAGE_EXT = /\.(png|jpe?g|heic|webp|gif)$/i;
+    const VIDEO_EXT = /\.(mp4|mov)$/i;
+    const TEXT_EXT = /\.(md|markdown|txt)$/i;
+    let internalDrag = false;   // a drag that started on this page (e.g. a card image)
+    let current = null;         // element showing the drop highlight
+
+    function kindOf(file) {
+      if (file.type.startsWith('image/') || IMAGE_EXT.test(file.name)) return 'image';
+      if (file.type.startsWith('video/') || VIDEO_EXT.test(file.name)) return 'video';
+      if (file.type === 'text/plain' || file.type === 'text/markdown' || TEXT_EXT.test(file.name)) return 'text';
+      return null;
+    }
+    function fileTitle(file) {
+      const base = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+      return base || 'Dropped file';
+    }
+    function droppedText(dt) {
+      const uri = dt.getData('text/uri-list');
+      if (uri) return uri.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#')).join('\n');
+      return dt.getData('text/plain') || '';
+    }
+    function accepts(dt) {
+      if (!dt || internalDrag) return false;
+      const types = [...(dt.types || [])];
+      return types.includes('Files') || types.includes('text/uri-list') || types.includes('text/plain');
+    }
+    function targetFor(el) {
+      if (!el || !el.closest) return { kind: 'window' };
+      if (el.closest('.import-drop-zone')) return null; // its own handler
+      const strip = el.closest('.panel-item .sub-strip');
+      if (strip) return { kind: 'item', slug: PanelManager.getOpenSlug(), el: strip };
+      const card = el.closest('.card[data-slug]');
+      if (card) return { kind: 'item', slug: card.dataset.slug, el: card };
+      if (el.closest('#panels-container')) return null; // the rest of a panel isn't a target
+      return { kind: 'window', el: document.querySelector('.header') };
+    }
+    function highlight(el) {
+      if (el === current) return;
+      if (current) current.classList.remove('is-drop-target');
+      current = el || null;
+      if (current) current.classList.add('is-drop-target');
+    }
+    function tooLong(text) {
+      if (text.length <= MAX_TEXT) return false;
+      showToast(`Text is too long (${text.length.toLocaleString()} characters; up to ${MAX_TEXT.toLocaleString()})`);
+      return true;
+    }
+
+    // New items, one per file (also used by Choose Photo).
+    async function importFiles(files) {
+      let videos = 0;
+      for (const file of files) {
+        const kind = kindOf(file);
+        if (kind === 'image') await captureImage(file, fileTitle(file));
+        else if (kind === 'text') {
+          const text = (await file.text()).trim();
+          if (text && !tooLong(text)) await captureText(text, fileTitle(file));
+        } else if (kind === 'video') videos++;
+        else showToast(`Can't import ${file.name}`);
+      }
+      if (videos) showToast('Videos can only be added in the Mac app');
+    }
+
+    async function importText(text) {
+      const t = text.trim();
+      if (!t) return;
+      const urls = t.match(/https?:\/\/[^\s<>"']+/g);
+      if (urls && urls.join(' ').length >= t.replace(/\s+/g, ' ').length - 2) {
+        if (urls.length === 1) captureURL(urls[0]); else captureBulkURLs([...new Set(urls)]);
+      } else if (!tooLong(t)) {
+        captureText(t);
+      }
+    }
+
+    // Attach to an existing item (card or panel strip).
+    async function attach(slug, files, text) {
+      if (!slug || !itemsBySlug[slug]) return;
+      let updated = null, images = 0, snippets = 0, videos = 0;
+      for (const file of files) {
+        const kind = kindOf(file);
+        if (kind === 'image') {
+          const base64 = await fileToBase64(file);
+          if (!base64) continue;
+          const r = await postItemUpdate(slug, { manual_image_upload: { base64, mime: file.type || 'image/jpeg' } });
+          if (r) { updated = r; images++; }
+        } else if (kind === 'text') {
+          const t = (await file.text()).trim();
+          if (!t || tooLong(t)) continue;
+          const r = await postItemUpdate(slug, { new_snippets: [t] });
+          if (r) { updated = r; snippets++; }
+        } else if (kind === 'video') videos++;
+      }
+      if (!files.length && text.trim() && !tooLong(text.trim())) {
+        const r = await postItemUpdate(slug, { new_snippets: [text.trim()] });
+        if (r) { updated = r; snippets++; }
+      }
+      if (videos) showToast('Videos can only be added in the Mac app');
+      if (!updated) { if (!videos) showToast('Couldn’t add to this item'); return; }
+      if (images) {
+        const newest = [...updated.images].reverse().find(i => i.source === 'manual');
+        if (newest && PanelManager.getOpenSlug() === slug) { panelPreview.slug = slug; panelPreview.path = newest.path; }
+      }
+      PanelManager.refreshItem(slug);
+      const parts = [];
+      if (images) parts.push(images === 1 ? 'image' : `${images} images`);
+      if (snippets) parts.push(snippets === 1 ? 'snippet' : `${snippets} snippets`);
+      showToast(`Added ${parts.join(' and ')}`);
+    }
+
+    function init() {
+      document.addEventListener('dragstart', () => { internalDrag = true; });
+      document.addEventListener('dragend', () => { internalDrag = false; highlight(null); });
+      document.addEventListener('dragover', (e) => {
+        if (!accepts(e.dataTransfer)) return;
+        const t = targetFor(e.target);
+        if (!t) { highlight(null); return; }
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        highlight(t.el);
+      });
+      document.addEventListener('dragleave', (e) => {
+        if (!e.relatedTarget) highlight(null); // left the window
+      });
+      document.addEventListener('drop', (e) => {
+        if (!accepts(e.dataTransfer)) return;
+        const t = targetFor(e.target);
+        highlight(null);
+        if (!t) return;
+        e.preventDefault();
+        const files = [...(e.dataTransfer.files || [])];
+        const text = files.length ? '' : droppedText(e.dataTransfer);
+        if (t.kind === 'item') attach(t.slug, files, text);
+        else if (files.length) importFiles(files);
+        else importText(text);
+      });
+    }
+
+    return { init, importFiles };
   })();
 
   // --- Start ---
