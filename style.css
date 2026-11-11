@@ -68,7 +68,12 @@ body {
   position: sticky;
   top: 24px;
   z-index: 100;
-  background: var(--accent);
+  /* Glass like the Mac header (StelloHeaderView): accent at 82% at the top,
+     easing to 64% over the first 48px of scroll so the grid shows through.
+     --header-scroll (0…1) is set by app.js. */
+  background: color-mix(in srgb, var(--accent) calc(82% - 18% * var(--header-scroll, 0)), transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
   color: var(--accent-contrast);
   border-radius: 12px;
   min-height: 120px;
@@ -410,6 +415,7 @@ html.arriving-from-login .header {
   width: var(--gutter, 24px);
   cursor: pointer;
   z-index: 5;
+  touch-action: none; /* touch drags scrub weeks instead of scrolling */
 }
 .timeline-bars { position: absolute; inset: 0; pointer-events: none; }
 .timeline-bar {
@@ -903,12 +909,14 @@ html.arriving-from-login .header {
    alignment to manage. */
 .card-thumb,
 .card-text-content,
-.card-placeholder {
+.card-placeholder,
+.card-glyph-tile {
   transition: filter 0.18s ease-out;
 }
 .card:hover .card-thumb,
 .card:hover .card-text-content,
-.card:hover .card-placeholder {
+.card:hover .card-placeholder,
+.card:hover .card-glyph-tile {
   filter: brightness(0.175);
 }
 
@@ -920,7 +928,7 @@ html.arriving-from-login .header {
   left: 12px;
   right: 12px;
   bottom: 40px;
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--card-title-scale, 1));
   font-weight: 500;
   line-height: 1.3;
   color: var(--text);
@@ -948,7 +956,7 @@ html.arriving-from-login .header {
   max-width: calc(100% - 20px);
   padding: 1px 8px;
   border-radius: var(--pill-radius);
-  font-size: 0.68rem;
+  font-size: calc(0.68rem * var(--card-pill-scale, 1));
   font-weight: 500;
   color: #ffffff;
   background: var(--pill-bg, rgba(255, 255, 255, 0.2));
@@ -988,6 +996,48 @@ html.arriving-from-login .header {
   border-radius: 4px;
   aspect-ratio: auto 1200 / 630;
 }
+
+/* Placeholder + text-card tints: one hue per card (--ph-hue, set inline),
+   lightness by mode so a theme switch repaints without a re-render. */
+.card-placeholder { background: hsl(var(--ph-hue, 40), 20%, 16%); }
+.card-text-content { background: hsl(var(--ph-hue, 40), 15%, 13%); }
+[data-theme="light"] .card-placeholder { background: hsl(var(--ph-hue, 40), 10%, 93%); }
+[data-theme="light"] .card-text-content { background: hsl(var(--ph-hue, 40), 12%, 92%); color: var(--text); }
+
+/* Imageless Tool / Resource: accent tile with a type glyph + the name
+   (Mac ItemCardView.glyphTile). */
+.card-glyph-tile {
+  width: 100%;
+  min-height: 140px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: 4px;
+  text-align: center;
+}
+.card-glyph svg { width: 26px; height: 26px; display: block; }
+.card-glyph-name {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Past 9 columns the card overlays hide, as on the Mac. */
+.cards-dense .card-title-badge,
+.cards-dense .card-url-pill,
+.cards-dense .card-review-badge,
+.cards-dense .card-badges { display: none; }
 
 /* Placeholder for non-image cards */
 .card-placeholder {
@@ -1900,9 +1950,7 @@ html.arriving-from-login .header {
 }
 .accent-swatch:hover { transform: scale(1.1); }
 .accent-swatch.active { border-color: var(--text); }
-.accent-swatch[data-accent="lime"]  { background: #bdee63; }
-.accent-swatch[data-accent="amber"] { background: #ffc53d; }
-.accent-swatch[data-accent="iris"]  { background: #5b5bd6; }
+.accent-swatches { display: inline-flex; flex-wrap: wrap; gap: 8px; }
 
 /* === LOGIN PAGE ===
    Mirrors the app header but expanded to fill the viewport with the
@@ -1921,6 +1969,7 @@ html.arriving-from-login .header {
   width: 100%;
   min-height: 0;
   padding: 24px;
+  background: var(--accent); /* the hero stays solid; glass is for the app header */
 }
 
 /* Shuffle animation for the action-word superscript */

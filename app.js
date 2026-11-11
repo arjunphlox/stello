@@ -116,9 +116,23 @@
   }
 
   // --- Theme Manager ---
+  // Mirrors the Mac's Theme.swift: mode is System / Light / Dark (System follows
+  // the OS), and each mode has its own six accents: bright ones in dark, muted
+  // ones in light. One accent is stored; when it isn't in the current mode's
+  // set, that mode's default shows (amber in dark, iris in light).
   const ThemeManager = {
     STORAGE_KEY: 'stello.theme',
     defaults: { mode: 'dark', accent: 'amber' },
+    ACCENTS: {
+      dark: ['amber', 'lime', 'yellow', 'grass', 'cyan', 'orange'],
+      light: ['iris', 'violet', 'plum', 'indigo', 'teal', 'bronze'],
+    },
+    // Picker dots: step 9 of each accent (the same in both modes).
+    SWATCH: {
+      amber: '#ffc53d', lime: '#bdee63', yellow: '#ffe629', grass: '#46a758', cyan: '#00a2c7', orange: '#f76b15',
+      iris: '#5b5bd6', violet: '#6e56cf', plum: '#ab4aba', indigo: '#3e63dd', teal: '#12a594', bronze: '#a18072',
+    },
+    _mql: window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null,
 
     load() {
       try {
@@ -127,9 +141,21 @@
       } catch { return { ...this.defaults }; }
     },
 
+    // 'light' | 'dark' — what the page paints right now.
+    resolvedMode(prefs = this.load()) {
+      if (prefs.mode === 'light' || prefs.mode === 'dark') return prefs.mode;
+      return this._mql && !this._mql.matches ? 'light' : 'dark';
+    },
+
+    resolvedAccent(prefs = this.load(), mode = this.resolvedMode(prefs)) {
+      const set = this.ACCENTS[mode];
+      return set.includes(prefs.accent) ? prefs.accent : set[0];
+    },
+
     apply(prefs) {
-      document.documentElement.setAttribute('data-theme', prefs.mode);
-      document.documentElement.setAttribute('data-accent', prefs.accent);
+      const mode = this.resolvedMode(prefs);
+      document.documentElement.setAttribute('data-theme', mode);
+      document.documentElement.setAttribute('data-accent', this.resolvedAccent(prefs, mode));
     },
 
     save(prefs) {
@@ -151,8 +177,18 @@
     },
 
     init() {
-      const prefs = this.load();
-      this.apply(prefs);
+      this.apply(this.load());
+      // System mode follows the OS live, like the Mac app.
+      if (this._mql) {
+        const onChange = () => {
+          const prefs = this.load();
+          if (prefs.mode !== 'system') return;
+          this.apply(prefs);
+          document.dispatchEvent(new CustomEvent('stello:themechange'));
+        };
+        if (this._mql.addEventListener) this._mql.addEventListener('change', onChange);
+        else if (this._mql.addListener) this._mql.addListener(onChange);
+      }
     }
   };
 
@@ -974,6 +1010,7 @@
     cardWidth = Math.max(60, (full - gap * (baseCols - 1)) / baseCols);
     gridColsAtFullWidth = baseCols;
     document.documentElement.style.setProperty('--card-w', cardWidth + 'px');
+    applyCardDensity(baseCols);
 
     const panelOpen = !!document.querySelector('#panels-container .panel');
     const avail = $grid.clientWidth || full;
@@ -997,6 +1034,18 @@
     } else {
       scheduleTimeline();
     }
+  }
+  // The Mac card's zoom rules (ItemCardView.swift): past 5 columns the title
+  // shrinks 16 → 12 pt and the link pill 11 → 9 pt; past 9 columns the card
+  // overlays (title, link pill, review mark, post marks) hide. Keyed to the
+  // card size (base columns), which stays fixed when the panel opens.
+  function applyCardDensity(cols) {
+    const title = cols <= 5 ? 16 : Math.max(12, 16 - (cols - 5));
+    const pill = cols <= 5 ? 11 : Math.max(9, 11 - 0.5 * (cols - 5));
+    const root = document.documentElement;
+    root.style.setProperty('--card-title-scale', (title / 16).toFixed(4));
+    root.style.setProperty('--card-pill-scale', (pill / 11).toFixed(4));
+    root.classList.toggle('cards-dense', cols > 9);
   }
   function setPanelExtra(px) {
     px = Math.round(px);
@@ -1232,8 +1281,34 @@
       const k = weekAtY(yOf(e));
       if (k !== hoverWeek) { hoverWeek = k; applyTimelineStates(); }
     });
-    tl.addEventListener('pointerleave', () => { hoverWeek = null; applyTimelineStates(); });
+    tl.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'touch') return;
+      hoverWeek = null; applyTimelineStates();
+    });
+    // Touch: drag along the bars to scrub weeks (the label follows the
+    // finger); lifting the finger toggles that week's filter, like the
+    // iPhone app's scrub gesture. The click that follows is swallowed.
+    let touchScrub = false;
+    tl.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      touchScrub = true;
+      try { tl.setPointerCapture(e.pointerId); } catch {}
+      hoverWeek = weekAtY(yOf(e)); applyTimelineStates();
+    });
+    const endScrub = (e, commit) => {
+      if (!touchScrub) return;
+      touchScrub = false;
+      const k = commit ? weekAtY(yOf(e)) : null;
+      hoverWeek = null; applyTimelineStates();
+      if (k) setWeekFilter(selectedWeek === k ? null : k);
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 400);
+    };
+    let suppressClick = false;
+    tl.addEventListener('pointerup', (e) => endScrub(e, true));
+    tl.addEventListener('pointercancel', (e) => endScrub(e, false));
     tl.addEventListener('click', (e) => {
+      if (suppressClick) { suppressClick = false; return; }
       const k = weekAtY(yOf(e));
       if (!k) return;
       setWeekFilter(selectedWeek === k ? null : k);
@@ -1316,11 +1391,47 @@
     return [item.kind || '', m, isAwaitingReview(item) ? 'r' : ''].join(':');
   }
 
+  // Imageless Tool / Resource cards: an accent tile with a type glyph and the
+  // item's name, as on the Mac (ItemCardView.glyphTile; SF Symbols → Phosphor).
+  const GLYPH_SVG = {
+    'code': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M69.12,94.15,28.5,128l40.62,33.85a8,8,0,1,1-10.24,12.29l-48-40a8,8,0,0,1,0-12.29l48-40a8,8,0,0,1,10.24,12.3Zm176,27.7-48-40a8,8,0,1,0-10.24,12.3L227.5,128l-40.62,33.85a8,8,0,1,0,10.24,12.29l48-40a8,8,0,0,0,0-12.29ZM162.73,32.48a8,8,0,0,0-10.25,4.79l-64,176a8,8,0,0,0,4.79,10.26A8.14,8.14,0,0,0,96,224a8,8,0,0,0,7.52-5.27l64-176A8,8,0,0,0,162.73,32.48Z"/></svg>',
+    'puzzle-piece': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M220.27,158.54a8,8,0,0,0-7.7-.46,20,20,0,1,1,0-36.16A8,8,0,0,0,224,114.69V72a16,16,0,0,0-16-16H171.78a35.36,35.36,0,0,0,.22-4,36.11,36.11,0,0,0-11.36-26.24,36,36,0,0,0-60.55,23.62,36.56,36.56,0,0,0,.14,6.62H64A16,16,0,0,0,48,72v32.22a35.36,35.36,0,0,0-4-.22,36.12,36.12,0,0,0-26.24,11.36,35.7,35.7,0,0,0-9.69,27,36.08,36.08,0,0,0,33.31,33.6,35.68,35.68,0,0,0,6.62-.14V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V165.31A8,8,0,0,0,220.27,158.54ZM208,208H64V165.31a8,8,0,0,0-11.43-7.23,20,20,0,1,1,0-36.16A8,8,0,0,0,64,114.69V72h46.69a8,8,0,0,0,7.23-11.43,20,20,0,1,1,36.16,0A8,8,0,0,0,161.31,72H208v32.23a35.68,35.68,0,0,0-6.62-.14A36,36,0,0,0,204,176a35.36,35.36,0,0,0,4-.22Z"/></svg>',
+    'cpu': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M152,96H104a8,8,0,0,0-8,8v48a8,8,0,0,0,8,8h48a8,8,0,0,0,8-8V104A8,8,0,0,0,152,96Zm-8,48H112V112h32Zm88,0H216V112h16a8,8,0,0,0,0-16H216V56a16,16,0,0,0-16-16H160V24a8,8,0,0,0-16,0V40H112V24a8,8,0,0,0-16,0V40H56A16,16,0,0,0,40,56V96H24a8,8,0,0,0,0,16H40v32H24a8,8,0,0,0,0,16H40v40a16,16,0,0,0,16,16H96v16a8,8,0,0,0,16,0V216h32v16a8,8,0,0,0,16,0V216h40a16,16,0,0,0,16-16V160h16a8,8,0,0,0,0-16Zm-32,56H56V56H200v95.87s0,.09,0,.13,0,.09,0,.13V200Z"/></svg>',
+    'app-window': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM80,84A12,12,0,1,1,68,72,12,12,0,0,1,80,84Zm40,0a12,12,0,1,1-12-12A12,12,0,0,1,120,84Z"/></svg>',
+    'globe': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24h0A104,104,0,1,0,232,128,104.12,104.12,0,0,0,128,24Zm88,104a87.61,87.61,0,0,1-3.33,24H174.16a157.44,157.44,0,0,0,0-48h38.51A87.61,87.61,0,0,1,216,128ZM102,168H154a115.11,115.11,0,0,1-26,45A115.27,115.27,0,0,1,102,168Zm-3.9-16a140.84,140.84,0,0,1,0-48h59.88a140.84,140.84,0,0,1,0,48ZM40,128a87.61,87.61,0,0,1,3.33-24H81.84a157.44,157.44,0,0,0,0,48H43.33A87.61,87.61,0,0,1,40,128ZM154,88H102a115.11,115.11,0,0,1,26-45A115.27,115.27,0,0,1,154,88Zm52.33,0H170.71a135.28,135.28,0,0,0-22.3-45.6A88.29,88.29,0,0,1,206.37,88ZM107.59,42.4A135.28,135.28,0,0,0,85.29,88H49.63A88.29,88.29,0,0,1,107.59,42.4ZM49.63,168H85.29a135.28,135.28,0,0,0,22.3,45.6A88.29,88.29,0,0,1,49.63,168Zm98.78,45.6a135.28,135.28,0,0,0,22.3-45.6h35.66A88.29,88.29,0,0,1,148.41,213.6Z"/></svg>',
+    'squares-four': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48v48Zm-96,32H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48v48Z"/></svg>',
+    'file': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg>',
+    'layout': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16V96H40V56ZM40,112H96v88H40Zm176,88H112V112H216v88Z"/></svg>',
+    'copy': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg>',
+    'image': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16V158.75l-26.07-26.06a16,16,0,0,0-22.63,0l-20,20-44-44a16,16,0,0,0-22.62,0L40,149.37V56ZM40,172l52-52,80,80H40Zm176,28H194.63l-36-36,20-20L216,181.38V200ZM144,100a12,12,0,1,1,12,12A12,12,0,0,1,144,100Z"/></svg>',
+    'star': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M239.18,97.26A16.38,16.38,0,0,0,224.92,86l-59-4.76L143.14,26.15a16.36,16.36,0,0,0-30.27,0L90.11,81.23,31.08,86a16.46,16.46,0,0,0-9.37,28.86l45,38.83L53,211.75a16.38,16.38,0,0,0,24.5,17.82L128,198.49l50.53,31.08A16.4,16.4,0,0,0,203,211.75l-13.76-58.07,45-38.83A16.43,16.43,0,0,0,239.18,97.26Zm-15.34,5.47-48.7,42a8,8,0,0,0-2.56,7.91l14.88,62.8a.37.37,0,0,1-.17.48c-.18.14-.23.11-.38,0l-54.72-33.65a8,8,0,0,0-8.38,0L69.09,215.94c-.15.09-.19.12-.38,0a.37.37,0,0,1-.17-.48l14.88-62.8a8,8,0,0,0-2.56-7.91l-48.7-42c-.12-.1-.23-.19-.13-.5s.18-.27.33-.29l63.92-5.16A8,8,0,0,0,103,91.86l24.62-59.61c.08-.17.11-.25.35-.25s.27.08.35.25L153,91.86a8,8,0,0,0,6.75,4.92l63.92,5.16c.15,0,.24,0,.33.29S224,102.63,223.84,102.73Z"/></svg>',
+    'books': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M231.65,194.55,198.46,36.75a16,16,0,0,0-19-12.39L132.65,34.42a16.08,16.08,0,0,0-12.3,19l33.19,157.8A16,16,0,0,0,169.16,224a16.25,16.25,0,0,0,3.38-.36l46.81-10.06A16.09,16.09,0,0,0,231.65,194.55ZM136,50.15c0-.06,0-.09,0-.09l46.8-10,3.33,15.87L139.33,66Zm6.62,31.47,46.82-10.05,3.34,15.9L146,97.53Zm6.64,31.57,46.82-10.06,13.3,63.24-46.82,10.06ZM216,197.94l-46.8,10-3.33-15.87L212.67,182,216,197.85C216,197.91,216,197.94,216,197.94ZM104,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32ZM56,48h48V64H56Zm0,32h48v96H56Zm48,128H56V192h48v16Z"/></svg>',
+    'package': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M223.68,66.15,135.68,18a15.88,15.88,0,0,0-15.36,0l-88,48.17a16,16,0,0,0-8.32,14v95.64a16,16,0,0,0,8.32,14l88,48.17a15.88,15.88,0,0,0,15.36,0l88-48.17a16,16,0,0,0,8.32-14V80.18A16,16,0,0,0,223.68,66.15ZM128,32l80.34,44-29.77,16.3-80.35-44ZM128,120,47.66,76l33.9-18.56,80.34,44ZM40,90l80,43.78v85.79L40,175.82Zm176,85.78h0l-80,43.79V133.82l32-17.51V152a8,8,0,0,0,16,0V107.55L216,90v85.77Z"/></svg>',
+    'stack': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M230.91,172A8,8,0,0,1,228,182.91l-96,56a8,8,0,0,1-8.06,0l-96-56A8,8,0,0,1,36,169.09l92,53.65,92-53.65A8,8,0,0,1,230.91,172ZM220,121.09l-92,53.65L36,121.09A8,8,0,0,0,28,134.91l96,56a8,8,0,0,0,8.06,0l96-56A8,8,0,1,0,220,121.09ZM24,80a8,8,0,0,1,4-6.91l96-56a8,8,0,0,1,8.06,0l96,56a8,8,0,0,1,0,13.82l-96,56a8,8,0,0,1-8.06,0l-96-56A8,8,0,0,1,24,80Zm23.88,0L128,126.74,208.12,80,128,33.26Z"/></svg>',
+  };
+  const TOOL_GLYPH = { library: 'code', extension: 'puzzle-piece', 'AI model': 'cpu', app: 'app-window' };
+  const RESOURCE_GLYPH = {
+    plugin: 'puzzle-piece', widget: 'squares-four', file: 'file', template: 'layout',
+    component: 'copy', pen: 'code', mockup: 'image', 'icon set': 'star',
+    'reading list': 'books', library: 'package',
+  };
+  function glyphTileFor(item) {
+    if (item.kind !== 'tool' && item.kind !== 'resource') return null;
+    const m = window.StelloPanel.metaOf(item);
+    if (!m) return null;
+    const icon = item.kind === 'tool'
+      ? (TOOL_GLYPH[m.subtype] || 'globe')
+      : (RESOURCE_GLYPH[m.subtype] || 'stack');
+    const name = (typeof m.name === 'string' && m.name.trim()) || item.title || '';
+    return { icon, name };
+  }
+
   function renderCard(item, idx) {
     let thumbHtml;
     const hasImage = item.has_image && item.image_path;
     const vtName = `card-${cssSlug(item.slug)}`;
 
+    const glyph = hasImage ? null : glyphTileFor(item);
     const hasTextContent = !hasImage && item.summary
       && item.summary.length > 30
       && !item.summary.startsWith('Saved from');
@@ -1334,16 +1445,16 @@
       const dims = (item.image_width && item.image_height)
         ? ` width="${item.image_width}" height="${item.image_height}"` : '';
       thumbHtml = `<img class="card-thumb" src="${item.image_path}" alt=""${dims} loading="lazy" style="view-transition-name:${vtName}" onerror="this.parentElement.classList.add('img-error')">`;
+    } else if (glyph) {
+      thumbHtml = `<div class="card-glyph-tile" style="view-transition-name:${vtName}"><span class="card-glyph" aria-hidden="true">${GLYPH_SVG[glyph.icon] || ''}</span><span class="card-glyph-name">${escHtml(glyph.name)}</span></div>`;
     } else if (hasTextContent) {
       const hue = PLACEHOLDER_HUES[idx % PLACEHOLDER_HUES.length];
       const truncated = escHtml(truncateWords(cleanSummary(item.summary), 200));
-      const light = ThemeManager.load().mode === 'light';
-      thumbHtml = `<div class="card-text-content" style="view-transition-name:${vtName};background:hsl(${hue},${light ? '12%,92%' : '15%,13%'})">${truncated}</div>`;
+      thumbHtml = `<div class="card-text-content" style="view-transition-name:${vtName};--ph-hue:${hue}">${truncated}</div>`;
     } else {
       const hue = PLACEHOLDER_HUES[idx % PLACEHOLDER_HUES.length];
       const letter = (item.title || '?')[0].toUpperCase();
-      const light = ThemeManager.load().mode === 'light';
-      thumbHtml = `<div class="card-placeholder" style="view-transition-name:${vtName};background:hsl(${hue},${light ? '10%,93%' : '20%,16%'})">${letter}</div>`;
+      thumbHtml = `<div class="card-placeholder" style="view-transition-name:${vtName};--ph-hue:${hue}">${letter}</div>`;
     }
 
     // URL pill — bottom-right. Default: 20% color bg + white text.
@@ -1362,7 +1473,7 @@
       ? `<span class="card-review-badge" style="--pill-bg:${pillBg}" title="Awaiting review" aria-label="Awaiting review">${icon('eye')}<span class="card-review-label">Review</span></span>`
       : '';
 
-    const cardClass = hasImage ? ' card-visual' : (hasTextContent ? ' card-text' : '');
+    const cardClass = hasImage ? ' card-visual' : (glyph ? ' card-glyph-card' : (hasTextContent ? ' card-text' : ''));
 
     return `<div class="card${cardClass}" data-slug="${item.slug}" data-render-sig="${cardRenderSig(item)}" tabindex="-1">
       <div class="card-visual-area">
@@ -2191,7 +2302,14 @@
     const mainContent = document.querySelector('.main-content');
     if (mainContent) {
       let scrollTimer;
+      // Header glass thins over the first 48px of scroll, as on the Mac.
+      const setHeaderScroll = () => {
+        const p = Math.min(Math.max(mainContent.scrollTop, 0) / 48, 1);
+        document.documentElement.style.setProperty('--header-scroll', p.toFixed(3));
+      };
+      setHeaderScroll();
       mainContent.addEventListener('scroll', () => {
+        setHeaderScroll();
         mainContent.classList.add('is-scrolling');
         clearTimeout(scrollTimer);
         scrollTimer = setTimeout(() => mainContent.classList.remove('is-scrolling'), 700);
@@ -2732,34 +2850,47 @@
     }
 
     // --- Theme controls ---
-    const prefs = ThemeManager.load();
 
-    // Mode toggle
+    // Mode toggle (System / Light / Dark) + the current mode's six accents.
     const $modeToggle = $panel.querySelector('#theme-mode-toggle');
+    const $swatches = $panel.querySelector('#accent-swatches');
+    const renderThemeControls = () => {
+      const p = ThemeManager.load();
+      if ($modeToggle) {
+        const mode = p.mode === 'light' || p.mode === 'dark' ? p.mode : 'system';
+        $modeToggle.querySelectorAll('.theme-toggle-option').forEach(o =>
+          o.classList.toggle('active', o.dataset.mode === mode));
+      }
+      if ($swatches) {
+        const current = ThemeManager.resolvedAccent(p);
+        $swatches.innerHTML = ThemeManager.ACCENTS[ThemeManager.resolvedMode(p)].map(a => {
+          const label = a.charAt(0).toUpperCase() + a.slice(1);
+          return `<button class="accent-swatch${a === current ? ' active' : ''}" data-accent="${a}" type="button" style="background:${ThemeManager.SWATCH[a]}" aria-label="${label} accent" aria-pressed="${a === current}" title="${label}"></button>`;
+        }).join('');
+      }
+    };
+    renderThemeControls();
     if ($modeToggle) {
-      $modeToggle.querySelectorAll('.theme-toggle-option').forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.mode === prefs.mode);
-      });
       $modeToggle.addEventListener('click', (e) => {
         const opt = e.target.closest('[data-mode]');
         if (!opt) return;
         ThemeManager.setMode(opt.dataset.mode);
-        $modeToggle.querySelectorAll('.theme-toggle-option').forEach(o =>
-          o.classList.toggle('active', o.dataset.mode === opt.dataset.mode)
-        );
+        renderThemeControls();
       });
     }
-
-    // Accent swatches
-    $panel.querySelectorAll('.accent-swatch').forEach(swatch => {
-      swatch.classList.toggle('active', swatch.dataset.accent === prefs.accent);
-      swatch.addEventListener('click', () => {
-        ThemeManager.setAccent(swatch.dataset.accent);
-        $panel.querySelectorAll('.accent-swatch').forEach(s =>
-          s.classList.toggle('active', s.dataset.accent === swatch.dataset.accent)
-        );
+    if ($swatches) {
+      $swatches.addEventListener('click', (e) => {
+        const sw = e.target.closest('.accent-swatch');
+        if (!sw) return;
+        ThemeManager.setAccent(sw.dataset.accent);
+        renderThemeControls();
       });
-    });
+    }
+    const onThemeChange = () => {
+      if (!$panel.isConnected) { document.removeEventListener('stello:themechange', onThemeChange); return; }
+      renderThemeControls();
+    };
+    document.addEventListener('stello:themechange', onThemeChange);
 
     // Grid columns stepper.
     const $cols = $panel.querySelector('#grid-columns');
