@@ -1017,6 +1017,8 @@ html.arriving-from-login .header {
   border-radius: 4px;
 }
 .card-glyph svg { width: 32px; height: 32px; display: block; }
+/* Light page and sand-3 are nearly the same tone; step up one so the tile reads. */
+[data-theme="light"] .card-glyph-tile { background: var(--card-hover); }
 
 /* Past 9 columns the card overlays hide, as on the Mac. */
 .cards-dense .card-title-badge,
