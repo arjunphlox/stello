@@ -1,22 +1,22 @@
 const {
-  authenticateRequest, jsonResponse, handleCors,
-  fetchOGMetadata, downloadImage, extractDomain,
-  generateTagsFromMetadata,
+  authenticateRequest, jsonResponse, handleCors, downloadImage,
 } = require('../lib/common');
 const storage = require('../lib/storage');
 const { enrichCore } = require('./enrich');
+const { readPage, makeNet, READ_AS_KINDS } = require('../lib/readers/pipeline.js');
+const { freshReadFields } = require('../lib/readers/enrich-read.js');
 
 /**
- * Re-run the full enrichment flow for an existing item:
- *   1. Re-fetch OG metadata; backfill title/summary/og_image_path/tags.
- *   2. Reset enrichment_status and re-run vision + candidates (waitUntil).
+ * Enrich, as on the Mac (EnrichmentService.enrich with force):
+ *   1. Re-fetch the page once and run the page readers on it (an already-typed item is
+ *      read as its kind). A fresh read is stored over the item's dossier without erasing
+ *      what was read before; a missing cover is backfilled. Titles, tags and summaries
+ *      the item has are left alone (a post's rule-made title may follow its new text).
+ *   2. Reset enrichment and re-run vision + snippets (waitUntil) on the same page: the
+ *      snippets come from the reader's text and replace earlier AI picks, never the
+ *      user's own.
  *
  * Body: { slug }
- *
- * NOTE (Phase 2): the old Vercel handler also captured 1440/640/360 full-page
- * screenshots via puppeteer + @sparticuz/chromium. That's deferred to a
- * follow-up on Cloudflare Browser Rendering — it was a manual, non-critical
- * enhancement that already degraded to no-screenshots when unavailable.
  */
 module.exports = async function handler(req, res) {
   if (handleCors(req, res)) return;
@@ -38,65 +38,51 @@ module.exports = async function handler(req, res) {
   if (fetchErr || !item) return jsonResponse(res, 404, { error: 'Item not found' });
 
   const updates = {};
+  let page = null;
+  let read = null;
 
-  // --- Phase 1: OG refetch (only if we have a source_url) ---
+  // --- Phase 1: one page fetch + the page readers (only with a source_url) ---
   if (item.source_url) {
     try {
-      const meta = await fetchOGMetadata(item.source_url);
-      const title = meta['og:title'] || meta.title || item.title;
-      const summary = meta['og:description'] || meta.description || item.summary;
-      const ogImageUrl = meta['og:image'] || null;
-      const domain = extractDomain(item.source_url);
-
-      if (title && title !== item.title) updates.title = title.replace(/"/g, "'");
-      if (summary && summary !== item.summary) updates.summary = (summary || '').slice(0, 200);
-      if (domain && domain !== item.domain) updates.domain = domain;
-
-      const existingTags = typeof item.tags === 'string' ? JSON.parse(item.tags) : (item.tags || []);
-      const visionAndIntent = existingTags.filter(t =>
-        ['color', 'style', 'mood', 'intent', 'collection'].includes(t.category)
-      );
-      const freshTags = generateTagsFromMetadata({
-        title: updates.title || item.title,
-        domain: updates.domain || item.domain,
-        description: updates.summary || item.summary,
-        sourceUrl: item.source_url,
+      const net = makeNet();
+      const got = await net.get(item.source_url);
+      if (got) page = got;
+      const tags = Array.isArray(item.tags) ? item.tags
+        : (() => { try { return JSON.parse(item.tags || '[]'); } catch { return []; } })();
+      // Without the page the URL and labels still decide (music reads its oEmbed).
+      read = await readPage({
+        url: item.source_url,
+        html: page ? page.text : '',
+        status: page ? page.status : null,
+        finalURL: page ? page.finalURL : null,
+        collectionLabels: tags.filter(t => t && t.category === 'collection').map(t => t.tag),
+        asKind: READ_AS_KINDS.has(item.kind) ? item.kind : null,
+        net,
       });
-      const haveNames = new Set(freshTags.map(t => t.tag));
-      const merged = [...freshTags];
-      for (const t of visionAndIntent) {
-        if (!haveNames.has(t.tag)) { merged.push(t); haveNames.add(t.tag); }
-      }
-      updates.tags = JSON.stringify(merged);
+      Object.assign(updates, freshReadFields(read, item) || {});
+      if (!item.summary && read.summary) updates.summary = String(read.summary).slice(0, 200);
+      if (!item.domain && read.domain) updates.domain = read.domain;
 
-      // Backfill og_image_path if missing.
-      if (!item.og_image_path && ogImageUrl) {
-        let fullImageUrl = ogImageUrl;
-        if (ogImageUrl.startsWith('//')) fullImageUrl = 'https:' + ogImageUrl;
-        else if (ogImageUrl.startsWith('/')) {
-          try { fullImageUrl = new URL(item.source_url).origin + ogImageUrl; } catch {}
-        }
-        const img = await downloadImage(env, fullImageUrl);
-        if (img) {
-          const key = `${user.id}/${slug}/og-image${img.ext}`;
-          const path = await storage.putSafe(env, key, img.buffer, img.mime);
-          if (path) {
-            updates.og_image_path = path;
-            const existingImages = (() => {
-              try { return typeof item.images === 'string' ? JSON.parse(item.images) : (item.images || []); }
-              catch { return []; }
-            })();
-            if (existingImages.length === 0) {
-              updates.images = JSON.stringify([{
-                path, source: 'og', is_primary: true,
-                width: img.width || null, height: img.height || null,
-              }]);
-            }
-          }
+      // Backfill a missing cover from what the readers found.
+      const images = Array.isArray(item.images) ? item.images
+        : (() => { try { return JSON.parse(item.images || '[]'); } catch { return []; } })();
+      if (!item.og_image_path && images.length === 0) {
+        const urls = [...(read.images?.urls || []).slice(0, 1), ...(read.images?.fallbacks || []).slice(0, 1)];
+        for (const url of urls) {
+          const img = await downloadImage(env, url);
+          if (!img) continue;
+          const path = await storage.putSafe(env, `${user.id}/${slug}/og-image${img.ext}`, img.buffer, img.mime);
+          if (!path) continue;
+          updates.og_image_path = path;
+          updates.images = JSON.stringify([{
+            path, source: read.images?.source || 'og', is_primary: true,
+            width: img.width || null, height: img.height || null,
+          }]);
+          break;
         }
       }
     } catch (err) {
-      console.warn('reenrich: OG refetch failed', slug, err.message);
+      console.warn('reenrich: page read failed', slug, err.message);
     }
   }
 
@@ -113,7 +99,14 @@ module.exports = async function handler(req, res) {
   // --- Phase 2: vision + candidates via waitUntil (no self-subrequest) ---
   if (req.ctx) {
     req.ctx.waitUntil(
-      enrichCore(env, user.id, { slug, itemId: item.id }).catch(() => {})
+      enrichCore(env, user.id, {
+        slug, itemId: item.id,
+        html: page && page.status < 400 ? page.text : null,
+        // Music pages have no prose: like the Mac, no snippets from a platform shell.
+        pageText: read ? read.extractedText : null,
+        noText: (updates.kind || item.kind) === 'music',
+        replaceAISnippets: true,
+      }).catch(() => {})
     );
   }
 

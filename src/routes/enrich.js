@@ -3,6 +3,8 @@ const {
 } = require('../lib/common');
 const storage = require('../lib/storage');
 const Anthropic = require('@anthropic-ai/sdk');
+const { extractText } = require('../lib/readers/html.js');
+const { stripSections } = require('../lib/markdown.js');
 
 const SYSTEM_PROMPT = `You analyze images from a design knowledge base. Based on the visual content, provide tags in three categories.
 
@@ -53,7 +55,7 @@ module.exports = async function handler(req, res) {
  * from capture / upload-image / reenrich (no self-subrequest). Builds its own
  * user-scoped client from the bearer token.
  */
-async function enrichCore(env, userId, { slug, itemId }) {
+async function enrichCore(env, userId, { slug, itemId, html = null, pageText = null, noText = false, replaceAISnippets = false }) {
   if (!userId) return { error: 'unauthorized' };
   const client = userClient(env, userId);
   const user = { id: userId };
@@ -67,7 +69,7 @@ async function enrichCore(env, userId, { slug, itemId }) {
   if (fetchErr || !item) return { error: 'Item not found' };
 
   const apiKey = await getApiKey(client, user.id, env);
-  return enrichItem(env, client, item, apiKey, user.id);
+  return enrichItem(env, client, item, apiKey, user.id, { html, pageText, noText, replaceAISnippets });
 }
 
 /**
@@ -77,7 +79,7 @@ async function enrichCore(env, userId, { slug, itemId }) {
  * key, and the owning user id (for R2 candidate paths). Phase A writes vision
  * tags + `vision_done`; Phase B harvests image/snippet/reason candidates.
  */
-async function enrichItem(env, client, item, apiKey, userId) {
+async function enrichItem(env, client, item, apiKey, userId, opts = {}) {
   const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
   const result = { slug: item.slug };
   const existingTags = typeof item.tags === 'string' ? JSON.parse(item.tags) : (item.tags || []);
@@ -157,7 +159,8 @@ async function enrichItem(env, client, item, apiKey, userId) {
   // ---- Phase B: Candidates (requires source_url + API key) ----
   if (item.source_url && anthropic) {
     try {
-      const html = await fetchPageHtml(item.source_url);
+      // Enrich passes the page it already read; capture and the cron fetch it here.
+      const html = opts.html || await fetchPageHtml(item.source_url);
       if (html) {
         // The cover is stored as an R2 "/img/<key>" path, so it can't be
         // compared against external candidate URLs. Re-derive the original
@@ -169,7 +172,9 @@ async function enrichItem(env, client, item, apiKey, userId) {
           excludeUrl,
         });
 
-        const pageText = extractPageText(html).slice(0, 6000);
+        // The reader's text when Enrich has it (a post's text, a social product's
+        // caption), else the page's main text with nav, header and footer stripped (#72).
+        const pageText = opts.noText ? '' : (opts.pageText || extractText(html, 6000) || '').slice(0, 6000);
         let snippets = [];
         let reasons = [];
         if (pageText.length > 200) {
@@ -220,7 +225,19 @@ async function enrichItem(env, client, item, apiKey, userId) {
           update.enrichment_status = 'candidates_done';
         }
 
-        const candidates = { images: imgs, snippets, reasons };
+        // Snippets go straight onto the item as source "ai", as on the Mac
+        // (EnrichmentService.apply); a user-run Enrich replaces earlier AI picks and
+        // never touches the snippets the user added.
+        if (snippets.length) {
+          const merged = mergeAISnippets(item.snippets, snippets, { replace: !!opts.replaceAISnippets });
+          if (merged.changed) {
+            update.snippets = JSON.stringify(merged.snippets);
+            update.body_markdown = withKeySnippets(item.body_markdown, merged.snippets);
+            result.snippets = merged.snippets;
+          }
+        }
+
+        const candidates = { images: imgs, snippets: [], reasons };
         result.enrichment_candidates = candidates;
         update.enrichment_candidates = JSON.stringify(candidates);
 
@@ -364,22 +381,6 @@ async function fetchPageHtml(url) {
   }
 }
 
-function extractPageText(html) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 function extractImageUrls(html, baseUrl) {
   const urls = new Set();
@@ -463,6 +464,36 @@ async function harvestImageCandidates({ env, html, sourceUrl, userId, slug, excl
   return out;
 }
 
+
+/**
+ * Adds AI snippets to an item's snippets (case-insensitive dedupe). `replace` drops the
+ * earlier AI ones first. Returns { snippets, changed }.
+ */
+function mergeAISnippets(existing, texts, { replace = false, now = new Date().toISOString() } = {}) {
+  let list = Array.isArray(existing) ? existing
+    : (() => { try { return JSON.parse(existing || '[]'); } catch { return []; } })();
+  const before = JSON.stringify(list);
+  if (replace) list = list.filter(s => s && s.source !== 'ai');
+  else list = list.slice();
+  const seen = new Set(list.map(s => String(s && s.text || '').toLowerCase()));
+  for (const raw of texts) {
+    const text = String(raw || '').trim();
+    if (!text || seen.has(text.toLowerCase())) continue;
+    seen.add(text.toLowerCase());
+    list.push({ text, source: 'ai', added_at: now });
+  }
+  return { snippets: list, changed: JSON.stringify(list) !== before };
+}
+
+/** body_markdown with its Key Snippets section rebuilt from `snippets`. */
+function withKeySnippets(md, snippets) {
+  let out = stripSections(md || '', ['Key Snippets']);
+  if (snippets.length) out = out.replace(/\s+$/, '') + `\n\n## Key Snippets\n${snippets.map(s => `> ${s.text}`).join('\n\n')}`;
+  return out;
+}
+
 module.exports.enrichCore = enrichCore;
 module.exports.enrichItem = enrichItem;
 module.exports.getApiKey = getApiKey;
+module.exports.mergeAISnippets = mergeAISnippets;
+module.exports.withKeySnippets = withKeySnippets;
