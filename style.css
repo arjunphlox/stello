@@ -17,28 +17,42 @@
 }
 
 /* === FONTS ===
-   Self-hosted Aribau Grotesk (licensed). Only the weights the app
-   actually uses — 400/500/700 — are shipped to keep page weight down. */
+   Karst, the Apple apps' typeface (StelloFont.swift), self-hosted as WOFF2
+   from the same files the apps bundle. Only the weights the web uses. */
 @font-face {
-  font-family: 'Aribau Grotesk';
+  font-family: 'Karst';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('fonts/aribau-grotesk-regular.otf') format('opentype');
+  src: url('fonts/karst-regular.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Aribau Grotesk';
+  font-family: 'Karst';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/karst-regularitalic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Karst';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('fonts/aribau-grotesk-medium.otf') format('opentype');
+  src: url('fonts/karst-medium.woff2') format('woff2');
 }
 @font-face {
-  font-family: 'Aribau Grotesk';
+  font-family: 'Karst';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/karst-semibold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Karst';
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url('fonts/aribau-grotesk-bold.otf') format('opentype');
+  src: url('fonts/karst-bold.woff2') format('woff2');
 }
 
 :root {
@@ -50,7 +64,7 @@
 button, input, select, textarea, fieldset { font-family: inherit; }
 
 body {
-  font-family: 'Aribau Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Karst', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
