@@ -30,7 +30,11 @@ module.exports = async function handler(req, res) {
 
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const title = `Image upload — ${dateStr}`;
+  // A dropped file passes its name (?title=, the Mac's file-name title);
+  // a pasted image has none.
+  const given = String((req.query && req.query.title) || '').trim().slice(0, 120);
+  const title = given || `Image upload — ${dateStr}`;
+  const origin = given ? 'Image dropped from a file' : 'Image pasted from clipboard';
   const slug = generateSlug(title);
   const isoNow = now.toISOString();
 
@@ -54,8 +58,8 @@ module.exports = async function handler(req, res) {
     source_url: null,
     domain: null,
     author: null,
-    summary: 'Image pasted from clipboard',
-    body_markdown: '## Summary\nImage pasted from clipboard',
+    summary: origin,
+    body_markdown: `## Summary\n${origin}`,
     og_image_path: path,
     images: JSON.stringify(imagesEntry),
     status: 'active',

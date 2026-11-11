@@ -1842,6 +1842,31 @@ html.arriving-from-login .header {
 
 }
 .import-submit:hover { background: var(--accent-hover); }
+/* Choose Photo (Mac CaptureSheet): secondary button under Import URLs. */
+.import-photo {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.78rem;
+  text-align: center;
+  cursor: pointer;
+}
+.import-photo:hover { background: var(--card-hover); }
+.import-photo:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Drop targets (Mac DropImportService): the header shows the window drop,
+   a card or the panel's image strip shows an attach. */
+.header.is-drop-target {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  outline: 2px dashed var(--accent-contrast);
+  outline-offset: -6px;
+}
+.card.is-drop-target { outline: 2px solid color-mix(in srgb, var(--accent) 85%, transparent); outline-offset: 2px; border-radius: 6px; }
+.sub-strip.is-drop-target { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 .import-divider {
   text-align: center;
   color: var(--text-dim);

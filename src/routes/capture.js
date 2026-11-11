@@ -14,14 +14,14 @@ module.exports = async function handler(req, res) {
   const { user, error, status, client } = await authenticateRequest(req);
   if (error) return jsonResponse(res, status, { error });
 
-  const { type, content } = req.body || {};
+  const { type, content, title } = req.body || {};
   if (!type || !content) return jsonResponse(res, 400, { error: 'Missing type or content' });
 
   if (type === 'url') {
     return handleUrlCapture(req, client, user, content, res);
   }
   if (type === 'text') {
-    return handleTextCapture(client, user, content, res);
+    return handleTextCapture(client, user, content, res, title);
   }
 
   return jsonResponse(res, 400, { error: 'Unknown type: ' + type });
@@ -153,9 +153,12 @@ async function handleUrlCapture(req, client, user, url, res) {
   });
 }
 
-async function handleTextCapture(client, user, content, res) {
+// `fileTitle`: a dropped .md / .txt file's name. Its text is kept whole as the
+// body (Mac DropImportService.importFile); a pasted note keeps the old shape.
+async function handleTextCapture(client, user, content, res, fileTitle) {
   const words = content.trim().split(/\s+/);
-  const title = words.slice(0, 5).join(' ');
+  const given = typeof fileTitle === 'string' ? fileTitle.trim().slice(0, 120) : '';
+  const title = given || words.slice(0, 5).join(' ');
   const slug = generateSlug(title);
   const now = new Date().toISOString();
   const summary = content.slice(0, 200);
@@ -174,7 +177,7 @@ async function handleTextCapture(client, user, content, res) {
     domain: null,
     author: null,
     summary,
-    body_markdown: `## Summary\n${summary}`,
+    body_markdown: given ? content : `## Summary\n${summary}`,
     og_image_path: null,
     status: 'active',
     location: null,
