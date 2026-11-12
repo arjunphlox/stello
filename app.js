@@ -34,7 +34,7 @@
   // --- State ---
   let allItems = [];
   let itemsBySlug = {};      // slug -> item lookup
-  let activeTags = [];      // [{tag, category}]
+  let activeTags = [];      // tag names; a name matches in any category, as on the Mac (ItemFilter)
   let needsReviewOnly = false;
   let searchQuery = '';
   let relatedIndex = {};     // slug -> Set of related slugs
@@ -727,9 +727,9 @@
 
       const chipsHtml = filtered.map(([tag, count]) => {
         const cls = CAT_CLASS[cat] || 'tag-format';
-        const isActive = activeTags.some(a => a.tag === tag && a.category === cat);
+        const isActive = activeTags.includes(tag);
         const dot = cat === 'color' ? `<span class="color-dot" style="background:${COLOR_MAP[tag] || COLOR_MAP[tag.replace(/[-_\s]/g, '_')] || '#888'}"></span>` : '';
-        return `<span class="tag-chip ${cls}${isActive ? ' active' : ''}" data-tag="${tag}" data-cat="${cat}">${dot}${tag} <span class="chip-count">${count}</span></span>`;
+        return `<span class="tag-chip ${cls}${isActive ? ' active' : ''}" data-tag="${escAttr(tag)}" data-cat="${cat}">${dot}${tag} <span class="chip-count">${count}</span></span>`;
       }).join('');
 
       return `<div class="tag-category-group${isExpanded ? ' is-expanded' : ''}" data-cat="${cat}">
@@ -783,9 +783,8 @@
       if (needsReviewOnly && !isAwaitingReview(item)) return false;
       if (selectedWeek && getWeekKey(item.added_at) !== selectedWeek) return false;
       if (activeTags.length > 0) {
-        return activeTags.every(at =>
-          item.tags.some(t => t.tag === at.tag && t.category === at.category)
-        );
+        // Same rule as the Mac's ItemFilter: a tag is its name, whatever its category.
+        return activeTags.every(name => item.tags.some(t => t.tag === name));
       }
       return true;
     });
@@ -2209,7 +2208,7 @@
       ? `<span class="active-filter-pill active-filter-week" data-week="${selectedWeek}">${escHtml(weekLabelFor(selectedWeek))} <span class="x">&times;</span></span>`
       : '';
     $activeFilters.innerHTML = reviewPill + weekPill + activeTags.map((at, i) =>
-      `<span class="active-filter-pill" data-idx="${i}">${escHtml(at.tag)} <span class="x">&times;</span></span>`
+      `<span class="active-filter-pill" data-idx="${i}">${escHtml(at)} <span class="x">&times;</span></span>`
     ).join('') + `<button class="clear-filters-btn" id="clear-filters">Clear all</button>`;
   }
 
@@ -2362,10 +2361,9 @@
       const chipInDrawer = e.target.closest('#filter-tag-drawer .tag-chip');
       if (!chipInDrawer) return;
       const tag = chipInDrawer.dataset.tag;
-      const cat = chipInDrawer.dataset.cat;
-      const idx = activeTags.findIndex(a => a.tag === tag && a.category === cat);
+      const idx = activeTags.indexOf(tag);
       if (idx >= 0) activeTags.splice(idx, 1);
-      else activeTags.push({ tag, category: cat });
+      else activeTags.push(tag);
       renderTagDrawer();
       renderActiveFilters();
       renderGrid();
