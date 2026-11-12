@@ -7,6 +7,8 @@ const storage = require('../lib/storage');
  * images, adds/removes snippets, toggles why-saved reasons, or uploads a
  * custom image. Each field is optional; only changed fields are sent.
  */
+const { stripSections } = require('../lib/markdown');
+
 module.exports = async function handler(req, res) {
   if (handleCors(req, res)) return;
   if (req.method !== 'POST') return jsonResponse(res, 405, { error: 'Method not allowed' });
@@ -270,19 +272,3 @@ function parseJsonField(v, fallback) {
   return v;
 }
 
-/**
- * Remove any `## Heading` section (and its contents up to the next `## `)
- * from a markdown string so the panel can rewrite its own sections.
- */
-function stripSections(md, headings) {
-  if (!md) return '';
-  let out = md;
-  for (const h of headings) {
-    const re = new RegExp(
-      `(^|\\n)##\\s+${h.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\b[\\s\\S]*?(?=\\n##\\s|$)`,
-      'g'
-    );
-    out = out.replace(re, '');
-  }
-  return out.replace(/\n{3,}/g, '\n\n').trim();
-}
