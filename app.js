@@ -3040,6 +3040,17 @@
       }
     })();
 
+    // Bookmarklet (the web's Share Extension): opens save.html in a small window with
+    // the page's link and title. Dragged to the bookmarks bar; a click here does nothing.
+    const $bm = $panel.querySelector('.settings-bookmarklet-link');
+    if ($bm) {
+      const target = JSON.stringify(location.origin + '/save.html');
+      $bm.href = 'javascript:(function(){window.open(' + target +
+        "+'?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)," +
+        "'stello-save','width=420,height=300')})()";
+      $bm.addEventListener('click', e => e.preventDefault());
+    }
+
     // Logout — ends the session and redirects to the login page
     const $logout = $panel.querySelector('.settings-logout');
     if ($logout) {

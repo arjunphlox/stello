@@ -21,6 +21,7 @@ const FILES = [
   'detail.html',
   'login.html',
   'reset-password.html',
+  'save.html',
   'app.js',
   'desktop-context.js',
   'panel-layout.js',
