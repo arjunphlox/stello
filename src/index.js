@@ -22,6 +22,7 @@ import uploadImage from './routes/upload-image.js';
 import itemUpdate from './routes/item-update.js';
 import itemDelete from './routes/item-delete.js';
 import config from './routes/config.js';
+import profile from './routes/profile.js';
 import batchStatus from './routes/batch-status.js';
 import mountAuth from './routes/auth.js';
 import mountData from './routes/data.js';
@@ -82,6 +83,7 @@ app.all('/api/upload-image', route(uploadImage));
 app.all('/api/item-update', route(itemUpdate));
 app.all('/api/item-delete', route(itemDelete));
 app.all('/api/config', route(config));
+app.all('/api/me/profile', route(profile));
 app.all('/api/batch-status', route(batchStatus));
 // NOTE: /api/cron/process-batches is intentionally NOT an HTTP route — it
 // drains batches with the admin client and runs only via scheduled() below.
