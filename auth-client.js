@@ -10,6 +10,17 @@
 
   let _session = null;          // { user: { id, email, display_name }, identities, has_password }
   let _loaded = false;
+  let _fromCache = false;       // true when the session came from this device (offline)
+
+  // The last signed-in session, kept so the app opens offline. Not a secret:
+  // the cookie stays HttpOnly; this is only the user's id, email and name.
+  const SESSION_KEY = 'stello.session.v1';
+  function cacheSession(s) {
+    try { s ? localStorage.setItem(SESSION_KEY, JSON.stringify(s)) : localStorage.removeItem(SESSION_KEY); } catch {}
+  }
+  function cachedSession() {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch { return null; }
+  }
 
   async function postJson(url, body) {
     try {
@@ -29,11 +40,16 @@
   /** Current session (cached after the first call), or null when signed out. */
   async function getSession({ refresh = false } = {}) {
     if (_loaded && !refresh) return _session;
+    _fromCache = false;
     try {
       const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
-      _session = res.ok ? await res.json() : null;
+      if (res.ok) { _session = await res.json(); cacheSession(_session); }
+      else if (res.status === 401) { _session = null; cacheSession(null); }
+      else { _session = cachedSession(); _fromCache = !!_session; } // server error: keep working from the device copy
     } catch {
-      _session = null;
+      // Offline: open with the last session; the server still checks every API call.
+      _session = cachedSession();
+      _fromCache = !!_session;
     }
     _loaded = true;
     return _session;
@@ -58,11 +74,19 @@
     return session;
   }
 
-  /** fetch() for /api/* calls; a 401 sends the user back to sign in. */
+  /** fetch() for /api/* calls; a 401 sends the user back to sign in.
+   *  Changes need the network: offline, a non-GET call fails at once and the
+   *  page hears `stello:offline-blocked` (app.js shows a toast). */
   async function apiFetch(url, opts = {}) {
+    const method = String(opts.method || 'GET').toUpperCase();
+    if (method !== 'GET' && navigator.onLine === false) {
+      window.dispatchEvent(new CustomEvent('stello:offline-blocked'));
+      throw new TypeError('you\u2019re offline');
+    }
     const res = await fetch(url, { credentials: 'same-origin', ...opts });
     if (res.status === 401 && _loaded && _session) {
       _session = null;
+      cacheSession(null);
       window.location.href = '/login.html';
     }
     return res;
@@ -117,6 +141,8 @@
   async function signOut() {
     await postJson('/api/auth/logout');
     _session = null;
+    cacheSession(null);
+    if (window.StelloOffline) await window.StelloOffline.clearAll();
     window.location.href = '/login.html';
   }
 
@@ -147,6 +173,7 @@
   window.Stello = {
     getSession,
     getUserId,
+    isSessionFromCache: () => _fromCache,
     getDisplayName,
     requireAuth,
     apiFetch,
