@@ -77,6 +77,16 @@ overwritten by an older server value. Rare for one person; worth a test on the M
 Not synced: `extractedText` (big, re-readable from the page), open counts, local video
 attachments, enrichment errors.
 
+**Profile** (name, designation, photo) rides along at the end of each cycle
+(`ProfileSync.swift`), through `/api/me/profile` rather than `/api/sync`. Same rule:
+per field (`name`, `designation`, `avatar`), the newer epoch-ms clock wins, ties keep
+the server value, the server clamps future clocks (`src/lib/profile.js`). Web edits
+count as "now"; the app sends when the edit was made. A Mac profile from before this
+existed is seeded at clock 1, so on the first sync it beats web values saved without
+clocks (clock 0). The photo is WebP in R2 on the web, `avatar.jpg` in Application
+Support on the device; the device remembers the web path so it neither re-uploads nor
+re-downloads.
+
 ## First link-up
 
 The Mac imported the same Supabase export that step 1 migrates into D1, with the same

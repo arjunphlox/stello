@@ -58,6 +58,56 @@ nonisolated struct SyncAPI: Sendable {
         return result.path
     }
 
+    // MARK: Profile (/api/me/profile, see src/lib/profile.js)
+
+    struct Profile: Decodable, Sendable {
+        struct Clock: Decodable, Sendable {
+            var name = 0
+            var designation = 0
+            var avatar = 0
+        }
+        let name: String
+        let designation: String
+        let avatar_path: String?
+        /// Missing from a Worker older than profile sync: every field counts as clock 0.
+        let clock: Clock?
+    }
+
+    func profile() async throws -> Profile {
+        try await send(URLRequest(url: Self.baseURL.appending(path: "api/me/profile")))
+    }
+
+    /// Sends only the given fields, each with when it changed here.
+    func putProfile(_ fields: [String: String], clock: [String: Int]) async throws -> Profile {
+        var request = URLRequest(url: Self.baseURL.appending(path: "api/me/profile"))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = fields
+        body["clock"] = clock
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await send(request)
+    }
+
+    func uploadAvatar(_ data: Data, contentType: String, clock: Int) async throws -> Profile {
+        var request = URLRequest(url: profileURL(clock: clock))
+        request.httpMethod = "POST"
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        return try await send(request)
+    }
+
+    func deleteAvatar(clock: Int) async throws -> Profile {
+        var request = URLRequest(url: profileURL(clock: clock))
+        request.httpMethod = "DELETE"
+        return try await send(request)
+    }
+
+    private func profileURL(clock: Int) -> URL {
+        var url = URLComponents(url: Self.baseURL.appending(path: "api/me/profile"), resolvingAgainstBaseURL: false)!
+        url.queryItems = [.init(name: "clock", value: String(clock))]
+        return url.url!
+    }
+
     /// Bytes behind a `/img/<key>` path (or any absolute URL).
     func downloadImage(path: String) async throws -> Data {
         let url = path.hasPrefix("http") ? URL(string: path)! : Self.baseURL.appending(path: String(path.dropFirst()))
