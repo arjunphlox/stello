@@ -1,10 +1,18 @@
 const {
-  authenticateRequest, jsonResponse, handleCors, downloadImage,
+  authenticateRequest, userClient, jsonResponse, handleCors, downloadImage,
 } = require('../lib/common');
 const storage = require('../lib/storage');
-const { enrichCore } = require('./enrich');
+const Anthropic = require('@anthropic-ai/sdk');
+const { enrichCore, getApiKey } = require('./enrich');
 const { readPage, makeNet, READ_AS_KINDS } = require('../lib/readers/pipeline.js');
 const { freshReadFields } = require('../lib/readers/enrich-read.js');
+const { fillIns, parseReply } = require('../lib/readers/fill-ins.js');
+const { GALLERY_CAP } = require('../lib/readers/product.js');
+
+/** The model that writes the per-kind fill-ins (one call per Enrich, user's own key). */
+const FILL_IN_MODEL = 'claude-opus-5-5';
+/** Kinds whose read images beyond the cover are kept as a gallery (Mac applyFreshRead). */
+const GALLERY_KINDS = new Set(['product', 'post']);
 
 /**
  * Enrich, as on the Mac (EnrichmentService.enrich with force):
@@ -12,9 +20,11 @@ const { freshReadFields } = require('../lib/readers/enrich-read.js');
  *      read as its kind). A fresh read is stored over the item's dossier without erasing
  *      what was read before; a missing cover is backfilled. Titles, tags and summaries
  *      the item has are left alone (a post's rule-made title may follow its new text).
- *   2. Reset enrichment and re-run vision + snippets (waitUntil) on the same page: the
- *      snippets come from the reader's text and replace earlier AI picks, never the
- *      user's own.
+ *   2. In the background (waitUntil): a product's or post's other images become its
+ *      gallery (when it has none yet); the per-kind fill-ins run (rules first, then one
+ *      model call for what is still missing: a tool's pricing, a book's authors, …);
+ *      then vision + snippets re-run on the same page. The snippets come from the
+ *      reader's text and replace earlier AI picks, never the user's own.
  *
  * Body: { slug }
  */
@@ -96,19 +106,84 @@ module.exports = async function handler(req, res) {
     .eq('id', item.id);
   if (updateErr) return jsonResponse(res, 500, { error: 'Update failed', detail: updateErr.message });
 
-  // --- Phase 2: vision + candidates via waitUntil (no self-subrequest) ---
+  // --- Phase 2: gallery, fill-ins, then vision + candidates via waitUntil ---
   if (req.ctx) {
-    req.ctx.waitUntil(
-      enrichCore(env, user.id, {
-        slug, itemId: item.id,
-        html: page && page.status < 400 ? page.text : null,
-        // Music pages have no prose: like the Mac, no snippets from a platform shell.
-        pageText: read ? read.extractedText : null,
-        noText: (updates.kind || item.kind) === 'music',
-        replaceAISnippets: true,
-      }).catch(() => {})
-    );
+    req.ctx.waitUntil((async () => {
+      const db = userClient(env, user.id);
+      const { data: fresh } = await db.from('items').select('*').eq('id', item.id).single();
+      if (fresh) {
+        const galleryStored = await storeGallery(env, db, user.id, fresh, read).catch(() => false);
+        await runFillIns(env, db, user.id, fresh, read).catch((err) => {
+          console.warn('reenrich: fill-ins failed', slug, err && err.message);
+        });
+        await enrichCore(env, user.id, {
+          slug, itemId: item.id,
+          html: page && page.status < 400 ? page.text : null,
+          // Music pages have no prose: like the Mac, no snippets from a platform shell.
+          pageText: read ? read.extractedText : null,
+          noText: (fresh.kind || item.kind) === 'music',
+          replaceAISnippets: true,
+          // A gallery already holds the page's images; don't harvest them again.
+          noImageCandidates: galleryStored,
+        });
+      }
+    })().catch(() => {}));
   }
 
   return jsonResponse(res, 200, { slug, status: 'reenriching' });
 };
+
+function parseList(v) {
+  if (Array.isArray(v)) return v;
+  try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch { return []; }
+}
+
+/**
+ * Products and posts keep the read's other images (after the cover) as a gallery, as the
+ * Mac's applyFreshRead does: only when the item has no gallery yet, and only when this
+ * read's kind is the item's kind. Returns whether gallery images were stored.
+ */
+async function storeGallery(env, db, userId, item, read) {
+  if (!read || !GALLERY_KINDS.has(item.kind) || read.kind !== item.kind) return false;
+  const images = parseList(item.images);
+  if (images.some((i) => i && i.role === 'gallery')) return false;
+  const urls = (read.images?.urls || []).slice(1, GALLERY_CAP);
+  if (!urls.length) return false;
+  const got = await Promise.all(urls.map(async (url, i) => {
+    const img = await downloadImage(env, url);
+    if (!img) return null;
+    const path = await storage.putSafe(env, `${userId}/${item.slug}/gallery-${i}${img.ext}`, img.buffer, img.mime);
+    return path ? {
+      path, source: read.images?.source || 'og', is_primary: false, role: 'gallery',
+      width: img.width || null, height: img.height || null,
+    } : null;
+  }));
+  const gallery = got.filter(Boolean);
+  if (!gallery.length) return false;
+  await db.from('items').update({ images: JSON.stringify([...images, ...gallery]) }).eq('id', item.id);
+  return true;
+}
+
+/** Per-kind fill-ins: rules first, then one model call (the user's key) for the gaps. */
+async function runFillIns(env, db, userId, item, read) {
+  const apiKey = await getApiKey(db, userId, env);
+  const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
+  const callModel = anthropic ? async ({ system, schema, user }) => {
+    const resp = await anthropic.messages.create({
+      model: FILL_IN_MODEL,
+      max_tokens: 2000,
+      system,
+      messages: [{ role: 'user', content: user }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+    });
+    if (resp.stop_reason === 'refusal') return null;
+    const block = (resp.content || []).find((b) => b.type === 'text');
+    return block ? parseReply(block.text) : null;
+  } : null;
+  const fields = await fillIns({ item, text: read ? read.extractedText : null, callModel });
+  if (!fields) return;
+  const update = {};
+  if (fields.metadata) update.metadata = fields.metadata;
+  if (fields.title) update.title = String(fields.title).replace(/"/g, "'");
+  await db.from('items').update(update).eq('id', item.id);
+}
