@@ -2134,8 +2134,12 @@
         }
         showToast(navigator.onLine === false ? 'Saved offline. Images download when you’re back online' : 'Saved offline');
       } else {
-        const recent = Date.parse(item.added_at) >= Date.now() - O.RECENT_DAYS * 86400000;
-        showToast(recent ? 'Offline copy removed. Items from the last 4 weeks stay offline' : 'Offline copy removed');
+        const now = Date.now();
+        const recent = Date.parse(item.added_at) >= now - O.RECENT_DAYS * 86400000;
+        const opened = Date.parse(item.last_opened_at) >= now - O.OPENED_DAYS * 86400000;
+        showToast(recent ? 'Offline copy removed. Items from the last 4 weeks stay offline'
+          : opened ? 'Offline copy removed. Items opened in the last 30 days stay offline while there\u2019s room'
+          : 'Offline copy removed');
       }
       await O.syncImages(allItems);
       if (offlineOnly) renderGrid();
@@ -3523,9 +3527,16 @@
     // Revisit tracking, once per item per page load (Apple: StelloStore.recordOpen).
     const openedThisSession = new Set();
     function recordOpen(slug) {
-      if (openedThisSession.has(slug)) return;
+      // Offline: nothing to send (and no "changes need a connection" toast for a read).
+      if (openedThisSession.has(slug) || navigator.onLine === false) return;
       openedThisSession.add(slug);
       postItemUpdate(slug, { record_open: true });
+      // Opened items stay offline for 30 days (offline.js); pick this one up now.
+      const item = itemsBySlug[slug];
+      if (item && window.StelloOffline && libraryComplete) {
+        item.last_opened_at = new Date().toISOString();
+        StelloOffline.syncImages(allItems);
+      }
     }
 
     function close() {

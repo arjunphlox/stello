@@ -57,7 +57,9 @@ function pathToKey(p) {
 
 /** Best-effort delete of one or many paths/keys. Never throws. */
 async function remove(env, paths) {
-  const keys = (Array.isArray(paths) ? paths : [paths]).map(pathToKey).filter(Boolean);
+  const base = (Array.isArray(paths) ? paths : [paths]).map(pathToKey).filter(Boolean);
+  // Each image may have a smaller offline copy next to it (see /img/* in index.js).
+  const keys = base.flatMap((k) => [k, offlineKey(k)]);
   if (!keys.length) return;
   try {
     await env.BUCKET.delete(keys);
@@ -66,10 +68,15 @@ async function remove(env, paths) {
   }
 }
 
+/** R2 key of an image's offline copy (made on first request, src/index.js). */
+function offlineKey(key) {
+  return `${key}.w1200.webp`;
+}
+
 /** List object keys under a `<user_id>/<slug>` prefix. */
 async function list(env, prefix) {
   const out = await env.BUCKET.list({ prefix });
   return (out.objects || []).map(o => o.key);
 }
 
-module.exports = { put, putSafe, remove, list, pathToKey, PREFIX };
+module.exports = { put, putSafe, remove, list, pathToKey, offlineKey, PREFIX };

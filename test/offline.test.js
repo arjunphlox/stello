@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { pickOfflineSet, imageUrls, OFFLINE_CAP, RECENT_DAYS } = require('../offline.js');
+const { pickOfflineSet, imageUrls, imageFetches, OFFLINE_CAP, RECENT_DAYS, OPENED_DAYS } = require('../offline.js');
 
 const DAY = 86400000;
 const NOW = Date.parse('2026-11-12T12:00:00Z');
@@ -9,6 +9,32 @@ const item = (slug, daysAgo, extra = {}) => ({ slug, added_at: new Date(NOW - da
 test('cap and window match the agreed scope', () => {
   assert.strictEqual(OFFLINE_CAP, 1000);
   assert.strictEqual(RECENT_DAYS, 28);
+  assert.strictEqual(OPENED_DAYS, 30);
+});
+
+test('items opened in the last 30 days fill the room left after recent saves and picks', () => {
+  const opened = (slug, daysAgo, openedDaysAgo) => item(slug, daysAgo, { last_opened_at: new Date(NOW - openedDaysAgo * DAY).toISOString() });
+  const items = [item('r1', 1), item('p1', 300), opened('o1', 200, 2), opened('o2', 200, 10), opened('stale', 200, 45)];
+  const set = pickOfflineSet(items, new Map([['p1', NOW]]), NOW);
+  assert.deepStrictEqual([...set.slugs], ['r1', 'p1', 'o1', 'o2']);
+  assert.strictEqual(set.opened, 2);
+  // Picks beat opened items when the cap is tight.
+  const tight = pickOfflineSet(items, new Map([['p1', NOW]]), NOW, 3);
+  assert.deepStrictEqual([...tight.slugs], ['r1', 'p1', 'o1']);
+  assert.deepStrictEqual(tight.dropped, []);
+});
+
+test('offline downloads ask for the 1200px copy only when the image is wider or of unknown width', () => {
+  const f = imageFetches({
+    images: [{ path: '/img/u/big.png', width: 2400 }, { path: '/img/u/small.webp', width: 800 }, { path: '/img/u/nodims.jpg' }],
+    og_image_path: '/img/u/og.png',
+  });
+  assert.deepStrictEqual(f, [
+    { path: '/img/u/big.png', fetch: '/img/u/big.png?w=1200' },
+    { path: '/img/u/small.webp', fetch: '/img/u/small.webp' },
+    { path: '/img/u/nodims.jpg', fetch: '/img/u/nodims.jpg?w=1200' },
+    { path: '/img/u/og.png', fetch: '/img/u/og.png?w=1200' },
+  ]);
 });
 
 test('recent items are offline, older ones only when picked', () => {
@@ -59,4 +85,12 @@ test('10k items pick in well under 50 ms', () => {
   const ms = performance.now() - t;
   assert.strictEqual(set.slugs.size, 1000);
   assert.ok(ms < 50, `took ${ms.toFixed(1)} ms`);
+});
+
+test('deleting an image also deletes its offline copy in R2', async () => {
+  const storage = require('../src/lib/storage.js');
+  let deleted = null;
+  const env = { BUCKET: { delete: async (keys) => { deleted = keys; } } };
+  await storage.remove(env, ['/img/u/a/og.png', 'https://elsewhere.com/x.png']);
+  assert.deepStrictEqual(deleted, ['u/a/og.png', 'u/a/og.png.w1200.webp']);
 });

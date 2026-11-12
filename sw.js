@@ -2,15 +2,16 @@
  *
  *   pages, app.js, style.css, fonts, icons → network first, cached copy
  *                                            when offline or slow (4 s)
- *   /img/*                                 → offline image cache first
- *                                            (filled by offline.js), else network
+ *   /img/*                                 → network when online; the offline image
+ *                                            cache (filled by offline.js) when
+ *                                            offline or the network fails
  *   /api/*                                 → never touched (always network)
  *
  * The page posts { type: 'precache', urls } after load (offline.js), so the
  * shell cache holds exactly the files that page used.
  */
 const SHELL = 'stello-shell-v1';
-const IMG = 'stello-offline-img-v1';
+const IMG = 'stello-offline-img-v2';
 const NETWORK_TIMEOUT_MS = 4000;
 
 self.addEventListener('install', (event) => {
@@ -22,6 +23,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     for (const key of await caches.keys()) {
       if (key.startsWith('stello-shell-') && key !== SHELL) await caches.delete(key);
+      if (key.startsWith('stello-offline-img-') && key !== IMG) await caches.delete(key);
     }
     await self.clients.claim();
   })());
@@ -70,10 +72,19 @@ async function networkFirst(request, cacheKey) {
   return network; // nothing cached: wait for (or fail with) the network
 }
 
+// Online: the full image from the network (sharp in the detail panel).
+// Offline, or the network fails: the ≤1200px offline copy.
 async function imageFirst(request) {
   const url = new URL(request.url);
-  const cached = await caches.open(IMG).then((c) => c.match(url.pathname)).catch(() => null);
-  return cached || fetch(request);
+  const fromCache = () => caches.open(IMG).then((c) => c.match(url.pathname)).catch(() => null);
+  if (self.navigator.onLine === false) return (await fromCache()) || fetch(request);
+  try {
+    return await fetch(request);
+  } catch (err) {
+    const cached = await fromCache();
+    if (cached) return cached;
+    throw err;
+  }
 }
 
 self.addEventListener('fetch', (event) => {
