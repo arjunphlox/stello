@@ -53,15 +53,6 @@ struct ItemCardView: View {
 
     private static let visualCornerRadius: CGFloat = 6
     private static let selectionOutlineOffset: CGFloat = 4
-    private static let hues: [Double] = [18, 80, 38, 140, 25, 45, 12, 100]
-    private func stableHash(_ s: String) -> Int {
-        s.utf8.reduce(5381) { ($0 &* 33) &+ Int($1) }
-    }
-
-    private var coverHue: Double {
-        Self.hues[abs(stableHash(item.slug)) % Self.hues.count] / 360.0
-    }
-
     private var primaryImage: ItemImage? { item.coverImage }
 
     private var hasImage: Bool {
@@ -362,21 +353,10 @@ struct ItemCardView: View {
         }
     }
 
+    /// Loading and video tiles: the neutral card surface the icon tiles use, never a
+    /// colour (Arjun, 11 Nov 2026: no accent or tinted tiles on imageless cards).
     private var placeholderGradient: some View {
-        let hash = abs(stableHash(item.slug))
-        let hueShift = Double(hash % 360) / 360.0
-        return LinearGradient(
-            colors: [
-                Color(hue: (coverHue + hueShift).truncatingRemainder(dividingBy: 1),
-                      saturation: theme.mode == .dark ? 0.28 : 0.18,
-                      brightness: theme.mode == .dark ? 0.32 : 0.88),
-                Color(hue: (coverHue + hueShift + 0.08).truncatingRemainder(dividingBy: 1),
-                      saturation: theme.mode == .dark ? 0.22 : 0.14,
-                      brightness: theme.mode == .dark ? 0.14 : 0.78),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        theme.mode == .light ? theme.borderSubtle : theme.surfaceRaised
     }
 
     #if os(iOS)

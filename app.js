@@ -1434,10 +1434,28 @@
     return `<div class="card-glyph-tile" style="view-transition-name:${vtName}"><span class="card-glyph" aria-hidden="true">${GLYPH_SVG[iconName] || GLYPH_SVG.link}</span></div>`;
   }
 
+  // A cover that fails to load (missing in storage) shows the neutral icon tile, as an
+  // imageless card does, never an empty or tinted box.
+  window.stelloCoverFailed = function (img) {
+    const area = img.parentElement;
+    const card = img.closest('.card');
+    if (!area || !card) return;
+    const vt = img.style.viewTransitionName || '';
+    img.outerHTML = glyphTileHTML(img.dataset.glyph || 'link', vt);
+    card.classList.remove('card-visual');
+    card.classList.add('card-glyph-card');
+    area.querySelectorAll('.card-badges').forEach(n => n.remove());
+  };
+
   function renderCard(item, idx) {
     let thumbHtml;
     const hasImage = item.has_image && item.image_path;
     const vtName = `card-${cssSlug(item.slug)}`;
+
+    // The icon an imageless card shows; also the fallback when a cover fails to load.
+    const glyph = glyphTileFor(item);
+    const isNote = (!item.kind || item.kind === 'link') && !item.source_url;
+    const glyphName = glyph ? glyph.icon : (isNote ? 'file-text' : (KIND_GLYPH[item.kind] || 'link'));
 
     if (hasImage) {
       // Emit width/height when known so the browser reserves the exact slot
@@ -1447,13 +1465,11 @@
       // capture.
       const dims = (item.image_width && item.image_height)
         ? ` width="${item.image_width}" height="${item.image_height}"` : '';
-      thumbHtml = `<img class="card-thumb" src="${item.image_path}" alt=""${dims} loading="lazy" style="view-transition-name:${vtName}" onerror="this.parentElement.classList.add('img-error')">`;
+      thumbHtml = `<img class="card-thumb" src="${item.image_path}" alt=""${dims} loading="lazy" style="view-transition-name:${vtName}" data-glyph="${glyphName}" onerror="window.stelloCoverFailed && window.stelloCoverFailed(this)">`;
     } else {
       // Every imageless card, text-only ones included (Arjun, 11 Nov 2026): one neutral
       // tile with its dominant category glyph. Link-less notes get a note glyph.
-      const glyph = glyphTileFor(item);
-      const isNote = (!item.kind || item.kind === 'link') && !item.source_url;
-      thumbHtml = glyphTileHTML(glyph ? glyph.icon : (isNote ? 'file-text' : (KIND_GLYPH[item.kind] || 'link')), vtName);
+      thumbHtml = glyphTileHTML(glyphName, vtName);
     }
 
     // URL pill — bottom-right. Default: 20% color bg + white text.
