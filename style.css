@@ -2760,3 +2760,76 @@ button.sub-ref:hover { border-color: var(--accent); }
 .grid-columns-stepper button:hover:not(:disabled) { background: var(--border); }
 .grid-columns-stepper button:disabled { opacity: 0.35; cursor: default; }
 .settings-hint { margin: 0; font-size: 0.7rem; color: var(--text-dim); }
+
+/* === PROFILE HEADER (settings) — the Mac's ProfileHeaderRow === */
+.settings-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0;
+}
+.profile-avatar {
+  position: relative;
+  flex: 0 0 80px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  cursor: pointer;
+  overflow: hidden;
+}
+.profile-avatar-img {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.profile-avatar-img svg { width: 44px; height: 44px; opacity: 0.55; }
+.profile-avatar-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.profile-avatar.has-photo .profile-avatar-img { border-color: transparent; }
+.profile-avatar-plus {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.38);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.profile-avatar:hover .profile-avatar-plus,
+.profile-avatar:focus-within .profile-avatar-plus,
+.profile-avatar.is-busy .profile-avatar-plus { opacity: 1; }
+.profile-avatar.is-busy { cursor: progress; }
+.profile-fields {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.profile-fields input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  color: var(--text);
+  font-family: inherit;
+}
+.profile-fields input:hover { border-color: var(--border); }
+.profile-fields input:focus { outline: none; border-color: var(--accent); background: var(--bg); }
+.profile-fields .profile-name { font-size: 17px; font-weight: 600; }
+.profile-fields .profile-designation { font-size: 13px; color: var(--text-secondary); }
+.profile-fields input::placeholder { color: var(--text-dim); }
+.bar-btn-avatar.has-photo { overflow: hidden; }
+.bar-avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }

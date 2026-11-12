@@ -315,6 +315,7 @@
     PanelManager.init();
     CardMenu.init();
     DropManager.init();
+    ProfileManager.init();
 
     // Background-stream remaining pages. Only runs if the first page hit the
     // limit — small libraries are done in a single round trip.
@@ -2821,10 +2822,110 @@
     }
   }
 
+  // --- Profile (the Mac's UserProfileStore: name, designation, photo) ---
+  // Lives in the account (/api/me/profile), so every browser shows the same one.
+  // The photo replaces the bottom bar's person icon, as on the Mac.
+  const ProfileManager = (() => {
+    let profile = { name: '', designation: '', avatar_path: null };
+    let loaded = null;
+
+    function paintBar() {
+      const $btn = document.getElementById('settings-btn');
+      if (!$btn) return;
+      if (profile.avatar_path) {
+        $btn.innerHTML = `<img class="bar-avatar-img" src="${escHtml(profile.avatar_path)}" alt="">`;
+        $btn.classList.add('has-photo');
+      } else if ($btn.classList.contains('has-photo')) {
+        $btn.classList.remove('has-photo');
+        $btn.innerHTML = icon('user-circle');
+      }
+    }
+
+    function paintPanel($panel) {
+      const $img = $panel.querySelector('.profile-avatar-img');
+      if ($img) {
+        $img.innerHTML = profile.avatar_path
+          ? `<img src="${escHtml(profile.avatar_path)}" alt="">`
+          : icon('user-circle');
+        $img.parentElement.classList.toggle('has-photo', !!profile.avatar_path);
+      }
+      const $name = $panel.querySelector('.profile-name');
+      const $des = $panel.querySelector('.profile-designation');
+      if ($name && document.activeElement !== $name) $name.value = profile.name || '';
+      if ($des && document.activeElement !== $des) $des.value = profile.designation || '';
+    }
+
+    async function load() {
+      if (!loaded) {
+        loaded = (async () => {
+          try {
+            const res = await apiFetch('/api/me/profile');
+            if (res.ok) profile = await res.json();
+          } catch { /* signed out or offline: keep the empty profile */ }
+          paintBar();
+        })();
+      }
+      return loaded;
+    }
+
+    async function saveText(patch) {
+      const res = await apiFetch('/api/me/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (res.ok) profile = await res.json();
+    }
+
+    async function savePhoto(file, $panel) {
+      if (!file || !file.type.startsWith('image/')) return;
+      $panel.querySelector('.profile-avatar')?.classList.add('is-busy');
+      try {
+        const res = await apiFetch('/api/me/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+        if (!res.ok) throw new Error('upload failed');
+        profile = await res.json();
+        paintBar();
+        paintPanel($panel);
+      } catch {
+        showToast('Couldn\u2019t save the photo');
+      } finally {
+        $panel.querySelector('.profile-avatar')?.classList.remove('is-busy');
+      }
+    }
+
+    // Wires the settings panel's profile header (called each time it opens).
+    async function bindPanel($panel) {
+      await load();
+      paintPanel($panel);
+      const $input = $panel.querySelector('.profile-avatar-input');
+      if ($input) $input.addEventListener('change', () => { savePhoto($input.files[0], $panel); $input.value = ''; });
+      for (const [sel, key] of [['.profile-name', 'name'], ['.profile-designation', 'designation']]) {
+        const $f = $panel.querySelector(sel);
+        if (!$f) continue;
+        const commit = () => {
+          const v = $f.value.trim();
+          if (v !== (profile[key] || '')) saveText({ [key]: v }).catch(() => showToast('Couldn\u2019t save the profile'));
+        };
+        $f.addEventListener('blur', commit);
+        $f.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); $f.blur(); }
+          if (e.key === 'Escape') { $f.value = profile[key] || ''; $f.blur(); }
+        });
+      }
+    }
+
+    return { init: load, bindPanel };
+  })();
+
   // --- Settings tool panel body (wired when the panel opens) ---
   async function loadSettingsIntoPanel() {
     const $panel = document.querySelector('.panel-tool[data-tool="settings"]');
     if (!$panel) return;
+    ProfileManager.bindPanel($panel);
     const $keyInput = $panel.querySelector('.settings-key');
     const $profileInput = $panel.querySelector('.settings-profile');
     const $status = $panel.querySelector('.settings-status');
@@ -2938,6 +3039,17 @@
         $link.addEventListener('click', () => Stello.signInWithApple({ link: true }));
       }
     })();
+
+    // Bookmarklet (the web's Share Extension): opens save.html in a small window with
+    // the page's link and title. Dragged to the bookmarks bar; a click here does nothing.
+    const $bm = $panel.querySelector('.settings-bookmarklet-link');
+    if ($bm) {
+      const target = JSON.stringify(location.origin + '/save.html');
+      $bm.href = 'javascript:(function(){window.open(' + target +
+        "+'?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)," +
+        "'stello-save','width=420,height=300')})()";
+      $bm.addEventListener('click', e => e.preventDefault());
+    }
 
     // Logout — ends the session and redirects to the login page
     const $logout = $panel.querySelector('.settings-logout');
