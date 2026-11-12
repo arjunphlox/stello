@@ -12,6 +12,8 @@
  */
 import { Hono } from 'hono';
 import { route } from './lib/adapter.js';
+import storage from './lib/storage.js';
+import images from './lib/images.js';
 
 import capture from './routes/capture.js';
 import captureBulk from './routes/capture-bulk.js';
@@ -103,9 +105,15 @@ app.post('/api/cron/drain-enrichment', async (c) => {
 });
 
 // --- Image serving from R2 (zero egress; replaces Supabase public URLs) ---
+//   /img/<key>          the stored image
+//   /img/<key>?w=1200   its offline copy (≤1200px WebP) for the web app's
+//                       offline cache (offline.js). Made on the first request
+//                       and kept in R2 next to the original, so each image
+//                       costs one Images transformation, ever.
 app.get('/img/*', async (c) => {
   const key = decodeURIComponent(new URL(c.req.url).pathname.slice('/img/'.length));
   if (!key) return c.notFound();
+  if (c.req.query('w') === String(images.OFFLINE_WIDTH)) return serveOfflineCopy(c, key);
   const obj = await c.env.BUCKET.get(key);
   if (!obj || !obj.body) return c.notFound();
   const headers = new Headers();
@@ -114,6 +122,30 @@ app.get('/img/*', async (c) => {
   headers.set('cache-control', 'public, max-age=31536000, immutable');
   return new Response(obj.body, { headers });
 });
+
+async function serveOfflineCopy(c, key) {
+  const headers = { 'cache-control': 'public, max-age=31536000, immutable' };
+  const copyKey = storage.offlineKey(key);
+  const existing = await c.env.BUCKET.get(copyKey);
+  if (existing && existing.body) {
+    return new Response(existing.body, { headers: { ...headers, 'content-type': 'image/webp' } });
+  }
+  const original = await c.env.BUCKET.get(key);
+  if (!original || !original.body) return c.notFound();
+  const type = original.httpMetadata?.contentType || 'application/octet-stream';
+  const bytes = new Uint8Array(await original.arrayBuffer());
+  const copy = await images.offlineCopy(c.env, bytes);
+  if (!copy) {
+    // No transform (quota, unsupported input): hand back the original, store nothing.
+    return new Response(bytes, { headers: { ...headers, 'content-type': type } });
+  }
+  // A copy that came out bigger (already small or well compressed) isn't worth
+  // keeping: store the original bytes instead so the transform never repeats.
+  const keep = copy.byteLength < bytes.byteLength ? copy : bytes;
+  const keepType = keep === copy ? 'image/webp' : type;
+  c.executionCtx.waitUntil(c.env.BUCKET.put(copyKey, keep, { httpMetadata: { contentType: keepType } }));
+  return new Response(keep, { headers: { ...headers, 'content-type': keepType } });
+}
 
 // --- Fallback: anything that reached the Worker but isn't ours → static assets.
 // (Only hit for non-asset paths under run_worker_first's fallthrough.)

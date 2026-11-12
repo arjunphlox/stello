@@ -17,7 +17,10 @@
 
   const OFFLINE_CAP = 1000;
   const RECENT_DAYS = 28;
-  const IMG_CACHE = 'stello-offline-img-v1';
+  const OPENED_DAYS = 30;
+  const OFFLINE_WIDTH = 1200; // matches images.OFFLINE_WIDTH on the Worker
+  // v2: offline copies are the ≤1200px versions (v1 held full-size originals).
+  const IMG_CACHE = 'stello-offline-img-v2';
   const DB_NAME = 'stello-offline';
   const DB_VERSION = 1;
   const FETCH_CONCURRENCY = 4;
@@ -31,18 +34,31 @@
 
   /** All image URLs one item shows (grid card + detail panel). */
   function imageUrls(item) {
-    const out = new Set();
+    return imageFetches(item).map(f => f.path);
+  }
+
+  /** Each image as { path (what <img> asks for), fetch (what to download) }.
+   *  Wider than 1200px, or width unknown → the Worker's smaller offline copy. */
+  function imageFetches(item) {
+    const out = new Map();
     for (const img of (Array.isArray(item.images) ? item.images : [])) {
-      if (img && typeof img.path === 'string' && img.path.startsWith('/img/')) out.add(img.path);
+      if (img && typeof img.path === 'string' && img.path.startsWith('/img/') && !out.has(img.path)) {
+        const small = Number(img.width) > 0 && Number(img.width) <= OFFLINE_WIDTH;
+        out.set(img.path, small ? img.path : `${img.path}?w=${OFFLINE_WIDTH}`);
+      }
     }
-    if (typeof item.og_image_path === 'string' && item.og_image_path.startsWith('/img/')) out.add(item.og_image_path);
-    return [...out];
+    const og = item.og_image_path;
+    if (typeof og === 'string' && og.startsWith('/img/') && !out.has(og)) out.set(og, `${og}?w=${OFFLINE_WIDTH}`);
+    return [...out].map(([path, fetch]) => ({ path, fetch }));
   }
 
   /**
-   * Which items keep their images offline. Recent items first (newest first),
-   * then picks (newest pick first), at most `cap` items in all.
-   * pins: Map<slug, pinnedAtMs>. Returns { slugs: Set, recent, pinned, dropped }.
+   * Which items keep their images offline, at most `cap` items in all:
+   *   1. saved in the last 4 weeks (newest first)
+   *   2. "Save Offline" picks (newest pick first)
+   *   3. opened in the last 30 days on any device (last_opened_at, newest first)
+   * pins: Map<slug, pinnedAtMs>.
+   * Returns { slugs: Set, recent, pinned, opened, dropped } (dropped = picks that didn't fit).
    */
   function pickOfflineSet(items, pins, now = Date.now(), cap = OFFLINE_CAP) {
     const cutoff = now - RECENT_DAYS * 86400000;
@@ -59,10 +75,20 @@
       if (slugs.size >= cap) { dropped.push(s); continue; }
       slugs.add(s);
     }
-    return { slugs, recent: recentCount, pinned: slugs.size - recentCount, dropped };
+    const pinnedCount = slugs.size - recentCount;
+    const openCutoff = now - OPENED_DAYS * 86400000;
+    const opened = items.filter(i => !i.deleted_at && !slugs.has(i.slug) && openedTime(i) >= openCutoff)
+      .sort((a, b) => openedTime(b) - openedTime(a));
+    for (const i of opened) { if (slugs.size >= cap) break; slugs.add(i.slug); }
+    return { slugs, recent: recentCount, pinned: pinnedCount, opened: slugs.size - recentCount - pinnedCount, dropped };
   }
 
-  const api = { OFFLINE_CAP, RECENT_DAYS, IMG_CACHE, imageUrls, pickOfflineSet };
+  function openedTime(item) {
+    const t = Date.parse(item && item.last_opened_at);
+    return Number.isFinite(t) ? t : 0;
+  }
+
+  const api = { OFFLINE_CAP, RECENT_DAYS, OPENED_DAYS, OFFLINE_WIDTH, IMG_CACHE, imageUrls, imageFetches, pickOfflineSet };
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
@@ -191,23 +217,24 @@
     _offlineSlugs = set.slugs;
     root.dispatchEvent(new CustomEvent('stello:offline-set', { detail: set }));
 
-    const want = new Set();
-    for (const item of items) if (set.slugs.has(item.slug)) imageUrls(item).forEach(u => want.add(u));
+    const want = new Map(); // path → URL to download
+    for (const item of items) if (set.slugs.has(item.slug)) imageFetches(item).forEach(f => want.set(f.path, f.fetch));
 
     const cache = await caches.open(IMG_CACHE);
     const have = new Set((await cache.keys()).map(r => new URL(r.url).pathname));
     await Promise.all([...have].filter(u => !want.has(u)).map(u => cache.delete(u)));
 
-    const todo = [...want].filter(u => !have.has(u));
+    const todo = [...want.keys()].filter(u => !have.has(u));
     if (!todo.length || !navigator.onLine) return;
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     let i = 0;
     async function worker() {
       while (i < todo.length && navigator.onLine && !_again) {
-        const url = todo[i++];
+        const path = todo[i++];
         try {
-          const res = await fetch(url, { credentials: 'same-origin' });
-          if (res.ok) await cache.put(url, res);
+          // Stored under the plain path, so the grid's <img src> finds it offline.
+          const res = await fetch(want.get(path), { credentials: 'same-origin' });
+          if (res.ok) await cache.put(path, res);
         } catch { /* offline or a missing image; next sync retries */ }
       }
     }
@@ -220,7 +247,9 @@
   /** Sign-out: nothing of this account stays on the device. */
   async function clearAll() {
     _pins = null; _offlineSlugs = new Set();
-    try { if (root.caches) await caches.delete(IMG_CACHE); } catch {}
+    try {
+      if (root.caches) for (const k of await caches.keys()) if (k.startsWith('stello-offline-img-')) await caches.delete(k);
+    } catch {}
     try {
       const db = await openDb();
       const tx = db.transaction(['items', 'pins', 'meta'], 'readwrite');

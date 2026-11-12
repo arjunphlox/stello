@@ -138,4 +138,25 @@ async function ensureWebp(env, input, opts = {}) {
   return toWebp(env, raw, opts);
 }
 
-module.exports = { toWebp, ensureWebp, isWebp };
+/**
+ * The smaller copy kept for offline use on the web (offline.js): at most
+ * OFFLINE_WIDTH wide, WebP. One transformation (no info() pass): fit
+ * 'scale-down' never enlarges. Returns the bytes, or null when the binding
+ * can't (absent locally, unsupported input, free-plan quota reached).
+ */
+const OFFLINE_WIDTH = 1200;
+async function offlineCopy(env, input) {
+  const raw = input instanceof Uint8Array ? input : new Uint8Array(input);
+  try {
+    const result = await env.IMAGES
+      .input(toStream(raw))
+      .transform({ width: OFFLINE_WIDTH, fit: 'scale-down' })
+      .output({ format: 'image/webp', quality: 78, anim: true });
+    return new Uint8Array(await result.response().arrayBuffer());
+  } catch (err) {
+    console.warn('offlineCopy failed', (err && err.message) || err);
+    return null;
+  }
+}
+
+module.exports = { toWebp, ensureWebp, isWebp, offlineCopy, OFFLINE_WIDTH };
