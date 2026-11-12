@@ -6,6 +6,7 @@
   // --- Icons (Phosphor regular, 16x16) ---
   const ICONS = {
     'gear': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm88-29.84q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.21,107.21,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.71,107.71,0,0,0-26.25-10.87,8,8,0,0,0-7.06,1.49L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.21,107.21,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06Zm-16.1-6.5a73.93,73.93,0,0,1,0,8.68,8,8,0,0,0,1.74,5.48l14.19,17.73a91.57,91.57,0,0,1-6.23,15L187,173.11a8,8,0,0,0-5.1,2.64,74.11,74.11,0,0,1-6.14,6.14,8,8,0,0,0-2.64,5.1l-2.51,22.58a91.32,91.32,0,0,1-15,6.23l-17.74-14.19a8,8,0,0,0-5-1.75h-.48a73.93,73.93,0,0,1-8.68,0,8,8,0,0,0-5.48,1.74L100.45,215.8a91.57,91.57,0,0,1-15-6.23L82.89,187a8,8,0,0,0-2.64-5.1,74.11,74.11,0,0,1-6.14-6.14,8,8,0,0,0-5.1-2.64L46.43,170.6a91.32,91.32,0,0,1-6.23-15l14.19-17.74a8,8,0,0,0,1.74-5.48,73.93,73.93,0,0,1,0-8.68,8,8,0,0,0-1.74-5.48L40.2,100.45a91.57,91.57,0,0,1,6.23-15L69,82.89a8,8,0,0,0,5.1-2.64,74.11,74.11,0,0,1,6.14-6.14A8,8,0,0,0,82.89,69L85.4,46.43a91.32,91.32,0,0,1,15-6.23l17.74,14.19a8,8,0,0,0,5.48,1.74,73.93,73.93,0,0,1,8.68,0,8,8,0,0,0,5.48-1.74L155.55,40.2a91.57,91.57,0,0,1,15,6.23L173.11,69a8,8,0,0,0,2.64,5.1,74.11,74.11,0,0,1,6.14,6.14,8,8,0,0,0,5.1,2.64l22.58,2.51a91.32,91.32,0,0,1,6.23,15l-14.19,17.74A8,8,0,0,0,199.87,123.66Z"/></svg>',
+    'cloud-arrow-down': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M80,128a80,80,0,1,1,80,80H72A56,56,0,1,1,85.92,97.74"/><path d="M144,112v56"/><path d="M120,144l24,24,24-24"/></svg>',
     'plus': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg>',
     'funnel': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M230.6,49.53A15.81,15.81,0,0,0,216,40H40A16,16,0,0,0,28.19,66.76l.08.09L96,139.17V216a16,16,0,0,0,24.87,13.32l32-21.34A16,16,0,0,0,160,194.66V139.17l67.74-72.32.08-.09A15.8,15.8,0,0,0,230.6,49.53ZM40,56h0Zm106.18,74.58A8,8,0,0,0,144,136v58.66L112,216V136a8,8,0,0,0-2.16-5.47L40,56H216Z"/></svg>',
     'x': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg>',
@@ -34,8 +35,11 @@
   // --- State ---
   let allItems = [];
   let itemsBySlug = {};      // slug -> item lookup
+  let loadedFromDevice = 0;  // savedAt (ms) when the grid opened from the offline copy
+  let libraryComplete = false; // every page arrived from the server this session
   let activeTags = [];      // tag names; a name matches in any category, as on the Mac (ItemFilter)
   let needsReviewOnly = false;
+  let offlineOnly = false;   // filter: items whose images are kept on this device
   let searchQuery = '';
   let relatedIndex = {};     // slug -> Set of related slugs
 
@@ -292,17 +296,32 @@
     // appended without disturbing the already-rendered first weeks.
     const PAGE = 1000;
 
+    // Returns null when the network or server fails (offline), so the
+    // caller can fall back to the copy on this device.
     async function fetchItemsPage(from) {
-      const body = await Stello.apiGet(`/api/items?offset=${from}&limit=${PAGE}`);
-      if (!body) {
-        console.error('Failed to load items');
-        return [];
+      try {
+        const body = await Stello.apiGet(`/api/items?offset=${from}&limit=${PAGE}`);
+        if (!body) { console.error('Failed to load items'); return null; }
+        return body.items || [];
+      } catch {
+        return null;
       }
-      return body.items || [];
     }
 
-    const firstPage = await fetchItemsPage(0);
-    allItems = firstPage.map(normalizeItem);
+    const userId = Stello.getUserId();
+    const Offline = window.StelloOffline || null;
+    let firstPage = Stello.isSessionFromCache && Stello.isSessionFromCache() ? null : await fetchItemsPage(0);
+    if (firstPage === null && Offline) {
+      const saved = await Offline.loadLibrary(userId);
+      if (saved) {
+        allItems = saved.items.map(normalizeItem);
+        loadedFromDevice = saved.savedAt;
+      } else {
+        allItems = [];
+      }
+    } else {
+      allItems = (firstPage || []).map(normalizeItem);
+    }
     sortItemsByAddedAt(allItems);
     itemsBySlug = {};
     allItems.forEach(item => { itemsBySlug[item.slug] = item; });
@@ -316,13 +335,36 @@
     CardMenu.init();
     DropManager.init();
     ProfileManager.init();
+    OfflineUI.init();
+
+    // Library fully in memory from the server → refresh the device copy and
+    // the offline images (idle, after first paint).
+    const afterFullLoad = () => {
+      libraryComplete = true;
+      if (!Offline) return;
+      const run = () => {
+        Offline.saveLibrary(userId, allItems).catch(err => console.warn('[offline] save failed', err));
+        Offline.syncImages(allItems);
+      };
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 5000 });
+      else setTimeout(run, 2000);
+    };
+
+    if (loadedFromDevice) {
+      // Offline launch: no server work. Offline images still line up with the
+      // device copy (and drop items that aged out of the 4-week window).
+      if (Offline) Offline.syncImages(allItems);
+      return;
+    }
 
     // Background-stream remaining pages. Only runs if the first page hit the
     // limit — small libraries are done in a single round trip.
-    if (firstPage.length === PAGE) {
+    if (firstPage && firstPage.length === PAGE) {
       (async () => {
+        let complete = true;
         for (let from = PAGE; ; from += PAGE) {
           const page = await fetchItemsPage(from);
+          if (page === null) { complete = false; break; }
           if (page.length === 0) break;
           const normalized = page.map(normalizeItem);
           allItems = allItems.concat(normalized);
@@ -340,7 +382,11 @@
         // backfillImageDimensions is idempotent and self-locking so
         // overlapping calls coalesce safely.
         setTimeout(() => backfillImageDimensions(), 500);
+        // A page failed mid-way: keep the older device copy rather than save a partial one.
+        if (complete) afterFullLoad();
       })();
+    } else if (firstPage) {
+      afterFullLoad();
     }
 
     // Kick off silent backfill for items that predate the entity-decode
@@ -781,6 +827,7 @@
     return allItems.filter(item => {
       if (searchQuery && !searchBlob(item).includes(searchQuery.toLowerCase())) return false;
       if (needsReviewOnly && !isAwaitingReview(item)) return false;
+      if (offlineOnly && !(window.StelloOffline && StelloOffline.isOffline(item.slug))) return false;
       if (selectedWeek && getWeekKey(item.added_at) !== selectedWeek) return false;
       if (activeTags.length > 0) {
         // Same rule as the Mac's ItemFilter: a tag is its name, whatever its category.
@@ -1320,7 +1367,7 @@
 
   function updateFilterButtonState() {
     const btn = document.getElementById('filter-panel-btn');
-    if (btn) btn.classList.toggle('has-filters', activeTags.length > 0 || !!selectedWeek || needsReviewOnly);
+    if (btn) btn.classList.toggle('has-filters', activeTags.length > 0 || !!selectedWeek || needsReviewOnly || offlineOnly);
   }
 
   function sortItemsByAddedAt(arr) {
@@ -2042,13 +2089,93 @@
     downloadBlob(zipFiles(files), `${name}.zip`);
   }
 
+  // --- Offline (offline.js + sw.js) ---
+  // The status pill, the "Save Offline" toggle, the "changes need a
+  // connection" toast, and keeping the device copy fresh.
+  const OfflineUI = (function () {
+    let $pill = null;
+    let lastBlockedToast = 0;
+    let lastSave = 0;
+    const SAVE_EVERY_MS = 5 * 60 * 1000;
+
+    function renderPill() {
+      const offline = navigator.onLine === false;
+      const show = offline || !!loadedFromDevice;
+      if (!show) { if ($pill) { $pill.remove(); $pill = null; } return; }
+      if (!$pill) {
+        $pill = document.createElement('div');
+        $pill.className = 'offline-pill';
+        $pill.setAttribute('role', 'status');
+        document.body.appendChild($pill);
+      }
+      const when = loadedFromDevice ? ` from ${new Date(loadedFromDevice).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : '';
+      if (offline) {
+        const what = loadedFromDevice ? `your saved copy${when}` : 'changes need a connection';
+        $pill.innerHTML = `<span class="offline-dot" aria-hidden="true"></span>Offline · ${escHtml(what)}`;
+      } else {
+        // Opened from the device copy but the browser says it's online
+        // (network back, or a connection that can't reach Stello): offer the live library.
+        $pill.innerHTML = `<span class="offline-dot is-online" aria-hidden="true"></span>Your saved copy${escHtml(when)} <button type="button" class="offline-refresh">Refresh</button>`;
+        $pill.querySelector('.offline-refresh').addEventListener('click', () => location.reload());
+      }
+    }
+
+    async function togglePin(item) {
+      const O = window.StelloOffline;
+      if (!O) return;
+      const on = !O.isPinned(item.slug);
+      await O.setPinned(item.slug, on);
+      if (on) {
+        const set = O.pickOfflineSet(allItems, await O.loadPins());
+        if (set.dropped.includes(item.slug)) {
+          await O.setPinned(item.slug, false);
+          showToast(`Offline is full (${O.OFFLINE_CAP.toLocaleString()} items). Remove an offline copy first.`);
+          return;
+        }
+        showToast(navigator.onLine === false ? 'Saved offline. Images download when you’re back online' : 'Saved offline');
+      } else {
+        const recent = Date.parse(item.added_at) >= Date.now() - O.RECENT_DAYS * 86400000;
+        showToast(recent ? 'Offline copy removed. Items from the last 4 weeks stay offline' : 'Offline copy removed');
+      }
+      await O.syncImages(allItems);
+      if (offlineOnly) renderGrid();
+    }
+
+    function saveSoon() {
+      const O = window.StelloOffline;
+      if (!O || !libraryComplete || Date.now() - lastSave < SAVE_EVERY_MS) return;
+      lastSave = Date.now();
+      O.saveLibrary(Stello.getUserId(), allItems).catch(() => {});
+    }
+
+    function init() {
+      const O = window.StelloOffline;
+      if (!O) return;
+      O.loadPins();
+      O.registerServiceWorker();
+      renderPill();
+      window.addEventListener('online', () => { renderPill(); if (libraryComplete) O.syncImages(allItems); });
+      window.addEventListener('offline', renderPill);
+      window.addEventListener('stello:offline-blocked', () => {
+        if (Date.now() - lastBlockedToast < 4000) return;
+        lastBlockedToast = Date.now();
+        showToast('You’re offline. Changes need a connection');
+      });
+      window.addEventListener('stello:offline-set', () => { if (offlineOnly) renderGrid(); });
+      // Keep the device copy close to what's on screen (edits, new saves).
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveSoon(); });
+    }
+
+    return { init, togglePin };
+  })();
+
   const CardMenu = (function () {
     let $menu = null;
     let slug = null;
 
     const ICON_FOR = {
       open: 'arrow-up-right', enrich: 'sparkle', share: 'share', 'copy-link': 'link',
-      copy: 'copy', download: 'download', delete: 'trash',
+      copy: 'copy', download: 'download', delete: 'trash', offline: 'cloud-arrow-down',
     };
 
     function entries(item) {
@@ -2065,6 +2192,9 @@
         { id: 'copy-md', label: 'Copy Details (Markdown)' },
         ...(hasImage ? [{ id: 'copy-image', label: 'Copy Image' }] : []),
       ] });
+      if (window.StelloOffline) {
+        list.push({ id: 'offline', label: StelloOffline.isPinned(item.slug) ? 'Remove Offline Copy' : 'Save Offline' });
+      }
       list.push({ id: 'download', label: 'Download', sub: [
         { id: 'dl-md', label: 'Download Markdown' },
         ...(hasImage ? [{ id: 'dl-image', label: 'Download Image' }] : []),
@@ -2129,6 +2259,7 @@
         case 'dl-image': downloadImage(item); break;
         case 'dl-full': downloadFullItem(item); break;
         case 'delete': deleteItem(item.slug); break;
+        case 'offline': OfflineUI.togglePin(item); break;
         default: break;
       }
     }
@@ -2197,17 +2328,20 @@
   // --- Active filter pills ---
   function renderActiveFilters() {
     updateFilterButtonState();
-    if (activeTags.length === 0 && !selectedWeek && !needsReviewOnly) {
+    if (activeTags.length === 0 && !selectedWeek && !needsReviewOnly && !offlineOnly) {
       $activeFilters.innerHTML = '';
       return;
     }
     const reviewPill = needsReviewOnly
       ? `<span class="active-filter-pill active-filter-review" data-review="1">Needs review <span class="x">&times;</span></span>`
       : '';
+    const offlinePill = offlineOnly
+      ? `<span class="active-filter-pill active-filter-offline" data-offline="1">Available offline <span class="x">&times;</span></span>`
+      : '';
     const weekPill = selectedWeek
       ? `<span class="active-filter-pill active-filter-week" data-week="${selectedWeek}">${escHtml(weekLabelFor(selectedWeek))} <span class="x">&times;</span></span>`
       : '';
-    $activeFilters.innerHTML = reviewPill + weekPill + activeTags.map((at, i) =>
+    $activeFilters.innerHTML = reviewPill + offlinePill + weekPill + activeTags.map((at, i) =>
       `<span class="active-filter-pill" data-idx="${i}">${escHtml(at)} <span class="x">&times;</span></span>`
     ).join('') + `<button class="clear-filters-btn" id="clear-filters">Clear all</button>`;
   }
@@ -2373,6 +2507,7 @@
       if (e.target.id === 'clear-filters' || e.target.closest('#clear-filters')) {
         activeTags = [];
         needsReviewOnly = false;
+        offlineOnly = false;
         syncReviewToggle();
         renderTagDrawer();
         if (selectedWeek) { setWeekFilter(null); return; }
@@ -2383,6 +2518,7 @@
       const pill = e.target.closest('.active-filter-pill');
       if (!pill) return;
       if (pill.dataset.week) { setWeekFilter(null); return; }
+      if (pill.dataset.offline) { setOfflineOnly(false); return; }
       if (pill.dataset.review) { setNeedsReview(false); return; }
       const idx = parseInt(pill.dataset.idx, 10);
       activeTags.splice(idx, 1);
@@ -2739,9 +2875,21 @@
   }
   function syncReviewToggle() {
     const t = document.getElementById('filter-needs-review');
-    if (!t) return;
-    t.classList.toggle('is-on', needsReviewOnly);
-    t.setAttribute('aria-pressed', needsReviewOnly ? 'true' : 'false');
+    if (t) {
+      t.classList.toggle('is-on', needsReviewOnly);
+      t.setAttribute('aria-pressed', needsReviewOnly ? 'true' : 'false');
+    }
+    const o = document.getElementById('filter-offline');
+    if (o) {
+      o.classList.toggle('is-on', offlineOnly);
+      o.setAttribute('aria-pressed', offlineOnly ? 'true' : 'false');
+    }
+  }
+  function setOfflineOnly(on) {
+    offlineOnly = !!on;
+    syncReviewToggle();
+    renderActiveFilters();
+    renderGrid();
   }
 
   function bindFilterPanelBody() {
@@ -2750,6 +2898,8 @@
       syncReviewToggle();
       $review.addEventListener('click', () => setNeedsReview(!needsReviewOnly));
     }
+    const $offline = document.getElementById('filter-offline');
+    if ($offline) $offline.addEventListener('click', () => setOfflineOnly(!offlineOnly));
     const $search = document.getElementById('filter-search');
     if (!$search) return;
     $search.value = tagSearchQuery;

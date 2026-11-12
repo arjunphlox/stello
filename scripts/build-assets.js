@@ -29,6 +29,9 @@ const FILES = [
   'style.css',
   'theme.css',
   'version.json',
+  'offline.js',
+  'sw.js',
+  'manifest.webmanifest',
 ];
 const DIRS = ['fonts', 'icons'];
 
