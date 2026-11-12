@@ -55,7 +55,7 @@ module.exports = async function handler(req, res) {
  * from capture / upload-image / reenrich (no self-subrequest). Builds its own
  * user-scoped client from the bearer token.
  */
-async function enrichCore(env, userId, { slug, itemId, html = null, pageText = null, noText = false, replaceAISnippets = false }) {
+async function enrichCore(env, userId, { slug, itemId, html = null, pageText = null, noText = false, replaceAISnippets = false, noImageCandidates = false }) {
   if (!userId) return { error: 'unauthorized' };
   const client = userClient(env, userId);
   const user = { id: userId };
@@ -69,7 +69,7 @@ async function enrichCore(env, userId, { slug, itemId, html = null, pageText = n
   if (fetchErr || !item) return { error: 'Item not found' };
 
   const apiKey = await getApiKey(client, user.id, env);
-  return enrichItem(env, client, item, apiKey, user.id, { html, pageText, noText, replaceAISnippets });
+  return enrichItem(env, client, item, apiKey, user.id, { html, pageText, noText, replaceAISnippets, noImageCandidates });
 }
 
 /**
@@ -166,7 +166,7 @@ async function enrichItem(env, client, item, apiKey, userId, opts = {}) {
         // compared against external candidate URLs. Re-derive the original
         // og:image source URL from the page and exclude *that* instead.
         const excludeUrl = extractOgImageUrl(html, item.source_url);
-        const imageCandidates = await harvestImageCandidates({
+        const imageCandidates = opts.noImageCandidates ? [] : await harvestImageCandidates({
           env, html, sourceUrl: item.source_url,
           userId, slug: item.slug,
           excludeUrl,
