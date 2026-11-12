@@ -113,6 +113,10 @@ final class SyncBridge {
                     try await pushHistory(api: api, context: context)
                 }
                 try await pull(api: api, context: context)
+                // The profile header rides along; its failures don't hold up the library.
+                do { try await ProfileSync.sync(api: api) }
+                catch SyncAPI.Failure.unauthorized { throw SyncAPI.Failure.unauthorized }
+                catch { print("⚠️ Profile sync failed: \(error)") }
                 lastSyncAt = .now
                 lastError = nil
             } catch SyncAPI.Failure.unauthorized {
@@ -213,7 +217,7 @@ final class SyncBridge {
         if uploaded { try context.save() }
     }
 
-    private static func contentType(of data: Data) -> String {
+    nonisolated static func contentType(of data: Data) -> String {
         let b = [UInt8](data.prefix(12))
         if b.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return "image/png" }
         if b.starts(with: [0x47, 0x49, 0x46]) { return "image/gif" }
