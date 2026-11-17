@@ -345,6 +345,15 @@
       item: (slug) => itemsBySlug[slug] || null,
       openItem: (slug) => PanelManager.open(slug),
       thumbHTML: canvasThumbHTML,
+      glyphSVG: (item) => {
+        const g = glyphTileFor(item);
+        const isNote = (!item.kind || item.kind === 'link') && !item.source_url;
+        const name = g ? g.icon : (isNote ? 'file-text' : (KIND_GLYPH[item.kind] || 'link'));
+        return GLYPH_SVG[name] || GLYPH_SVG.link;
+      },
+      displayLink: (item) => window.StelloPanel.displayLink(item),
+      visibleTags: (item) => (item.tags || []).filter(t => t.category !== 'color' && t.category !== 'intent' && t.weight >= 0.5),
+      toast: (msg) => showToast(msg),
       kindLine: (item) => window.StelloPanel.kindLineFor(item),
       dominantColor,
       icon,
@@ -947,7 +956,9 @@
     const padL = parseFloat(cs.paddingLeft) || 0;
     const maxW = parseFloat(cs.maxWidth);
     const sb = mc ? (mc.offsetWidth - mc.clientWidth) : 0;
-    const innerW = Math.min(window.innerWidth - sb, Number.isFinite(maxW) ? maxW : Infinity);
+    // With the project board open the library is a column beside it: size cards to that column.
+    const base = document.documentElement.classList.contains('canvas-open') && mc ? mc.clientWidth : window.innerWidth - sb;
+    const innerW = Math.min(base, Number.isFinite(maxW) ? maxW : Infinity);
     return Math.max(0, innerW - 2 * padL);
   }
   function fitCols(avail, cw, gap) {

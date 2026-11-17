@@ -2872,211 +2872,350 @@ button.sub-ref:hover { border-color: var(--accent); }
 }
 .offline-refresh:hover { border-color: var(--text); }
 
-/* === PROJECTS CANVAS (mockup) ===
-   A board for using saves in real work. Covers the grid column only (left/width
-   set by projects.js), so the item panel still opens beside it. The board moves
-   as one GPU layer; only on-screen cards exist in the DOM. */
+/* === PROJECTS CANVAS ===
+   A board beside the library: the grid column narrows on the left and the
+   board fills the rest, so items are picked from the real grid. The board is
+   one GPU layer (translate + scale); projects.js renders only cards in view. */
+html.canvas-open .main-content { flex: 0 0 clamp(340px, 34vw, 640px); }
+html.canvas-open .main-layout:has(.panel) .main-content { flex-basis: clamp(300px, 26vw, 480px); }
 .canvas-view {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 50;
-  background: var(--bg);
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 360px;
+  margin: 24px 24px 24px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-secondary) 55%, var(--bg));
   overflow: hidden;
 }
+.main-layout:has(.panel) .canvas-view { margin-right: 0; }
 .canvas-view[hidden] { display: none; }
-.main-layout { position: relative; }
-html.canvas-open .main-content { visibility: hidden; }
 
 .canvas-stage {
   position: absolute;
   inset: 0;
-  cursor: grab;
+  outline: none;
+  cursor: default;
   touch-action: none;
-  /* Dot grid: says "canvas" without adding chrome. */
-  background-image: radial-gradient(circle, color-mix(in srgb, var(--text) 13%, transparent) 1px, transparent 1.5px);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--text) 14%, transparent) 1px, transparent 1.4px);
   background-size: 24px 24px;
 }
+.canvas-stage.dots-off { background-image: none; }
+.canvas-stage.is-hand, .canvas-stage.is-panning { cursor: grab; }
 .canvas-stage.is-panning { cursor: grabbing; }
+.canvas-stage.is-drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
 .canvas-world {
   position: absolute;
   top: 0;
   left: 0;
   width: 0;
   height: 0;
+  transform-origin: 0 0;
   will-change: transform;
 }
-.canvas-links {
-  position: absolute;
-  top: 0;
-  left: 0;
-  overflow: visible;
-  pointer-events: none;
-}
-.canvas-links line {
-  stroke: color-mix(in srgb, var(--accent) 70%, transparent);
-  stroke-width: 1.5;
-}
-.canvas-links line.cv-draft { stroke-dasharray: 4 4; stroke: var(--accent); }
-.canvas-links line[hidden] { display: none; }
-.canvas-labels, .canvas-cards { position: absolute; top: 0; left: 0; }
-.canvas-labels { z-index: 2; }
-.canvas-hint {
-  position: absolute;
-  top: 50%;
-  left: calc((100% - 352px) / 2);
-  transform: translate(-50%, -50%);
-  color: var(--text-secondary);
-  font-size: 0.95rem;
-  pointer-events: none;
-}
-.canvas-hint[hidden] { display: none; }
+.canvas-view.is-animating .canvas-world,
+.canvas-view.is-animating .cv-card { transition: transform 0.3s cubic-bezier(.2,.8,.2,1); }
+.canvas-frames, .canvas-ghosts, .canvas-cards, .canvas-labels { position: absolute; top: 0; left: 0; }
+.canvas-links { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+.canvas-links line { stroke: color-mix(in srgb, var(--text) 35%, transparent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.canvas-links line.is-hot { stroke: var(--accent); }
+.canvas-links line.cv-draft { stroke: var(--accent); stroke-dasharray: 5 5; }
 
-/* Cards: the grid card's cover, plus a title and the intent line underneath. */
+/* Cards: library-card cover plus title, source, kind, intent; tags and
+   summary appear when zoomed in (data-lod 2), only the cover when zoomed out. */
 .cv-card {
   position: absolute;
   top: 0;
   left: 0;
-  width: 184px;
-  cursor: pointer;
+  width: 200px;
   user-select: none;
+  cursor: default;
 }
-.cv-card.is-dragging { cursor: grabbing; z-index: 5; }
-.cv-card.is-dragging .cv-cover { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); }
 .cv-cover {
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
-  background: var(--bg-secondary);
-  outline: 1px solid transparent;
-  outline-offset: 2px;
-  transition: outline-color 0.15s, box-shadow 0.15s;
+  background: var(--card-bg);
+  box-shadow: 0 1px 0 rgba(0,0,0,.2);
+  transition: box-shadow 0.15s;
 }
 .cv-cover > img, .cv-cover > .card-glyph-tile {
-  min-height: 0;
   width: 100%;
   height: 100%;
+  min-height: 0;
   object-fit: cover;
   display: flex;
-  aspect-ratio: auto;
+  pointer-events: none;
 }
-.cv-card:hover .cv-cover { outline-color: var(--border); }
-.cv-card.is-target .cv-cover { outline-color: var(--accent); }
-.cv-meta { padding: 8px 2px 0; }
+.cv-card:hover .cv-cover { box-shadow: 0 0 0 1px var(--text-dim); }
+.cv-card.is-selected .cv-cover { box-shadow: 0 0 0 2px var(--accent); }
+.cv-card.is-target .cv-cover, .cv-card.is-hint .cv-cover { box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--accent-subtle); }
+.canvas-view.is-moving .cv-card.is-selected .cv-cover { box-shadow: 0 0 0 2px var(--accent), 0 18px 40px rgba(0,0,0,.35); }
+.cv-meta { padding: 8px 2px 0; display: flex; flex-direction: column; gap: 3px; }
 .cv-title {
-  font-size: 0.82rem;
+  font-size: 0.86rem;
   line-height: 1.3;
+  font-weight: 500;
   color: var(--text);
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
 }
+.cv-facts { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.74rem; color: var(--text-secondary); }
+.cv-kind { display: flex; flex: 0 0 auto; color: var(--text-secondary); }
+.cv-kind svg { width: 12px; height: 12px; }
+.cv-link { color: var(--text-secondary); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+a.cv-link:hover { color: var(--accent); }
+.cv-kindline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; opacity: .8; }
+.cv-kindline::before { content: '·'; margin-right: 6px; }
+.cv-link + .cv-kindline { display: none; }
 .cv-note {
-  display: block;
+  align-self: flex-start;
   max-width: 100%;
-  margin-top: 2px;
   padding: 0;
-  background: none;
   border: 0;
+  background: none;
   font-size: 0.78rem;
-  line-height: 1.3;
+  line-height: 1.35;
   color: var(--accent);
   text-align: left;
   cursor: text;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
-.cv-note.is-empty { color: var(--text-secondary); opacity: 0; transition: opacity 0.15s; }
-.cv-card:hover .cv-note.is-empty { opacity: 1; }
-.cv-remove {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+.cv-note.is-empty { color: var(--text-dim); opacity: 0; transition: opacity .15s; }
+.cv-card:hover .cv-note.is-empty, .cv-card.is-selected .cv-note.is-empty { opacity: 1; }
+.cv-note-input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg);
   color: var(--text);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
+  font-size: 0.78rem;
+  outline: none;
 }
-.cv-remove svg { width: 12px; height: 12px; }
-.cv-card:hover .cv-remove { opacity: 1; }
-/* Link handle: a dot on the cover's right edge. */
+.cv-cover { position: relative; }
+/* Zoomed in: tags sit on the cover, like the grid card's pills. */
+.cv-tags {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: none;
+  flex-wrap: wrap-reverse;
+  gap: 4px;
+}
+.cv-tag {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-size: 0.62rem;
+  line-height: 1.7;
+  color: var(--text);
+}
+.cv-summary {
+  display: none;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.canvas-stage[data-lod="2"] .cv-tags { display: flex; }
+.canvas-stage[data-lod="0"] .cv-meta { display: none; }
+.canvas-stage[data-lod="0"] .cv-handle { display: none; }
 .cv-handle {
   position: absolute;
-  top: 40px;
-  right: -7px;
-  width: 14px;
-  height: 14px;
+  top: 36px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--accent);
   border: 3px solid var(--bg);
   cursor: crosshair;
   opacity: 0;
-  transition: opacity 0.15s, transform 0.15s;
+  transition: opacity .15s, transform .15s;
 }
-.cv-card:hover .cv-handle, .cv-card.is-linking .cv-handle { opacity: 1; }
-.cv-handle:hover { transform: scale(1.25); }
-.cv-link-label {
+.cv-card:hover .cv-handle, .cv-card.is-selected .cv-handle { opacity: 1; }
+.cv-handle:hover { transform: scale(1.2); }
+
+/* Related saves offered around a card: faded, one click keeps them. */
+.cv-ghost { opacity: .55; cursor: pointer; transition: opacity .15s; }
+.cv-ghost .cv-cover { box-shadow: 0 0 0 1px var(--border); filter: grayscale(.4); }
+.cv-ghost:hover { opacity: 1; }
+.cv-ghost:hover .cv-cover { filter: none; box-shadow: 0 0 0 2px var(--accent); }
+.cv-why { font-size: 0.72rem; color: var(--text-dim); }
+.cv-ghost-add {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.cv-ghost-add svg { width: 12px; height: 12px; }
+
+/* Groups: a soft frame behind its cards, label on top-left. */
+.cv-frame {
   position: absolute;
   top: 0;
   left: 0;
-  max-width: 180px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--text) 16%, transparent);
+}
+.cv-frame-label {
+  position: absolute;
+  top: -30px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: grab;
+  white-space: nowrap;
+}
+.cv-frame-label span { font-size: 0.75rem; color: var(--text-dim); font-weight: 400; }
+.cv-frame-label:hover { background: var(--card-hover); }
+
+.cv-link-label, .cv-link-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: 200px;
   padding: 2px 10px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--bg-secondary);
   color: var(--text);
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   line-height: 1.5;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
 }
-.cv-link-label.is-empty { width: 22px; height: 22px; padding: 0; color: var(--text-secondary); }
+.cv-link-label.is-empty { width: 20px; height: 20px; padding: 0; line-height: 1; color: var(--text-dim); opacity: .7; }
+.cv-link-input { width: 200px; height: 28px; border-color: var(--accent); outline: none; cursor: text; }
 
-/* Header: the library header's accent glass, compact. */
-.canvas-header {
+/* Suggested actions: quiet chips above the cards they're about. */
+.canvas-chips { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.cv-chip {
   position: absolute;
-  top: 24px;
-  left: 24px;
-  z-index: 10;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  pointer-events: auto;
 }
+.cv-chip-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+[data-theme="light"] .cv-chip-btn { color: var(--accent-contrast); background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.cv-chip-btn:hover { background: var(--accent); color: var(--accent-contrast); }
+.cv-chip-x {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.cv-chip-x svg { width: 10px; height: 10px; }
+.cv-chip-x:hover { color: var(--text); background: var(--card-hover); }
+
+.canvas-marquee {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 7;
+  border: 1px solid var(--accent);
+  background: var(--accent-subtle);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.canvas-marquee[hidden] { display: none; }
+.canvas-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, 80%);
+  text-align: center;
+  pointer-events: none;
+}
+.canvas-empty[hidden] { display: none; }
+.canvas-empty-title { font-size: 1.1rem; color: var(--text); }
+.canvas-empty-text { margin-top: 6px; font-size: 0.86rem; line-height: 1.5; color: var(--text-secondary); }
+
+/* Header: project name in the accent glass, compact. */
+.canvas-header { position: absolute; top: 16px; left: 16px; z-index: 10; }
 .canvas-title {
   display: flex;
   align-items: flex-end;
-  gap: 6px;
-  min-width: 240px;
-  min-height: 72px;
-  padding: 12px 14px 12px 12px;
+  gap: 4px;
+  min-height: 56px;
+  padding: 10px 12px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--accent) 82%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   backdrop-filter: blur(20px) saturate(1.4);
   color: var(--accent-contrast);
-  font-size: 2rem;
-  font-weight: 400;
+  font-size: 1.6rem;
   letter-spacing: -0.03em;
   line-height: 1;
   cursor: pointer;
-  text-align: left;
 }
 .canvas-title-text { white-space: nowrap; text-box: trim-both cap alphabetic; }
-.canvas-title-count { font-size: 0.8rem; letter-spacing: 0; align-self: flex-start; margin-top: -2px; }
-.canvas-caret { display: flex; margin-left: auto; padding-left: 12px; opacity: 0.7; }
-.canvas-caret svg { width: 14px; height: 14px; }
+.canvas-title-count { font-size: 0.75rem; letter-spacing: 0; align-self: flex-start; }
+.canvas-caret { display: flex; padding-left: 10px; opacity: .7; }
+.canvas-caret svg { width: 12px; height: 12px; }
 .canvas-menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -3086,7 +3225,7 @@ html.canvas-open .main-content { visibility: hidden; }
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 32px rgba(0,0,0,.25);
 }
 .canvas-menu[hidden] { display: none; }
 .canvas-menu-item {
@@ -3107,184 +3246,189 @@ html.canvas-open .main-content { visibility: hidden; }
 .canvas-menu-item:hover { background: var(--card-hover); }
 .canvas-menu-item.is-current { color: var(--accent); }
 .canvas-menu-item.is-danger { color: #e5484d; }
-.canvas-menu-count { margin-left: auto; color: var(--text-secondary); font-size: 0.8rem; }
+.canvas-menu-count { margin-left: auto; color: var(--text-secondary); font-size: .8rem; }
 .canvas-menu-sep { height: 1px; margin: 6px 4px; background: var(--border); }
-
-/* Suggestions tray: the side panel's surface, floating inside the canvas. */
-.canvas-tray {
+.canvas-close {
   position: absolute;
-  top: 24px;
-  right: 24px;
-  bottom: 24px;
-  width: 320px;
+  top: 16px;
+  right: 16px;
   z-index: 10;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-.tray-head { padding: 14px 16px 12px; }
-.tray-title { font-size: 1rem; font-weight: 500; color: var(--text); }
-.tray-sub { font-size: 0.8rem; line-height: 1.4; color: var(--text-secondary); margin: 2px 0 10px; }
-.tray-search {
-  width: 100%;
+  width: 36px;
   height: 36px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.88rem;
-  outline: none;
-}
-.tray-search:focus { border-color: var(--accent); }
-.tray-list { flex: 1 1 auto; overflow-y: auto; padding: 0 8px 12px; scrollbar-width: thin; }
-.tray-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  cursor: grab;
-  user-select: none;
-}
-.tray-row:hover { background: var(--card-hover); }
-.tray-thumb {
-  flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
-  border-radius: 4px;
-  overflow: hidden;
-  background: var(--bg);
-}
-.tray-thumb > img, .tray-thumb > .card-glyph-tile { width: 100%; height: 100%; min-height: 0; object-fit: cover; aspect-ratio: auto; display: flex; }
-.tray-thumb .card-glyph svg { width: 18px; height: 18px; }
-.tray-text { min-width: 0; flex: 1 1 auto; }
-.tray-row-title {
-  font-size: 0.85rem;
-  line-height: 1.3;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tray-row-reason {
-  font-size: 0.75rem;
-  line-height: 1.3;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tray-add {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
   border-radius: 50%;
   border: 1px solid var(--border);
-  background: transparent;
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   color: var(--text);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
 }
-.tray-add svg { width: 14px; height: 14px; }
-.tray-row:hover .tray-add { opacity: 1; }
-.tray-add:hover { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
-.tray-ghost {
+.canvas-close svg { width: 14px; height: 14px; }
+
+/* Toolbar: bottom centre, same glass as the library bar. */
+.canvas-toolbar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+}
+.tb-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+.tb-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font-size: .82rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.tb-btn svg { width: 15px; height: 15px; }
+.tb-btn:hover { background: var(--card-hover); }
+.tb-zoom { min-width: 54px; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.tb-text { padding: 0 12px; }
+.tb-caret svg { width: 10px; height: 10px; opacity: .7; }
+.tb-drop { position: relative; }
+.tb-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 150px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  box-shadow: 0 12px 32px rgba(0,0,0,.25);
+}
+.tb-menu[hidden] { display: none; }
+.tb-menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font-size: .86rem;
+  text-align: left;
+  cursor: pointer;
+}
+.tb-menu button:hover { background: var(--card-hover); }
+
+.canvas-minimap {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  width: 176px;
+  height: 112px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  cursor: pointer;
+}
+.canvas-minimap[hidden] { display: none; }
+
+/* Picked library cards → add them together. */
+.canvas-pickbar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 70px;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  font-size: .82rem;
+  color: var(--text);
+}
+.canvas-pickbar[hidden] { display: none; }
+.pickbar-add, .pickbar-clear { height: 30px; padding: 0 12px; border-radius: 999px; border: 0; font-size: .82rem; cursor: pointer; }
+.pickbar-add { background: var(--accent); color: var(--accent-contrast); }
+.pickbar-clear { background: none; color: var(--text-secondary); }
+
+/* Library side while the board is open. */
+.grid-add-btn {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: .78rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25);
+  cursor: pointer;
+}
+.grid-add-btn svg { width: 12px; height: 12px; }
+.grid-add-btn.is-on { background: var(--bg-secondary); color: var(--text-secondary); }
+.grid-add-btn[hidden] { display: none; }
+html.canvas-open #masonry-grid .card { cursor: grab; }
+html.is-grid-dragging, html.is-grid-dragging * { cursor: grabbing !important; }
+.grid-drag-ghost {
   position: fixed;
   top: 0;
   left: 0;
   z-index: 1000;
-  width: 280px;
+  width: 120px;
+  border-radius: 6px;
+  overflow: hidden;
   pointer-events: none;
-  background: var(--bg-secondary);
-  border: 1px solid var(--accent);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-  opacity: 0.95;
+  box-shadow: 0 16px 40px rgba(0,0,0,.4), 0 0 0 2px var(--accent);
+  opacity: .95;
 }
-.tray-ghost .tray-add { display: none; }
-
-/* Bottom-left bar: same glass buttons as the library bar. */
-.canvas-bar {
+.grid-drag-ghost > img, .grid-drag-ghost > .card-glyph-tile { width: 100%; height: auto; min-height: 80px; display: block; object-fit: cover; }
+.grid-drag-count {
   position: absolute;
-  left: 24px;
-  bottom: 24px;
-  z-index: 10;
+  top: 6px;
+  right: 6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: .75rem;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
 }
-.canvas-bar-hint {
-  height: 44px;
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--bg-secondary) 62%, transparent);
-  border: 1px solid var(--border);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
-}
-
-/* "What's this here for?" — one line, optional, right under the card. */
-.canvas-ask {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 20;
-  width: 280px;
-  padding: 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
-}
-.canvas-ask[hidden] { display: none; }
-.ask-q { font-size: 0.88rem; font-weight: 500; color: var(--text); margin-bottom: 8px; }
-.ask-input {
-  width: 100%;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.85rem;
-  outline: none;
-}
-.ask-input:focus { border-color: var(--accent); }
-.ask-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.ask-chips[hidden] { display: none; }
-.ask-chip {
-  padding: 2px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  line-height: 1.6;
-  cursor: pointer;
-}
-.ask-chip:hover { color: var(--text); border-color: var(--text-secondary); }
-.ask-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
-.ask-skip, .ask-save {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-.ask-skip { border: 0; background: none; color: var(--text-secondary); }
-.ask-skip:hover { color: var(--text); }
-.ask-save { border: 0; background: var(--accent); color: var(--accent-contrast); }
 
 /* Start a project */
 .canvas-start {
@@ -3294,9 +3438,7 @@ html.canvas-open .main-content { visibility: hidden; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--bg) 70%, transparent);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
 }
 .canvas-start[hidden] { display: none; }
 .canvas-start-card {
@@ -3306,8 +3448,8 @@ html.canvas-open .main-content { visibility: hidden; }
   border: 1px solid var(--border);
   border-radius: 12px;
 }
-.canvas-start-title { font-size: 1.5rem; letter-spacing: -0.02em; color: var(--text); line-height: 1.2; }
-.canvas-start-text { margin: 6px 0 16px; font-size: 0.88rem; line-height: 1.5; color: var(--text-secondary); }
+.canvas-start-title { font-size: 1.5rem; letter-spacing: -.02em; color: var(--text); line-height: 1.2; }
+.canvas-start-text { margin: 6px 0 16px; font-size: .88rem; line-height: 1.5; color: var(--text-secondary); }
 .canvas-start-form { display: flex; gap: 8px; }
 .canvas-start-input {
   flex: 1 1 auto;
@@ -3318,38 +3460,15 @@ html.canvas-open .main-content { visibility: hidden; }
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: .92rem;
   outline: none;
 }
 .canvas-start-input:focus { border-color: var(--accent); }
-.canvas-start-btn {
-  height: 40px;
-  padding: 0 18px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 0.92rem;
-  cursor: pointer;
-}
-.canvas-start-cancel {
-  margin-top: 10px;
-  border: 0;
-  background: none;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
+.canvas-start-btn { height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-contrast); font-size: .92rem; cursor: pointer; }
+.canvas-start-cancel { margin-top: 10px; border: 0; background: none; color: var(--text-secondary); font-size: .85rem; cursor: pointer; }
 .canvas-start-cancel[hidden] { display: none; }
 
-@media (max-width: 768px) {
-  .canvas-tray { top: auto; left: 12px; right: 12px; bottom: 76px; width: auto; height: 38vh; }
-  .canvas-header { top: 12px; left: 12px; }
-  .canvas-title { font-size: 1.5rem; min-height: 56px; min-width: 0; }
-  .canvas-bar { left: 12px; bottom: 12px; }
-  .canvas-bar-hint { display: none; }
-  .canvas-hint { left: 50%; top: 30%; }
+@media (max-width: 900px) {
+  html.canvas-open .main-content { display: none; }
+  .canvas-view { margin: 12px; }
 }
-/* An open item panel takes the tray's place beside the board. */
-.main-layout:has(#panels-container .panel) .canvas-tray { display: none; }
-.main-layout:has(#panels-container .panel) .canvas-hint { left: 50%; }
