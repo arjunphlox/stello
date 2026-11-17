@@ -1,14 +1,17 @@
-# Projects canvas (mockup, Nov 2026)
+# Projects canvas (Nov 2026)
 
-**Why:** the old "Why saved" presets were picked in a hurry at save time, so they only roughly fit. Intent is better captured when an item is actually used.
+**Why:** the old "Why saved" presets were picked in a hurry at save time, so they only roughly fit. Intent is better captured when an item is used.
 
-**What it is:** a board per project. Saving stays one tap; intent is asked later, in context.
+**Shape (v2, after Arjun's review of v1):** the board is a mode of the library, not a separate page. Opening a project narrows the library grid to a column on the left; the board fills the rest; the item panel opens to the right without covering cards.
 
-- **Suggestions tray** (rules only, no AI): ranks the library by shared heavy tags with what's on the board, same source, same top colour, same kind, and words from the project name. Each row says why ("Shares editorial, elegant"). Search finds anything else.
-- **Place** an item (drag from the tray, or +) → one optional question, "What's this here for?". Chips offer this project's recent answers and the item's old preset as a starting point. Enter saves, Esc skips.
-- **Link** two items by dragging the dot on a card's edge → optional "How do these connect?" label on the line.
-- Click a card to open the usual item panel (it replaces the tray while open).
+- **Picking from the library:** drag cards straight from the grid (search and filters work as usual), press **+ Add** on a hovered card, or Shift/⌘-click several and press **Add to board**. Cards already on the board fade in the grid.
+- **Canvas basics:** pan (scroll, Space-drag, middle button, touch), zoom (pinch, ⌘/Ctrl-scroll, − / + / 0 keys and buttons), Fit (Shift 1), zoom %, minimap (click to jump), marquee and Shift multi-select, move selections, snap to the 24px dot grid (Alt to skip), Delete removes from the board, double-click opens the item panel.
+- **Cards:** cover, title, source domain, kind icon, intent line. Zoomed in: tags on the cover. Zoomed out: covers only. Card height never changes with zoom, so layouts stay valid.
+- **Arrangement (rules only):** a placed card lands next to its most similar card, and its closest unplaced saves appear around it as faded ghosts (one click keeps one and links it). **Tidy** packs groups and loose cards (linked cards stay together). **Cluster** by topic, kind, source or colour makes labelled groups.
+- **Suggested actions (rules only, max two at once, dismissible):** "N share 'tag' → Group them", "X links N items → Arrange around it", "N links say 'label' → Group these", "Related saves → Show around it" (one card selected), "N have no 'what for' → Add reasons" (steps through cards).
+- **Intent:** inline one-line field on the card after placing ("What's this here for?"), inline label field on a new link. Enter saves, Esc skips.
+- **Export:** Markdown brief (groups, items with links and reasons, named connections).
 
-**Performance:** the board moves as one GPU-composited layer (CSS transform); only cards within the screen + 400px exist in the DOM. Suggestions are one pass over the library per board change, off the open path. WebGL was considered and is kept for a possible whole-library map, not boards.
+**Performance:** the board is one GPU layer (translate + scale); only cards in view (+300px) are in the DOM. Similarity is one pass over the library per action, never on open.
 
-**Mockup limits:** projects live in this browser's localStorage (`stello.projects.v0`). Not yet: D1 table + sync to the Apple apps, showing "Used in <project>: <note>" on the item panel, zoom, touch drag polish.
+**Not yet:** projects live in this browser's localStorage (`stello.projects.v0`); saving to D1 + sync to the Apple apps, "Used in" on the item panel, and turning a group into a real collection tag come next.
