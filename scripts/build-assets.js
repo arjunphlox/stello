@@ -30,6 +30,7 @@ const FILES = [
   'theme.css',
   'version.json',
   'offline.js',
+  'projects.js',
   'sw.js',
   'manifest.webmanifest',
 ];

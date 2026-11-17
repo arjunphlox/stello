@@ -28,6 +28,8 @@
     'eye': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M247.31 124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57 61.26 162.88 48 128 48S61.43 61.26 36.34 86.35C17.51 105.18 9 124 8.69 124.76a8 8 0 0 0 0 6.5c.35.79 8.82 19.57 27.65 38.4C61.43 194.74 93.12 208 128 208s66.57-13.26 91.66-38.34c18.83-18.83 27.3-37.61 27.65-38.4a8 8 0 0 0 0-6.5ZM128 168a40 40 0 1 1 40-40 40 40 0 0 1-40 40Z"/></svg>',
     'play': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232.4 114.49 88.32 26.35a16 16 0 0 0-16.2-.3A15.86 15.86 0 0 0 64 39.87v176.26a15.94 15.94 0 0 0 16 15.87 16.12 16.12 0 0 0 8.32-2.35l144.08-88.14a15.68 15.68 0 0 0 0-27Z"/></svg>',
     'stack': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linejoin="round"><rect x="72" y="72" width="144" height="144" rx="16"/><path d="M184 40H56a16 16 0 0 0-16 16v128"/></svg>',
+    'squares-four': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48v48Zm-96,32H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48v48Z"/></svg>',
+    'graph': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round"><circle cx="64" cy="76" r="28"/><circle cx="192" cy="100" r="28"/><circle cx="108" cy="192" r="28"/><path d="M92 81l72 14M170 118l-42 52M74 102l22 63"/></svg>',
     'dots-three': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM48,116a12,12,0,1,0,12,12A12,12,0,0,0,48,116Zm160,0a12,12,0,1,0,12,12A12,12,0,0,0,208,116Z"/></svg>',
   };
   function icon(name) { return ICONS[name] || ''; }
@@ -336,6 +338,19 @@
     DropManager.init();
     ProfileManager.init();
     OfflineUI.init();
+
+    // Projects canvas (projects.js) reads the library through this small hook.
+    window.StelloApp = {
+      items: () => allItems,
+      item: (slug) => itemsBySlug[slug] || null,
+      openItem: (slug) => PanelManager.open(slug),
+      thumbHTML: canvasThumbHTML,
+      kindLine: (item) => window.StelloPanel.kindLineFor(item),
+      dominantColor,
+      icon,
+      esc: escHtml,
+    };
+    document.dispatchEvent(new CustomEvent('stello:ready'));
 
     // Library fully in memory from the server → refresh the device copy and
     // the offline images (idle, after first paint).
@@ -1492,6 +1507,19 @@
     card.classList.add('card-glyph-card');
     area.querySelectorAll('.card-badges').forEach(n => n.remove());
   };
+
+  // Cover for a projects-canvas card: the grid's image, or its neutral icon tile.
+  function canvasThumbHTML(item) {
+    const glyph = glyphTileFor(item);
+    const isNote = (!item.kind || item.kind === 'link') && !item.source_url;
+    const glyphName = glyph ? glyph.icon : (isNote ? 'file-text' : (KIND_GLYPH[item.kind] || 'link'));
+    if (item.has_image && item.image_path) {
+      const dims = (item.image_width && item.image_height) ? ` width="${item.image_width}" height="${item.image_height}"` : '';
+      return `<img class="card-thumb" src="${escHtml(item.image_path)}" alt=""${dims} loading="lazy" draggable="false" onerror="this.outerHTML=window.stelloGlyphHTML('${glyphName}')">`;
+    }
+    return glyphTileHTML(glyphName, 'none');
+  }
+  window.stelloGlyphHTML = (name) => glyphTileHTML(name, 'none');
 
   function renderCard(item, idx) {
     let thumbHtml;
