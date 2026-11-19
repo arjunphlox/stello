@@ -4,6 +4,7 @@
  * idempotent (IF NOT EXISTS), so a cold start costs one small batch.
  */
 import INIT_SQL from '../../migrations/0001_init.sql';
+import PROJECTS_SQL from '../../migrations/0002_projects.sql';
 
 let ready = null;
 
@@ -40,7 +41,7 @@ export function splitSql(sql) {
 export function ensureSchema(env) {
   if (!env.DB) throw new Error('D1 binding DB is missing (bindings: ' + Object.keys(env).join(',') + ')');
   if (!ready) {
-    ready = env.DB.batch(splitSql(INIT_SQL).map(s => env.DB.prepare(s)))
+    ready = env.DB.batch(splitSql(INIT_SQL + '\n' + PROJECTS_SQL).map(s => env.DB.prepare(s)))
       .then(() => addMissingColumns(env.DB))
       .catch(err => { ready = null; throw err; });
   }

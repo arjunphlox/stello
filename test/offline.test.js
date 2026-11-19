@@ -87,10 +87,10 @@ test('10k items pick in well under 50 ms', () => {
   assert.ok(ms < 50, `took ${ms.toFixed(1)} ms`);
 });
 
-test('deleting an image also deletes its offline copy in R2', async () => {
+test('deleting an image also deletes its offline and Figma copies in R2', async () => {
   const storage = require('../src/lib/storage.js');
   let deleted = null;
   const env = { BUCKET: { delete: async (keys) => { deleted = keys; } } };
   await storage.remove(env, ['/img/u/a/og.png', 'https://elsewhere.com/x.png']);
-  assert.deepStrictEqual(deleted, ['u/a/og.png', 'u/a/og.png.w1200.webp']);
+  assert.deepStrictEqual(deleted, ['u/a/og.png', 'u/a/og.png.w1200.webp', 'u/a/og.png.w1200.jpg']);
 });

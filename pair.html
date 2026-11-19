@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-accent="amber">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect to Stello</title>
+  <script>
+    (function () {
+      var t = {}; try { t = JSON.parse(localStorage.getItem('stello.theme') || '{}') || {}; } catch (e) {}
+      var mode = t.mode === 'light' || t.mode === 'dark' ? t.mode
+        : (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', mode);
+      document.documentElement.setAttribute('data-accent', t.accent || (mode === 'light' ? 'iris' : 'amber'));
+    })();
+  </script>
+  <link rel="stylesheet" href="theme.css?v=2">
+  <link rel="stylesheet" href="style.css?v=80">
+  <style>
+    /* Approve a plugin (Figma) or make a token for an MCP client. */
+    body.pair-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .pair-card { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+    .pair-brand { font-size: 13px; color: var(--text-dim); }
+    .pair-title { font-size: 18px; font-weight: 600; color: var(--text); }
+    .pair-text { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+    .pair-code { font: 600 28px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 2px; color: var(--text); }
+    .pair-status { font-size: 14px; color: var(--text); }
+    .pair-status.is-ok { color: var(--accent); }
+    .pair-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pair-actions a, .pair-actions button {
+      font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border); background: transparent; color: var(--text); text-decoration: none;
+    }
+    .pair-actions .is-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+    .pair-pre { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px; border-radius: 6px;
+      border: 1px solid var(--border); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+  </style>
+</head>
+<body class="pair-page">
+  <main class="pair-card" aria-live="polite">
+    <div class="pair-brand">Stello</div>
+    <div class="pair-title" id="pair-title">Connect to Stello</div>
+    <div class="pair-text" id="pair-text"></div>
+    <div class="pair-code" id="pair-code" hidden></div>
+    <div class="pair-pre" id="pair-pre" hidden></div>
+    <div class="pair-status" id="pair-status"></div>
+    <div class="pair-actions" id="pair-actions"></div>
+  </main>
+  <script src="auth-client.js?v=1"></script>
+  <script>
+  (async function () {
+    const params = new URLSearchParams(location.search);
+    const $ = (id) => document.getElementById(id);
+    const code = (params.get('code') || '').toUpperCase();
+    function button(label, onClick, primary) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = label;
+      if (primary) b.className = 'is-primary';
+      b.addEventListener('click', onClick);
+      return b;
+    }
+    function actions(list) { $('pair-actions').replaceChildren(...list); }
+    function status(text, ok) { $('pair-status').textContent = text; $('pair-status').classList.toggle('is-ok', !!ok); }
+
+    const session = await Stello.getSession();
+    if (!session) {
+      $('pair-text').textContent = 'Sign in to Stello first, then open this page again from the plugin.';
+      const a = document.createElement('a');
+      a.href = '/login.html'; a.textContent = 'Sign in'; a.className = 'is-primary';
+      actions([a]);
+      return;
+    }
+
+    // A token for an MCP client (Figma agent custom connector, Claude Code, Cursor).
+    if (params.get('new') === '1') {
+      $('pair-title').textContent = 'Connect an AI agent';
+      $('pair-text').textContent = 'Make a token for the Figma agent, Claude Code or Cursor. It lets them search your library and, if you allow it, add to your canvas. It shows once.';
+      actions([button('Make a token', makeToken, true)]);
+      return;
+    }
+
+    if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)) {
+      $('pair-text').textContent = 'Open this page from the Stello plugin in Figma.';
+      return;
+    }
+    const info = await Stello.apiFetch('/api/pair/info?code=' + encodeURIComponent(code));
+    const data = await info.json().catch(() => ({}));
+    if (!info.ok) { $('pair-text').textContent = data.error || 'That code has expired.'; return; }
+    $('pair-title').textContent = 'Connect ' + data.label;
+    $('pair-text').textContent = 'Check this code matches the one in the plugin. Connecting lets it read your library and save to your canvases.';
+    $('pair-code').textContent = code; $('pair-code').hidden = false;
+    if (data.approved) { status('Connected. You can go back to Figma.', true); return; }
+    actions([button('Connect', async () => {
+      const r = await Stello.apiFetch('/api/pair/approve', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { status(d.error || 'Couldn’t connect.'); return; }
+      actions([]);
+      status('Connected. You can go back to Figma.', true);
+    }, true), button('Cancel', () => window.close())]);
+
+    async function makeToken() {
+      actions([]);
+      status('Making a token…');
+      const start = await fetch('/api/pair/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: 'AI agent (MCP)' }),
+      }).then((r) => r.json());
+      await Stello.apiFetch('/api/pair/approve', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: start.code }),
+      });
+      const got = await fetch('/api/pair/poll', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: start.code, poll: start.poll }),
+      }).then((r) => r.json());
+      if (!got.token) { status('Couldn’t make a token. Try again.'); actions([button('Try again', makeToken, true)]); return; }
+      const url = location.origin + '/api/mcp';
+      $('pair-pre').textContent =
+        'Server URL\n' + url + '\n\nHeader\nAuthorization: Bearer ' + got.token +
+        '\n\nClaude Code\nclaude mcp add --transport http stello ' + url + ' --header "Authorization: Bearer ' + got.token + '"';
+      $('pair-pre').hidden = false;
+      status('Copy this now. It won’t show again.', true);
+      actions([button('Copy token', () => navigator.clipboard.writeText(got.token).then(() => status('Token copied.', true)), true)]);
+    }
+  })();
+  </script>
+</body>
+</html>

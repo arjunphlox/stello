@@ -34,7 +34,10 @@ module.exports = async function handler(req, res) {
   // a pasted image has none.
   const given = String((req.query && req.query.title) || '').trim().slice(0, 120);
   const title = given || `Image upload — ${dateStr}`;
-  const origin = given ? 'Image dropped from a file' : 'Image pasted from clipboard';
+  // The Figma plugin's "Save to Stello" passes the frame's Figma link.
+  const figmaLink = String((req.query && req.query.source_url) || '').trim();
+  const fromFigma = /^https:\/\/(www\.)?figma\.com\//.test(figmaLink);
+  const origin = fromFigma ? 'Saved from Figma' : given ? 'Image dropped from a file' : 'Image pasted from clipboard';
   const slug = generateSlug(title);
   const isoNow = now.toISOString();
 
@@ -45,6 +48,7 @@ module.exports = async function handler(req, res) {
   }
 
   const tags = [{ tag: 'image-upload', category: 'format', weight: 0.4 }];
+  if (fromFigma) tags.push({ tag: 'figma', category: 'tool', weight: 0.6 });
 
   const imagesEntry = [{
     path, source: 'og', is_primary: true,
@@ -55,8 +59,8 @@ module.exports = async function handler(req, res) {
     user_id: user.id,
     slug,
     title,
-    source_url: null,
-    domain: null,
+    source_url: fromFigma ? figmaLink.slice(0, 2000) : null,
+    domain: fromFigma ? 'figma.com' : null,
     author: null,
     summary: origin,
     body_markdown: `## Summary\n${origin}`,

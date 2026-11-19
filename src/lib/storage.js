@@ -59,7 +59,7 @@ function pathToKey(p) {
 async function remove(env, paths) {
   const base = (Array.isArray(paths) ? paths : [paths]).map(pathToKey).filter(Boolean);
   // Each image may have a smaller offline copy next to it (see /img/* in index.js).
-  const keys = base.flatMap((k) => [k, offlineKey(k)]);
+  const keys = base.flatMap((k) => [k, offlineKey(k), figmaKey(k)]);
   if (!keys.length) return;
   try {
     await env.BUCKET.delete(keys);
@@ -73,10 +73,15 @@ function offlineKey(key) {
   return `${key}.w1200.webp`;
 }
 
+/** The JPEG copy for the Figma plugin (see images.figmaCopy). */
+function figmaKey(key) {
+  return `${key}.w1200.jpg`;
+}
+
 /** List object keys under a `<user_id>/<slug>` prefix. */
 async function list(env, prefix) {
   const out = await env.BUCKET.list({ prefix });
   return (out.objects || []).map(o => o.key);
 }
 
-module.exports = { put, putSafe, remove, list, pathToKey, offlineKey, PREFIX };
+module.exports = { put, putSafe, remove, list, pathToKey, offlineKey, figmaKey, PREFIX };
