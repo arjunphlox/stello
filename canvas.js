@@ -35,6 +35,10 @@
   const LOD_DETAIL = 0.62;                  // at or above: full details card
   const LABEL_K = 0.42;                     // link labels from this zoom
   const MAX_LINKS = 420, MAX_LABELS = 90;
+  // Families: similar items inside a group sit close together on a tint.
+  const FAM_MAX = 12, FAM_GAP_X = 88, FAM_GAP_Y = 104, FAM_CAP = 40, F_COL = 20, F_ROW = 26, FAM_PAD = 18;
+  const NEAR = 720;                         // drag reveal radius (world px)
+  const STRAIGHT = 230;                     // closer than this: one straight segment
 
   // Layer 1 kinds, in tie-break order. Colours follow the Figma legend.
   const SIM = {
@@ -84,10 +88,16 @@
   let sel = null;                 // selected slug
   let selNote = null;             // selected note id
   let hover = null;
+  let hoverGhost = null;
+  let dragging = null;            // slug being dragged
+  let near = [];                  // [{ b, s, label, type, d }] while dragging
+  let families = [];              // [{ cl, tag, type, color, slugs, loose, box }]
+  let linkCount = new Map();
+  let boxLod = 2;                 // zoom level the family boxes were measured at      // slug -> number of your links
   let connect = null;             // { from, kind } while picking a target
   let pinFor = null;              // slug while placing a note on its image
   let layers = {
-    sim: { on: true, place: true, colour: true, looks: true, kind: true, idea: true, style: true },
+    sim: { on: true, always: false, place: true, colour: true, looks: true, kind: true, idea: true, style: true },
     ins: { marks: true, notes: true, gaps: true, time: true, glow: true },
   };
   let raf = 0, layoutRaf = 0, dirtyLayout = true;
@@ -331,6 +341,7 @@
     const cap = Math.max(40, Math.min(600, N * 0.25));
     const score = new Map();
     fs.forEach(x => {
+      if (!layers.sim[x.type]) return;
       const post = inv.get(x.f);
       if (!post || post.length < 2 || post.length > cap) return;
       const idf = Math.log(1 + N / post.length);
@@ -354,7 +365,7 @@
   function similarityScore(a, b) {
     const fb = new Set((featOf.get(b.slug) || featuresLoose(b)).map(x => x.f));
     let s = 0; const shared = [];
-    (featOf.get(a.slug) || featuresLoose(a)).forEach(x => { if (fb.has(x.f)) { s += SIM[x.type].w; shared.push(x.tag); } });
+    (featOf.get(a.slug) || featuresLoose(a)).forEach(x => { if (layers.sim[x.type] && fb.has(x.f)) { s += SIM[x.type].w; shared.push(x.tag); } });
     return { s, shared };
   }
   function featuresLoose(it) {
@@ -399,25 +410,49 @@
     const isMissing = (k) => /^(no |other$|undated$)/i.test(k);
     entries.sort((a, b) => (isMissing(a[0]) - isMissing(b[0])) || b[1].length - a[1].length);
 
-    // Per group: a loose masonry block.
+    // Per group: families of similar items, each a tight block on a tint,
+    // packed with air between them. Closeness carries the relationship, so
+    // no lines are needed until you ask for them.
+    families = [];
     clusters = entries.map(([key, items], i) => {
       items.sort((a, b) => String(b.added_at).localeCompare(String(a.added_at)));
-      const cols = Math.max(1, Math.min(16, Math.ceil(Math.sqrt(items.length * 0.9))));
-      const colY = new Array(cols).fill(0).map((_, c) => (c % 2) * 56);
-      const slugs = [];
-      items.forEach(it => {
-        const c = colY.indexOf(Math.min(...colY));
-        const d = details(it);
-        const ch = Math.round(W * coverRatio(it));
-        const dh = detailsHeight(d);
-        const jitter = Math.round((hashOf(it.slug) - 0.5) * 20);
-        nodes.set(it.slug, { slug: it.slug, item: it, d, x: c * (W + COL_GAP) + jitter, y: colY[c], ch, dh, h: ch + 8 + dh, cl: i });
-        colY[c] += ch + 8 + dh + ROW_GAP + Math.round(hashOf(it.slug + 'y') * 24);
-        slugs.push(it.slug);
+      const fams = familiesOf(items);
+      const blocks = fams.map(f => {
+        const cols = f.loose ? Math.max(1, Math.min(8, Math.ceil(Math.sqrt(f.items.length * 0.9)))) : Math.max(1, Math.min(4, Math.ceil(Math.sqrt(f.items.length))));
+        const cg = f.loose ? COL_GAP : F_COL, rg = f.loose ? ROW_GAP : F_ROW;
+        const colY = new Array(cols).fill(0);
+        const pos = [];
+        f.items.forEach(it => {
+          const c = colY.indexOf(Math.min(...colY));
+          const d = details(it);
+          const ch = Math.round(W * coverRatio(it));
+          const dh = detailsHeight(d);
+          pos.push({ it, d, ch, dh, x: c * (W + cg), y: colY[c] });
+          colY[c] += ch + 8 + dh + rg;
+        });
+        return { f, pos, w: cols * W + (cols - 1) * cg, h: Math.max(...colY) - rg };
       });
-      const w = cols * W + (cols - 1) * COL_GAP;
-      const h = Math.max(...colY) - ROW_GAP;
-      return { key, name: cap(key), sub: subtitleFor(items), color: PALETTE[i % PALETTE.length], x: 0, y: 0, w, h, slugs, items };
+      // Shelf-pack the families inside the group.
+      const area = blocks.reduce((t, b) => t + (b.w + FAM_GAP_X) * (b.h + FAM_GAP_Y + FAM_CAP), 0);
+      const maxW = Math.max(Math.max(...blocks.map(b => b.w)), Math.sqrt(area) * 1.5);
+      let fx = 0, fy = 0, rowH = 0, gw = 0;
+      const slugs = [];
+      blocks.forEach(b => {
+        if (fx > 0 && fx + b.w > maxW) { fx = 0; fy += rowH + FAM_GAP_Y; rowH = 0; }
+        const top = fy + (b.f.loose && fams.length === 1 ? 0 : FAM_CAP);
+        const fam = { cl: i, tag: b.f.tag, type: b.f.type, loose: b.f.loose, slugs: [], box: null };
+        fam.color = b.f.type ? (SIM[b.f.type].color || null) : null;
+        families.push(fam);
+        b.pos.forEach(p => {
+          const jitter = b.f.loose ? Math.round((hashOf(p.it.slug) - 0.5) * 16) : 0;
+          nodes.set(p.it.slug, { slug: p.it.slug, item: p.it, d: p.d, x: fx + p.x + jitter, y: top + p.y, ch: p.ch, dh: p.dh, h: p.ch + 8 + p.dh, cl: i, fam: families.length - 1 });
+          fam.slugs.push(p.it.slug); slugs.push(p.it.slug);
+        });
+        fx += b.w + FAM_GAP_X;
+        gw = Math.max(gw, fx - FAM_GAP_X);
+        rowH = Math.max(rowH, top - fy + b.h);
+      });
+      return { key, name: cap(key), sub: subtitleFor(items), color: PALETTE[i % PALETTE.length], x: 0, y: 0, w: gw, h: fy + rowH, slugs, items };
     });
 
     // Gaps per group (computed hints).
@@ -437,7 +472,10 @@
     });
     // Place cards, honouring cards you moved (for this grouping).
     clusters.forEach(cl => cl.slugs.forEach(s => { const n = nodes.get(s); n.x += cl.x; n.y += cl.y; }));
-    doc.cards.forEach(c => { const n = nodes.get(c.slug); if (n && c.by === by && Number.isFinite(c.x)) { n.x = c.x; n.y = c.y; } });
+    families.forEach(famBox);
+    const moved = [];
+    doc.cards.forEach(c => { const n = nodes.get(c.slug); if (n && c.by === by && Number.isFinite(c.x)) { n.x = c.x; n.y = c.y; moved.push(n); } });
+    moved.forEach(n => refamily(n));
 
     // Bounds and timeline below everything.
     let x0 = 0, y0 = -TITLE_H, x1 = 0, y1 = 0;
@@ -450,6 +488,61 @@
     rendered.forEach(el => el.remove());
     rendered.clear();
     renderStatic();
+  }
+  // Greedy cover: the most telling shared feature first (rarer in the library,
+  // stronger type, more members), up to FAM_MAX items per family. What is left
+  // over is the loose family.
+  function familiesOf(items) {
+    const N = set.length;
+    const by = new Map();
+    items.forEach(it => (featOf.get(it.slug) || []).forEach(x => {
+      if (!layers.sim.on || !layers.sim[x.type]) return;
+      let e = by.get(x.f); if (!e) by.set(x.f, e = { x, slugs: [] }); e.slugs.push(it.slug);
+    }));
+    const cands = [...by.values()].filter(e => e.slugs.length >= 2 && e.slugs.length < Math.max(3, items.length * 0.9))
+      .map(e => ({ ...e, score: SIM[e.x.type].w * Math.log(1 + N / (inv.get(e.x.f) || e.slugs).length) * Math.log2(1 + Math.min(e.slugs.length, FAM_MAX)) }))
+      .sort((a, b) => b.score - a.score);
+    const taken = new Set(), out = [];
+    const bySlug = new Map(items.map(it => [it.slug, it]));
+    for (const c of cands) {
+      let free = c.slugs.filter(s => !taken.has(s));
+      while (free.length >= 2) {
+        const part = free.slice(0, FAM_MAX);
+        if (part.length < 2) break;
+        part.forEach(s => taken.add(s));
+        out.push({ tag: c.x.tag, type: c.x.type, items: part.map(s => bySlug.get(s)) });
+        free = free.slice(FAM_MAX);
+      }
+    }
+    out.sort((a, b) => b.items.length - a.items.length);
+    const rest = items.filter(it => !taken.has(it.slug));
+    if (rest.length) out.push({ tag: null, type: null, loose: true, items: rest });
+    return out;
+  }
+  // How tall a card looks at the current zoom (details shrink at mid zoom).
+  function visH(n) {
+    if (boxLod >= 2) return n.h;
+    if (n.vh1 === undefined) n.vh1 = n.ch + 8 + Math.min(n.dh, 14 + (lines(n.d.title, 20) > 1 ? 52 : 26) + 4 + 20 + (n.d.cols.length ? 30 : 0) + 8);
+    return boxLod === 0 ? n.ch : n.vh1;
+  }
+  function famBox(f) {
+    if (!f || !f.slugs.length) { if (f) f.box = null; return; }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    f.slugs.forEach(s => { const n = nodes.get(s); x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + W); y1 = Math.max(y1, n.y + visH(n)); });
+    f.box = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+  // After a move: leave the family if dropped clear of it, join one if dropped on it.
+  function refamily(n) {
+    const cx = n.x + W / 2, cy = n.y + n.ch / 2;
+    const inside = (f, pad) => f.box && cx > f.box.x - pad && cx < f.box.x + f.box.w + pad && cy > f.box.y - pad && cy < f.box.y + f.box.h + pad;
+    const cur = families[n.fam];
+    if (cur) {
+      cur.slugs = cur.slugs.filter(s => s !== n.slug); famBox(cur);
+      if (inside(cur, 60) || (cur.loose && !families.some(f => f !== cur && !f.loose && inside(f, 0)))) { cur.slugs.push(n.slug); famBox(cur); return; }
+    }
+    const to = families.findIndex(f => f !== cur && !f.loose && inside(f, 0));
+    n.fam = to >= 0 ? to : -1;
+    if (to >= 0) { families[to].slugs.push(n.slug); famBox(families[to]); }
   }
   function rebuildHash() {
     hash = new Map();
@@ -548,6 +641,7 @@
     caret: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>',
     open: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
     x: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    link: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h7v10h9"/></svg>',
   };
   function build() {
     const mc = document.querySelector('.main-content');
@@ -615,10 +709,11 @@
     const sw = Object.entries(SIM).filter(([k]) => layers.sim.on && layers.sim[k]).map(([, d]) => `<i style="background:${d.color || 'var(--text)'}"></i>`).join('');
     els.controls.querySelector('[data-swatches]').innerHTML = sw;
     els.controls.querySelector('[data-menu-for="sim"]').innerHTML =
-      `<label class="lc-mi lc-mi-head"><input type="checkbox" data-sim="on"${layers.sim.on ? ' checked' : ''}> <span>Show similarity lines</span></label>` +
+      `<label class="lc-mi lc-mi-head"><input type="checkbox" data-sim="on"${layers.sim.on ? ' checked' : ''}> <span>Sort by similarity</span></label>` +
       Object.entries(SIM).map(([k, d]) => `<label class="lc-mi"><input type="checkbox" data-sim="${k}"${layers.sim[k] ? ' checked' : ''}${layers.sim.on ? '' : ' disabled'}>
         <span class="lc-key${d.dash ? ' is-dash' : ''}" style="--c:${d.color || 'var(--text)'}"></span><span><b>${d.label}</b> <em>${d.hint}</em></span></label>`).join('') +
-      `<p class="lc-menu-note">Lines appear as you zoom in. Select an item to see only its lines.</p>`;
+      `<label class="lc-mi lc-mi-head"><input type="checkbox" data-sim="always"${layers.sim.always ? ' checked' : ''}${layers.sim.on ? '' : ' disabled'}> <span>Always show lines</span></label>` +
+      `<p class="lc-menu-note">Similar items sit together on a tint, named by what they share. Hover, select or drag an item to see its lines.</p>`;
     els.controls.querySelector('[data-menu-for="ins"]').innerHTML =
       Object.entries(INSIGHTS).map(([k, v]) => `<label class="lc-mi"><input type="checkbox" data-ins="${k}"${layers.ins[k] ? ' checked' : ''}><span>${v}</span></label>`).join('') +
       `<div class="lc-legend">${Object.entries(L2).filter(([k]) => k !== 'related').map(([, d]) => `<span><span class="lc-key${d.dash ? ' is-dash' : ''}" style="--c:${d.color}"></span>${d.label} <em>${d.hint}</em></span>`).join('')}</div>
@@ -724,6 +819,9 @@
     if (rec && rec.state) {
       el.insertAdjacentHTML('afterbegin', `<div class="lc-mark" data-ins-part="marks"><b>${rec.state === 'use' ? 'Use' : 'Rejected'}</b>${rec.reason ? ' ' + esc(rec.reason) : ''}</div>`);
     }
+    el.querySelectorAll('.lc-links').forEach(x => x.remove());
+    const lc = linkCount.get(n.slug);
+    if (lc) el.querySelector('.lc-cover').insertAdjacentHTML('beforeend', `<span class="lc-links" data-ins-part="marks" title="Your links: hover to see them">${IC.link}${lc}</span>`);
     const v = visit(n.item);
     el.classList.toggle('is-glow', v === 'glow');
     el.classList.toggle('is-fade', v === 'fade');
@@ -775,6 +873,8 @@
     let blocks = lod === 0 && vis.length > 260;
     if (blocks) vis = [];
     els.stage.dataset.lod = blocks ? 0 : Math.max(1, lod);
+    const bl = blocks ? 0 : Math.max(1, lod);
+    if (bl !== boxLod) { boxLod = bl; families.forEach(famBox); }
     const want = new Set(vis);
     rendered.forEach((el, s) => { if (!want.has(s)) { el.remove(); rendered.delete(s); } });
     const frag = document.createDocumentFragment();
@@ -786,19 +886,26 @@
     });
     if (frag.childNodes.length) els.cards.appendChild(frag);
 
-    // Focus: the selected (or hovered) item and what it links to.
-    const focus = sel || (!blocks ? hover : null);
+    if (schedule.full) {
+      linkCount = new Map();
+      doc.links.forEach(l => [l.a, l.b].forEach(x => linkCount.set(x, (linkCount.get(x) || 0) + 1)));
+      rendered.forEach((el, s) => decorate(el, nodes.get(s)));
+    }
+    // Focus: the selected (or hovered) item or note and what it links to.
+    const focus = dragging || sel || selNote || (!blocks ? hover : null);
+    const nearSet = new Set(near.map(x => x.b));
     lastBlocks = blocks;
     const linked = sel ? focusSet(sel) : null;
     rendered.forEach((el, s) => {
       el.classList.toggle('is-selected', s === sel);
       el.classList.toggle('is-dim', !!(linked && !linked.has(s)));
       el.classList.toggle('is-target', !!(connect && s !== connect.from));
+      el.classList.toggle('is-near', nearSet.has(s));
     });
     els.root.classList.toggle('has-focus', !!linked);
     els.root.classList.toggle('is-connecting', !!(connect || pinFor));
     drawInk(r, blocks ? 0 : Math.max(1, lod), vis, focus, linked);
-    if (hover && !rendered.has(hover)) hover = null;
+    if (hover && !rendered.has(hover) && !doc.notes.some(n => n.id === hover)) hover = null;
     renderSelbar(r);
     schedule.full = false;
     if (t0) window.__lcPerf.push(performance.now() - t0);
@@ -839,13 +946,32 @@
     if (Math.abs(dx) * h > Math.abs(dy) * w) return { x: dx > 0 ? note.x + w : note.x, y: cy, nx: Math.sign(dx), ny: 0 };
     return dy > 0 ? { x: cx, y: note.y + h, nx: 0, ny: 1 } : { x: cx, y: note.y, nx: 0, ny: -1 };
   }
-  function curve(pa, pb) {
-    const d = Math.max(40, Math.hypot(pb.x - pa.x, pb.y - pa.y) * 0.35);
-    return [pa.x, pa.y, pa.x + pa.nx * d, pa.y + pa.ny * d, pb.x + pb.nx * d, pb.y + pb.ny * d, pb.x, pb.y];
+  // Straight runs with 90° bends and rounded corners; one straight segment
+  // when the two ends are close.
+  function route(pa, pb) {
+    const dx = pb.x - pa.x, dy = pb.y - pa.y;
+    if (Math.hypot(dx, dy) < STRAIGHT || Math.abs(dx) < 3 || Math.abs(dy) < 3) return [pa, pb];
+    if (pa.nx && pb.nx) { const mx = (pa.x + pb.x) / 2; return [pa, { x: mx, y: pa.y }, { x: mx, y: pb.y }, pb]; }
+    if (pa.ny && pb.ny) { const my = (pa.y + pb.y) / 2; return [pa, { x: pa.x, y: my }, { x: pb.x, y: my }, pb]; }
+    if (pa.nx) return [pa, { x: pb.x, y: pa.y }, pb];
+    return [pa, { x: pa.x, y: pb.y }, pb];
   }
-  function bez(c, t) {
-    const u = 1 - t;
-    return { x: u * u * u * c[0] + 3 * u * u * t * c[2] + 3 * u * t * t * c[4] + t * t * t * c[6], y: u * u * u * c[1] + 3 * u * u * t * c[3] + 3 * u * t * t * c[5] + t * t * t * c[7] };
+  function strokeRoute(ctx, pts) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p = pts[i], a = pts[i - 1], b = pts[i + 1];
+      const r = Math.min(18, Math.hypot(p.x - a.x, p.y - a.y) / 2, Math.hypot(b.x - p.x, b.y - p.y) / 2);
+      ctx.arcTo(p.x, p.y, b.x, b.y, r);
+    }
+    const z = pts[pts.length - 1];
+    ctx.lineTo(z.x, z.y);
+    ctx.stroke();
+  }
+  function routeMid(pts) {
+    let best = 0, bi = 0;
+    for (let i = 0; i < pts.length - 1; i++) { const d = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); if (d > best) { best = d; bi = i; } }
+    return { x: (pts[bi].x + pts[bi + 1].x) / 2, y: (pts[bi].y + pts[bi + 1].y) / 2 };
   }
   function drawInk(r, lod, vis, focus, linked) {
     const dpr = window.devicePixelRatio || 1;
@@ -878,36 +1004,81 @@
       ctx.globalAlpha = 1;
     }
 
+    // Family tints and captions (behind everything).
+    if (layers.sim.on && k >= 0.05) {
+      const vx0 = -view.x / k, vy0 = -view.y / k, vx1 = (r.width - view.x) / k, vy1 = (r.height - view.y) / k;
+      const fs = Math.max(15, 12 / k);
+      ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`;
+      ctx.textBaseline = 'alphabetic';
+      families.forEach(f => {
+        const b = f.box;
+        if (!b || f.loose || f.slugs.length < 2) return;
+        if (b.x + b.w + FAM_PAD < vx0 || b.x - FAM_PAD > vx1 || b.y + b.h + FAM_PAD < vy0 || b.y - FAM_CAP > vy1) return;
+        const col = f.color || textCol;
+        const dim = linked && !f.slugs.some(s => linked.has(s));
+        ctx.globalAlpha = dim ? 0.03 : 0.09;
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.roundRect(b.x - FAM_PAD, b.y - FAM_PAD, b.w + FAM_PAD * 2, b.h + FAM_PAD * 2, 22); ctx.fill();
+        if (k >= 0.12) {
+          ctx.globalAlpha = dim ? 0.25 : 1;
+          const tx = b.x - FAM_PAD + 4, ty = b.y - FAM_PAD - 12;
+          ctx.beginPath(); ctx.arc(tx + fs * 0.32, ty - fs * 0.34, fs * 0.3, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = col;
+          // Fit the caption to the family's width: tag first, then the type and count.
+          const room = b.w + FAM_PAD * 2 + FAM_GAP_X * 0.6 - fs * 0.9 - 4;
+          const fit = (t) => { if (ctx.measureText(t).width <= room) return t; while (t.length > 2 && ctx.measureText(t + '…').width > room) t = t.slice(0, -1); return t + '…'; };
+          const t1 = fit(cap(f.tag));
+          ctx.fillText(t1, tx + fs * 0.9, ty);
+          const w1 = ctx.measureText(t1).width;
+          ctx.globalAlpha = dim ? 0.15 : 0.55;
+          ctx.fillStyle = textCol;
+          ctx.font = `400 ${fs * 0.86}px Inter, system-ui, sans-serif`;
+          const t2 = `  ${SIM[f.type].label.toLowerCase()} · ${f.slugs.length}`;
+          if (w1 + ctx.measureText(t2).width <= room) ctx.fillText(t2, tx + fs * 0.9 + w1, ty);
+          ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`;
+        }
+      });
+      ctx.globalAlpha = 1;
+    }
+
     const labels = [];
     const lw = (px) => px / k;
     const drawLink = (a, b, color, dash, alpha, width, arrow, label, cls) => {
       const e = endpoints(a, b);
       if (!e) return;
-      const cv = curve(e.pa, e.pb);
+      const pts = route(e.pa, e.pb);
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = color || textCol;
       ctx.lineWidth = lw(width);
       ctx.setLineDash(dash ? dash.map(v => lw(v)) : []);
-      ctx.beginPath(); ctx.moveTo(cv[0], cv[1]); ctx.bezierCurveTo(cv[2], cv[3], cv[4], cv[5], cv[6], cv[7]); ctx.stroke();
+      strokeRoute(ctx, pts);
       ctx.setLineDash([]);
       ctx.fillStyle = color || textCol;
-      const dot = lw(3.2);
-      [[cv[0], cv[1]], [cv[6], cv[7]]].forEach(([x, y], i) => {
+      const ends = [[pts[0], pts[1]], [pts[pts.length - 1], pts[pts.length - 2]]];
+      ends.forEach(([p, q], i) => {
         if (arrow && (i === 1 || arrow === 'both')) {
-          const p = i === 1 ? bez(cv, 0.97) : bez(cv, 0.03);
-          const ang = Math.atan2(y - p.y, x - p.x), s = lw(9);
-          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - s * Math.cos(ang - 0.45), y - s * Math.sin(ang - 0.45)); ctx.lineTo(x - s * Math.cos(ang + 0.45), y - s * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill();
-        } else { ctx.beginPath(); ctx.arc(x, y, dot, 0, Math.PI * 2); ctx.fill(); }
+          const ang = Math.atan2(p.y - q.y, p.x - q.x), s = lw(9);
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - s * Math.cos(ang - 0.45), p.y - s * Math.sin(ang - 0.45)); ctx.lineTo(p.x - s * Math.cos(ang + 0.45), p.y - s * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill();
+        } else { ctx.beginPath(); ctx.arc(p.x, p.y, lw(3.2), 0, Math.PI * 2); ctx.fill(); }
       });
       ctx.globalAlpha = 1;
-      if (label && alpha > 0.5) { const m = bez(cv, 0.5); labels.push({ x: m.x, y: m.y, text: label, color: color || textCol, cls }); }
+      if (label && alpha > 0.5) { const m = routeMid(pts); labels.push({ x: m.x, y: m.y, text: label, color: color || textCol, cls }); }
     };
+    const always = layers.sim.always;
+    const touches = (l) => focus && (l.a === focus || l.b === focus);
 
-    // Layer 1: computed similarity.
-    if (layers.sim.on) {
+    // Layer 1: computed similarity. Hidden until you hover, select or drag,
+    // unless "always" is on.
+    if (layers.sim.on && dragging) {
+      near.forEach(x => {
+        const d = SIM[x.type];
+        const a = Math.max(0.3, 1 - x.d / NEAR);
+        drawLink(dragging, x.b, d.color, d.dash, a, 1.4 + a, false, x.d < NEAR * 0.65 ? x.label : null, 'sim-' + x.type);
+      });
+    } else if (layers.sim.on && (focus || always)) {
       const seen = new Set();
       let drawn = 0;
-      const from = focus ? [focus] : (lod >= 1 ? vis : []);
+      const from = focus && nodes.has(focus) ? [focus] : (always && lod >= 1 ? vis : []);
       for (const s of from) {
         if (drawn > MAX_LINKS) break;
         for (const l of linksFor(s, s === focus)) {
@@ -915,33 +1086,34 @@
           const key = l.a < l.b ? l.a + '|' + l.b : l.b + '|' + l.a;
           if (seen.has(key)) continue;
           seen.add(key);
-          const on = !focus || l.a === focus || l.b === focus;
+          const on = touches(l);
           const d = SIM[l.type];
-          drawLink(l.a, l.b, d.color, d.dash, on ? (focus ? 0.95 : 0.45) : 0.06, focus ? 2.2 : 1.4, false, ((k >= 0.9 && l.s >= 3.6) || (focus && on)) ? l.label : null, 'sim-' + l.type);
+          drawLink(l.a, l.b, d.color, d.dash, on ? 0.95 : 0.4, on ? 2 : 1.3, false, on || (k >= 0.9 && l.s >= 3.6) ? l.label : null, 'sim-' + l.type);
           drawn++;
         }
       }
     }
-    // Layer 2: your links (and accepted maybes).
+    // Layer 2: your links (and accepted maybes), shown for the item in focus.
     doc.links.forEach(l => {
       const d = L2[l.kind] || L2.related;
       if (l.kind === 'question' || l.kind === 'part_of' ? !layers.ins.notes : !layers.ins.marks && l.kind !== 'related') return;
       if (!centreOf(l.a) || !centreOf(l.b)) return;
-      const on = !focus || l.a === focus || l.b === focus;
+      const on = touches(l);
+      if (!on && !always) return;
       const label = l.kind === 'influence' ? (l.label ? 'inspired: ' + l.label : 'inspired') : l.kind === 'contrast' ? 'vs' + (l.label ? ' · ' + l.label : '') : l.kind === 'part_of' ? 'part of' : l.kind === 'related' ? (l.label ? 'maybe: ' + l.label : null) : null;
-      drawLink(l.a, l.b, d.color, d.dash, on ? 0.95 : 0.12, 2, l.kind === 'influence' ? 'both' : (l.kind === 'part_of' || l.kind === 'question') ? 'end' : false, (k >= LABEL_K * 0.8 || on && focus) ? label : null, 'l2');
+      drawLink(l.a, l.b, d.color, d.dash, on || !focus ? 0.95 : 0.12, 2, l.kind === 'influence' ? 'both' : (l.kind === 'part_of' || l.kind === 'question') ? 'end' : false, (on || k >= LABEL_K) ? label : null, 'l2');
     });
     // Gaps: ghost to its anchor.
     if (layers.ins.gaps && lod > 0) clusters.forEach(cl => {
       if (!cl.ghost || !cl.ghost.anchor) return;
+      if (!always && focus !== cl.ghost.anchor && hoverGhost !== cl.ghost.slug) return;
       const n = nodes.get(cl.ghost.anchor); if (!n) return;
       const gx = cl.x + cl.w + 60, gy = cl.y + 60;
-      const pa = anchor(n, { x: gx, y: gy });
-      const cv = curve(pa, { x: gx, y: gy, nx: -1, ny: 0 });
-      ctx.strokeStyle = textCol; ctx.globalAlpha = 0.45; ctx.lineWidth = lw(1.2); ctx.setLineDash([lw(4), lw(4)]);
-      ctx.beginPath(); ctx.moveTo(cv[0], cv[1]); ctx.bezierCurveTo(cv[2], cv[3], cv[4], cv[5], cv[6], cv[7]); ctx.stroke();
+      const pts = route(anchor(n, { x: gx, y: gy }), { x: gx, y: gy, nx: -1, ny: 0 });
+      ctx.strokeStyle = textCol; ctx.globalAlpha = 0.55; ctx.lineWidth = lw(1.2); ctx.setLineDash([lw(4), lw(4)]);
+      strokeRoute(ctx, pts);
       ctx.setLineDash([]); ctx.globalAlpha = 1;
-      if (k >= LABEL_K && cl.ghost.shared[0]) { const m = bez(cv, 0.5); labels.push({ x: m.x, y: m.y, text: 'maybe: ' + cl.ghost.shared[0], color: null, cls: 'maybe' }); }
+      if (cl.ghost.shared[0]) { const m = routeMid(pts); labels.push({ x: m.x, y: m.y, text: 'maybe: ' + cl.ghost.shared[0], color: null, cls: 'maybe' }); }
     });
     // Region notes: a line to the point on the image.
     if (layers.ins.notes) doc.notes.forEach(note => {
@@ -1100,7 +1272,7 @@
   function askLabel(link) {
     if (!link || (link.kind !== 'influence' && link.kind !== 'contrast')) return;
     const e = endpoints(link.a, link.b); if (!e) return;
-    const m = bez(curve(e.pa, e.pb), 0.5);
+    const m = routeMid(route(e.pa, e.pb));
     const inp = document.createElement('input');
     inp.className = 'lc-label-input';
     inp.placeholder = link.kind === 'influence' ? 'What carried over?' : 'What’s the contrast?';
@@ -1164,6 +1336,7 @@
     els.controls.addEventListener('change', (e) => {
       const t = e.target;
       if (t.dataset.sim) { layers.sim[t.dataset.sim] = t.checked; }
+      if (t.dataset.sim && t.dataset.sim !== 'always') markLayout();
       if (t.dataset.ins) { layers.ins[t.dataset.ins] = t.checked; }
       saveDoc(); renderMenus();
       const id = t.dataset.sim ? 'sim' : 'ins';
@@ -1265,8 +1438,11 @@
     els.stage.addEventListener('pointermove', (e) => {
       if (e.buttons) return;
       const c = e.target.closest('.lc-card');
-      const s = c ? c.dataset.slug : null;
-      if (s !== hover) { hover = s; schedule(); }
+      const nt = e.target.closest('.lc-note');
+      const g = e.target.closest('.lc-ghost');
+      const s = c ? c.dataset.slug : nt ? nt.dataset.note : null;
+      const gs = g ? g.dataset.ghost : null;
+      if (s !== hover || gs !== hoverGhost) { hover = s; hoverGhost = gs; schedule(); }
     });
     els.stage.addEventListener('pointerleave', () => { if (hover) { hover = null; schedule(); } });
     els.stage.addEventListener('dblclick', (e) => {
@@ -1395,20 +1571,40 @@
       let moved = false, snap = null;
       return track((ev) => {
         if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
-        if (!moved) { moved = true; snap = JSON.stringify(doc); els.root.classList.add('is-moving'); sel = s; }
+        if (!moved) { moved = true; snap = JSON.stringify(doc); els.root.classList.add('is-moving'); sel = s; dragging = s; }
         n.x = Math.round(ox + (ev.clientX - sx) / view.k); n.y = Math.round(oy + (ev.clientY - sy) / view.k);
+        near = nearOf(n);
+        if (families[n.fam]) famBox(families[n.fam]);
         schedule();
       }, () => {
         els.root.classList.remove('is-moving');
+        dragging = null; near = [];
         if (moved) {
           undoStack.push(snap);
           const c = cardRecMake(s); c.x = n.x; c.y = n.y; c.by = doc.groupBy;
+          refamily(n);
           saveDoc(); rebuildHash();
         } else sel = sel === s ? null : s;
         renderNotes();
         schedule(true);
       });
     }
+  }
+  // While dragging: related items within reach, nearer ones first.
+  function nearOf(n) {
+    const out = [];
+    const cx = n.x + W / 2, cy = n.y + n.ch / 2;
+    inRect(n.x - NEAR, n.y - NEAR, n.x + W + NEAR, n.y + n.h + NEAR).forEach(b => {
+      if (b === n.slug) return;
+      const m = nodes.get(b);
+      const d = Math.max(0, Math.hypot(m.x + W / 2 - cx, m.y + m.ch / 2 - cy) - W);
+      if (d > NEAR) return;
+      const fa = featOf.get(n.slug) || [], fb = new Set((featOf.get(b) || []).map(x => x.f));
+      let s = 0, best = null;
+      fa.forEach(x => { if (layers.sim[x.type] && fb.has(x.f)) { const w = SIM[x.type].w; s += w; if (!best || w > SIM[best.type].w) best = x; } });
+      if (s >= 1.4) out.push({ b, s, d, type: best.type, label: best.tag });
+    });
+    return out.sort((a, b) => (b.s - b.d / 300) - (a.s - a.d / 300)).slice(0, 10);
   }
   function track(move, up) {
     const m = (ev) => move(ev);

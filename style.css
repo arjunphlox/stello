@@ -3205,3 +3205,12 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
   .lc-controls { top: auto; bottom: 84px; right: 12px; left: 12px; flex-wrap: wrap; }
   .lc-zoom { display: none !important; }
 }
+
+/* Progressive disclosure: your-link count on a card, near items while dragging. */
+.lc-links {
+  position: absolute; left: 8px; top: 8px; height: 22px; padding: 0 8px 0 6px; border-radius: 11px;
+  display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600;
+  background: rgba(20, 20, 18, 0.78); color: #fff;
+}
+.lc-stage[data-lod="1"] .lc-links { transform: scale(1.4); transform-origin: 0 0; }
+.lc-card.is-near .lc-cover { outline: 2px solid color-mix(in srgb, var(--accent) 80%, transparent); outline-offset: 3px; }
