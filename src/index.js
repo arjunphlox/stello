@@ -36,6 +36,10 @@ import { runDailySync } from './lib/sync-cron.js';
 import { mergeDuplicates } from './lib/dedupe.js';
 import processBatchesMod from './routes/process-batches.js';
 import classifyRoute from './routes/classify.js';
+import mountProjects from './routes/projects.js';
+import mountLibrary from './routes/library.js';
+import mountPair from './routes/pair.js';
+import mountMcp from './routes/mcp.js';
 
 const app = new Hono();
 
@@ -45,8 +49,31 @@ app.use('/api/*', async (c, next) => {
   await next();
 });
 
+// CORS for the routes the Figma plugin calls. Its iframe has a null origin and
+// sends a device token as a bearer (never cookies), so '*' is safe here.
+const PLUGIN_CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+};
+for (const path of ['/api/library', '/api/library/*', '/api/projects', '/api/projects/*', '/api/pair/*']) {
+  app.use(path, async (c, next) => {
+    if (c.req.method === 'OPTIONS') return new Response(null, { status: 204, headers: PLUGIN_CORS });
+    await next();
+    for (const [k, v] of Object.entries(PLUGIN_CORS)) c.res.headers.set(k, v);
+  });
+}
+
 mountAuth(app);
 mountData(app);
+
+// Canvas docs (library canvas + projects), the slim library for the Figma
+// plugin, plugin pairing, and the Stello MCP server (POST /mcp).
+mountProjects(app, { requireUser: auth.requireUser });
+mountLibrary(app, { requireUser: auth.requireUser });
+mountPair(app);
+mountMcp(app);
 
 // Apple app <-> web copy sync (docs/plans/apple-web-sync.md).
 app.post('/api/auth/apple/native', appleNative);
@@ -114,6 +141,7 @@ app.get('/img/*', async (c) => {
   const key = decodeURIComponent(new URL(c.req.url).pathname.slice('/img/'.length));
   if (!key) return c.notFound();
   if (c.req.query('w') === String(images.OFFLINE_WIDTH)) return serveOfflineCopy(c, key);
+  if (c.req.query('format') === 'figma') return serveFigmaCopy(c, key);
   const obj = await c.env.BUCKET.get(key);
   if (!obj || !obj.body) return c.notFound();
   const headers = new Headers();
@@ -145,6 +173,27 @@ async function serveOfflineCopy(c, key) {
   const keepType = keep === copy ? 'image/webp' : type;
   c.executionCtx.waitUntil(c.env.BUCKET.put(copyKey, keep, { httpMetadata: { contentType: keepType } }));
   return new Response(keep, { headers: { ...headers, 'content-type': keepType } });
+}
+
+// The Figma plugin's copy: ≤1200px JPEG (plugins can't place WebP). Made on
+// first request and kept in R2, like the offline copy. CORS-open: the plugin
+// iframe has a null origin, and image URLs are already public.
+async function serveFigmaCopy(c, key) {
+  const headers = { 'cache-control': 'public, max-age=31536000, immutable', 'access-control-allow-origin': '*' };
+  const copyKey = storage.figmaKey(key);
+  const existing = await c.env.BUCKET.get(copyKey);
+  if (existing && existing.body) {
+    return new Response(existing.body, { headers: { ...headers, 'content-type': 'image/jpeg' } });
+  }
+  const original = await c.env.BUCKET.get(key);
+  if (!original || !original.body) return c.notFound();
+  const type = original.httpMetadata?.contentType || 'application/octet-stream';
+  const bytes = new Uint8Array(await original.arrayBuffer());
+  if (/^image\/(png|jpeg|gif)$/.test(type)) return new Response(bytes, { headers: { ...headers, 'content-type': type } });
+  const copy = await images.figmaCopy(c.env, bytes);
+  if (!copy) return new Response(bytes, { headers: { ...headers, 'content-type': type } });
+  c.executionCtx.waitUntil(c.env.BUCKET.put(copyKey, copy, { httpMetadata: { contentType: 'image/jpeg' } }));
+  return new Response(copy, { headers: { ...headers, 'content-type': 'image/jpeg' } });
 }
 
 // --- Fallback: anything that reached the Worker but isn't ours → static assets.

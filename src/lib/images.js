@@ -159,4 +159,23 @@ async function offlineCopy(env, input) {
   }
 }
 
-module.exports = { toWebp, ensureWebp, isWebp, offlineCopy, OFFLINE_WIDTH };
+/**
+ * The copy the Figma plugin places on the canvas: Figma plugins accept only
+ * PNG, JPG or GIF up to 4096px, and Stello stores WebP. ≤ OFFLINE_WIDTH wide
+ * JPEG keeps reference boards light. Returns bytes, or null (as offlineCopy).
+ */
+async function figmaCopy(env, input) {
+  const raw = input instanceof Uint8Array ? input : new Uint8Array(input);
+  try {
+    const result = await env.IMAGES
+      .input(toStream(raw))
+      .transform({ width: OFFLINE_WIDTH, fit: 'scale-down' })
+      .output({ format: 'image/jpeg', quality: 82 });
+    return new Uint8Array(await result.response().arrayBuffer());
+  } catch (err) {
+    console.warn('figmaCopy failed', (err && err.message) || err);
+    return null;
+  }
+}
+
+module.exports = { toWebp, ensureWebp, isWebp, offlineCopy, figmaCopy, OFFLINE_WIDTH };
