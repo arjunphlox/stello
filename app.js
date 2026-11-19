@@ -346,6 +346,7 @@
       colorHex: (name) => COLOR_MAP[name] || COLOR_MAP[String(name).replace(/[-_\s]/g, '_')] || '#888888',
       item: (slug) => itemsBySlug[slug] || null,
       openItem: (slug) => PanelManager.open(slug),
+      openCardMenu: (slug, x, y) => CardMenu.openAt(slug, x, y),
       thumbHTML: canvasThumbHTML,
       glyphSVG: (item) => {
         const g = glyphTileFor(item);
@@ -2210,7 +2211,7 @@
 
     const ICON_FOR = {
       open: 'arrow-up-right', enrich: 'sparkle', share: 'share', 'copy-link': 'link',
-      copy: 'copy', download: 'download', delete: 'trash', offline: 'cloud-arrow-down',
+      copy: 'copy', download: 'download', delete: 'trash', offline: 'cloud-arrow-down', canvas: 'graph',
     };
 
     function entries(item) {
@@ -2218,6 +2219,7 @@
       const hasImage = !!item.image_path;
       const list = [
         { id: 'open', label: 'Open' },
+        ...(window.StelloCanvas ? [{ id: 'canvas', label: window.StelloCanvas.has(item.slug) ? 'Show on Canvas' : 'Add to Canvas' }] : []),
         { id: 'enrich', label: 'Enrich' },
       ];
       if (hasURL && navigator.share) list.push({ id: 'share', label: 'Share' });
@@ -2284,6 +2286,7 @@
       if (!item) return;
       switch (action) {
         case 'open': PanelManager.open(item.slug); break;
+        case 'canvas': window.StelloCanvas && window.StelloCanvas.addAuto(item.slug); break;
         case 'enrich': enrichItem(item.slug); break;
         case 'share': navigator.share({ title: item.title || '', url: item.source_url }).catch(() => {}); break;
         case 'copy-link': copyText(item.source_url, 'Link'); break;
@@ -2323,7 +2326,7 @@
       window.addEventListener('blur', close);
     }
 
-    return { init, close };
+    return { init, close, openAt };
   })();
 
   // ---- Capture queue (sequential panel curation) ----

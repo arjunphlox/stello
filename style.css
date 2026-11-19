@@ -3390,3 +3390,43 @@ html.view-canvas .bottom-bar .lc-doc { max-width: 260px; }
   html.view-canvas .bottom-bar .lc-doc { flex: 1 1 auto; max-width: none; }
   html.view-canvas .bottom-bar .bar-search { flex: 0 0 44px; }
 }
+
+/* Phone carry: press and hold a grid card, the canvas opens under it. */
+.lc-carry-top {
+  position: fixed; z-index: 1001; left: 50%; top: calc(var(--gap-top, 12px) + 4px); transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 4px; height: 44px; padding: 3px 3px 3px 16px; max-width: calc(100vw - 24px);
+  border-radius: 999px; background: color-mix(in srgb, var(--bg-secondary) 80%, transparent); border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  font-size: 14px; color: var(--text-primary); pointer-events: none;
+}
+.lc-carry-top[hidden] { display: none; }
+.lc-carry-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lc-carry-cancel {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--card-hover) 70%, transparent); transition: background 0.12s, color 0.12s, transform 0.12s;
+}
+.lc-carry-cancel svg { width: 14px; height: 14px; }
+.lc-carry-top.is-hot .lc-carry-cancel { background: #e5484d; color: #fff; transform: scale(1.06); }
+.lc-drag-ghost { transition: opacity 0.12s, filter 0.12s; }
+.lc-drag-ghost.is-cancel { opacity: 0.45; filter: grayscale(1); }
+html.is-carrying .bottom-bar, html.is-carrying .lc-controls, html.is-carrying .lc-zoom { opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+html.is-carrying, html.is-carrying * { user-select: none; -webkit-user-select: none; }
+.lc-atoast {
+  position: fixed; z-index: 1001; left: 50%; bottom: calc(var(--gap-bottom, 12px) + 64px); transform: translate(-50%, 12px);
+  display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 3px 3px 3px 16px; max-width: calc(100vw - 24px);
+  border-radius: 999px; background: color-mix(in srgb, var(--bg-secondary) 88%, transparent); border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  font-size: 14px; color: var(--text-primary); opacity: 0; pointer-events: none; transition: opacity 0.18s, transform 0.18s;
+}
+.lc-atoast.is-on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.lc-atoast > span { min-width: 0; padding-right: 6px; line-height: 1.25; font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lc-atoast button {
+  height: 36px; padding: 0 14px; border-radius: 999px; border: 0; font: inherit; color: inherit; white-space: nowrap; cursor: pointer;
+  background: color-mix(in srgb, var(--card-hover) 70%, transparent);
+}
+.lc-atoast button:last-child { background: var(--accent); color: var(--accent-contrast); }
+@media (max-width: 768px) {
+  .view-switch [data-view="split"] { display: none; }
+  .grid-container .card[data-slug] { -webkit-touch-callout: none; }
+}
+html.is-carrying .header { visibility: hidden; }
