@@ -105,6 +105,11 @@
     ins: { marks: true, notes: true, gaps: true, glow: true },
   };
   let raf = 0, layoutRaf = 0, dirtyLayout = true;
+  const touchPts = new Map();     // pointerId -> { x, y } for fingers on the canvas
+  let pinch = null;               // { d, k, wx, wy } at pinch start
+  let active = null;              // { id, cancel } the single-pointer action in progress
+  let inertia = 0;                // rAF id of a touch pan's glide
+  let camSet = false;             // the camera has been placed once this session
   let spaceDown = false;
   let lastBlocks = false;
   let theme = { text: '#eee', card: '#333', accent: '#ffc53d' };
@@ -120,12 +125,24 @@
   function hashOf(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
 
   // ---------- Document (same shape as the server projects API) ----------
-  function blankDoc() { return { name: 'Library canvas', groupBy: 'collection', cards: [], links: [], groups: [], notes: [], dismissed: [], layers: null }; }
+  // v2: the canvas starts empty and holds only what you drag in. Older docs
+  // (v1, auto-filled with the whole library) are cleared once: their cards,
+  // groups and free notes go; links stay but show only between dropped items.
+  const DOC_V = 2;
+  function blankDoc() { return { v: DOC_V, name: 'Library canvas', groupBy: 'collection', cards: [], links: [], groups: [], notes: [], dismissed: [], layers: null }; }
+  function upgrade(d) {
+    if (d.v === DOC_V) return false;
+    d.v = DOC_V; d.cards = []; d.groups = []; d.notes = [];
+    return true;
+  }
+  let upgraded = false;
   function loadDoc() {
     try { doc = JSON.parse(localStorage.getItem(DOC_KEY)); } catch { doc = null; }
     if (!doc || typeof doc !== 'object') doc = blankDoc();
     const b = blankDoc();
+    if (doc.v == null) doc.v = 1;
     Object.keys(b).forEach(k => { if (doc[k] == null) doc[k] = b[k]; });
+    if (upgrade(doc)) { upgraded = true; localStorage.setItem(DOC_KEY, JSON.stringify(doc)); }
     if (doc.layers) {
       layers.sim = Object.assign(layers.sim, doc.layers.sim || {});
       layers.ins = Object.assign(layers.ins, doc.layers.ins || {});
@@ -143,7 +160,7 @@
   const canSync = () => !!(window.Stello && Stello.apiFetch && Stello.getUserId && Stello.getUserId());
   function toServer(d) {
     return {
-      name: d.name, groupBy: d.groupBy,
+      v: DOC_V, name: d.name, groupBy: d.groupBy,
       cards: d.cards.map(c => {
         const o = { slug: c.slug, x: Math.round(c.x || 0), y: Math.round(c.y || 0) };
         if (c.state) o.state = c.state;
@@ -163,6 +180,7 @@
       const o = { slug: c.slug };
       const l = local.get(c.slug);
       if (l && l.by && Math.round(l.x) === Math.round(c.x) && Math.round(l.y) === Math.round(c.y)) { o.x = l.x; o.y = l.y; o.by = l.by; }
+      else if (Number.isFinite(c.x) && Number.isFinite(c.y) && (c.x || c.y)) { o.x = c.x; o.y = c.y; o.by = next.groupBy; }
       if (c.state) o.state = c.state;
       if (c.note) o.reason = c.note;
       return o;
@@ -170,6 +188,7 @@
     next.links = (sd.links || []).map(l => ({ ...l, kind: l.kind === 'maybe' ? 'related' : l.kind }));
     next.groups = sd.groups || []; next.notes = sd.notes || []; next.dismissed = sd.dismissed || [];
     next.layers = doc.layers;
+    if (sd.v !== DOC_V) { next.v = 1; upgrade(next); upgraded = true; }
     return next;
   }
   function adopt(project) {
@@ -183,9 +202,15 @@
       const body = await Stello.apiGet('/api/projects/library');
       const p = body && body.project;
       if (!p) return;
-      if (p.rev > rev && !dirty) { adopt(p); markLayout(); }
+      if (p.rev > rev && !dirty) { adopt(p); markLayout(); afterLoad(); }
+      else if (p.rev === rev && p.doc && p.doc.v !== DOC_V) { adopt(p); markLayout(); afterLoad(); }
       else if (p.rev < rev || (p.rev === 0 && (doc.cards.length || doc.links.length || doc.notes.length))) { rev = p.rev; queuePush(); }
     } catch { /* offline: keep the local copy */ }
+  }
+  // A doc cleared by the v2 upgrade is written back once, so every device agrees.
+  function afterLoad() {
+    if (upgraded) { upgraded = false; queuePush(); }
+    if (mode !== 'grid') { markGrid(); emptyState(); }
   }
   function queuePush() {
     if (!canSync()) return;
@@ -204,7 +229,7 @@
       const body = await res.json().catch(() => null);
       if (res.ok && body && body.project) { rev = body.project.rev; localStorage.setItem(REV_KEY, String(rev)); }
       else if (res.status === 409 && body && body.project) {
-        adopt(body.project); markLayout();
+        adopt(body.project); markLayout(); afterLoad();
         App.toast('Canvas changed on another device; showing the latest copy');
       }
     } catch { dirty = true; /* offline: retry on the next change */ }
@@ -386,11 +411,6 @@
   function computeSet() {
     // The canvas holds only what you dragged onto it (not the grid's filters).
     const ids = new Set(doc.cards.filter(c => App.item(c.slug)).map(c => c.slug));
-    // Saves you accepted from "maybe related" come along with the item they relate to.
-    doc.links.forEach(l => {
-      if (l.kind !== 'related') return;
-      if (ids.has(l.a) && !ids.has(l.b) && App.item(l.b)) { ids.add(l.b); }
-    });
     set = [...ids].map(s => App.item(s)).filter(Boolean);
     setIndex = new Map(set.map(i => [i.slug, i]));
   }
@@ -479,9 +499,29 @@
     // Place cards, honouring cards you moved (for this grouping).
     clusters.forEach(cl => cl.slugs.forEach(s => { const n = nodes.get(s); n.x += cl.x; n.y += cl.y; }));
     families.forEach(famBox);
-    const moved = [];
-    doc.cards.forEach(c => { const n = nodes.get(c.slug); if (n && c.by === by && Number.isFinite(c.x)) { n.x = c.x; n.y = c.y; moved.push(n); } });
-    moved.forEach(n => refamily(n));
+    // Cards stay where you put them. The auto arrangement above is only for
+    // cards without a spot yet (after a Group by change); once laid out they
+    // keep that spot, so a new drop never reshuffles the others.
+    let placedAny = false, wrote = false;
+    const unplaced = [];
+    doc.cards.forEach(c => {
+      const n = nodes.get(c.slug); if (!n) return;
+      if (c.by === by && Number.isFinite(c.x)) { n.x = c.x; n.y = c.y; placedAny = true; }
+      else unplaced.push([c, n]);
+    });
+    if (placedAny && unplaced.length) {
+      // New arrivals from elsewhere (another device, the MCP): a column to the
+      // right of what is already placed, never on top of it.
+      const unp = new Set(unplaced.map(([c]) => c.slug));
+      let mx = -Infinity, my = Infinity;
+      doc.cards.forEach(c => { const n = nodes.get(c.slug); if (n && !unp.has(c.slug)) { mx = Math.max(mx, n.x + W); my = Math.min(my, n.y); } });
+      unplaced.forEach(([, n]) => { n.x = -1e7; n.y = -1e7; });
+      rebuildHash();
+      unplaced.forEach(([, n]) => { const p = freeSpot(mx + 160, my, n.h); n.x = p.x; n.y = p.y; rebuildHash(); });
+    }
+    unplaced.forEach(([c, n]) => { c.x = n.x; c.y = n.y; c.by = by; wrote = true; });
+    if (placedAny) settleSpatial();
+    if (wrote) { localStorage.setItem(DOC_KEY, JSON.stringify(doc)); queuePush(); }
 
     // Bounds.
     let x0 = 0, y0 = -TITLE_H, x1 = 0, y1 = 0;
@@ -492,6 +532,48 @@
     // Keep cards that are still here so they can glide to their new spots.
     rendered.forEach((el, slug) => { if (!nodes.has(slug)) { el.remove(); rendered.delete(slug); } });
     renderStatic();
+  }
+  // With cards where you put them, closeness decides what reads as a group:
+  // a similarity family keeps only its members that sit together, and each
+  // broad group gets one caption per spot where its cards actually are.
+  function settleSpatial() {
+    rebuildHash();
+    const comps = (slugs, gap) => {
+      const left = new Set(slugs), out = [];
+      while (left.size) {
+        const first = left.values().next().value; left.delete(first);
+        const comp = [first], q = [first];
+        while (q.length) {
+          const n = nodes.get(q.pop());
+          inRect(n.x - gap, n.y - gap, n.x + W + gap, n.y + n.h + gap).forEach(b => { if (left.has(b)) { left.delete(b); comp.push(b); q.push(b); } });
+        }
+        out.push(comp);
+      }
+      return out.sort((a, b) => b.length - a.length);
+    };
+    families.forEach((f, fi) => {
+      if (f.loose || f.type === 'user' || f.slugs.length < 2) return;
+      const cs = comps(f.slugs, 90);
+      const keep = cs[0].length >= 2 ? new Set(cs[0]) : new Set();
+      f.slugs.forEach(sl => { if (!keep.has(sl)) nodes.get(sl).fam = -1; });
+      f.slugs = [...keep];
+    });
+    families.forEach(famBox);
+    const next = [];
+    clusters.forEach(cl => {
+      comps(cl.slugs, 240).forEach((sl, ci) => {
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        sl.forEach(x => { const n = nodes.get(x); x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + W); y1 = Math.max(y1, n.y + n.h); });
+        const items = sl.map(x => nodes.get(x).item);
+        const c = { ...cl, x: x0, y: y0, w: x1 - x0, h: y1 - y0, slugs: sl, items, sub: subtitleFor(items) };
+        if (ci > 0) { c.empty = null; c.ghost = null; }
+        else { c.empty = emptySpot(c); c.ghost = cl.ghost; }
+        next.push(c);
+      });
+    });
+    clusters = next;
+    clusters.forEach((cl, i) => cl.slugs.forEach(x => { nodes.get(x).cl = i; }));
+    families.forEach(f => { if (f.slugs.length) f.cl = nodes.get(f.slugs[0]).cl; });
   }
   // Greedy cover: the most telling shared feature first (rarer in the library,
   // stronger type, more members), up to FAM_MAX items per family. What is left
@@ -662,7 +744,7 @@
         <div class="lc-empty-state" hidden>
           <div class="lc-empty-icon">${App.icon('graph')}</div>
           <p class="lc-empty-title">Your canvas is empty</p>
-          <p class="lc-empty-sub">Drag items here from the grid. Similar ones group themselves, and you can link, mark and note them.</p>
+          <p class="lc-empty-sub">Drag items here from the grid (on touch, press and hold a card first). Drop one next to another to group them.</p>
           <button type="button" data-split>Open split view</button>
         </div>
       </div>
@@ -735,7 +817,9 @@
   function renderStatic() {
     let h = '';
     clusters.forEach(cl => {
-      h += `<div class="lc-group" style="transform:translate(${cl.x}px,${cl.y - TITLE_H}px);width:${Math.max(cl.w, 320)}px">
+      // A caption names a broad group only where it has gathered: not over a
+      // lone card, and not for "No collection"-style leftovers.
+      if (cl.slugs.length > 1 && !/^(no |other$|undated$)/i.test(cl.key)) h += `<div class="lc-group" style="transform:translate(${cl.x}px,${cl.y - TITLE_H}px);width:${Math.max(cl.w, 320)}px">
         <h3><i style="background:${cl.color}"></i><span>${esc(cl.name)}</span></h3><p>${esc(cl.sub)}</p></div>`;
       if (cl.empty) h += `<div class="lc-empty" data-ins-part="gaps" style="transform:translate(${cl.x}px,${cl.y + cl.h + 60}px);width:${Math.max(cl.w, 300)}px"><span>Empty spot</span>${esc(cl.empty)}</div>`;
       if (cl.ghost) {
@@ -888,7 +972,7 @@
         el = cardEl(n); rendered.set(s, el); frag.appendChild(el); made++; added = true;
         if (dropAnim && dropAnim.slug === s) {
           const d = dropAnim; dropAnim = null;
-          el.style.transform = `translate(${d.x}px,${d.y}px) scale(0.6)`; el.style.opacity = '0.4';
+          el.style.transform = `translate(${n.x}px,${n.y + 12}px) scale(0.94)`; el.style.opacity = '0';
           requestAnimationFrame(() => requestAnimationFrame(() => { el.classList.add('is-landing'); el.style.transform = `translate(${n.x}px,${n.y}px)`; el.style.opacity = ''; setTimeout(() => el.classList.remove('is-landing'), 480); }));
         }
       } else if (el._x !== n.x || el._y !== n.y) { el.style.transform = `translate(${n.x}px,${n.y}px)`; el._x = n.x; el._y = n.y; }
@@ -1349,6 +1433,9 @@
     if (mode === 'split') { if (els.root.parentElement !== mc.parentElement) mc.after(els.root); }
     else if (els.root.parentElement !== mc) mc.appendChild(els.root);
     els.root.hidden = mode === 'grid';
+    // Zoom sits in the bottom bar in canvas view, inside the canvas panel in split.
+    if (mode === 'split') { if (els.zoom.parentElement !== els.root) els.root.appendChild(els.zoom); }
+    else if (els.zoom.previousElementSibling !== els.switch) els.switch.after(els.zoom);
     els.switch.querySelectorAll('button').forEach(b => b.classList.toggle('is-on', b.dataset.view === mode));
     stageBox = null;
     if (mode === 'grid') {
@@ -1361,7 +1448,8 @@
     readTheme();
     layout();
     rendered.forEach(el => el.remove()); rendered.clear();
-    requestAnimationFrame(() => { stageBox = null; fit(false); render(); markGrid(); });
+    // Keep the camera where you left it; fit only the first time there is something to show.
+    requestAnimationFrame(() => { stageBox = null; if (!camSet && nodes.size) { fit(false); camSet = true; } render(); markGrid(); });
     if (!(opts && opts.quiet)) els.stage.focus({ preventScroll: true });
   }
   // Grid cards already on the canvas carry a small mark (split view).
@@ -1379,40 +1467,53 @@
 
   // ---------- Bringing items in: drag from the grid ----------
   let dropAnim = null;            // { slug, x, y } world point a dropped card flies from
+  // A card lands where you drop it. Dropped on or right next to a card, it
+  // snaps beside that card and joins its group. Nothing else moves.
+  function freeSpot(x, y, h) {
+    for (let i = 0; i < 40; i++) {
+      const hit = inRect(x - 10, y - 10, x + W + 10, y + h + 10);
+      if (!hit.length) return { x, y };
+      y = Math.max(...hit.map(b => { const m = nodes.get(b); return m.y + m.h; })) + F_ROW;
+    }
+    return { x, y };
+  }
   function addToCanvas(slugs, at) {
     slugs = slugs.filter(s => App.item(s) && !cardRec(s));
     if (!slugs.length) return;
-    // Dropped on or right next to a card: it joins that card's group.
-    const near = at && nearestAt(at, SNAP_GAP);
+    if (!at) { const r = stageRect(); at = screenToWorld(r.left + r.width / 2, r.top + r.height / 2); }
+    const near = nearestAt(at, SNAP_GAP);
+    const by = doc.groupBy in GROUPS ? doc.groupBy : 'collection';
     change(() => {
-      slugs.forEach(s => doc.cards.push({ slug: s }));
+      let y = null;
+      slugs.forEach((s, i) => {
+        const h = Math.round(W * coverRatio(App.item(s)));
+        let x;
+        if (near) { x = at.x > near.x + W / 2 ? near.x + W + F_COL : near.x - W - F_COL; if (y == null) y = near.y; }
+        else { x = Math.round(at.x - W / 2); if (y == null) y = Math.round(at.y - h / 2); }
+        const p = freeSpot(x, y, h);
+        doc.cards.push({ slug: s, x: p.x, y: p.y, by });
+        nodes.set(s, { slug: s, item: App.item(s), x: p.x, y: p.y, h, ch: h, fam: -1, cl: 0 });  // reserve the spot for the next one
+        rebuildHash();
+        y = p.y + h + F_ROW;
+        if (i === 0 && near) y = p.y;
+      });
       if (near) {
         const f = families[near.fam];
         let g = f && f.gid && doc.groups.find(x => x.id === f.gid);
         if (!g) {
-          const base = f && !f.loose ? f.slugs : [near.slug];
+          const base = f && !f.loose && f.slugs.length > 1 ? f.slugs : [near.slug];
           const sh = similarityScore(App.item(slugs[0]), near.item).shared;
-          g = { id: uid(), name: f && !f.loose ? cap(f.tag) : (sh[0] ? cap(sh[0]) : 'New group'), slugs: [...base] };
+          g = { id: uid(), name: f && !f.loose && f.tag ? cap(f.tag) : (sh[0] ? cap(sh[0]) : 'New group'), slugs: [...base] };
           doc.groups.push(g);
         }
         slugs.forEach(s => { if (!g.slugs.includes(s)) g.slugs.push(s); });
-      }
+        App.toast(`Added to ${g.name}`);
+      } else App.toast(slugs.length > 1 ? `Added ${slugs.length} items` : 'Added to the canvas');
     }, { layout: true });
-    if (at) dropAnim = { slug: slugs[0], x: at.x - W / 2, y: at.y - 60 };
-    relayoutAnim();
-    App.toast(slugs.length > 1 ? `Added ${slugs.length} items to the canvas` : 'Added to the canvas');
+    layout(); schedule(true);
+    dropAnim = { slug: slugs[0] };
+    camSet = true;
     markGrid(); emptyState();
-    // Keep the new card in sight.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const n = nodes.get(slugs[0]); if (!n) return;
-      const r = stageRect();
-      const sx = n.x * view.k + view.x, sy = n.y * view.k + view.y;
-      if (sx < 0 || sy < 0 || sx + W * view.k > r.width || sy + n.h * view.k > r.height) {
-        const box = { x: Math.min(n.x, worldBox.x), y: Math.min(n.y, worldBox.y), w: 0, h: 0 };
-        box.w = Math.max(n.x + W, worldBox.x + worldBox.w) - box.x; box.h = Math.max(n.y + n.h, worldBox.y + worldBox.h) - box.y;
-        fit(true, nodes.size <= 3 ? { x: n.x - 300, y: n.y - 300, w: W + 600, h: n.h + 600 } : box);
-      }
-    }));
   }
   function renameFamily(fi, cx, cy) {
     const f = families[fi];
@@ -1464,15 +1565,34 @@
     const mc = mainEl(); if (!mc) return;
     // The browser's own image drag would swallow the pointer events.
     mc.addEventListener('dragstart', (e) => { if (mode === 'split' && e.target.closest && e.target.closest('.grid-container .card')) e.preventDefault(); });
+    // Touch: a plain swipe scrolls the grid; press and hold a card to pick it up.
+    let held = false;
+    mc.addEventListener('touchmove', (e) => { if (held) e.preventDefault(); }, { passive: false });
+    mc.addEventListener('contextmenu', (e) => { if (mode === 'split' && e.target.closest('.grid-container .card')) e.preventDefault(); });
     mc.addEventListener('pointerdown', (e) => {
-      if (mode !== 'split' || e.button !== 0) return;
+      if (mode !== 'split' || e.button !== 0 || !e.isPrimary) return;
       const card = e.target.closest('.grid-container .card[data-slug]');
       if (!card || e.target.closest('button, a, input')) return;
-      const slug = card.dataset.slug, sx = e.clientX, sy = e.clientY;
-      let ghost = null, over = false;
-      const move = (ev) => {
+      const slug = card.dataset.slug, sx = e.clientX, sy = e.clientY, id = e.pointerId;
+      const touch = e.pointerType !== 'mouse';
+      let ghost = null, over = false, holdT = 0, last = e;
+      const pick = () => {
+        holdT = 0; held = true;
+        card.classList.add('is-picked');
+        if (navigator.vibrate) navigator.vibrate(8);
+        move(last, true);
+      };
+      if (touch) holdT = setTimeout(pick, 320);
+      const move = (ev, force) => {
+        if (ev.pointerId !== id) return;
+        last = ev;
+        if (touch && !held) {
+          // Moved before the hold: it's a scroll, let the grid have it.
+          if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) cleanup();
+          return;
+        }
         if (!ghost) {
-          if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+          if (!force && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
           const r = card.getBoundingClientRect();
           const w = Math.min(180, r.width), h = r.height * (w / r.width);
           ghost = document.createElement('div');
@@ -1491,9 +1611,20 @@
         if (over) { const w = screenToWorld(ev.clientX, ev.clientY); const nn = nearestAt(w, SNAP_GAP); hoverDrop = nn ? nn.slug : null; schedule(); }
         else if (hoverDrop) { hoverDrop = null; schedule(); }
       };
-      const up = (ev) => {
+      const cleanup = () => {
+        clearTimeout(holdT); held = false; card.classList.remove('is-picked');
         window.removeEventListener('pointermove', move);
         window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', cancel);
+      };
+      const cancel = (ev) => {
+        if (ev.pointerId !== id) return;
+        cleanup();
+        if (ghost) { ghost.remove(); document.documentElement.classList.remove('is-dragging-in'); els.stage.classList.remove('is-drop-target'); hoverDrop = null; schedule(); }
+      };
+      const up = (ev) => {
+        if (ev.pointerId !== id) return;
+        cleanup();
         if (!ghost) return;
         ghost.remove();
         document.documentElement.classList.remove('is-dragging-in');
@@ -1508,6 +1639,7 @@
       };
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', cancel);
     });
   }
 
@@ -1595,9 +1727,11 @@
       }
       const g = e.target.closest('[data-group]');
       if (g) {
+        // Group by arranges the canvas into those groups (undo puts it back).
+        undoStack.push(JSON.stringify(doc));
         doc.groupBy = g.dataset.group; saveDoc(); renderMenus();
         els.controls.querySelectorAll('.lc-menu').forEach(m => { m.hidden = true; });
-        sel = null; layout(); fit(true);
+        sel = null; relayoutAnim(); layout(); fit(true);
       }
     });
     els.controls.addEventListener('change', (e) => {
@@ -1622,9 +1756,9 @@
         const cl = clusters.find(c => c.ghost && c.ghost.slug === acc.dataset.accept);
         if (cl && cl.ghost.anchor) {
           const g = cl.ghost;
-          change(() => { doc.links.push({ id: uid(), a: g.anchor, b: g.slug, kind: 'related', label: g.shared[0] || '', source: 'maybe' }); if (!cardRec(g.slug)) doc.cards.push({ slug: g.slug }); }, { layout: true });
-          relayoutAnim(); markGrid();
-          App.toast('Added: it sits with what it relates to');
+          change(() => { doc.links.push({ id: uid(), a: g.anchor, b: g.slug, kind: 'related', label: g.shared[0] || '', source: 'maybe' }); });
+          const an = nodes.get(g.anchor);
+          addToCanvas([g.slug], an ? { x: an.x + W + 10, y: an.y + 10 } : null);
         }
         return;
       }
@@ -1684,6 +1818,7 @@
     els.stage.addEventListener('wheel', (e) => {
       if (e.target.closest('.lc-note-text, .lc-det')) return;
       e.preventDefault();
+      stopInertia();
       const r = stageRect();
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? r.height : 1;
       let dx = e.deltaX * unit, dy = e.deltaY * unit;
@@ -1697,36 +1832,61 @@
         view.x -= dx; view.y -= dy; gesture(); schedule();
       }
     }, { passive: false });
-    // Safari trackpad pinch.
-    let gk = null;
-    els.stage.addEventListener('gesturestart', (e) => { e.preventDefault(); gk = view.k; }, { passive: false });
-    els.stage.addEventListener('gesturechange', (e) => {
-      e.preventDefault(); if (gk == null) return;
-      const r = stageRect();
-      zoomAt(gk * e.scale, e.clientX - r.left, e.clientY - r.top);
-    }, { passive: false });
-    els.stage.addEventListener('gestureend', (e) => { e.preventDefault(); gk = null; }, { passive: false });
-
-    // Touch pinch
-    const touches = new Map();
-    let pinch = null;
-    els.stage.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') touches.set(e.pointerId, e); }, true);
-    window.addEventListener('pointermove', (e) => {
-      if (!touches.has(e.pointerId)) return;
-      touches.set(e.pointerId, e);
-      if (touches.size !== 2) return;
-      const [a, b] = [...touches.values()];
-      const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-      const r = stageRect();
-      const cx = (a.clientX + b.clientX) / 2 - r.left, cy = (a.clientY + b.clientY) / 2 - r.top;
-      if (!pinch) pinch = { d, k: view.k, cx, cy, x: view.x, y: view.y };
-      else {
-        const k = Math.max(MIN_K, Math.min(MAX_K, pinch.k * d / pinch.d));
-        const wx = (pinch.cx - pinch.x) / pinch.k, wy = (pinch.cy - pinch.y) / pinch.k;
-        view.k = k; view.x = cx - wx * k; view.y = cy - wy * k; gesture(); schedule();
+    // ---- Pinch (touch) and Safari trackpad pinch ----
+    // One owner per gesture. A two-finger pinch cancels whatever the first
+    // finger started (pan, card drag) and computes the camera from the state
+    // at pinch start, so the world point between your fingers stays between
+    // them: no drift, no fighting handlers. Safari also fires gesture events
+    // for touch pinches; those are ignored while fingers are down.
+    els.stage.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      stopInertia();
+      touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touchPts.size === 2) {
+        if (active) active.cancel();
+        stopTween();
+        stageBox = null;
+        const [a, b] = [...touchPts.values()], r = stageRect();
+        const c = { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top };
+        pinch = { d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), k: view.k, wx: (c.x - view.x) / view.k, wy: (c.y - view.y) / view.k };
+        els.stage.classList.add('is-panning');
       }
-    });
-    window.addEventListener('pointerup', (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch = null; });
+    }, true);
+    window.addEventListener('pointermove', (e) => {
+      if (!touchPts.has(e.pointerId)) return;
+      touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!pinch || touchPts.size < 2) return;
+      const [a, b] = [...touchPts.values()], r = stageRect();
+      const cx = (a.x + b.x) / 2 - r.left, cy = (a.y + b.y) / 2 - r.top;
+      const k = Math.max(MIN_K, Math.min(MAX_K, pinch.k * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d));
+      view.k = k; view.x = cx - pinch.wx * k; view.y = cy - pinch.wy * k;
+      gesture(); schedule();
+    }, { passive: true });
+    const touchUp = (e) => {
+      if (!touchPts.delete(e.pointerId)) return;
+      if (touchPts.size < 2 && pinch) { pinch = null; els.stage.classList.remove('is-panning'); }
+    };
+    window.addEventListener('pointerup', touchUp);
+    window.addEventListener('pointercancel', touchUp);
+    let gp = null;
+    els.stage.addEventListener('gesturestart', (e) => {
+      e.preventDefault();
+      if (touchPts.size) { gp = null; return; }
+      stopTween(); stageBox = null;
+      const r = stageRect(), cx = e.clientX - r.left, cy = e.clientY - r.top;
+      gp = { k: view.k, cx, cy, wx: (cx - view.x) / view.k, wy: (cy - view.y) / view.k };
+    }, { passive: false });
+    els.stage.addEventListener('gesturechange', (e) => {
+      e.preventDefault();
+      if (!gp || touchPts.size) return;
+      const k = Math.max(MIN_K, Math.min(MAX_K, gp.k * e.scale));
+      view.k = k; view.x = gp.cx - gp.wx * k; view.y = gp.cy - gp.wy * k;
+      gesture(); schedule();
+    }, { passive: false });
+    els.stage.addEventListener('gestureend', (e) => { e.preventDefault(); gp = null; }, { passive: false });
+    // Page zoom never starts from the canvas or its controls.
+    els.root.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    if (window.visualViewport) visualViewport.addEventListener('resize', () => { stageBox = null; });
 
     els.stage.addEventListener('click', (e) => {
       const b = e.target.closest('[data-info]'); if (!b) return;
@@ -1788,7 +1948,17 @@
       if (handled) { e.preventDefault(); e.stopImmediatePropagation(); }
     }, true);
     window.addEventListener('keyup', (e) => { if (e.code === 'Space') { spaceDown = false; els.stage.classList.remove('is-hand'); } });
-    new ResizeObserver(() => { stageBox = null; schedule(); }).observe(els.stage);
+    // The stage changed size (split <-> canvas, panel, rotation): keep what was
+    // in the middle in the middle, instead of letting the view jump.
+    let lastSize = null;
+    new ResizeObserver(() => {
+      stageBox = null;
+      const r = stageRect();
+      if (!r.width) return;
+      if (lastSize && camSet) { view.x += (r.width - lastSize.w) / 2; view.y += (r.height - lastSize.h) / 2; }
+      lastSize = { w: r.width, h: r.height };
+      schedule();
+    }).observe(els.stage);
     window.addEventListener('resize', () => { stageBox = null; });
     new MutationObserver(() => { readTheme(); schedule(true); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-accent'] });
 
@@ -1815,7 +1985,8 @@
     return hit.length ? hit[hit.length - 1] : null;
   }
   function onDown(e) {
-    if (e.pointerType === 'touch' && !e.isPrimary) return;
+    if (e.pointerType === 'touch' && (!e.isPrimary || touchPts.size > 1)) return;
+    stopInertia();
     if (e.target.closest('input, button, a, [contenteditable="true"], .lc-selbar, .lc-create')) return;
     const sx = e.clientX, sy = e.clientY;
     const cardSlug = hitSlug(e);
@@ -1848,17 +2019,25 @@
     if (e.button === 1 || spaceDown || (!card && !note && !e.target.closest('.lc-ghost'))) {
       if (e.button !== 0 && e.button !== 1) return;
       e.preventDefault();
+      stopTween();
       const vx = view.x, vy = view.y;
       let moved = false;
+      const samples = [];
       els.stage.classList.add('is-panning');
-      return track((ev) => {
-        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 3) return;
+      return track(e, (ev) => {
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < (e.pointerType === 'touch' ? 6 : 3)) return;
         moved = true;
-        view.x = vx + ev.clientX - sx; view.y = vy + ev.clientY - sy; schedule();
-      }, () => {
+        view.x = vx + ev.clientX - sx; view.y = vy + ev.clientY - sy;
+        samples.push({ t: ev.timeStamp, x: ev.clientX, y: ev.clientY }); if (samples.length > 6) samples.shift();
+        gesture(); schedule();
+      }, (ev) => {
         els.stage.classList.remove('is-panning');
         if (!moved && (sel || selNote)) { sel = null; selNote = null; renderNotes(); schedule(true); }
-      });
+        if (moved && e.pointerType === 'touch' && samples.length > 1) {
+          const a = samples[0], b = samples[samples.length - 1], dt = b.t - a.t;
+          if (dt > 0 && ev.timeStamp - b.t < 60) glide((b.x - a.x) / dt, (b.y - a.y) / dt);
+        }
+      }, () => { els.stage.classList.remove('is-panning'); });
     }
     if (e.button !== 0) return;
 
@@ -1871,7 +2050,7 @@
       note.classList.add('is-selected');
       const ox = n.x, oy = n.y;
       let moved = false, snap = null;
-      return track((ev) => {
+      return track(e, (ev) => {
         if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
         if (!moved) { moved = true; snap = JSON.stringify(doc); }
         n.x = Math.round(ox + (ev.clientX - sx) / view.k); n.y = Math.round(oy + (ev.clientY - sy) / view.k);
@@ -1881,7 +2060,7 @@
         if (moved) { undoStack.push(snap); saveDoc(); }
         renderNotes(); schedule(true);
         if (!moved) { const t = els.notes.querySelector(`[data-note="${n.id}"] .lc-note-text`); if (t) t.focus(); }
-      });
+      }, () => { n.x = ox; n.y = oy; renderNotes(); schedule(true); });
     }
 
     // Card: select; drag moves it (remembered for this grouping).
@@ -1892,8 +2071,8 @@
       selNote = null;
       const ox = n.x, oy = n.y;
       let moved = false, snap = null;
-      return track((ev) => {
-        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
+      return track(e, (ev) => {
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < (e.pointerType === 'touch' ? 8 : 4)) return;
         if (!moved) { moved = true; snap = JSON.stringify(doc); els.root.classList.add('is-moving'); sel = s; dragging = s; }
         n.x = Math.round(ox + (ev.clientX - sx) / view.k); n.y = Math.round(oy + (ev.clientY - sy) / view.k);
         near = nearOf(n);
@@ -1911,6 +2090,13 @@
           saveDoc(); rebuildHash();
         } else sel = sel === s ? null : s;
         renderNotes();
+        schedule(true);
+      }, () => {
+        // A second finger landed: this was the start of a pinch, not a drag.
+        els.root.classList.remove('is-moving');
+        dragging = null; near = []; suggest = null;
+        n.x = ox; n.y = oy;
+        if (families[n.fam]) famBox(families[n.fam]);
         schedule(true);
       });
     }
@@ -1978,11 +2164,37 @@
     });
     return out.sort((a, b) => (b.s - b.d / 300) - (a.s - a.d / 300)).slice(0, 10);
   }
-  function track(move, up) {
-    const m = (ev) => move(ev);
-    const u = (ev) => { window.removeEventListener('pointermove', m); window.removeEventListener('pointerup', u); up && up(ev); };
+  // Follow one pointer until it lifts. Moves from other pointers are ignored;
+  // a pinch (or pointercancel) calls `cancel` instead of `up`.
+  function track(e, move, up, cancel) {
+    const id = e.pointerId;
+    const m = (ev) => { if (ev.pointerId === id) move(ev); };
+    const stop = () => {
+      window.removeEventListener('pointermove', m);
+      window.removeEventListener('pointerup', u);
+      window.removeEventListener('pointercancel', c);
+      if (active && active.id === id) active = null;
+    };
+    const u = (ev) => { if (ev.pointerId !== id) return; stop(); up && up(ev); };
+    const c = (ev) => { if (ev.pointerId !== id) return; stop(); cancel ? cancel() : up && up(ev); };
     window.addEventListener('pointermove', m);
     window.addEventListener('pointerup', u);
+    window.addEventListener('pointercancel', c);
+    active = { id, cancel: () => { stop(); cancel && cancel(); } };
+  }
+  function stopInertia() { if (inertia) { cancelAnimationFrame(inertia); inertia = 0; } }
+  // A flicked touch pan keeps gliding and slows down, like a native scroll view.
+  function glide(vx, vy) {
+    stopInertia();
+    let last = performance.now();
+    const step = (now) => {
+      const dt = Math.min(32, now - last); last = now;
+      view.x += vx * dt; view.y += vy * dt;
+      const f = Math.pow(0.994, dt); vx *= f; vy *= f;
+      gesture(); render();
+      inertia = Math.hypot(vx, vy) > 0.02 ? requestAnimationFrame(step) : 0;
+    };
+    if (Math.hypot(vx, vy) > 0.15) inertia = requestAnimationFrame(step);
   }
 
   // ---------- Boot ----------
