@@ -785,20 +785,21 @@
     els.empty.querySelector('[data-split]').addEventListener('click', () => setMode('split'));
     els.ctx = els.ink.getContext('2d');
 
-    // Grid / canvas switch, right of the search field.
-    const search = document.querySelector('.bar-search');
+    // Grid / canvas switch, right of the account button (bar order: account,
+    // views, canvas name, search, filter, add; zoom at the far right).
+    const acct = document.getElementById('settings-btn') || document.querySelector('.bar-search');
     const sw = document.createElement('div');
     sw.className = 'view-switch';
     sw.setAttribute('role', 'group');
     sw.setAttribute('aria-label', 'View');
     sw.innerHTML = `<button type="button" data-view="grid" aria-label="Grid view" title="Grid">${App.icon('squares-four')}</button><button type="button" data-view="split" aria-label="Split view: grid and canvas" title="Split">${IC.split}</button><button type="button" data-view="canvas" aria-label="Canvas view" title="Canvas">${App.icon('graph')}</button>`;
-    search.after(sw);
+    acct.after(sw);
     els.switch = sw;
     // Zoom, shown in canvas view only.
     const zm = document.createElement('div');
     zm.className = 'lc-zoom';
     zm.innerHTML = `<button type="button" data-z="out" aria-label="Zoom out">−</button><button type="button" data-z="reset" class="lc-zoom-pct" aria-label="Zoom to 100%">100%</button><button type="button" data-z="in" aria-label="Zoom in">+</button><button type="button" data-z="fit" aria-label="Fit everything">Fit</button>`;
-    sw.after(zm);
+    sw.parentElement.appendChild(zm);
     els.zoom = zm;
     // This canvas: its name (click to rename) and a chevron for canvases and export.
     const dp = document.createElement('div');
@@ -1416,10 +1417,11 @@
     // Zoom sits in the bottom bar in canvas view, inside the canvas panel in split.
     if (mode === 'split') { if (els.zoom.parentElement !== els.root) els.root.appendChild(els.zoom); if (els.docbox.parentElement !== els.root) els.root.appendChild(els.docbox); }
     else {
-      if (els.zoom.previousElementSibling !== els.switch) els.switch.after(els.zoom);
-      // Canvas view: first in the bottom bar, on the same line as the zoom.
+      const bar0 = els.switch.parentElement;
+      if (bar0 && bar0.lastElementChild !== els.zoom) bar0.appendChild(els.zoom);
+      // Canvas view: the canvas name follows the view switch.
       const bar = document.querySelector('.bottom-bar');
-      if (bar && els.docbox.parentElement !== bar) bar.prepend(els.docbox);
+      if (bar && els.docbox.previousElementSibling !== els.switch) els.switch.after(els.docbox);
     }
     closeDocMenu();
     els.switch.querySelectorAll('button').forEach(b => b.classList.toggle('is-on', b.dataset.view === mode));
