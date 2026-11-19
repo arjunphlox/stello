@@ -2,6 +2,18 @@
 
 **Why:** the old "Why saved" presets were picked in a hurry at save time, so they only roughly fit. Intent is better captured from use. After two board prototypes (PRs #86, #87), Arjun set the direction on Nov 19 2026. The canvas is the Figma "Exploration canvas" (file bhsqjw3EbQance8tClHfWx, node 13:1783), made interactive. It is a second view of the same library, not a separate board.
 
+**Round 3 (Arjun, Nov 19 2026)**
+- Camera works like Figma:
+  - Two-finger scroll pans. Pinch, Safari gesture events or ⌘/Ctrl + wheel zoom at the pointer.
+  - Keys: `+`/`-` step through 2%…200%, `0` sets 100%, Shift+1 fits, Shift+2 zooms to the selection, and the arrow keys pan.
+  - Buttons and keys tween the view in rAF, in log space. While the camera moves, only transforms and ink update; card swaps wait until it settles.
+- Cards are covers only. The details card opens from the info button beside the source pill and floats over what is below, with no reflow.
+- Grid ↔ canvas morph in place: the visible cards fly (FLIP, GPU transforms) from the grid to their canvas spot and back, and the canvas lands framing what you were looking at.
+- Packing is skyline (maze-like) for families and for groups.
+- Dragging a card close to another shows a dotted rectangle, "Drop to group". Dropping saves it to `doc.groups`, and your groups lead each group.
+- No bold titles anywhere in the app (headings 500, group titles 400). The canvas save timeline was removed.
+- More than 240 cards in view are painted on the canvas as cover images instead of DOM nodes, with hit-testing kept.
+
 **Shape**
 - **Switch:** a grid/canvas switch sits right of the search field. Both views show the same items, after search and filters. There are no trays and no split view; the item panel opens as usual (double-click, Enter or Open).
 - **Broad groups:** **Group by** Collection (default), Topic, Kind, Colour, Style, Place, Source or Month saved. Each group has a title and a "N saves · top tags" line. Inside a group, similar items sit together as **families** (up to 12 items) on a soft tint, captioned by what they share ("Typographic · same style · 3"). Items that share nothing strong form a loose block. Cards you drag stay where you put them for that grouping. Drop a card on another family's tint to join it, or clear of its own to leave it.
