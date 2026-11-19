@@ -89,6 +89,8 @@
   let selNote = null;             // selected note id
   let hover = null;
   let hoverGhost = null;
+  let hoverDrop = null;
+  let overCanvas = false;           // card a grid drag would group with
   let dragging = null;            // slug being dragged
   let suggest = null;             // { slugs, box, name, fam } while dragging close to another item
   let near = [];                  // [{ b, s, label, type, d }] while dragging
@@ -382,8 +384,8 @@
 
   // ---------- Layout ----------
   function computeSet() {
-    const base = App.filtered ? App.filtered() : App.items();
-    const ids = new Set(base.map(i => i.slug));
+    // The canvas holds only what you dragged onto it (not the grid's filters).
+    const ids = new Set(doc.cards.filter(c => App.item(c.slug)).map(c => c.slug));
     // Saves you accepted from "maybe related" come along with the item they relate to.
     doc.links.forEach(l => {
       if (l.kind !== 'related') return;
@@ -394,13 +396,22 @@
   }
   function layout() {
     dirtyLayout = false;
+    if (els.empty) emptyState();
     computeSet();
     buildIndex();
     nodes = new Map();
     const by = doc.groupBy in GROUPS ? doc.groupBy : 'collection';
     const topics = by === 'topic' ? topicMap(set) : null;
     const groups = new Map();
-    set.forEach(it => { const k = groupKey(it, by, topics); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); });
+    // Your groups stay together: every member goes where the first one goes.
+    const pinned = new Map();
+    (doc.groups || []).forEach(g => {
+      const first = (g.slugs || []).map(x => setIndex.get(x)).find(Boolean);
+      if (!first) return;
+      const k = groupKey(first, by, topics);
+      g.slugs.forEach(x => { if (setIndex.has(x) && !pinned.has(x)) pinned.set(x, k); });
+    });
+    set.forEach(it => { const k = pinned.get(it.slug) || groupKey(it, by, topics); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); });
     let entries = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
     // Too many small groups: fold the tail into "Other".
     if (entries.length > 18) {
@@ -478,8 +489,8 @@
     clusters.forEach(cl => { x1 = Math.max(x1, cl.x + footW(cl)); y1 = Math.max(y1, cl.y + cl.h + (cl.empty ? 140 : 0)); });
     worldBox = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
     rebuildHash();
-    rendered.forEach(el => el.remove());
-    rendered.clear();
+    // Keep cards that are still here so they can glide to their new spots.
+    rendered.forEach((el, slug) => { if (!nodes.has(slug)) { el.remove(); rendered.delete(slug); } });
     renderStatic();
   }
   // Greedy cover: the most telling shared feature first (rarer in the library,
@@ -631,6 +642,7 @@
     caret: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>',
     open: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
     x: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    split: '<svg viewBox="0 0 256 256" width="18" height="18" fill="none" stroke="currentColor" stroke-width="16" stroke-linejoin="round"><rect x="32" y="48" width="192" height="160" rx="16"/><path d="M128 48v160"/></svg>',
     info: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h9"/></svg>',
     link: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h7v10h9"/></svg>',
   };
@@ -647,6 +659,12 @@
         <div class="lc-labels" aria-hidden="true"></div>
         <div class="lc-selbar" hidden></div>
         <div class="lc-hint" hidden></div>
+        <div class="lc-empty-state" hidden>
+          <div class="lc-empty-icon">${App.icon('graph')}</div>
+          <p class="lc-empty-title">Your canvas is empty</p>
+          <p class="lc-empty-sub">Drag items here from the grid. Similar ones group themselves, and you can link, mark and note them.</p>
+          <button type="button" data-split>Open split view</button>
+        </div>
       </div>
       <div class="lc-controls">
         <div class="lc-ctl" data-menu="group"><button type="button" class="lc-ctl-btn" data-open="group"><span class="lc-ctl-k">Group by</span> <b data-groupname></b>${IC.caret}</button>
@@ -673,6 +691,8 @@
     els.hint = root.querySelector('.lc-hint');
     els.controls = root.querySelector('.lc-controls');
     els.create = root.querySelector('.lc-create');
+    els.empty = root.querySelector('.lc-empty-state');
+    els.empty.querySelector('[data-split]').addEventListener('click', () => setMode('split'));
     els.ctx = els.ink.getContext('2d');
 
     // Grid / canvas switch, right of the search field.
@@ -681,7 +701,7 @@
     sw.className = 'view-switch';
     sw.setAttribute('role', 'group');
     sw.setAttribute('aria-label', 'View');
-    sw.innerHTML = `<button type="button" data-view="grid" aria-label="Grid view" title="Grid">${App.icon('squares-four')}</button><button type="button" data-view="canvas" aria-label="Canvas view" title="Canvas">${App.icon('graph')}</button>`;
+    sw.innerHTML = `<button type="button" data-view="grid" aria-label="Grid view" title="Grid">${App.icon('squares-four')}</button><button type="button" data-view="split" aria-label="Split view: grid and canvas" title="Split">${IC.split}</button><button type="button" data-view="canvas" aria-label="Canvas view" title="Canvas">${App.icon('graph')}</button>`;
     search.after(sw);
     els.switch = sw;
     // Zoom, shown in canvas view only.
@@ -827,11 +847,11 @@
   function markLayout() {
     dirtyLayout = true;
     if (layoutRaf) return;
-    layoutRaf = requestAnimationFrame(() => { layoutRaf = 0; if (mode === 'canvas') { layout(); schedule(true); } });
+    layoutRaf = requestAnimationFrame(() => { layoutRaf = 0; if (mode !== 'grid') { layout(); schedule(true); } });
   }
   function lodFor(k) { return k < LOD_BLOCKS ? 0 : k < LOD_DETAIL ? 1 : 2; }
   function render() {
-    if (mode !== 'canvas') return;
+    if (mode === 'grid') return;
     const t0 = window.__lcPerf ? performance.now() : 0;
     if (dirtyLayout) layout();
     const r = stageRect();
@@ -866,6 +886,11 @@
       if (!el) {
         if (moving && made >= 24) { more = true; continue; }
         el = cardEl(n); rendered.set(s, el); frag.appendChild(el); made++; added = true;
+        if (dropAnim && dropAnim.slug === s) {
+          const d = dropAnim; dropAnim = null;
+          el.style.transform = `translate(${d.x}px,${d.y}px) scale(0.6)`; el.style.opacity = '0.4';
+          requestAnimationFrame(() => requestAnimationFrame(() => { el.classList.add('is-landing'); el.style.transform = `translate(${n.x}px,${n.y}px)`; el.style.opacity = ''; setTimeout(() => el.classList.remove('is-landing'), 480); }));
+        }
       } else if (el._x !== n.x || el._y !== n.y) { el.style.transform = `translate(${n.x}px,${n.y}px)`; el._x = n.x; el._y = n.y; }
     }
     if (frag.childNodes.length) els.cards.appendChild(frag);
@@ -1058,6 +1083,14 @@
 
     const labels = [];
     const lw = (px) => px / k;
+    if (hoverDrop && nodes.get(hoverDrop)) {
+      const n = nodes.get(hoverDrop), f = families[n.fam];
+      const b = f && !f.loose && f.box ? f.box : { x: n.x, y: n.y, w: W, h: n.h };
+      const p = 16;
+      ctx.globalAlpha = 1; ctx.strokeStyle = theme.accent; ctx.lineWidth = lw(2); ctx.setLineDash([lw(6), lw(5)]);
+      ctx.beginPath(); ctx.roundRect(b.x - p, b.y - p, b.w + p * 2, b.h + p * 2, 20); ctx.stroke(); ctx.setLineDash([]);
+      labels.push({ x: b.x + b.w / 2, y: b.y - p - 14 / k, text: f && !f.loose ? 'Drop to add to ' + cap(f.tag) : 'Drop to group', color: theme.accent, cls: 'l2 is-suggest' });
+    }
     if (suggest) {
       const b = suggest.box, p = 16;
       ctx.globalAlpha = 1; ctx.strokeStyle = theme.accent; ctx.lineWidth = lw(2); ctx.setLineDash([lw(6), lw(5)]);
@@ -1198,6 +1231,8 @@
         <button type="button" data-act="part_of">Part of…</button>
         <button type="button" data-act="question">Ask…</button>
         <button type="button" data-act="pin">Note on image</button>
+        <span class="sep"></span>
+        <button type="button" data-act="remove" title="Take it off the canvas (it stays in your library)">Remove</button>
         ${rec.state ? `<input class="lc-reason" type="text" placeholder="Why? (optional)" value="${esc(rec.reason || '')}" maxlength="60">` : ''}`;
     }
     bar.hidden = false;
@@ -1294,145 +1329,186 @@
   }
 
   // ---------- Mode ----------
-  // ---------- Mode: grid <-> canvas, morphing in place ----------
-  // The cards you can see fly from where they are to where they belong (FLIP on
-  // GPU transforms only); everything else cross-fades. No reflow during it.
-  const MORPH_MS = 560, MORPH_MAX = 140;
-  let gridScroll = 0, morphing = false;
+  // ---------- Mode: grid | split | canvas ----------
+  // Split puts the grid on the left half and the canvas on the right; you drag
+  // items from the grid onto the canvas. Canvas alone fills the column.
+  const MODES = ['grid', 'split', 'canvas'];
+  let gridScroll = 0;
   const mainEl = () => document.querySelector('.main-content');
-  const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function visibleGridCards() {
-    const mc = mainEl(); if (!mc) return [];
-    const vr = mc.getBoundingClientRect();
-    const out = [];
-    for (const el of mc.querySelectorAll('.grid-container .card[data-slug]')) {
-      const r = el.getBoundingClientRect();
-      if (!r.width || r.bottom < vr.top - 40 || r.top > vr.bottom + 40 || r.right < vr.left || r.left > vr.right) continue;
-      out.push({ slug: el.dataset.slug, el, r });
-      if (out.length >= MORPH_MAX) break;
-    }
-    return out;
-  }
-  function overlay() {
-    const o = document.createElement('div');
-    o.className = 'lc-morph';
-    document.body.appendChild(o);
-    return o;
-  }
-  function flyEl(el, from, to, o, fade) {
-    el.style.cssText = `position:absolute;left:0;top:0;margin:0;width:${from.w}px;height:${from.h}px;transform-origin:0 0;will-change:transform,opacity;`;
-    el.classList.add('lc-morph-item');
-    o.appendChild(el);
-    const A = `translate3d(${from.x}px,${from.y}px,0) scale(${from.s || 1},${from.s || 1})`;
-    const B = to ? `translate3d(${to.x}px,${to.y}px,0) scale(${to.w / from.w},${to.h / from.h})` : A;
-    const kf = to ? [{ transform: A }, { transform: B }] : [{ transform: A, opacity: 1 }, { transform: A + ' scale(0.92)', opacity: 0 }];
-    if (fade && to) { kf[0].opacity = 1; kf[1].opacity = 1; }
-    return el.animate(kf, { duration: to ? MORPH_MS : MORPH_MS * 0.5, easing: 'cubic-bezier(.2,.75,.15,1)', fill: 'forwards' });
-  }
   function setMode(m, opts) {
-    const next = m === 'canvas' ? 'canvas' : 'grid';
-    const animate = !(opts && opts.quiet) && next !== mode && !reduced() && !morphing;
-    if (next === 'canvas') toCanvas(animate, opts); else toGrid(animate);
-  }
-  function applyMode(next) {
+    const next = MODES.includes(m) ? m : 'grid';
+    const prev = mode;
+    const mc = mainEl();
+    if (prev === 'grid' && mc) gridScroll = mc.scrollTop;
     mode = next;
     localStorage.setItem(VIEW_KEY, mode);
-    document.documentElement.classList.toggle('view-canvas', mode === 'canvas');
-    els.root.hidden = mode !== 'canvas';
+    const html = document.documentElement;
+    html.classList.toggle('view-canvas', mode === 'canvas');
+    html.classList.toggle('view-split', mode === 'split');
+    // Where the canvas lives: inside the grid column (canvas) or beside it (split).
+    if (mode === 'split') { if (els.root.parentElement !== mc.parentElement) mc.after(els.root); }
+    else if (els.root.parentElement !== mc) mc.appendChild(els.root);
+    els.root.hidden = mode === 'grid';
     els.switch.querySelectorAll('button').forEach(b => b.classList.toggle('is-on', b.dataset.view === mode));
     stageBox = null;
-  }
-  function toCanvas(animate, opts) {
-    const mc = mainEl();
-    const src = animate ? visibleGridCards() : [];
-    if (mc) gridScroll = mc.scrollTop;
-    applyMode('canvas');
+    if (mode === 'grid') {
+      rendered.forEach(el => el.remove()); rendered.clear();
+      sel = null; connect = null; pinFor = null; stopTween();
+      if (mc && prev === 'canvas') mc.scrollTop = gridScroll;
+      return;
+    }
+    if (mc && mode === 'split' && prev === 'canvas') mc.scrollTop = gridScroll;
     readTheme();
     layout();
-    // Land where you were looking: frame the items that were on screen.
-    let box = null;
-    const inSet = src.filter(x => nodes.has(x.slug));
-    if (inSet.length) {
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      inSet.forEach(x => { const n = nodes.get(x.slug); x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + W); y1 = Math.max(y1, n.y + n.h); });
-      box = { x: x0 - 80, y: y0 - 120, w: x1 - x0 + 160, h: y1 - y0 + 200 };
-    }
-    fit(false, box || undefined);
-    render();
-    if (!(opts && opts.quiet)) els.stage.focus({ preventScroll: true });
-    if (!animate || !inSet.length) return;
-    morphing = true;
-    const o = overlay();
-    const sr = stageRect();
-    const k = view.k;
-    const anims = [];
-    const hidden = [];
-    src.forEach(x => {
-      const n = nodes.get(x.slug);
-      const clone = x.el.cloneNode(true);
-      clone.classList.remove('card-active');
-      const from = { x: x.r.left, y: x.r.top, w: x.r.width, h: x.r.height };
-      const target = n ? { x: sr.left + n.x * k + view.x, y: sr.top + n.y * k + view.y, w: W * k, h: n.ch * k } : null;
-      const onScreen = target && target.x < innerWidth && target.y < innerHeight && target.x + target.w > 0 && target.y + target.h > 0;
-      anims.push(flyEl(clone, from, onScreen ? target : null, o));
-      const el = n && rendered.get(x.slug);
-      if (el && onScreen) { el.style.visibility = 'hidden'; hidden.push(el); }
-    });
-    // Everything new on the canvas fades in under the flying cards.
-    const fadeIn = els.root.animate([{ opacity: 0 }, { opacity: 1 }], { duration: MORPH_MS * 0.7, easing: 'ease-out' });
-    Promise.all(anims.map(a => a.finished.catch(() => {}))).then(() => {
-      hidden.forEach(el => { el.style.visibility = ''; });
-      o.remove(); fadeIn.cancel(); morphing = false; schedule(true);
-    });
-  }
-  function toGrid(animate) {
-    const sr = stageRect();
-    const k = view.k;
-    const src = [];
-    if (animate && mode === 'canvas') {
-      rendered.forEach((el, slug) => {
-        if (src.length >= MORPH_MAX) return;
-        const n = nodes.get(slug);
-        const x = sr.left + n.x * k + view.x, y = sr.top + n.y * k + view.y, w = W * k, h = n.ch * k;
-        if (x > innerWidth || y > innerHeight || x + w < 0 || y + h < 0) return;
-        src.push({ slug, el, from: { x, y, w: W, h: n.ch, s: k } });
-      });
-    }
-    const clones = src.map(x => { const c = x.el.cloneNode(true); c.classList.remove('is-selected', 'is-dim', 'is-near', 'has-det'); c.querySelectorAll('.lc-det').forEach(d => d.remove()); return { ...x, c }; });
-    applyMode('grid');
     rendered.forEach(el => el.remove()); rendered.clear();
-    sel = null; connect = null; pinFor = null; stopTween();
-    const mc = mainEl();
-    if (mc) mc.scrollTop = gridScroll;
-    if (!clones.length) return;
-    morphing = true;
-    const o = overlay();
-    const anims = [], hidden = [];
-    clones.forEach(x => {
-      const g = mc && mc.querySelector(`.grid-container .card[data-slug="${CSS.escape(x.slug)}"]`);
-      const r = g && g.getBoundingClientRect();
-      const ok = r && r.width && r.bottom > 0 && r.top < innerHeight;
-      const from = x.from;   // world size (W x ch), drawn at scale k
-      const to = ok ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
-      anims.push(flyCanvas(x.c, from, to, o));
-      if (ok) { g.style.visibility = 'hidden'; hidden.push(g); }
-    });
-    const grid = mc && mc.querySelector('.grid-container');
-    const fadeIn = grid && grid.animate([{ opacity: 0 }, { opacity: 1 }], { duration: MORPH_MS * 0.7, easing: 'ease-out' });
-    Promise.all(anims.map(a => a.finished.catch(() => {}))).then(() => {
-      hidden.forEach(el => { el.style.visibility = ''; });
-      o.remove(); if (fadeIn) fadeIn.cancel(); morphing = false;
-    });
+    requestAnimationFrame(() => { stageBox = null; fit(false); render(); markGrid(); });
+    if (!(opts && opts.quiet)) els.stage.focus({ preventScroll: true });
   }
-  // A canvas card at world size (W x ch) scaled by k, flying to a grid rect.
-  function flyCanvas(el, from, to, o) {
-    el.style.cssText = `position:absolute;left:0;top:0;width:${from.w}px;height:${from.h}px;transform-origin:0 0;will-change:transform,opacity;`;
-    el.classList.add('lc-morph-item');
-    o.appendChild(el);
-    const A = `translate3d(${from.x}px,${from.y}px,0) scale(${from.s})`;
-    const kf = to ? [{ transform: A }, { transform: `translate3d(${to.x}px,${to.y}px,0) scale(${to.w / from.w},${to.h / from.h})` }]
-      : [{ transform: A, opacity: 1 }, { transform: A, opacity: 0 }];
-    return el.animate(kf, { duration: to ? MORPH_MS : MORPH_MS * 0.5, easing: 'cubic-bezier(.2,.75,.15,1)', fill: 'forwards' });
+  // Grid cards already on the canvas carry a small mark (split view).
+  function markGrid() {
+    const on = new Set(doc.cards.map(c => c.slug));
+    const mc = mainEl(); if (!mc) return;
+    mc.querySelectorAll('.grid-container .card[data-slug]').forEach(el => el.classList.toggle('on-canvas', on.has(el.dataset.slug)));
+  }
+  function emptyState() {
+    if (!els.empty) return;
+    const empty = !doc.cards.some(c => App.item(c.slug));
+    els.empty.hidden = !empty || mode === 'grid';
+    els.empty.querySelector('[data-split]').hidden = mode !== 'canvas';
+  }
+
+  // ---------- Bringing items in: drag from the grid ----------
+  let dropAnim = null;            // { slug, x, y } world point a dropped card flies from
+  function addToCanvas(slugs, at) {
+    slugs = slugs.filter(s => App.item(s) && !cardRec(s));
+    if (!slugs.length) return;
+    // Dropped on or right next to a card: it joins that card's group.
+    const near = at && nearestAt(at, SNAP_GAP);
+    change(() => {
+      slugs.forEach(s => doc.cards.push({ slug: s }));
+      if (near) {
+        const f = families[near.fam];
+        let g = f && f.gid && doc.groups.find(x => x.id === f.gid);
+        if (!g) {
+          const base = f && !f.loose ? f.slugs : [near.slug];
+          const sh = similarityScore(App.item(slugs[0]), near.item).shared;
+          g = { id: uid(), name: f && !f.loose ? cap(f.tag) : (sh[0] ? cap(sh[0]) : 'New group'), slugs: [...base] };
+          doc.groups.push(g);
+        }
+        slugs.forEach(s => { if (!g.slugs.includes(s)) g.slugs.push(s); });
+      }
+    }, { layout: true });
+    if (at) dropAnim = { slug: slugs[0], x: at.x - W / 2, y: at.y - 60 };
+    relayoutAnim();
+    App.toast(slugs.length > 1 ? `Added ${slugs.length} items to the canvas` : 'Added to the canvas');
+    markGrid(); emptyState();
+    // Keep the new card in sight.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const n = nodes.get(slugs[0]); if (!n) return;
+      const r = stageRect();
+      const sx = n.x * view.k + view.x, sy = n.y * view.k + view.y;
+      if (sx < 0 || sy < 0 || sx + W * view.k > r.width || sy + n.h * view.k > r.height) {
+        const box = { x: Math.min(n.x, worldBox.x), y: Math.min(n.y, worldBox.y), w: 0, h: 0 };
+        box.w = Math.max(n.x + W, worldBox.x + worldBox.w) - box.x; box.h = Math.max(n.y + n.h, worldBox.y + worldBox.h) - box.y;
+        fit(true, nodes.size <= 3 ? { x: n.x - 300, y: n.y - 300, w: W + 600, h: n.h + 600 } : box);
+      }
+    }));
+  }
+  function renameFamily(fi, cx, cy) {
+    const f = families[fi];
+    const r = stageRect();
+    const inp = document.createElement('input');
+    inp.className = 'lc-label-input';
+    inp.value = cap(f.tag || ''); inp.maxLength = 40; inp.placeholder = 'Group name';
+    inp.style.transform = `translate(${cx - r.left}px,${cy - r.top}px) translate(-20%,-50%)`;
+    els.stage.appendChild(inp); inp.focus(); inp.select();
+    let done = false;
+    const finish = (ok) => {
+      if (done) return; done = true; inp.remove();
+      const name = inp.value.trim(); if (!ok || !name) return;
+      change(() => {
+        let g = f.gid && doc.groups.find(x => x.id === f.gid);
+        if (!g) { g = { id: uid(), name, slugs: [...f.slugs] }; doc.groups.push(g); f.gid = g.id; f.type = 'user'; f.color = 'accent'; }
+        g.name = name; f.tag = name;
+      });
+      schedule(true);
+    };
+    inp.addEventListener('keydown', (ev) => { ev.stopPropagation(); if (ev.key === 'Enter') finish(true); if (ev.key === 'Escape') finish(false); });
+    inp.addEventListener('blur', () => finish(true));
+  }
+  function removeFromCanvas(slug) {
+    change(() => {
+      doc.cards = doc.cards.filter(c => c.slug !== slug);
+      doc.groups.forEach(g => { g.slugs = g.slugs.filter(x => x !== slug); });
+      doc.groups = doc.groups.filter(g => g.slugs.length > 1);
+    }, { layout: true });
+    sel = null; relayoutAnim(); markGrid(); emptyState();
+  }
+  function nearestAt(at, gap) {
+    let best = null;
+    inRect(at.x - gap, at.y - gap, at.x + gap, at.y + gap).forEach(s => {
+      const n = nodes.get(s);
+      const dx = Math.max(0, n.x - at.x, at.x - (n.x + W)), dy = Math.max(0, n.y - at.y, at.y - (n.y + n.h));
+      const d = Math.hypot(dx, dy);
+      if (d <= gap && (!best || d < best.d)) best = { n, d };
+    });
+    return best && best.n;
+  }
+  // Cards glide to their new spots when the layout changes.
+  function relayoutAnim() {
+    els.root.classList.add('is-relayout');
+    clearTimeout(relayoutAnim.t);
+    relayoutAnim.t = setTimeout(() => els.root.classList.remove('is-relayout'), 520);
+  }
+  function bindGridDrag() {
+    const mc = mainEl(); if (!mc) return;
+    // The browser's own image drag would swallow the pointer events.
+    mc.addEventListener('dragstart', (e) => { if (mode === 'split' && e.target.closest && e.target.closest('.grid-container .card')) e.preventDefault(); });
+    mc.addEventListener('pointerdown', (e) => {
+      if (mode !== 'split' || e.button !== 0) return;
+      const card = e.target.closest('.grid-container .card[data-slug]');
+      if (!card || e.target.closest('button, a, input')) return;
+      const slug = card.dataset.slug, sx = e.clientX, sy = e.clientY;
+      let ghost = null, over = false;
+      const move = (ev) => {
+        if (!ghost) {
+          if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+          const r = card.getBoundingClientRect();
+          const w = Math.min(180, r.width), h = r.height * (w / r.width);
+          ghost = document.createElement('div');
+          ghost.className = 'lc-drag-ghost';
+          ghost.style.cssText = `width:${w}px;height:${h}px;`;
+          const img = card.querySelector('img');
+          ghost.innerHTML = img ? `<img src="${img.currentSrc || img.src}" alt="">` : App.thumbHTML(App.item(slug));
+          if (cardRec(slug)) ghost.classList.add('is-on');
+          document.body.appendChild(ghost);
+          document.documentElement.classList.add('is-dragging-in');
+        }
+        ghost.style.transform = `translate(${ev.clientX - 30}px,${ev.clientY - 30}px) rotate(-2deg)`;
+        const r = els.stage.getBoundingClientRect();
+        const now = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+        if (now !== over) { over = now; els.stage.classList.toggle('is-drop-target', over); }
+        if (over) { const w = screenToWorld(ev.clientX, ev.clientY); const nn = nearestAt(w, SNAP_GAP); hoverDrop = nn ? nn.slug : null; schedule(); }
+        else if (hoverDrop) { hoverDrop = null; schedule(); }
+      };
+      const up = (ev) => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        if (!ghost) return;
+        ghost.remove();
+        document.documentElement.classList.remove('is-dragging-in');
+        els.stage.classList.remove('is-drop-target');
+        hoverDrop = null;
+        // The grid would open the item on this click; it was a drag.
+        window.addEventListener('click', (ce) => { ce.stopPropagation(); ce.preventDefault(); }, { capture: true, once: true });
+        if (over) {
+          if (cardRec(slug)) { App.toast('Already on the canvas'); focusOn(slug); sel = slug; schedule(true); }
+          else addToCanvas([slug], screenToWorld(ev.clientX, ev.clientY));
+        }
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
   }
 
   // ---------- Actions ----------
@@ -1546,8 +1622,9 @@
         const cl = clusters.find(c => c.ghost && c.ghost.slug === acc.dataset.accept);
         if (cl && cl.ghost.anchor) {
           const g = cl.ghost;
-          change(() => doc.links.push({ id: uid(), a: g.anchor, b: g.slug, kind: 'related', label: g.shared[0] || '', source: 'maybe' }), { layout: true });
-          App.toast('Kept: it now sits next to what it relates to');
+          change(() => { doc.links.push({ id: uid(), a: g.anchor, b: g.slug, kind: 'related', label: g.shared[0] || '', source: 'maybe' }); if (!cardRec(g.slug)) doc.cards.push({ slug: g.slug }); }, { layout: true });
+          relayoutAnim(); markGrid();
+          App.toast('Added: it sits with what it relates to');
         }
         return;
       }
@@ -1575,6 +1652,7 @@
       const b = e.target.closest('[data-act]'); if (!b || !sel) return;
       const a = b.dataset.act;
       if (a === 'open') App.openItem(sel);
+      else if (a === 'remove') removeFromCanvas(sel);
       else if (a === 'use' || a === 'rejected') setMark(sel, a);
       else if (a === 'pin') { pinFor = sel; schedule(true); }
       else { connect = { from: sel, kind: a }; schedule(true); }
@@ -1656,6 +1734,8 @@
       const el = b.closest('.lc-card'); const n = el && nodes.get(el.dataset.slug);
       if (n) toggleDet(el, n);
     });
+    els.stage.addEventListener('pointerenter', () => { overCanvas = true; });
+    els.stage.addEventListener('pointerleave', () => { overCanvas = false; });
     els.stage.addEventListener('pointerdown', onDown);
     els.stage.addEventListener('pointermove', (e) => {
       if (e.buttons) return;
@@ -1668,6 +1748,10 @@
     });
     els.stage.addEventListener('pointerleave', () => { if (hover) { hover = null; schedule(); } });
     els.stage.addEventListener('dblclick', (e) => {
+      // Double-click a group's name to rename it.
+      const w = screenToWorld(e.clientX, e.clientY);
+      const fi = families.findIndex(f => f.box && !f.loose && f.slugs.length > 1 && w.x >= f.box.x - FAM_PAD && w.x <= f.box.x + Math.max(f.box.w, 240) && w.y >= f.box.y - FAM_PAD - Math.max(30, 26 / view.k) && w.y <= f.box.y - FAM_PAD + 4);
+      if (fi >= 0) { renameFamily(fi, e.clientX, e.clientY); return; }
       const hs = hitSlug(e);
       if (hs) { App.openItem(hs); return; }
       if (e.target.closest('.lc-note, .lc-ghost, .lc-selbar, input')) return;
@@ -1679,7 +1763,9 @@
 
     // Keys (canvas view only; fields keep their own keys).
     window.addEventListener('keydown', (e) => {
-      if (mode !== 'canvas') return;
+      if (mode === 'grid') return;
+      // Split: the canvas takes keys only while you are working in it.
+      if (mode === 'split' && !overCanvas && !els.root.contains(document.activeElement)) return;
       if (e.target && e.target.matches && e.target.matches('input, textarea, [contenteditable="true"]')) return;
       if (document.querySelector('.modal-overlay:not([hidden]), .settings-modal.open')) return;
       if (e.code === 'Space') { spaceDown = true; els.stage.classList.add('is-hand'); if (e.target === els.stage || e.target === document.body) e.preventDefault(); return; }
@@ -1693,6 +1779,7 @@
       else if (e.key.startsWith('Arrow') && !sel) { const d = e.shiftKey ? 400 : 80; flyTo({ ...view, x: view.x + (e.key === 'ArrowLeft' ? d : e.key === 'ArrowRight' ? -d : 0), y: view.y + (e.key === 'ArrowUp' ? d : e.key === 'ArrowDown' ? -d : 0) }, 160); }
       else if (e.key === 'Escape') { sel = null; selNote = null; connect = null; pinFor = null; els.create.hidden = true; renderNotes(); schedule(true); }
       else if (e.key === 'Enter' && sel) App.openItem(sel);
+      else if ((e.key === 'Backspace' || e.key === 'Delete') && sel && !selNote) removeFromCanvas(sel);
       else if ((e.key === 'Backspace' || e.key === 'Delete') && selNote) {
         const id = selNote; selNote = null;
         change(() => { doc.notes = doc.notes.filter(n => n.id !== id); doc.links = doc.links.filter(l => l.a !== id && l.b !== id); });
@@ -1711,9 +1798,9 @@
     document.addEventListener('stello:results', () => {
       const list = App.filtered ? App.filtered() : [];
       const next = list.length + ':' + list.map(i => i.slug).join(',');
+      if (mode !== 'grid') markGrid();
       if (next === sig) return;
       sig = next;
-      if (mode === 'canvas') markLayout(); else dirtyLayout = true;
     });
   }
 
@@ -1905,6 +1992,7 @@
     loadDoc();
     build();
     bind();
+    bindGridDrag();
     const q = new URLSearchParams(location.search).get('view');
     const start = q || localStorage.getItem(VIEW_KEY) || 'grid';
     setMode(start, { quiet: true });
