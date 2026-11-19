@@ -117,7 +117,85 @@
       layers.ins = Object.assign(layers.ins, doc.layers.ins || {});
     }
   }
-  function saveDoc() { doc.layers = layers; localStorage.setItem(DOC_KEY, JSON.stringify(doc)); }
+  function saveDoc() { doc.layers = layers; localStorage.setItem(DOC_KEY, JSON.stringify(doc)); queuePush(); }
+
+  // ---------- Sync with D1 (/api/projects/library) ----------
+  // The server keeps marks, links, notes and the grouping; this device keeps
+  // its own hand-placed positions (`by`) and layer toggles. Positions from
+  // other clients (FigJam, MCP) use other coordinates, so they never move
+  // cards here. A stale rev gets 409 and we adopt the server copy.
+  const REV_KEY = 'stello.canvas.rev';
+  let rev = +(localStorage.getItem(REV_KEY) || 0), pushTimer = 0, pushing = false, dirty = false;
+  const canSync = () => !!(window.Stello && Stello.apiFetch && Stello.getUserId && Stello.getUserId());
+  function toServer(d) {
+    return {
+      name: d.name, groupBy: d.groupBy,
+      cards: d.cards.map(c => {
+        const o = { slug: c.slug, x: Math.round(c.x || 0), y: Math.round(c.y || 0) };
+        if (c.state) o.state = c.state;
+        if (c.reason) o.note = c.reason;
+        return o;
+      }),
+      links: d.links.map(l => ({ id: l.id, a: l.a, b: l.b, kind: l.kind === 'related' ? 'maybe' : l.kind, label: l.label || undefined, source: 'web' })),
+      groups: d.groups, notes: d.notes, dismissed: d.dismissed,
+    };
+  }
+  function fromServer(sd) {
+    const local = new Map(doc.cards.map(c => [c.slug, c]));
+    const next = blankDoc();
+    next.name = sd.name || next.name;
+    next.groupBy = Object.prototype.hasOwnProperty.call(GROUPS, sd.groupBy) ? sd.groupBy : doc.groupBy;
+    next.cards = (sd.cards || []).map(c => {
+      const o = { slug: c.slug };
+      const l = local.get(c.slug);
+      if (l && l.by && Math.round(l.x) === Math.round(c.x) && Math.round(l.y) === Math.round(c.y)) { o.x = l.x; o.y = l.y; o.by = l.by; }
+      if (c.state) o.state = c.state;
+      if (c.note) o.reason = c.note;
+      return o;
+    });
+    next.links = (sd.links || []).map(l => ({ ...l, kind: l.kind === 'maybe' ? 'related' : l.kind }));
+    next.groups = sd.groups || []; next.notes = sd.notes || []; next.dismissed = sd.dismissed || [];
+    next.layers = doc.layers;
+    return next;
+  }
+  function adopt(project) {
+    rev = project.rev || 0; localStorage.setItem(REV_KEY, String(rev));
+    doc = fromServer(project.doc || {});
+    localStorage.setItem(DOC_KEY, JSON.stringify(doc));
+  }
+  async function pullDoc() {
+    if (!canSync()) return;
+    try {
+      const body = await Stello.apiGet('/api/projects/library');
+      const p = body && body.project;
+      if (!p) return;
+      if (p.rev > rev && !dirty) { adopt(p); markLayout(); }
+      else if (p.rev < rev || (p.rev === 0 && (doc.cards.length || doc.links.length || doc.notes.length))) { rev = p.rev; queuePush(); }
+    } catch { /* offline: keep the local copy */ }
+  }
+  function queuePush() {
+    if (!canSync()) return;
+    dirty = true;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(pushDoc, 1200);
+  }
+  async function pushDoc() {
+    if (pushing) { queuePush(); return; }
+    pushing = true; dirty = false;
+    try {
+      const res = await Stello.apiFetch('/api/projects/library', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rev, doc: toServer(doc) }),
+      });
+      const body = await res.json().catch(() => null);
+      if (res.ok && body && body.project) { rev = body.project.rev; localStorage.setItem(REV_KEY, String(rev)); }
+      else if (res.status === 409 && body && body.project) {
+        adopt(body.project); markLayout();
+        App.toast('Canvas changed on another device; showing the latest copy');
+      }
+    } catch { dirty = true; /* offline: retry on the next change */ }
+    pushing = false;
+  }
   function change(fn, opts) {
     undoStack.push(JSON.stringify(doc));
     if (undoStack.length > 50) undoStack.shift();
@@ -1349,6 +1427,8 @@
     const q = new URLSearchParams(location.search).get('view');
     const start = q || localStorage.getItem(VIEW_KEY) || 'grid';
     setMode(start, { quiet: true });
+    pullDoc();
+    window.addEventListener('focus', () => { if (!dirty && !pushing) pullDoc(); });
     window.StelloCanvas = { setMode, focusOn, centerOn: (sx, sy, k) => { const w = screenToWorld(sx, sy); const r = els.stage.getBoundingClientRect(); view.k = k; view.x = r.width / 2 - w.x * k; view.y = r.height / 2 - w.y * k; schedule(); }, fit: () => fit(true), get view() { return view; }, zoomAt, select: (s) => { sel = s; schedule(true); } };
   }
   if (window.StelloApp) init();
