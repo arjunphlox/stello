@@ -4,19 +4,21 @@
 
 **Shape**
 - **Switch:** a grid/canvas switch sits right of the search field. Both views show the same items, after search and filters. There are no trays and no split view; the item panel opens as usual (double-click, Enter or Open).
-- **Broad groups:** **Group by** Collection (default), Topic, Kind, Colour, Style, Place, Source or Month saved. Each group is a loose masonry block with a title and a "N saves · top tags" line. There are no containers. Cards you drag stay where you put them for that grouping.
+- **Broad groups:** **Group by** Collection (default), Topic, Kind, Colour, Style, Place, Source or Month saved. Each group has a title and a "N saves · top tags" line. Inside a group, similar items sit together as **families** (up to 12 items) on a soft tint, captioned by what they share ("Typographic · same style · 3"). Items that share nothing strong form a loose block. Cards you drag stay where you put them for that grouping. Drop a card on another family's tint to join it, or clear of its own to leave it.
 - **Cards:** cover with a domain pill, then a details card. The details card holds the title, source · kind · saved date, colour swatches, style, tags, collection, place, why saved and a summary quote. Heights are computed, never measured, so zoom never reflows.
 - **Progressive disclosure by zoom:**
   - Far out: colour blocks with large group names. Real cards are used if fewer than about 260 are in view.
   - Middle: cover, title and meta.
   - Close: the full details card.
-  - Link labels show close up (from 90%) or for the selected or hovered item. Selecting an item dims the rest and shows up to six of its lines.
+  - **Lines are hidden by default** (Arjun, Nov 19 2026: grouping, spacing, colour and the card itself carry the first level). Hovering a card or note shows its lines. Selecting one dims the rest and shows up to six similarity lines plus your links. Dragging a card shows lines to related items within reach, brighter when they are closer. "Always show lines" in the Similarity menu brings back the old view.
+  - Cards with your links show a small count badge.
+  - Lines are straight runs with 90° bends and rounded corners. When the two ends are close, a single straight segment is used.
 
 **Layer 1: similarity (computed, rules only)**
 - The six line types are same place, same colour, looks alike (top colour + top style), same kind, same idea (subject tags) and same style.
 - Rare shared features weigh more, and very common ones are skipped.
-- Each item shows its two strongest lines (one when far out).
-- The **Similarity** menu holds the legend and a toggle for each type.
+- Families come from a greedy cover: the most telling shared feature first (rarer in the library, stronger type, more members).
+- The **Similarity** menu holds the legend and a toggle for each type. Turning a type off also re-forms the families.
 
 **Layer 2: intent, time and gaps**
 - **Use / Rejected:** marks with an optional reason, set from the selection bar.
