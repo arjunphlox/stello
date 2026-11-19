@@ -1390,7 +1390,8 @@
   let gridScroll = 0;
   const mainEl = () => document.querySelector('.main-content');
   function setMode(m, opts) {
-    const next = MODES.includes(m) ? m : 'grid';
+    let next = MODES.includes(m) ? m : 'grid';
+    if (next === 'split' && isPhone()) next = 'canvas';
     const prev = mode;
     const mc = mainEl();
     if (prev === 'grid' && mc) gridScroll = mc.scrollTop;
@@ -1438,7 +1439,10 @@
     if (!els.empty) return;
     const empty = !doc.cards.some(c => App.item(c.slug));
     els.empty.hidden = !empty || mode === 'grid';
-    els.empty.querySelector('[data-split]').hidden = mode !== 'canvas';
+    els.empty.querySelector('[data-split]').hidden = mode !== 'canvas' || isPhone();
+    els.empty.querySelector('.lc-empty-sub').textContent = isPhone()
+      ? 'In the grid, press and hold an item, then drag it here. Drop one next to another to group them.'
+      : 'Drag items here from the grid (on touch, press and hold a card first). Drop one next to another to group them.';
   }
 
   // ---------- Bringing items in: drag from the grid ----------
@@ -1453,9 +1457,10 @@
     }
     return { x, y };
   }
-  function addToCanvas(slugs, at) {
+  function addToCanvas(slugs, at, quiet) {
     slugs = slugs.filter(s => App.item(s) && !cardRec(s));
-    if (!slugs.length) return;
+    if (!slugs.length) return '';
+    let said = '';
     if (!at) { const r = stageRect(); at = screenToWorld(r.left + r.width / 2, r.top + r.height / 2); }
     const near = nearestAt(at, SNAP_GAP);
     const by = doc.groupBy in GROUPS ? doc.groupBy : 'collection';
@@ -1483,13 +1488,15 @@
           doc.groups.push(g);
         }
         slugs.forEach(s => { if (!g.slugs.includes(s)) g.slugs.push(s); });
-        App.toast(`Added to ${g.name}`);
-      } else App.toast(slugs.length > 1 ? `Added ${slugs.length} items` : 'Added to the canvas');
+        said = g.name;
+        if (!quiet) App.toast(`Added to ${g.name}`);
+      } else if (!quiet) App.toast(slugs.length > 1 ? `Added ${slugs.length} items` : 'Added to the canvas');
     }, { layout: true });
     layout(); schedule(true);
     dropAnim = { slug: slugs[0] };
     camSet = true;
     markGrid(); emptyState();
+    return said || true;
   }
   // ---------- Canvases: name, new, switch, delete, export ----------
   function renderDocName() {
@@ -1821,25 +1828,90 @@
     clearTimeout(relayoutAnim.t);
     relayoutAnim.t = setTimeout(() => els.root.classList.remove('is-relayout'), 520);
   }
+  // ---------- Phones: carry an item from the grid to the canvas ----------
+  // No split view on a phone. Press and hold a grid card: it lifts; start
+  // moving and the canvas fades in under it, so you place it exactly. Let go
+  // on the canvas to drop it (near a card it groups), on the Cancel pill to
+  // put it back. Then you are back in the grid where you were (or stay on the
+  // canvas, by preference). Held and released without moving: the card menu.
+  const PHONE_MQ = window.matchMedia('(max-width: 768px)');
+  const isPhone = () => PHONE_MQ.matches;
+  const RETURN_KEY = 'stello.canvas.mobileReturn';   // 'grid' | 'canvas'
+  let carry = null;                // { from } while a card is carried from the grid
+  function carryUI(on) {
+    document.documentElement.classList.toggle('is-carrying', on);
+    if (on && !els.cancel) {
+      const c = document.createElement('div');
+      c.className = 'lc-carry-top';
+      c.innerHTML = `<span class="lc-carry-name"></span><span class="lc-carry-cancel" data-cancel>${IC.x} Cancel</span>`;
+      document.body.appendChild(c); els.cancel = c;
+    }
+    if (on && els.atoast) els.atoast.classList.remove('is-on');
+    if (els.cancel) {
+      els.cancel.hidden = !on;
+      els.cancel.querySelector('.lc-carry-name').textContent = 'Adding to ' + (doc.name || 'canvas');
+    }
+  }
+  function actionToast(text, actions) {
+    let t = els.atoast;
+    if (!t) { t = document.createElement('div'); t.className = 'lc-atoast'; t.setAttribute('role', 'status'); document.body.appendChild(t); els.atoast = t; }
+    t.innerHTML = `<span>${esc(text)}</span>` + actions.map((a, i) => `<button type="button" data-i="${i}">${esc(a.label)}</button>`).join('');
+    t.onclick = (e) => { const b = e.target.closest('[data-i]'); if (!b) return; t.classList.remove('is-on'); actions[+b.dataset.i].run(); };
+    t.classList.add('is-on');
+    clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('is-on'), 5000);
+  }
+  // Edge auto-pan while carrying: near a stage edge the canvas slides along.
+  let edgeRaf = 0, edgePt = null;
+  function edgePan() {
+    edgeRaf = 0;
+    if (!carry || !edgePt) return;
+    const r = els.stage.getBoundingClientRect(), E = 44, sp = 9;
+    let dx = 0, dy = 0;
+    if (edgePt.x < r.left + E) dx = sp; else if (edgePt.x > r.right - E) dx = -sp;
+    if (edgePt.y < r.top + E + 40) dy = sp; else if (edgePt.y > r.bottom - E - 60) dy = -sp;
+    if (dx || dy) { view.x += dx; view.y += dy; gesture(); schedule(); }
+    edgeRaf = requestAnimationFrame(edgePan);
+  }
+  // "Add to canvas" from the card menu: next to the item most like it.
+  function addAuto(slug) {
+    if (cardRec(slug)) { if (mode === 'grid') setMode(isPhone() ? 'canvas' : 'split'); requestAnimationFrame(() => { focusOn(slug); sel = slug; schedule(true); }); return; }
+    if (mode === 'grid') { layout(); }
+    const it = App.item(slug); if (!it) return;
+    let best = null;
+    nodes.forEach(n => { const sc = similarityScore(it, n.item).s; if (sc > 0 && (!best || sc > best.s)) best = { n, s: sc }; });
+    let at;
+    if (best) at = { x: best.n.x + W * 1.5 + SNAP_GAP + 20, y: best.n.y + 40 };
+    else if (nodes.size) at = { x: worldBox.x + worldBox.w + W / 2 + 80, y: worldBox.y + TITLE_H + 120 };
+    else at = { x: W / 2, y: 160 };
+    addToCanvas([slug], at);
+    if (mode === 'grid') actionToast(`Added to ${doc.name || 'canvas'}`, [{ label: 'Undo', run: () => { undo(); markGrid(); } }, { label: 'Open canvas', run: () => { setMode(isPhone() ? 'canvas' : 'split'); requestAnimationFrame(() => { focusOn(slug); }); } }]);
+  }
+
   function bindGridDrag() {
     const mc = mainEl(); if (!mc) return;
+    const active = () => mode === 'split' || (mode === 'grid' && isPhone());
     // The browser's own image drag would swallow the pointer events.
-    mc.addEventListener('dragstart', (e) => { if (mode === 'split' && e.target.closest && e.target.closest('.grid-container .card')) e.preventDefault(); });
+    mc.addEventListener('dragstart', (e) => { if (active() && e.target.closest && e.target.closest('.grid-container .card')) e.preventDefault(); });
     // Touch: a plain swipe scrolls the grid; press and hold a card to pick it up.
-    let held = false;
+    let held = false, lastType = 'mouse';
     mc.addEventListener('touchmove', (e) => { if (held) e.preventDefault(); }, { passive: false });
-    mc.addEventListener('contextmenu', (e) => { if (mode === 'split' && e.target.closest('.grid-container .card')) e.preventDefault(); });
+    // A long press would also open the browser's (or our) menu: the hold owns it.
+    mc.addEventListener('contextmenu', (e) => { if (active() && lastType !== 'mouse' && e.target.closest('.grid-container .card')) { e.preventDefault(); e.stopPropagation(); } });
     mc.addEventListener('pointerdown', (e) => {
-      if (mode !== 'split' || e.button !== 0 || !e.isPrimary) return;
+      lastType = e.pointerType;
+      if (!active() || e.button !== 0 || !e.isPrimary) return;
+      const phoneFlow = mode === 'grid';
+      if (phoneFlow && e.pointerType === 'mouse') return;
       const card = e.target.closest('.grid-container .card[data-slug]');
       if (!card || e.target.closest('button, a, input')) return;
       const slug = card.dataset.slug, sx = e.clientX, sy = e.clientY, id = e.pointerId;
       const touch = e.pointerType !== 'mouse';
-      let ghost = null, over = false, holdT = 0, last = e;
+      let ghost = null, over = false, onCancel = false, holdT = 0, last = e, liftX = sx, liftY = sy;
       const pick = () => {
         holdT = 0; held = true;
         card.classList.add('is-picked');
         if (navigator.vibrate) navigator.vibrate(8);
+        liftX = last.clientX; liftY = last.clientY;
         move(last, true);
       };
       if (touch) holdT = setTimeout(pick, 320);
@@ -1854,7 +1926,7 @@
         if (!ghost) {
           if (!force && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
           const r = card.getBoundingClientRect();
-          const w = Math.min(180, r.width), h = r.height * (w / r.width);
+          const w = Math.min(phoneFlow ? 150 : 180, r.width), h = r.height * (w / r.width);
           ghost = document.createElement('div');
           ghost.className = 'lc-drag-ghost';
           ghost.style.cssText = `width:${w}px;height:${h}px;`;
@@ -1865,11 +1937,23 @@
           document.documentElement.classList.add('is-dragging-in');
         }
         ghost.style.transform = `translate(${ev.clientX - 30}px,${ev.clientY - 30}px) rotate(-2deg)`;
+        // Phone: once the lifted card starts to travel, the canvas comes in under it.
+        if (phoneFlow && !carry && Math.hypot(ev.clientX - liftX, ev.clientY - liftY) > 12) {
+          carry = { from: 'grid' };
+          setMode('canvas', { quiet: true, carry: true });
+          carryUI(true);
+          stageBox = null;
+        }
+        if (phoneFlow && !carry) return;
         const r = els.stage.getBoundingClientRect();
-        const now = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
-        if (now !== over) { over = now; els.stage.classList.toggle('is-drop-target', over); }
+        const cr = els.cancel && carry ? els.cancel.querySelector('[data-cancel]').getBoundingClientRect() : null;
+        const nowCancel = !!(cr && ev.clientX >= cr.left - 12 && ev.clientX <= cr.right + 12 && ev.clientY >= cr.top - 12 && ev.clientY <= cr.bottom + 12);
+        if (nowCancel !== onCancel) { onCancel = nowCancel; els.cancel.classList.toggle('is-hot', onCancel); ghost.classList.toggle('is-cancel', onCancel); }
+        const now = !onCancel && ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+        if (now !== over) { over = now; els.stage.classList.toggle('is-drop-target', over && !carry); }
         if (over) { const w = screenToWorld(ev.clientX, ev.clientY); const nn = nearestAt(w, SNAP_GAP); hoverDrop = nn ? nn.slug : null; schedule(); }
         else if (hoverDrop) { hoverDrop = null; schedule(); }
+        if (carry) { edgePt = { x: ev.clientX, y: ev.clientY }; if (!edgeRaf) edgeRaf = requestAnimationFrame(edgePan); }
       };
       const cleanup = () => {
         clearTimeout(holdT); held = false; card.classList.remove('is-picked');
@@ -1877,13 +1961,33 @@
         window.removeEventListener('pointerup', up);
         window.removeEventListener('pointercancel', cancel);
       };
+      const endCarry = (dropped) => {
+        const was = carry; carry = null; edgePt = null;
+        if (edgeRaf) { cancelAnimationFrame(edgeRaf); edgeRaf = 0; }
+        carryUI(false);
+        if (!was) return;
+        const stay = localStorage.getItem(RETURN_KEY) === 'canvas';
+        if (!dropped) { setMode('grid', { quiet: true }); return; }
+        if (stay) return;
+        // Let the card land, then go back to where you were in the grid.
+        setTimeout(() => {
+          setMode('grid', { quiet: true });
+          const where = doc.name || 'canvas';
+          actionToast(dropped === 'have' ? 'Already on the canvas' : typeof dropped === 'string' ? `Added to ${dropped} in ${where}` : `Added to ${where}`, [
+            ...(dropped === 'have' ? [] : [{ label: 'Undo', run: () => { undo(); markGrid(); } }]),
+            { label: 'Open canvas', run: () => { setMode('canvas'); requestAnimationFrame(() => focusOn(slug)); } },
+          ]);
+        }, 650);
+      };
       const cancel = (ev) => {
         if (ev.pointerId !== id) return;
         cleanup();
         if (ghost) { ghost.remove(); document.documentElement.classList.remove('is-dragging-in'); els.stage.classList.remove('is-drop-target'); hoverDrop = null; schedule(); }
+        endCarry(false);
       };
       const up = (ev) => {
         if (ev.pointerId !== id) return;
+        const wasHeld = held;
         cleanup();
         if (!ghost) return;
         ghost.remove();
@@ -1892,16 +1996,21 @@
         hoverDrop = null;
         // The grid would open the item on this click; it was a drag.
         window.addEventListener('click', (ce) => { ce.stopPropagation(); ce.preventDefault(); }, { capture: true, once: true });
+        // Phone: held and let go without moving it: the card menu.
+        if (phoneFlow && !carry) { if (wasHeld && App.openCardMenu) App.openCardMenu(slug, ev.clientX, ev.clientY); return; }
+        let dropped = false;
         if (over) {
-          if (cardRec(slug)) { App.toast('Already on the canvas'); focusOn(slug); sel = slug; schedule(true); }
-          else addToCanvas([slug], screenToWorld(ev.clientX, ev.clientY));
+          if (cardRec(slug)) { dropped = 'have'; if (!carry) App.toast('Already on the canvas'); focusOn(slug); sel = slug; schedule(true); }
+          else dropped = addToCanvas([slug], screenToWorld(ev.clientX, ev.clientY), !!carry) || false;
         }
+        if (carry) endCarry(dropped);
       };
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
       window.addEventListener('pointercancel', cancel);
     });
   }
+
 
   // ---------- Actions ----------
   function setMark(slug, state) {
@@ -2470,7 +2579,7 @@
     setMode(start, { quiet: true });
     pullDoc();
     window.addEventListener('focus', () => { if (!dirty && !pushing) pullDoc(); });
-    window.StelloCanvas = { setMode, focusOn, centerOn: (sx, sy, k) => { const w = screenToWorld(sx, sy); const r = stageRect(); view.k = k; view.x = r.width / 2 - w.x * k; view.y = r.height / 2 - w.y * k; schedule(); }, fit: () => fit(true), get view() { return view; }, zoomAt, stepZoom, flyTo, select: (s) => { sel = s; schedule(true); } };
+    window.StelloCanvas = { setMode, addAuto, has: (s) => !!cardRec(s), setReturn: (v) => localStorage.setItem(RETURN_KEY, v), focusOn, centerOn: (sx, sy, k) => { const w = screenToWorld(sx, sy); const r = stageRect(); view.k = k; view.x = r.width / 2 - w.x * k; view.y = r.height / 2 - w.y * k; schedule(); }, fit: () => fit(true), get view() { return view; }, zoomAt, stepZoom, flyTo, select: (s) => { sel = s; schedule(true); } };
   }
   if (window.StelloApp) init();
   else document.addEventListener('stello:ready', init, { once: true });
