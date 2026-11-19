@@ -9,7 +9,7 @@
    Layer 2 (yours, plus a few computed hints): use / rejected marks,
    influence (A inspired B), contrast (vs), part of a set, questions,
    notes on part of an image; gaps (maybe-related saves and empty spots),
-   a save timeline, and revisit glow / fade.
+   and revisit glow / fade.
 
    Progressive disclosure is by zoom: far out you see colour blocks and
    group names; closer, covers and titles; close up, the full details card.
@@ -27,7 +27,7 @@
   const DOC_KEY = 'stello.canvas.v1';
   const VIEW_KEY = 'stello.view';           // 'grid' | 'canvas'
   const W = 274;                            // card width (world px)
-  const COL_GAP = 36, ROW_GAP = 40, CL_GAP_X = 240, CL_GAP_Y = 300;
+  const COL_GAP = 28, ROW_GAP = 28, CL_GAP_X = 200, CL_GAP_Y = 220;
   const TITLE_H = 120;                      // room above a group for its title
   const CELL = 800;                         // spatial hash cell
   const MIN_K = 0.01, MAX_K = 2.5;
@@ -35,8 +35,9 @@
   const LOD_DETAIL = 0.62;                  // at or above: full details card
   const LABEL_K = 0.42;                     // link labels from this zoom
   const MAX_LINKS = 420, MAX_LABELS = 90;
+  const DOM_CAP = 240;                      // more cards than this in view: paint them on the canvas
   // Families: similar items inside a group sit close together on a tint.
-  const FAM_MAX = 12, FAM_GAP_X = 88, FAM_GAP_Y = 104, FAM_CAP = 40, F_COL = 20, F_ROW = 26, FAM_PAD = 18;
+  const FAM_MAX = 12, FAM_GAP_X = 76, FAM_GAP_Y = 64, FAM_CAP = 40, F_COL = 16, F_ROW = 16, FAM_PAD = 18;
   const NEAR = 720;                         // drag reveal radius (world px)
   const STRAIGHT = 230;                     // closer than this: one straight segment
 
@@ -59,7 +60,7 @@
   };
   const INSIGHTS = {
     marks: 'Use / rejected', notes: 'Questions, notes and sets', gaps: 'Gaps: maybe related, empty spots',
-    time: 'Save timeline', glow: 'Revisits: glow and fade',
+    glow: 'Revisits: glow and fade',
   };
   const GROUPS = {
     collection: 'Collection', topic: 'Topic', kind: 'Kind', colour: 'Colour', style: 'Style',
@@ -80,7 +81,6 @@
   let clusters = [];              // [{ key, name, sub, color, x, y, w, h, slugs, empty, ghost }]
   let hash = new Map();           // cell -> [slug]
   let worldBox = { x: 0, y: 0, w: 1, h: 1 };
-  let timeline = null;            // { x, y, w, h, ... }
   let inv = new Map();            // feature -> [slug]
   let featOf = new Map();         // slug -> [{ f, type, tag }]
   let simCache = new Map();       // slug -> [{ b, type, label, s }]
@@ -90,15 +90,17 @@
   let hover = null;
   let hoverGhost = null;
   let dragging = null;            // slug being dragged
+  let suggest = null;             // { slugs, box, name, fam } while dragging close to another item
   let near = [];                  // [{ b, s, label, type, d }] while dragging
   let families = [];              // [{ cl, tag, type, color, slugs, loose, box }]
   let linkCount = new Map();
+  const openDet = new Set();      // cards with their details card open
   let boxLod = 2;                 // zoom level the family boxes were measured at      // slug -> number of your links
   let connect = null;             // { from, kind } while picking a target
   let pinFor = null;              // slug while placing a note on its image
   let layers = {
     sim: { on: true, always: false, place: true, colour: true, looks: true, kind: true, idea: true, style: true },
-    ins: { marks: true, notes: true, gaps: true, time: true, glow: true },
+    ins: { marks: true, notes: true, gaps: true, glow: true },
   };
   let raf = 0, layoutRaf = 0, dirtyLayout = true;
   let spaceDown = false;
@@ -418,41 +420,39 @@
       items.sort((a, b) => String(b.added_at).localeCompare(String(a.added_at)));
       const fams = familiesOf(items);
       const blocks = fams.map(f => {
-        const cols = f.loose ? Math.max(1, Math.min(8, Math.ceil(Math.sqrt(f.items.length * 0.9)))) : Math.max(1, Math.min(4, Math.ceil(Math.sqrt(f.items.length))));
+        const m = f.items.length;
+        const cols = f.loose ? Math.max(1, Math.min(8, Math.ceil(Math.sqrt(m * 0.8)))) : Math.max(1, Math.min(4, Math.ceil(Math.sqrt(m * 0.8))));
         const cg = f.loose ? COL_GAP : F_COL, rg = f.loose ? ROW_GAP : F_ROW;
-        const colY = new Array(cols).fill(0);
+        const colY = new Array(cols).fill(0).map((_, c) => f.loose ? Math.round(hashOf(f.items[0].slug + c) * 40) : 0);
         const pos = [];
         f.items.forEach(it => {
           const c = colY.indexOf(Math.min(...colY));
-          const d = details(it);
           const ch = Math.round(W * coverRatio(it));
-          const dh = detailsHeight(d);
-          pos.push({ it, d, ch, dh, x: c * (W + cg), y: colY[c] });
-          colY[c] += ch + 8 + dh + rg;
+          pos.push({ it, d: details(it), ch, x: c * (W + cg), y: colY[c] });
+          colY[c] += ch + rg;
         });
-        return { f, pos, w: cols * W + (cols - 1) * cg, h: Math.max(...colY) - rg };
+        return { f, pos, w: cols * W + (cols - 1) * cg, h: Math.max(...colY) - rg + (f.loose && fams.length === 1 ? 0 : FAM_CAP) };
       });
-      // Shelf-pack the families inside the group.
-      const area = blocks.reduce((t, b) => t + (b.w + FAM_GAP_X) * (b.h + FAM_GAP_Y + FAM_CAP), 0);
-      const maxW = Math.max(Math.max(...blocks.map(b => b.w)), Math.sqrt(area) * 1.5);
-      let fx = 0, fy = 0, rowH = 0, gw = 0;
+      // Skyline-pack the families inside the group: each drops to the lowest
+      // spot it fits, which leaves the uneven, maze-like gaps between them.
+      const area = blocks.reduce((t, b) => t + (b.w + FAM_GAP_X) * (b.h + FAM_GAP_Y), 0);
+      const maxW = Math.max(Math.max(...blocks.map(b => b.w)), Math.sqrt(area) * 1.35);
+      const at = skyline(blocks, maxW, FAM_GAP_X, FAM_GAP_Y);
+      let gw = 0, gh = 0;
       const slugs = [];
-      blocks.forEach(b => {
-        if (fx > 0 && fx + b.w > maxW) { fx = 0; fy += rowH + FAM_GAP_Y; rowH = 0; }
-        const top = fy + (b.f.loose && fams.length === 1 ? 0 : FAM_CAP);
-        const fam = { cl: i, tag: b.f.tag, type: b.f.type, loose: b.f.loose, slugs: [], box: null };
-        fam.color = b.f.type ? (SIM[b.f.type].color || null) : null;
+      blocks.forEach((b, bi) => {
+        const fx = at[bi].x, top = at[bi].y + (b.f.loose && fams.length === 1 ? 0 : FAM_CAP);
+        const fam = { cl: i, tag: b.f.tag, type: b.f.type, loose: b.f.loose, gid: b.f.gid || null, slugs: [], box: null };
+        fam.color = b.f.type === 'user' ? 'accent' : b.f.type ? (SIM[b.f.type].color || null) : null;
         families.push(fam);
         b.pos.forEach(p => {
-          const jitter = b.f.loose ? Math.round((hashOf(p.it.slug) - 0.5) * 16) : 0;
-          nodes.set(p.it.slug, { slug: p.it.slug, item: p.it, d: p.d, x: fx + p.x + jitter, y: top + p.y, ch: p.ch, dh: p.dh, h: p.ch + 8 + p.dh, cl: i, fam: families.length - 1 });
+          const jitter = b.f.loose ? Math.round((hashOf(p.it.slug) - 0.5) * 18) : 0;
+          nodes.set(p.it.slug, { slug: p.it.slug, item: p.it, d: p.d, x: fx + p.x + jitter, y: top + p.y, ch: p.ch, h: p.ch, cl: i, fam: families.length - 1 });
           fam.slugs.push(p.it.slug); slugs.push(p.it.slug);
         });
-        fx += b.w + FAM_GAP_X;
-        gw = Math.max(gw, fx - FAM_GAP_X);
-        rowH = Math.max(rowH, top - fy + b.h);
+        gw = Math.max(gw, fx + b.w); gh = Math.max(gh, at[bi].y + b.h);
       });
-      return { key, name: cap(key), sub: subtitleFor(items), color: PALETTE[i % PALETTE.length], x: 0, y: 0, w: gw, h: fy + rowH, slugs, items };
+      return { key, name: cap(key), sub: subtitleFor(items), color: PALETTE[i % PALETTE.length], x: 0, y: 0, w: gw, h: gh, slugs, items };
     });
 
     // Gaps per group (computed hints).
@@ -461,15 +461,10 @@
     // Shelf-pack the groups into rows.
     const footW = (cl) => cl.w + (cl.ghost ? 60 + W : 0);
     const footH = (cl) => TITLE_H + cl.h + (cl.empty ? 140 : 0);
-    const area = clusters.reduce((s, cl) => s + footW(cl) * footH(cl), 0);
-    const maxW = Math.max(2400, Math.sqrt(area) * 1.5);
-    let x = 0, y = 0, rowH = 0;
-    clusters.forEach(cl => {
-      if (x > 0 && x + footW(cl) > maxW) { x = 0; y += rowH + CL_GAP_Y; rowH = 0; }
-      cl.x = x; cl.y = y + TITLE_H;
-      x += footW(cl) + CL_GAP_X;
-      rowH = Math.max(rowH, footH(cl));
-    });
+    const area = clusters.reduce((s, cl) => s + (footW(cl) + CL_GAP_X) * (footH(cl) + CL_GAP_Y), 0);
+    const maxW = Math.max(2400, Math.max(...clusters.map(footW)), Math.sqrt(area) * 1.4);
+    const gat = skyline(clusters.map(cl => ({ w: footW(cl), h: footH(cl) })), maxW, CL_GAP_X, CL_GAP_Y);
+    clusters.forEach((cl, ci) => { cl.x = gat[ci].x; cl.y = gat[ci].y + TITLE_H; });
     // Place cards, honouring cards you moved (for this grouping).
     clusters.forEach(cl => cl.slugs.forEach(s => { const n = nodes.get(s); n.x += cl.x; n.y += cl.y; }));
     families.forEach(famBox);
@@ -477,12 +472,10 @@
     doc.cards.forEach(c => { const n = nodes.get(c.slug); if (n && c.by === by && Number.isFinite(c.x)) { n.x = c.x; n.y = c.y; moved.push(n); } });
     moved.forEach(n => refamily(n));
 
-    // Bounds and timeline below everything.
+    // Bounds.
     let x0 = 0, y0 = -TITLE_H, x1 = 0, y1 = 0;
     nodes.forEach(n => { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y - TITLE_H); x1 = Math.max(x1, n.x + W); y1 = Math.max(y1, n.y + n.h); });
     clusters.forEach(cl => { x1 = Math.max(x1, cl.x + footW(cl)); y1 = Math.max(y1, cl.y + cl.h + (cl.empty ? 140 : 0)); });
-    timeline = buildTimeline(x0, y1 + 260, Math.max(1600, x1 - x0));
-    if (timeline) y1 = timeline.y + timeline.h;
     worldBox = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
     rebuildHash();
     rendered.forEach(el => el.remove());
@@ -492,6 +485,34 @@
   // Greedy cover: the most telling shared feature first (rarer in the library,
   // stronger type, more members), up to FAM_MAX items per family. What is left
   // over is the loose family.
+  // Bottom-left skyline packing: blocks in order, each at the lowest y it fits.
+  function skyline(blocks, maxW, gx, gy) {
+    let sky = [{ x: 0, w: Infinity, y: 0 }];
+    return blocks.map(b => {
+      let best = null;
+      for (let i = 0; i < sky.length; i++) {
+        const x = sky[i].x;
+        if (x > 0 && x + b.w > maxW) break;
+        let y = 0;
+        for (let j = i; j < sky.length && sky[j].x < x + b.w; j++) y = Math.max(y, sky[j].y);
+        if (!best || y < best.y - 1) best = { x, y };
+      }
+      if (!best) best = { x: 0, y: Math.max(...sky.map(sg => sg.y)) };
+      // Raise the skyline over [x, x + w + gap).
+      const x0 = best.x, x1 = best.x + b.w + gx, top = best.y + b.h + gy;
+      const next = [];
+      sky.forEach(sg => {
+        const a = sg.x, z = sg.x + sg.w;
+        if (z <= x0 || a >= x1) { next.push(sg); return; }
+        if (a < x0) next.push({ x: a, w: x0 - a, y: sg.y });
+        if (z > x1) next.push({ x: x1, w: z - x1, y: sg.y });
+      });
+      next.push({ x: x0, w: x1 - x0, y: top });
+      next.sort((p, q) => p.x - q.x);
+      sky = next.reduce((acc, sg) => { const l = acc[acc.length - 1]; if (l && l.y === sg.y && l.x + l.w === sg.x) l.w += sg.w; else acc.push({ ...sg }); return acc; }, []);
+      return best;
+    });
+  }
   function familiesOf(items) {
     const N = set.length;
     const by = new Map();
@@ -504,6 +525,13 @@
       .sort((a, b) => b.score - a.score);
     const taken = new Set(), out = [];
     const bySlug = new Map(items.map(it => [it.slug, it]));
+    // Groups you made come first.
+    (doc.groups || []).forEach(g => {
+      const part = (g.slugs || []).filter(s => bySlug.has(s) && !taken.has(s));
+      if (part.length < 2) return;
+      part.forEach(s => taken.add(s));
+      out.push({ tag: g.name || 'Group', type: 'user', gid: g.id, items: part.map(s => bySlug.get(s)) });
+    });
     for (const c of cands) {
       let free = c.slugs.filter(s => !taken.has(s));
       while (free.length >= 2) {
@@ -514,21 +542,17 @@
         free = free.slice(FAM_MAX);
       }
     }
-    out.sort((a, b) => b.items.length - a.items.length);
+    out.sort((a, b) => (b.type === 'user') - (a.type === 'user') || b.items.length - a.items.length);
     const rest = items.filter(it => !taken.has(it.slug));
     if (rest.length) out.push({ tag: null, type: null, loose: true, items: rest });
     return out;
   }
   // How tall a card looks at the current zoom (details shrink at mid zoom).
-  function visH(n) {
-    if (boxLod >= 2) return n.h;
-    if (n.vh1 === undefined) n.vh1 = n.ch + 8 + Math.min(n.dh, 14 + (lines(n.d.title, 20) > 1 ? 52 : 26) + 4 + 20 + (n.d.cols.length ? 30 : 0) + 8);
-    return boxLod === 0 ? n.ch : n.vh1;
-  }
+  function visH(n) { return n.h; }
   function famBox(f) {
     if (!f || !f.slugs.length) { if (f) f.box = null; return; }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    f.slugs.forEach(s => { const n = nodes.get(s); x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + W); y1 = Math.max(y1, n.y + visH(n)); });
+    f.slugs.forEach(s => { if (s === dragging && f.slugs.length > 1) return; const n = nodes.get(s); x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + W); y1 = Math.max(y1, n.y + visH(n)); });
     f.box = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
   // After a move: leave the family if dropped clear of it, join one if dropped on it.
@@ -601,46 +625,13 @@
   }
 
   // ---------- Timeline (computed) ----------
-  function buildTimeline(x, y, w) {
-    const dated = set.map(it => ({ it, t: Date.parse(it.added_at) })).filter(o => Number.isFinite(o.t));
-    if (dated.length < 3) return null;
-    dated.sort((a, b) => a.t - b.t);
-    const t0 = new Date(dated[0].t); t0.setDate(1); t0.setHours(0, 0, 0, 0);
-    const t1 = new Date(dated[dated.length - 1].t); t1.setMonth(t1.getMonth() + 1, 1); t1.setHours(0, 0, 0, 0);
-    const span = t1 - t0 || 1;
-    const week = 7 * 86400000;
-    const bins = new Map();
-    dated.forEach(o => { const b = Math.floor((o.t - t0) / week); let a = bins.get(b); if (!a) bins.set(b, a = []); a.push(o.it); });
-    const months = [];
-    for (let d = new Date(t0); d <= t1; d.setMonth(d.getMonth() + 1)) months.push({ t: d.getTime(), label: d.toLocaleDateString('en-US', { month: 'short' }) + (d.getMonth() === 0 ? ' ' + d.getFullYear() : '') });
-    // Busiest month band.
-    const perMonth = new Map();
-    dated.forEach(o => { const d = new Date(o.t); const k = d.getFullYear() * 12 + d.getMonth(); perMonth.set(k, (perMonth.get(k) || 0) + 1); });
-    const [bk, bn] = [...perMonth.entries()].sort((a, b) => b[1] - a[1])[0];
-    const bandStart = new Date(Math.floor(bk / 12), bk % 12, 1).getTime();
-    const bandEnd = new Date(Math.floor(bk / 12), bk % 12 + 1, 1).getTime();
-    return { x, y, w, h: 300, t0: t0.getTime(), span, week, bins, months, band: { a: bandStart, b: bandEnd, n: bn }, drift: tasteDrift(dated), count: dated.length };
-  }
-  function tasteDrift(dated) {
-    if (dated.length < 12) return null;
-    const third = Math.floor(dated.length / 3);
-    const top = (arr) => {
-      const c = new Map();
-      arr.forEach(o => tagsOf(o.it, 'style', 0.55).concat(tagsOf(o.it, 'subject', 0.7)).concat(tagsOf(o.it, 'color', 0.4)).forEach(t => { if (!SKIP_SUBJECT.has(t.tag)) c.set(t.tag, (c.get(t.tag) || 0) + 1); }));
-      return c;
-    };
-    const early = top(dated.slice(0, third)), late = top(dated.slice(-third));
-    const lift = (a, b) => [...a.entries()].map(([t, n]) => [t, n - (b.get(t) || 0)]).sort((x, y) => y[1] - x[1]).filter(([, d]) => d > 1).slice(0, 3).map(([t]) => t);
-    const e = lift(early, late), l = lift(late, early);
-    if (!e.length && !l.length) return null;
-    return `Early saves lean ${e.length ? e.join(', ') : 'mixed'}. Recent saves lean ${l.length ? l.join(', ') : 'mixed'}.`;
-  }
 
   // ---------- Build DOM ----------
   const IC = {
     caret: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>',
     open: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
     x: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    info: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h9"/></svg>',
     link: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h7v10h9"/></svg>',
   };
   function build() {
@@ -720,7 +711,7 @@
        <p class="lc-menu-note">Double-click empty canvas to add a question, note or set. Select an item to mark it or connect it.</p>`;
   }
 
-  // ---------- Static world layer: group titles, empty spots, ghosts, notes, timeline ----------
+  // ---------- Static world layer: group titles, empty spots, ghosts, notes ----------
   function renderStatic() {
     let h = '';
     clusters.forEach(cl => {
@@ -738,35 +729,9 @@
           <div class="lc-ghost-act"><button type="button" data-accept="${esc(g.slug)}">Accept</button><button type="button" data-dismiss="${esc(g.slug)}">Dismiss</button></div></div>`;
       }
     });
-    if (timeline) h += timelineHTML(timeline);
     els.static.innerHTML = h + '<div class="lc-notes"></div>';
     els.notes = els.static.querySelector('.lc-notes');
     renderNotes();
-  }
-  function timelineHTML(T) {
-    const X = (t) => T.x + ((t - T.t0) / T.span) * T.w;
-    const base = T.y + 230;
-    let h = `<div class="lc-time" data-ins-part="time" style="transform:translate(${T.x}px,${T.y}px);width:${T.w}px">
-      <h3>Save timeline</h3><p>When each item on this canvas was saved · ${T.count} items</p></div>`;
-    h += `<div class="lc-time-band" data-ins-part="time" style="transform:translate(${X(T.band.a)}px,${T.y + 70}px);width:${Math.max(40, X(T.band.b) - X(T.band.a))}px;height:${160}px"><span>${T.band.n} saved this month, the most</span></div>`;
-    h += `<div class="lc-time-axis" data-ins-part="time" style="transform:translate(${T.x}px,${base}px);width:${T.w}px"></div>`;
-    T.months.forEach(m => { h += `<div class="lc-time-month" data-ins-part="time" style="transform:translate(${X(m.t)}px,${base + 10}px)">${esc(m.label)}</div>`; });
-    const big = T.count > 160;
-    T.bins.forEach((items, b) => {
-      const x = X(T.t0 + b * T.week + T.week / 2);
-      if (big) {
-        const hh = Math.min(150, 6 + items.length * 3);
-        const col = clusters[nodes.get(items[0].slug) ? nodes.get(items[0].slug).cl : 0];
-        h += `<div class="lc-time-bar" data-ins-part="time" data-week="${b}" title="${items.length} saved" style="transform:translate(${x - 5}px,${base - hh}px);height:${hh}px;background:${col ? col.color : 'var(--text-dim)'}"></div>`;
-      } else {
-        items.slice(0, 8).forEach((it, i) => {
-          const n = nodes.get(it.slug); const col = n ? clusters[n.cl].color : 'var(--text-dim)';
-          h += `<div class="lc-time-pill" data-ins-part="time" data-slug="${esc(it.slug)}" style="transform:translate(${x}px,${base - 22 - i * 22}px);background:${col}">${esc((it.domain || it.title || '').replace(/^www\./, ''))}</div>`;
-        });
-      }
-    });
-    if (T.drift) h += `<div class="lc-drift" data-ins-part="time" style="transform:translate(${T.x + T.w * 0.42}px,${T.y + 60}px)"><span>Taste drift</span>${esc(T.drift)}</div>`;
-    return h;
   }
   function renderNotes() {
     if (!els.notes) return;
@@ -789,26 +754,38 @@
   }
 
   // ---------- Cards ----------
+  // A card is its cover. The details card opens from the info button beside
+  // the source pill, floating over what is below (no reflow).
   function cardEl(n) {
-    const it = n.item, d = n.d;
+    const it = n.item;
     const el = document.createElement('div');
     el.className = 'lc-card';
     el.dataset.slug = n.slug;
-    const sw = d.cols.map(c => `<span class="lc-sw"><i style="background:${App.colorHex ? App.colorHex(c) : App.dominantColor(it)}"></i>${esc(c)}</span>`).join('');
-    const rows = d.rows.map(([k, v]) => `<div class="lc-row"><dt>${k}</dt><dd class="${lines(v, 30) > 1 ? 'l2' : ''}">${esc(v)}</dd></div>`).join('');
     const dom = (it.domain || '').replace(/^www\./, '');
+    const noImg = !it.has_image;
     el.innerHTML = `
-      <div class="lc-cover" style="height:${n.ch}px">${App.thumbHTML(it)}${dom ? `<span class="lc-dom">${esc(dom)}</span>` : ''}</div>
-      <div class="lc-det" style="height:${n.dh}px">
-        <div class="lc-title${lines(d.title, 26) > 1 ? ' l2' : ''}">${esc(d.title)}</div>
-        <div class="lc-meta${lines(d.meta, 38) > 1 ? ' l2' : ''}">${esc(d.meta)}</div>
-        ${sw ? `<div class="lc-sws">${sw}</div>` : ''}
-        <dl class="lc-rows">${rows}</dl>
-        ${d.note ? `<div class="lc-quote">“${esc(d.note)}”</div>` : ''}
-      </div>`;
-    el.style.transform = `translate(${n.x}px,${n.y}px)`;
+      <div class="lc-cover" style="height:${n.ch}px">${App.thumbHTML(it)}${noImg ? `<span class="lc-name">${esc(it.title || dom)}</span>` : ''}
+        <span class="lc-pills">${dom ? `<span class="lc-dom">${esc(dom)}</span>` : ''}<button type="button" class="lc-info" data-info aria-label="Details" title="Details">${IC.info}</button></span></div>`;
+    el.style.transform = `translate(${n.x}px,${n.y}px)`; el._x = n.x; el._y = n.y;
+    if (openDet.has(n.slug)) toggleDet(el, n, true);
     decorate(el, n);
     return el;
+  }
+  function detHTML(n) {
+    const d = n.d;
+    const sw = d.cols.map(c => `<span class="lc-sw"><i style="background:${App.colorHex ? App.colorHex(c) : App.dominantColor(n.item)}"></i>${esc(c)}</span>`).join('');
+    const rows = d.rows.map(([k, v]) => `<div class="lc-row"><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
+    return `<div class="lc-title">${esc(d.title)}</div><div class="lc-meta">${esc(d.meta)}</div>
+      ${sw ? `<div class="lc-sws">${sw}</div>` : ''}<dl class="lc-rows">${rows}</dl>
+      ${d.note ? `<div class="lc-quote">“${esc(d.note)}”</div>` : ''}`;
+  }
+  function toggleDet(el, n, on) {
+    let det = el.querySelector('.lc-det');
+    if (on == null) on = !det;
+    if (on && !det) { det = document.createElement('div'); det.className = 'lc-det'; det.innerHTML = detHTML(n); el.appendChild(det); }
+    if (!on && det) det.remove();
+    el.classList.toggle('has-det', on);
+    if (on) openDet.add(n.slug); else openDet.delete(n.slug);
   }
   // Marks and revisit state on a card (cheap; re-run when they change).
   function decorate(el, n) {
@@ -857,34 +834,42 @@
     if (mode !== 'canvas') return;
     const t0 = window.__lcPerf ? performance.now() : 0;
     if (dirtyLayout) layout();
-    const r = els.stage.getBoundingClientRect();
+    const r = stageRect();
     const k = view.k, lod = lodFor(k);
     els.world.style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${k})`;
-    els.root.style.setProperty('--inv', String(1 / k));
-    els.root.style.setProperty('--title-scale', String(Math.max(1, 0.55 / k)));
-    els.zoom.querySelector('.lc-zoom-pct').textContent = Math.round(k * 100) + '%';
-    Object.keys(INSIGHTS).forEach(p => els.root.classList.toggle('hide-' + p, !layers.ins[p]));
+    // Counter-scaled titles: only touch the variable when it changes enough to see.
+    const ts = Math.max(1, 0.55 / k);
+    if (Math.abs(ts / (render.ts || 1) - 1) > 0.03 || (ts === 1) !== (render.ts === 1)) { render.ts = ts; els.root.style.setProperty('--title-scale', ts.toFixed(3)); }
+    const pct = Math.round(k * 100) + '%';
+    if (render.pct !== pct) { render.pct = pct; els.zoom.querySelector('.lc-zoom-pct').textContent = pct; }
+    if (schedule.full) Object.keys(INSIGHTS).forEach(p => els.root.classList.toggle('hide-' + p, !layers.ins[p]));
 
     // Cards in view (plus a margin), DOM only when zoomed in enough.
     const m = 300 / k;
     const x0 = (-view.x) / k - m, y0 = (-view.y) / k - m, x1 = (r.width - view.x) / k + m, y1 = (r.height - view.y) / k + m;
     // Far out, a small set still gets real cards; a big one is drawn as blocks.
     let vis = inRect(x0, y0, x1, y1);
-    let blocks = lod === 0 && vis.length > 260;
+    let blocks = vis.length > DOM_CAP;
     if (blocks) vis = [];
     els.stage.dataset.lod = blocks ? 0 : Math.max(1, lod);
     const bl = blocks ? 0 : Math.max(1, lod);
     if (bl !== boxLod) { boxLod = bl; families.forEach(famBox); }
     const want = new Set(vis);
-    rendered.forEach((el, s) => { if (!want.has(s)) { el.remove(); rendered.delete(s); } });
+    // Moving: keep what is there, add a few new cards per frame. Still: tidy up.
+    if (!moving || blocks || rendered.size > DOM_CAP * 1.5) rendered.forEach((el, s) => { if (!want.has(s)) { el.remove(); rendered.delete(s); } });
     const frag = document.createDocumentFragment();
-    vis.forEach(s => {
+    let made = 0, more = false;
+    let added = false;
+    for (const s of vis) {
       let el = rendered.get(s);
       const n = nodes.get(s);
-      if (!el) { el = cardEl(n); rendered.set(s, el); frag.appendChild(el); }
-      else el.style.transform = `translate(${n.x}px,${n.y}px)`;
-    });
+      if (!el) {
+        if (moving && made >= 24) { more = true; continue; }
+        el = cardEl(n); rendered.set(s, el); frag.appendChild(el); made++; added = true;
+      } else if (el._x !== n.x || el._y !== n.y) { el.style.transform = `translate(${n.x}px,${n.y}px)`; el._x = n.x; el._y = n.y; }
+    }
     if (frag.childNodes.length) els.cards.appendChild(frag);
+    if (more) schedule();
 
     if (schedule.full) {
       linkCount = new Map();
@@ -892,23 +877,32 @@
       rendered.forEach((el, s) => decorate(el, nodes.get(s)));
     }
     // Focus: the selected (or hovered) item or note and what it links to.
-    const focus = dragging || sel || selNote || (!blocks ? hover : null);
+    const focus = dragging || sel || selNote || hover;
     const nearSet = new Set(near.map(x => x.b));
     lastBlocks = blocks;
     const linked = sel ? focusSet(sel) : null;
-    rendered.forEach((el, s) => {
-      el.classList.toggle('is-selected', s === sel);
-      el.classList.toggle('is-dim', !!(linked && !linked.has(s)));
-      el.classList.toggle('is-target', !!(connect && s !== connect.from));
-      el.classList.toggle('is-near', nearSet.has(s));
-    });
+    const stateKey = [sel, connect && connect.from, near.map(x => x.b).join(), linked ? linked.size : 0].join('|');
+    if (added || schedule.full || stateKey !== render.stateKey) {
+      render.stateKey = stateKey;
+      rendered.forEach((el, s) => {
+        el.classList.toggle('is-selected', s === sel);
+        el.classList.toggle('is-dim', !!(linked && !linked.has(s)));
+        el.classList.toggle('is-target', !!(connect && s !== connect.from));
+        el.classList.toggle('is-near', nearSet.has(s));
+      });
+    }
     els.root.classList.toggle('has-focus', !!linked);
     els.root.classList.toggle('is-connecting', !!(connect || pinFor));
     drawInk(r, blocks ? 0 : Math.max(1, lod), vis, focus, linked);
-    if (hover && !rendered.has(hover) && !doc.notes.some(n => n.id === hover)) hover = null;
+    if (hover && !blocks && !rendered.has(hover) && !doc.notes.some(n => n.id === hover)) hover = null;
     renderSelbar(r);
     schedule.full = false;
     if (t0) window.__lcPerf.push(performance.now() - t0);
+  }
+  let stageBox = null;
+  function stageRect() {
+    if (!stageBox) { const b = els.stage.getBoundingClientRect(); stageBox = { left: b.left, top: b.top, width: b.width, height: b.height }; }
+    return stageBox;
   }
   function focusSet(slug) {
     const s = new Set([slug]);
@@ -973,6 +967,23 @@
     for (let i = 0; i < pts.length - 1; i++) { const d = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y); if (d > best) { best = d; bi = i; } }
     return { x: (pts[bi].x + pts[bi + 1].x) / 2, y: (pts[bi].y + pts[bi + 1].y) / 2 };
   }
+  const imgCache = new Map();
+  let imgPending = 0;
+  function thumbImg(it) {
+    let im = imgCache.get(it.slug);
+    if (im === undefined) {
+      if (!it.has_image || !it.image_path || imgPending > 32) return null;
+      im = new Image();
+      im.decoding = 'async';
+      imgPending++;
+      im.onload = () => { imgPending--; im._ok = true; schedule(); };
+      im.onerror = () => { imgPending--; imgCache.set(it.slug, null); };
+      im.src = it.image_path;
+      imgCache.set(it.slug, im);
+      if (imgCache.size > 5000) imgCache.delete(imgCache.keys().next().value);
+    }
+    return im && im._ok ? im : null;
+  }
   function drawInk(r, lod, vis, focus, linked) {
     const dpr = window.devicePixelRatio || 1;
     const c = els.ink, ctx = els.ctx;
@@ -986,35 +997,17 @@
     const k = view.k;
     const textCol = theme.text;
 
-    // Far out: every item as a colour block (no DOM).
-    if (lod === 0) {
-      const x0 = -view.x / k, y0 = -view.y / k, x1 = (r.width - view.x) / k, y1 = (r.height - view.y) / k;
-      const cardCol = theme.card;
-      inRect(x0, y0, x1, y1).forEach(s => {
-        const n = nodes.get(s);
-        const dim = linked && !linked.has(s);
-        ctx.globalAlpha = dim ? 0.25 : 1;
-        if (n.block === undefined) n.block = n.item.has_image && (n.item.tags || []).some(t => t.category === 'color') ? App.dominantColor(n.item) : null;
-        ctx.fillStyle = n.block || cardCol;
-        ctx.fillRect(n.x, n.y, W, n.ch);
-        ctx.fillStyle = cardCol;
-        ctx.fillRect(n.x, n.y + n.ch + 8, W, n.dh);
-        if (s === sel) { ctx.globalAlpha = 1; ctx.lineWidth = 6 / k; ctx.strokeStyle = theme.accent; ctx.strokeRect(n.x - 8, n.y - 8, W + 16, n.h + 16); }
-      });
-      ctx.globalAlpha = 1;
-    }
-
     // Family tints and captions (behind everything).
     if (layers.sim.on && k >= 0.05) {
       const vx0 = -view.x / k, vy0 = -view.y / k, vx1 = (r.width - view.x) / k, vy1 = (r.height - view.y) / k;
       const fs = Math.max(15, 12 / k);
-      ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`;
+      ctx.font = `500 ${fs}px Inter, system-ui, sans-serif`;
       ctx.textBaseline = 'alphabetic';
       families.forEach(f => {
         const b = f.box;
         if (!b || f.loose || f.slugs.length < 2) return;
         if (b.x + b.w + FAM_PAD < vx0 || b.x - FAM_PAD > vx1 || b.y + b.h + FAM_PAD < vy0 || b.y - FAM_CAP > vy1) return;
-        const col = f.color || textCol;
+        const col = f.color === 'accent' ? theme.accent : f.color || textCol;
         const dim = linked && !f.slugs.some(s => linked.has(s));
         ctx.globalAlpha = dim ? 0.03 : 0.09;
         ctx.fillStyle = col;
@@ -1033,16 +1026,45 @@
           ctx.globalAlpha = dim ? 0.15 : 0.55;
           ctx.fillStyle = textCol;
           ctx.font = `400 ${fs * 0.86}px Inter, system-ui, sans-serif`;
-          const t2 = `  ${SIM[f.type].label.toLowerCase()} · ${f.slugs.length}`;
+          const t2 = `  ${f.type === 'user' ? 'your group' : SIM[f.type].label.toLowerCase()} · ${f.slugs.length}`;
           if (w1 + ctx.measureText(t2).width <= room) ctx.fillText(t2, tx + fs * 0.9 + w1, ty);
-          ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`;
+          ctx.font = `500 ${fs}px Inter, system-ui, sans-serif`;
         }
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    // Many cards in view: paint them here (cover images on the GPU canvas,
+    // colour blocks when tiny) instead of thousands of DOM nodes.
+    if (lod === 0) {
+      const x0 = -view.x / k, y0 = -view.y / k, x1 = (r.width - view.x) / k, y1 = (r.height - view.y) / k;
+      const cardCol = theme.card;
+      const pics = W * k >= 16;
+      inRect(x0, y0, x1, y1).forEach(s => {
+        const n = nodes.get(s);
+        const dim = linked && !linked.has(s);
+        ctx.globalAlpha = dim ? 0.25 : 1;
+        const im = pics ? thumbImg(n.item) : null;
+        if (im) ctx.drawImage(im, n.x, n.y, W, n.ch);
+        else {
+          if (n.block === undefined) n.block = n.item.has_image && (n.item.tags || []).some(t => t.category === 'color') ? App.dominantColor(n.item) : null;
+          ctx.fillStyle = n.block || cardCol;
+          ctx.fillRect(n.x, n.y, W, n.ch);
+        }
+        if (s === sel || s === hover) { ctx.globalAlpha = 1; ctx.lineWidth = (s === sel ? 3 : 1.5) / k; ctx.strokeStyle = s === sel ? theme.accent : textCol; ctx.strokeRect(n.x - 4 / k, n.y - 4 / k, W + 8 / k, n.h + 8 / k); }
       });
       ctx.globalAlpha = 1;
     }
 
     const labels = [];
     const lw = (px) => px / k;
+    if (suggest) {
+      const b = suggest.box, p = 16;
+      ctx.globalAlpha = 1; ctx.strokeStyle = theme.accent; ctx.lineWidth = lw(2); ctx.setLineDash([lw(6), lw(5)]);
+      ctx.beginPath(); ctx.roundRect(b.x - p, b.y - p, b.w + p * 2, b.h + p * 2, 20); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = 0.06; ctx.fillStyle = theme.accent; ctx.fill(); ctx.globalAlpha = 1;
+      labels.push({ x: b.x + b.w / 2, y: b.y - p - 14 / k, text: (suggest.joining ? 'Drop to add to ' : 'Drop to group · ') + suggest.name, color: theme.accent, cls: 'l2 is-suggest' });
+    }
     const drawLink = (a, b, color, dash, alpha, width, arrow, label, cls) => {
       const e = endpoints(a, b);
       if (!e) return;
@@ -1129,7 +1151,7 @@
   }
   function renderLabels(list) {
     const k = view.k;
-    const r = els.stage.getBoundingClientRect();
+    const r = stageRect();
     let h = '';
     let n = 0;
     const placed = [];
@@ -1143,7 +1165,7 @@
       if (placed.some(p => box.x0 < p.x1 + 4 && box.x1 > p.x0 - 4 && box.y0 < p.y1 + 2 && box.y1 > p.y0 - 2)) continue;
       placed.push(box);
       if (++n > MAX_LABELS) break;
-      const bg = l.color ? `background:${l.color};color:#fff` : '';
+      const bg = l.color ? `background:${l.color};color:${/is-suggest/.test(l.cls) ? 'var(--accent-contrast)' : '#fff'}` : '';
       h += `<span class="lc-label ${l.cls || ''}" style="transform:translate(${sx}px,${sy}px) translate(-50%,-50%);${bg}">${esc(l.text)}</span>`;
     }
     els.labels.innerHTML = h;
@@ -1189,58 +1211,228 @@
   }
 
   // ---------- View ----------
-  function zoomAt(k, sx, sy) {
+  // ---------- Camera ----------
+  // One source of truth: `view`. Gestures write it directly; buttons and keys
+  // tween it in rAF (zoom in log space), so cards, tints and lines move together.
+  const ZOOM_STEPS = [0.02, 0.03, 0.05, 0.08, 0.125, 0.25, 0.5, 1, 2];
+  let tween = null;
+  function viewAt(k, sx, sy, from) {
+    const v = from || view;
     k = Math.max(MIN_K, Math.min(MAX_K, k));
-    const r = els.stage.getBoundingClientRect();
+    const r = stageRect();
     if (sx == null) { sx = r.width / 2; sy = r.height / 2; }
-    const wx = (sx - view.x) / view.k, wy = (sy - view.y) / view.k;
-    view.k = k; view.x = sx - wx * k; view.y = sy - wy * k;
+    const wx = (sx - v.x) / v.k, wy = (sy - v.y) / v.k;
+    return { k, x: sx - wx * k, y: sy - wy * k };
+  }
+  function zoomAt(k, sx, sy, animate) {
+    const base = tween ? tween.to : view;
+    const to = viewAt(k, sx, sy, base);
+    if (animate) return flyTo(to);
+    stopTween();
+    view.k = to.k; view.x = to.x; view.y = to.y;
+    gesture();
     schedule();
   }
-  function fit(animate, box) {
+  function stepZoom(dir, sx, sy) {
+    const k = (tween ? tween.to : view).k;
+    const next = dir > 0 ? ZOOM_STEPS.find(z => z > k * 1.01) || MAX_K : [...ZOOM_STEPS].reverse().find(z => z < k / 1.01) || MIN_K;
+    zoomAt(next, sx, sy, true);
+  }
+  function stopTween() { if (tween) { cancelAnimationFrame(tween.raf); tween = null; } }
+  function flyTo(to, ms) {
+    stopTween();
+    const from = { ...view }, dur = ms || 280, t0 = performance.now();
+    // Interpolate the world point under the screen centre and log(k), so zooms feel even.
+    const r = stageRect();
+    const cx = r.width / 2, cy = r.height / 2;
+    const fw = { x: (cx - from.x) / from.k, y: (cy - from.y) / from.k }, tw = { x: (cx - to.x) / to.k, y: (cy - to.y) / to.k };
+    const lk0 = Math.log(from.k), lk1 = Math.log(to.k);
+    tween = { to };
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - t, 3);
+      const k = Math.exp(lk0 + (lk1 - lk0) * e);
+      const wx = fw.x + (tw.x - fw.x) * e, wy = fw.y + (tw.y - fw.y) * e;
+      view.k = k; view.x = cx - wx * k; view.y = cy - wy * k;
+      if (t >= 1) { view.k = to.k; view.x = to.x; view.y = to.y; tween = null; settle(); render(); return; }
+      gesture(); render();
+      tween.raf = requestAnimationFrame(step);
+    };
+    tween.raf = requestAnimationFrame(step);
+  }
+  // While the camera moves, only transforms and ink update; card swaps and
+  // other DOM work wait until it has been still for a moment.
+  let moving = false, settleT = 0;
+  function gesture() { moving = true; clearTimeout(settleT); settleT = setTimeout(settle, 140); }
+  function settle() { moving = false; schedule(true); }
+  function fitView(box) {
     const b = box || worldBox;
-    const r = els.stage.getBoundingClientRect();
-    if (!r.width || !b) return;
+    const r = stageRect();
+    if (!r.width || !b) return null;
     const padT = 120, padB = 110, padX = 48;
     const k = Math.max(MIN_K, Math.min(1, Math.min((r.width - padX * 2) / b.w, (r.height - padT - padB) / b.h)));
-    view.k = k;
-    view.x = padX + (r.width - padX * 2 - b.w * k) / 2 - b.x * k;
-    view.y = padT + (r.height - padT - padB - b.h * k) / 2 - b.y * k;
-    if (animate) animateWorld();
-    schedule();
+    return { k, x: padX + (r.width - padX * 2 - b.w * k) / 2 - b.x * k, y: padT + (r.height - padT - padB - b.h * k) / 2 - b.y * k };
   }
-  function animateWorld() {
-    els.root.classList.add('is-animating');
-    clearTimeout(animateWorld.t);
-    animateWorld.t = setTimeout(() => { els.root.classList.remove('is-animating'); schedule(); }, 320);
+  function fit(animate, box) {
+    const to = fitView(box); if (!to) return;
+    if (animate) return flyTo(to, 360);
+    stopTween(); view.k = to.k; view.x = to.x; view.y = to.y; schedule(true);
+  }
+  function fitSelection() {
+    const n = sel && nodes.get(sel);
+    if (!n) return fit(true);
+    fit(true, { x: n.x - 200, y: n.y - 200, w: W + 400, h: n.h + 400 });
   }
   function screenToWorld(cx, cy) {
-    const r = els.stage.getBoundingClientRect();
+    const r = stageRect();
     return { x: (cx - r.left - view.x) / view.k, y: (cy - r.top - view.y) / view.k };
   }
   function focusOn(slug) {
     const n = nodes.get(slug); if (!n) return;
-    const r = els.stage.getBoundingClientRect();
+    const r = stageRect();
     const k = Math.max(view.k, 0.75);
-    view.k = k; view.x = r.width / 2 - (n.x + W / 2) * k; view.y = r.height / 2 - (n.y + n.h / 2) * k;
-    animateWorld(); schedule();
+    flyTo({ k, x: r.width / 2 - (n.x + W / 2) * k, y: r.height / 2 - (n.y + n.h / 2) * k });
   }
 
   // ---------- Mode ----------
+  // ---------- Mode: grid <-> canvas, morphing in place ----------
+  // The cards you can see fly from where they are to where they belong (FLIP on
+  // GPU transforms only); everything else cross-fades. No reflow during it.
+  const MORPH_MS = 560, MORPH_MAX = 140;
+  let gridScroll = 0, morphing = false;
+  const mainEl = () => document.querySelector('.main-content');
+  const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function visibleGridCards() {
+    const mc = mainEl(); if (!mc) return [];
+    const vr = mc.getBoundingClientRect();
+    const out = [];
+    for (const el of mc.querySelectorAll('.grid-container .card[data-slug]')) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || r.bottom < vr.top - 40 || r.top > vr.bottom + 40 || r.right < vr.left || r.left > vr.right) continue;
+      out.push({ slug: el.dataset.slug, el, r });
+      if (out.length >= MORPH_MAX) break;
+    }
+    return out;
+  }
+  function overlay() {
+    const o = document.createElement('div');
+    o.className = 'lc-morph';
+    document.body.appendChild(o);
+    return o;
+  }
+  function flyEl(el, from, to, o, fade) {
+    el.style.cssText = `position:absolute;left:0;top:0;margin:0;width:${from.w}px;height:${from.h}px;transform-origin:0 0;will-change:transform,opacity;`;
+    el.classList.add('lc-morph-item');
+    o.appendChild(el);
+    const A = `translate3d(${from.x}px,${from.y}px,0) scale(${from.s || 1},${from.s || 1})`;
+    const B = to ? `translate3d(${to.x}px,${to.y}px,0) scale(${to.w / from.w},${to.h / from.h})` : A;
+    const kf = to ? [{ transform: A }, { transform: B }] : [{ transform: A, opacity: 1 }, { transform: A + ' scale(0.92)', opacity: 0 }];
+    if (fade && to) { kf[0].opacity = 1; kf[1].opacity = 1; }
+    return el.animate(kf, { duration: to ? MORPH_MS : MORPH_MS * 0.5, easing: 'cubic-bezier(.2,.75,.15,1)', fill: 'forwards' });
+  }
   function setMode(m, opts) {
-    mode = m === 'canvas' ? 'canvas' : 'grid';
+    const next = m === 'canvas' ? 'canvas' : 'grid';
+    const animate = !(opts && opts.quiet) && next !== mode && !reduced() && !morphing;
+    if (next === 'canvas') toCanvas(animate, opts); else toGrid(animate);
+  }
+  function applyMode(next) {
+    mode = next;
     localStorage.setItem(VIEW_KEY, mode);
     document.documentElement.classList.toggle('view-canvas', mode === 'canvas');
     els.root.hidden = mode !== 'canvas';
     els.switch.querySelectorAll('button').forEach(b => b.classList.toggle('is-on', b.dataset.view === mode));
-    if (mode === 'canvas') {
-      readTheme();
-      layout();
-      requestAnimationFrame(() => { fit(false); if (!(opts && opts.quiet)) els.stage.focus({ preventScroll: true }); });
-    } else {
-      rendered.forEach(el => el.remove()); rendered.clear();
-      sel = null; connect = null; pinFor = null;
+    stageBox = null;
+  }
+  function toCanvas(animate, opts) {
+    const mc = mainEl();
+    const src = animate ? visibleGridCards() : [];
+    if (mc) gridScroll = mc.scrollTop;
+    applyMode('canvas');
+    readTheme();
+    layout();
+    // Land where you were looking: frame the items that were on screen.
+    let box = null;
+    const inSet = src.filter(x => nodes.has(x.slug));
+    if (inSet.length) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      inSet.forEach(x => { const n = nodes.get(x.slug); x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + W); y1 = Math.max(y1, n.y + n.h); });
+      box = { x: x0 - 80, y: y0 - 120, w: x1 - x0 + 160, h: y1 - y0 + 200 };
     }
+    fit(false, box || undefined);
+    render();
+    if (!(opts && opts.quiet)) els.stage.focus({ preventScroll: true });
+    if (!animate || !inSet.length) return;
+    morphing = true;
+    const o = overlay();
+    const sr = stageRect();
+    const k = view.k;
+    const anims = [];
+    const hidden = [];
+    src.forEach(x => {
+      const n = nodes.get(x.slug);
+      const clone = x.el.cloneNode(true);
+      clone.classList.remove('card-active');
+      const from = { x: x.r.left, y: x.r.top, w: x.r.width, h: x.r.height };
+      const target = n ? { x: sr.left + n.x * k + view.x, y: sr.top + n.y * k + view.y, w: W * k, h: n.ch * k } : null;
+      const onScreen = target && target.x < innerWidth && target.y < innerHeight && target.x + target.w > 0 && target.y + target.h > 0;
+      anims.push(flyEl(clone, from, onScreen ? target : null, o));
+      const el = n && rendered.get(x.slug);
+      if (el && onScreen) { el.style.visibility = 'hidden'; hidden.push(el); }
+    });
+    // Everything new on the canvas fades in under the flying cards.
+    const fadeIn = els.root.animate([{ opacity: 0 }, { opacity: 1 }], { duration: MORPH_MS * 0.7, easing: 'ease-out' });
+    Promise.all(anims.map(a => a.finished.catch(() => {}))).then(() => {
+      hidden.forEach(el => { el.style.visibility = ''; });
+      o.remove(); fadeIn.cancel(); morphing = false; schedule(true);
+    });
+  }
+  function toGrid(animate) {
+    const sr = stageRect();
+    const k = view.k;
+    const src = [];
+    if (animate && mode === 'canvas') {
+      rendered.forEach((el, slug) => {
+        if (src.length >= MORPH_MAX) return;
+        const n = nodes.get(slug);
+        const x = sr.left + n.x * k + view.x, y = sr.top + n.y * k + view.y, w = W * k, h = n.ch * k;
+        if (x > innerWidth || y > innerHeight || x + w < 0 || y + h < 0) return;
+        src.push({ slug, el, from: { x, y, w: W, h: n.ch, s: k } });
+      });
+    }
+    const clones = src.map(x => { const c = x.el.cloneNode(true); c.classList.remove('is-selected', 'is-dim', 'is-near', 'has-det'); c.querySelectorAll('.lc-det').forEach(d => d.remove()); return { ...x, c }; });
+    applyMode('grid');
+    rendered.forEach(el => el.remove()); rendered.clear();
+    sel = null; connect = null; pinFor = null; stopTween();
+    const mc = mainEl();
+    if (mc) mc.scrollTop = gridScroll;
+    if (!clones.length) return;
+    morphing = true;
+    const o = overlay();
+    const anims = [], hidden = [];
+    clones.forEach(x => {
+      const g = mc && mc.querySelector(`.grid-container .card[data-slug="${CSS.escape(x.slug)}"]`);
+      const r = g && g.getBoundingClientRect();
+      const ok = r && r.width && r.bottom > 0 && r.top < innerHeight;
+      const from = x.from;   // world size (W x ch), drawn at scale k
+      const to = ok ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+      anims.push(flyCanvas(x.c, from, to, o));
+      if (ok) { g.style.visibility = 'hidden'; hidden.push(g); }
+    });
+    const grid = mc && mc.querySelector('.grid-container');
+    const fadeIn = grid && grid.animate([{ opacity: 0 }, { opacity: 1 }], { duration: MORPH_MS * 0.7, easing: 'ease-out' });
+    Promise.all(anims.map(a => a.finished.catch(() => {}))).then(() => {
+      hidden.forEach(el => { el.style.visibility = ''; });
+      o.remove(); if (fadeIn) fadeIn.cancel(); morphing = false;
+    });
+  }
+  // A canvas card at world size (W x ch) scaled by k, flying to a grid rect.
+  function flyCanvas(el, from, to, o) {
+    el.style.cssText = `position:absolute;left:0;top:0;width:${from.w}px;height:${from.h}px;transform-origin:0 0;will-change:transform,opacity;`;
+    el.classList.add('lc-morph-item');
+    o.appendChild(el);
+    const A = `translate3d(${from.x}px,${from.y}px,0) scale(${from.s})`;
+    const kf = to ? [{ transform: A }, { transform: `translate3d(${to.x}px,${to.y}px,0) scale(${to.w / from.w},${to.h / from.h})` }]
+      : [{ transform: A, opacity: 1 }, { transform: A, opacity: 0 }];
+    return el.animate(kf, { duration: to ? MORPH_MS : MORPH_MS * 0.5, easing: 'cubic-bezier(.2,.75,.15,1)', fill: 'forwards' });
   }
 
   // ---------- Actions ----------
@@ -1312,11 +1504,10 @@
     });
     els.zoom.addEventListener('click', (e) => {
       const b = e.target.closest('[data-z]'); if (!b) return;
-      if (b.dataset.z === 'in') zoomAt(view.k * 1.3);
-      else if (b.dataset.z === 'out') zoomAt(view.k / 1.3);
-      else if (b.dataset.z === 'reset') zoomAt(1);
+      if (b.dataset.z === 'in') stepZoom(1);
+      else if (b.dataset.z === 'out') stepZoom(-1);
+      else if (b.dataset.z === 'reset') zoomAt(1, null, null, true);
       else fit(true);
-      animateWorld();
     });
     // Menus
     els.controls.addEventListener('click', (e) => {
@@ -1410,13 +1601,33 @@
     });
 
     // Wheel: pinch or ⌘/Ctrl-scroll zooms at the pointer; plain scroll pans.
+    // Figma rules: two-finger scroll pans, pinch (ctrlKey on Chrome/Firefox,
+    // gesture events on Safari) or ⌘/Ctrl + wheel zooms at the pointer.
     els.stage.addEventListener('wheel', (e) => {
-      if (e.target.closest('.lc-note-text')) return;
+      if (e.target.closest('.lc-note-text, .lc-det')) return;
       e.preventDefault();
-      const r = els.stage.getBoundingClientRect();
-      if (e.ctrlKey || e.metaKey) zoomAt(view.k * Math.exp(-e.deltaY * 0.01), e.clientX - r.left, e.clientY - r.top);
-      else { view.x -= e.deltaX; view.y -= e.deltaY; schedule(); }
+      const r = stageRect();
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? r.height : 1;
+      let dx = e.deltaX * unit, dy = e.deltaY * unit;
+      if (e.ctrlKey || e.metaKey) {
+        // Trackpad pinch sends small fractional deltas; a mouse wheel sends big steps.
+        const d = Math.max(-60, Math.min(60, dy));
+        zoomAt(view.k * Math.exp(-d * (e.ctrlKey && Math.abs(dy) < 50 ? 0.012 : 0.006)), e.clientX - r.left, e.clientY - r.top);
+      } else {
+        if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+        stopTween();
+        view.x -= dx; view.y -= dy; gesture(); schedule();
+      }
     }, { passive: false });
+    // Safari trackpad pinch.
+    let gk = null;
+    els.stage.addEventListener('gesturestart', (e) => { e.preventDefault(); gk = view.k; }, { passive: false });
+    els.stage.addEventListener('gesturechange', (e) => {
+      e.preventDefault(); if (gk == null) return;
+      const r = stageRect();
+      zoomAt(gk * e.scale, e.clientX - r.left, e.clientY - r.top);
+    }, { passive: false });
+    els.stage.addEventListener('gestureend', (e) => { e.preventDefault(); gk = null; }, { passive: false });
 
     // Touch pinch
     const touches = new Map();
@@ -1428,28 +1639,39 @@
       if (touches.size !== 2) return;
       const [a, b] = [...touches.values()];
       const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-      const r = els.stage.getBoundingClientRect();
+      const r = stageRect();
       const cx = (a.clientX + b.clientX) / 2 - r.left, cy = (a.clientY + b.clientY) / 2 - r.top;
-      if (!pinch) pinch = { d, k: view.k }; else zoomAt(pinch.k * d / pinch.d, cx, cy);
+      if (!pinch) pinch = { d, k: view.k, cx, cy, x: view.x, y: view.y };
+      else {
+        const k = Math.max(MIN_K, Math.min(MAX_K, pinch.k * d / pinch.d));
+        const wx = (pinch.cx - pinch.x) / pinch.k, wy = (pinch.cy - pinch.y) / pinch.k;
+        view.k = k; view.x = cx - wx * k; view.y = cy - wy * k; gesture(); schedule();
+      }
     });
     window.addEventListener('pointerup', (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch = null; });
 
+    els.stage.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-info]'); if (!b) return;
+      e.stopPropagation();
+      const el = b.closest('.lc-card'); const n = el && nodes.get(el.dataset.slug);
+      if (n) toggleDet(el, n);
+    });
     els.stage.addEventListener('pointerdown', onDown);
     els.stage.addEventListener('pointermove', (e) => {
       if (e.buttons) return;
-      const c = e.target.closest('.lc-card');
+      const cs = moving ? hover : hitSlug(e);
       const nt = e.target.closest('.lc-note');
       const g = e.target.closest('.lc-ghost');
-      const s = c ? c.dataset.slug : nt ? nt.dataset.note : null;
+      const s = cs || (nt ? nt.dataset.note : null);
       const gs = g ? g.dataset.ghost : null;
       if (s !== hover || gs !== hoverGhost) { hover = s; hoverGhost = gs; schedule(); }
     });
     els.stage.addEventListener('pointerleave', () => { if (hover) { hover = null; schedule(); } });
     els.stage.addEventListener('dblclick', (e) => {
-      const card = e.target.closest('.lc-card');
-      if (card) { App.openItem(card.dataset.slug); return; }
+      const hs = hitSlug(e);
+      if (hs) { App.openItem(hs); return; }
       if (e.target.closest('.lc-note, .lc-ghost, .lc-selbar, input')) return;
-      const r = els.stage.getBoundingClientRect();
+      const r = stageRect();
       els.create._at = screenToWorld(e.clientX, e.clientY);
       els.create.hidden = false;
       els.create.style.transform = `translate(${e.clientX - r.left}px,${e.clientY - r.top}px)`;
@@ -1463,10 +1685,12 @@
       if (e.code === 'Space') { spaceDown = true; els.stage.classList.add('is-hand'); if (e.target === els.stage || e.target === document.body) e.preventDefault(); return; }
       let handled = true;
       if ((e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey)) undo();
-      else if ((e.key === '+' || e.key === '=') && !e.metaKey && !e.ctrlKey) { zoomAt(view.k * 1.3); animateWorld(); }
-      else if ((e.key === '-' || e.key === '_') && !e.metaKey && !e.ctrlKey) { zoomAt(view.k / 1.3); animateWorld(); }
-      else if (e.key === '0' && !e.metaKey && !e.ctrlKey) { zoomAt(1); animateWorld(); }
-      else if (e.key === '!' || (e.key === '1' && e.shiftKey)) fit(true);
+      else if (e.key === '+' || e.key === '=') stepZoom(1);
+      else if (e.key === '-' || e.key === '_') stepZoom(-1);
+      else if (e.key === '0' || e.key === ')' || e.code === 'Digit0') zoomAt(1, null, null, true);
+      else if (e.code === 'Digit1' && e.shiftKey) fit(true);
+      else if (e.code === 'Digit2' && e.shiftKey) fitSelection();
+      else if (e.key.startsWith('Arrow') && !sel) { const d = e.shiftKey ? 400 : 80; flyTo({ ...view, x: view.x + (e.key === 'ArrowLeft' ? d : e.key === 'ArrowRight' ? -d : 0), y: view.y + (e.key === 'ArrowUp' ? d : e.key === 'ArrowDown' ? -d : 0) }, 160); }
       else if (e.key === 'Escape') { sel = null; selNote = null; connect = null; pinFor = null; els.create.hidden = true; renderNotes(); schedule(true); }
       else if (e.key === 'Enter' && sel) App.openItem(sel);
       else if ((e.key === 'Backspace' || e.key === 'Delete') && selNote) {
@@ -1477,7 +1701,8 @@
       if (handled) { e.preventDefault(); e.stopImmediatePropagation(); }
     }, true);
     window.addEventListener('keyup', (e) => { if (e.code === 'Space') { spaceDown = false; els.stage.classList.remove('is-hand'); } });
-    new ResizeObserver(() => schedule()).observe(els.stage);
+    new ResizeObserver(() => { stageBox = null; schedule(); }).observe(els.stage);
+    window.addEventListener('resize', () => { stageBox = null; });
     new MutationObserver(() => { readTheme(); schedule(true); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-accent'] });
 
     // The grid re-rendered (search, filters, new saves): follow it.
@@ -1492,11 +1717,22 @@
     });
   }
 
+  // A card under the pointer: its element, or (when cards are painted on the
+  // canvas because too many are in view) the node under that point.
+  function hitSlug(e) {
+    const c = e.target.closest && e.target.closest('.lc-card');
+    if (c) return c.dataset.slug;
+    if (!lastBlocks || !e.target.closest('.lc-stage') || e.target.closest('.lc-note, .lc-ghost, .lc-selbar')) return null;
+    const w = screenToWorld(e.clientX, e.clientY);
+    const hit = inRect(w.x - 1, w.y - 1, w.x + 1, w.y + 1);
+    return hit.length ? hit[hit.length - 1] : null;
+  }
   function onDown(e) {
     if (e.pointerType === 'touch' && !e.isPrimary) return;
     if (e.target.closest('input, button, a, [contenteditable="true"], .lc-selbar, .lc-create')) return;
     const sx = e.clientX, sy = e.clientY;
-    const card = e.target.closest('.lc-card');
+    const cardSlug = hitSlug(e);
+    const card = cardSlug ? { dataset: { slug: cardSlug } } : null;
     const note = e.target.closest('.lc-note');
 
     // Picking a spot on an image for a region note.
@@ -1574,21 +1810,70 @@
         if (!moved) { moved = true; snap = JSON.stringify(doc); els.root.classList.add('is-moving'); sel = s; dragging = s; }
         n.x = Math.round(ox + (ev.clientX - sx) / view.k); n.y = Math.round(oy + (ev.clientY - sy) / view.k);
         near = nearOf(n);
+        suggest = suggestOf(n);
         if (families[n.fam]) famBox(families[n.fam]);
         schedule();
       }, () => {
         els.root.classList.remove('is-moving');
         dragging = null; near = [];
+        const sug = suggest; suggest = null;
         if (moved) {
           undoStack.push(snap);
           const c = cardRecMake(s); c.x = n.x; c.y = n.y; c.by = doc.groupBy;
-          refamily(n);
+          if (sug) acceptSuggest(n, sug); else refamily(n);
           saveDoc(); rebuildHash();
         } else sel = sel === s ? null : s;
         renderNotes();
         schedule(true);
       });
     }
+  }
+  // Dragged close to another item (or a family): offer a group, shown as a
+  // dotted rectangle around what would be grouped. Dropping accepts it.
+  const SNAP_GAP = 56;
+  function suggestOf(n) {
+    let best = null;
+    inRect(n.x - SNAP_GAP, n.y - SNAP_GAP, n.x + W + SNAP_GAP, n.y + n.h + SNAP_GAP).forEach(b => {
+      if (b === n.slug) return;
+      const m = nodes.get(b);
+      const gx = Math.max(0, Math.max(m.x - (n.x + W), n.x - (m.x + W)));
+      const gy = Math.max(0, Math.max(m.y - (n.y + n.h), n.y - (m.y + m.h)));
+      const g = Math.hypot(gx, gy);
+      if (g <= SNAP_GAP && (!best || g < best.g)) best = { b, g, m };
+    });
+    if (!best) return null;
+    const fam = families[best.m.fam];
+    const same = fam && !fam.loose && best.m.fam === n.fam;
+    if (same) return null;
+    const members = fam && !fam.loose ? fam.slugs.filter(x => x !== n.slug) : [best.b];
+    const all = [...members, n.slug];
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    all.forEach(x => { const q = nodes.get(x); x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x + W); y1 = Math.max(y1, q.y + q.h); });
+    let name = fam && !fam.loose ? cap(fam.tag) : null;
+    if (!name) { const sh = similarityScore(n.item, best.m.item).shared; name = sh[0] ? cap(sh[0]) : 'New group'; }
+    return { slugs: all, box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, name, fam: fam && !fam.loose ? best.m.fam : -1, with: best.b, joining: !!(fam && !fam.loose) };
+  }
+  function acceptSuggest(n, sg) {
+    const cur = families[n.fam];
+    if (cur) { cur.slugs = cur.slugs.filter(x => x !== n.slug); famBox(cur); }
+    let f = families[sg.fam];
+    if (f) {
+      // Joining a family: it becomes one of your groups, named as it was.
+      let g = f.gid && doc.groups.find(x => x.id === f.gid);
+      if (!g) { g = { id: uid(), name: sg.name, slugs: [...f.slugs] }; doc.groups.push(g); f.gid = g.id; f.type = 'user'; f.color = 'accent'; f.tag = sg.name; }
+      if (!g.slugs.includes(n.slug)) g.slugs.push(n.slug);
+      f.slugs.push(n.slug); n.fam = sg.fam;
+    } else {
+      const other = nodes.get(sg.with), of = families[other.fam];
+      if (of) { of.slugs = of.slugs.filter(x => x !== sg.with); famBox(of); }
+      const g = { id: uid(), name: sg.name, slugs: [sg.with, n.slug] };
+      doc.groups.push(g);
+      families.push({ cl: other.cl, tag: sg.name, type: 'user', color: 'accent', gid: g.id, slugs: [sg.with, n.slug], box: null });
+      n.fam = other.fam = families.length - 1;
+      f = families[n.fam];
+    }
+    famBox(f);
+    App.toast(sg.joining ? `Added to ${sg.name}` : `Grouped as ${sg.name}`);
   }
   // While dragging: related items within reach, nearer ones first.
   function nearOf(n) {
@@ -1625,7 +1910,7 @@
     setMode(start, { quiet: true });
     pullDoc();
     window.addEventListener('focus', () => { if (!dirty && !pushing) pullDoc(); });
-    window.StelloCanvas = { setMode, focusOn, centerOn: (sx, sy, k) => { const w = screenToWorld(sx, sy); const r = els.stage.getBoundingClientRect(); view.k = k; view.x = r.width / 2 - w.x * k; view.y = r.height / 2 - w.y * k; schedule(); }, fit: () => fit(true), get view() { return view; }, zoomAt, select: (s) => { sel = s; schedule(true); } };
+    window.StelloCanvas = { setMode, focusOn, centerOn: (sx, sy, k) => { const w = screenToWorld(sx, sy); const r = stageRect(); view.k = k; view.x = r.width / 2 - w.x * k; view.y = r.height / 2 - w.y * k; schedule(); }, fit: () => fit(true), get view() { return view; }, zoomAt, stepZoom, flyTo, select: (s) => { sel = s; schedule(true); } };
   }
   if (window.StelloApp) init();
   else document.addEventListener('stello:ready', init, { once: true });

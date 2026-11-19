@@ -197,12 +197,12 @@ html.arriving-from-login .header {
   border-radius: var(--pill-radius);
   background: var(--accent);
   color: var(--accent-contrast);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s;
 }
 .active-filter-pill:hover { opacity: 0.85; }
-.active-filter-pill .x { font-weight: 700; }
+.active-filter-pill .x { font-weight: 500; }
 
 .clear-filters-btn {
   background: transparent;
@@ -1044,7 +1044,7 @@ html.arriving-from-login .header {
   align-items: center;
   justify-content: center;
   font-size: 3rem;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--placeholder-text);
   border-radius: 4px;
 }
@@ -1104,7 +1104,7 @@ html.arriving-from-login .header {
 
 .card-expanded-title {
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text);
   line-height: 1.35;
 }
@@ -1140,7 +1140,7 @@ html.arriving-from-login .header {
   font-size: 0.85rem;
   color: var(--text);
   margin: 12px 0 4px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .card-expanded-md h3 {
   font-size: 0.82rem;
@@ -1672,7 +1672,7 @@ html.arriving-from-login .header {
 }
 .panel-snippet-candidate .plus {
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 500;
   flex-shrink: 0;
 }
 .panel-snippet-add {
@@ -2063,7 +2063,7 @@ html.arriving-from-login .header {
   border-radius: 8px;
   padding: 0 18px;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s;
   flex-shrink: 0;
@@ -2234,7 +2234,7 @@ html.arriving-from-login .header {
   line-height: 1.5;
 }
 .update-title {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text);
   margin-bottom: 4px;
 }
@@ -2371,7 +2371,7 @@ body.just-logged-in #masonry-grid .masonry-section .card {
 .sub-card-title {
   margin: 0;
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-secondary);
@@ -2382,7 +2382,7 @@ body.just-logged-in #masonry-grid .masonry-section .card {
 .sub-header-title {
   margin: 0;
   font-size: 1.25rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.25;
   color: var(--text);
   overflow-wrap: anywhere;
@@ -2391,7 +2391,7 @@ body.just-logged-in #masonry-grid .masonry-section .card {
 .sub-badge {
   align-self: flex-start;
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 500;
   padding: 3px 8px;
   border-radius: 999px;
   background: var(--accent-subtle);
@@ -2406,12 +2406,12 @@ body.just-logged-in #masonry-grid .masonry-section .card {
   white-space: pre-line;
 }
 .sub-extra-text { color: var(--text-secondary); }
-.sub-ai-label { font-size: 0.68rem; font-weight: 600; color: var(--text-secondary); }
+.sub-ai-label { font-size: 0.68rem; font-weight: 500; color: var(--text-secondary); }
 
 /* Facts */
 .sub-facts { margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .sub-fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sub-fact dt { font-size: 0.68rem; font-weight: 600; color: var(--text-secondary); }
+.sub-fact dt { font-size: 0.68rem; font-weight: 500; color: var(--text-secondary); }
 .sub-fact dd {
   margin: 0;
   font-size: 0.9rem;
@@ -2497,7 +2497,7 @@ button.sub-ref:hover { border-color: var(--accent); }
   color: var(--accent-contrast);
   font: inherit;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 .sub-enrich:hover { background: var(--accent-hover); }
@@ -2511,7 +2511,7 @@ button.sub-ref:hover { border-color: var(--accent); }
 .sub-notes > :first-child { margin-top: 0; }
 .sub-notes > :last-child { margin-bottom: 0; }
 .sub-faqs { display: flex; flex-direction: column; gap: 8px; }
-.sub-faqs summary { cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--text); }
+.sub-faqs summary { cursor: pointer; font-size: 0.9rem; font-weight: 500; color: var(--text); }
 .sub-faqs p { margin: 4px 0 0; font-size: 0.9rem; color: var(--text-secondary); }
 .sub-tracks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .sub-tracks li { display: flex; justify-content: space-between; gap: 8px; font-size: 0.9rem; color: var(--text); }
@@ -2539,7 +2539,7 @@ button.sub-ref:hover { border-color: var(--accent); }
   border: 0; border-radius: 999px;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  font: inherit; font-size: 0.68rem; font-weight: 600;
+  font: inherit; font-size: 0.68rem; font-weight: 500;
   cursor: pointer;
 }
 .sub-set-cover svg { width: 12px; height: 12px; }
@@ -2571,7 +2571,7 @@ button.sub-ref:hover { border-color: var(--accent); }
 .sub-add-tile svg { width: 16px; height: 16px; }
 .sub-add-tile:hover { color: var(--text); }
 .sub-notes h1, .sub-notes h2, .sub-notes h3, .sub-notes h4 {
-  font-size: 0.9rem; font-weight: 600; color: var(--text); margin: 0.6em 0 0.2em;
+  font-size: 0.9rem; font-weight: 500; color: var(--text); margin: 0.6em 0 0.2em;
 }
 
 /* === CARD CONTEXT MENU — the Mac card's right-click menu === */
@@ -2699,7 +2699,7 @@ button.sub-ref:hover { border-color: var(--accent); }
   background: rgba(0, 0, 0, 0.45);
   color: #fff;
   font-size: 0.62rem;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 .card-badge svg { width: 10px; height: 10px; }
@@ -2801,7 +2801,7 @@ button.sub-ref:hover { border-color: var(--accent); }
   background: rgba(0, 0, 0, 0.38);
   color: #fff;
   font-size: 26px;
-  font-weight: 600;
+  font-weight: 500;
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -2828,7 +2828,7 @@ button.sub-ref:hover { border-color: var(--accent); }
 }
 .profile-fields input:hover { border-color: var(--border); }
 .profile-fields input:focus { outline: none; border-color: var(--accent); background: var(--bg); }
-.profile-fields .profile-name { font-size: 17px; font-weight: 600; }
+.profile-fields .profile-name { font-size: 17px; font-weight: 500; }
 .profile-fields .profile-designation { font-size: 13px; color: var(--text-secondary); }
 .profile-fields input::placeholder { color: var(--text-dim); }
 .bar-btn-avatar.has-photo { overflow: hidden; }
@@ -2871,6 +2871,9 @@ button.sub-ref:hover { border-color: var(--accent); }
   cursor: pointer;
 }
 .offline-refresh:hover { border-color: var(--text); }
+
+/* No bold titles anywhere (Arjun, Nov 19 2026): headings default to medium. */
+h1, h2, h3, h4, h5, h6, th, summary, dt { font-weight: 500; }
 
 /* === CANVAS VIEW ===
    The library as nodes on a zoomable canvas (canvas.js). Same items as the
@@ -2956,7 +2959,6 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 .lc.is-connecting .lc-stage { cursor: crosshair; }
 .lc-ink { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 0; }
 .lc-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; z-index: 1; }
-.lc.is-animating .lc-world { transition: transform 0.3s cubic-bezier(.2, .8, .2, 1); }
 .lc-static, .lc-cards, .lc-notes { position: absolute; left: 0; top: 0; }
 .lc-notes { z-index: 3; }
 .lc-labels { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
@@ -2964,7 +2966,7 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 /* Group titles: counter-scaled so they stay readable far out. */
 .lc-group { position: absolute; left: 0; top: 0; transform-origin: 0 100%; pointer-events: none; }
 .lc-group h3 {
-  font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--text);
+  font-size: 34px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.1; color: var(--text);
   display: flex; align-items: center; gap: 12px; white-space: nowrap;
   transform: scale(var(--title-scale, 1)); transform-origin: 0 100%;
   max-width: calc(100% / var(--title-scale, 1)); overflow: hidden; text-overflow: ellipsis;
@@ -2982,18 +2984,34 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 }
 .lc-cover img, .lc-cover .card-thumb { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 .lc-cover .card-glyph-tile, .lc-cover > div { width: 100%; height: 100%; min-height: 0; }
-.lc-dom {
+.lc-pills {
   position: absolute; right: 8px; bottom: 8px; max-width: calc(100% - 16px);
-  font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 11px;
+  display: flex; align-items: center; gap: 4px; transform-origin: 100% 100%;
+}
+.lc-dom {
+  min-width: 0; font-size: 12px; font-weight: 500; height: 22px; line-height: 22px; padding: 0 9px; border-radius: 11px;
   background: rgba(20, 20, 18, 0.78); color: #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.lc-det {
-  margin-top: 8px; border-radius: 12px; background: var(--bg-secondary); border: 1px solid var(--border);
-  padding: 14px 14px 0; overflow: hidden; box-sizing: border-box;
+.lc-info {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 11px; border: 0; padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(20, 20, 18, 0.78); color: #eee;
 }
-.lc-title { font-size: 16px; font-weight: 500; line-height: 20px; height: 20px; overflow: hidden; color: var(--text); }
+.lc-info:hover, .lc-card.has-det .lc-info { background: var(--accent); color: var(--accent-contrast); }
+.lc-stage[data-lod="1"] .lc-pills { transform: scale(1.5); }
+.lc-name {
+  position: absolute; left: 12px; top: 12px; right: 12px; font-size: 14px; line-height: 18px; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.lc-card.has-det { z-index: 5; }
+.lc-det {
+  position: absolute; left: 0; top: calc(100% + 8px); width: 100%;
+  border-radius: 12px; background: var(--bg-secondary); border: 1px solid var(--border);
+  padding: 14px 14px 8px; box-sizing: border-box; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+.lc-title { font-size: 16px; font-weight: 500; line-height: 20px; color: var(--text); }
 .lc-title.l2 { height: 40px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.lc-meta { font-size: 12px; line-height: 16px; height: 16px; color: var(--text-dim); margin-top: 4px; overflow: hidden; }
+.lc-meta { font-size: 12px; line-height: 16px; color: var(--text-dim); margin-top: 4px; overflow: hidden; }
 .lc-meta.l2 { height: 32px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .lc-sws { display: flex; gap: 10px; height: 26px; align-items: center; overflow: hidden; font-size: 12px; color: var(--text-secondary); }
 .lc-sw { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -3001,17 +3019,10 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 .lc-rows { margin: 6px 0 0; }
 .lc-row { display: flex; gap: 8px; margin-bottom: 6px; }
 .lc-row dt { flex: 0 0 76px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); line-height: 15px; }
-.lc-row dd { margin: 0; flex: 1; font-size: 12px; line-height: 15px; height: 15px; overflow: hidden; color: var(--text-secondary); }
+.lc-row dd { margin: 0; flex: 1; font-size: 12px; line-height: 15px; color: var(--text-secondary); }
 .lc-row dd.l2 { height: 30px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .lc-quote { margin-top: 8px; font-size: 12px; line-height: 15px; font-style: italic; color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 /* Mid zoom: title, meta and colours only (the box keeps its size). */
-.lc-stage[data-lod="1"] .lc-rows,
-.lc-stage[data-lod="1"] .lc-quote { display: none; }
-.lc-stage[data-lod="1"] .lc-det { background: transparent; border-color: transparent; padding-left: 2px; padding-right: 2px; }
-.lc-stage[data-lod="1"] .lc-meta { font-size: 15px; line-height: 20px; height: 20px; }
-.lc-stage[data-lod="1"] .lc-sws { height: 30px; }
-.lc-stage[data-lod="1"] .lc-title { font-size: 22px; line-height: 26px; height: auto; }
-.lc-stage[data-lod="1"] .lc-dom { transform: scale(1.4); transform-origin: 100% 100%; }
 
 .lc-card.is-selected .lc-cover { outline: 3px solid var(--accent); outline-offset: 3px; }
 .lc-card.is-selected .lc-det { border-color: var(--accent); }
@@ -3084,21 +3095,6 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 .lc-ghost-act button[data-accept] { background: var(--text); color: var(--bg); border-color: var(--text); }
 
 /* Timeline */
-.lc-time { position: absolute; left: 0; top: 0; pointer-events: none; }
-.lc-time h3 { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); transform: scale(var(--title-scale, 1)); transform-origin: 0 100%; }
-.lc-time p { font-size: 15px; color: var(--text-dim); margin-top: 6px; }
-.lc-time-band {
-  position: absolute; left: 0; top: 0; border-radius: 10px; background: color-mix(in srgb, var(--accent) 14%, transparent);
-  pointer-events: none;
-}
-.lc-time-band span { position: absolute; left: 10px; top: 10px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
-.lc-time-axis { position: absolute; left: 0; top: 0; height: 2px; background: var(--border-light); }
-.lc-time-month { position: absolute; left: 0; top: 0; font-size: 13px; color: var(--text-dim); transform-origin: 0 0; white-space: nowrap; }
-.lc-time-bar { position: absolute; left: 0; top: 0; width: 10px; border-radius: 3px 3px 0 0; opacity: 0.85; }
-.lc-time-pill {
-  position: absolute; left: 0; top: 0; translate: -50% 0; font-size: 11px; color: #fff; padding: 3px 8px;
-  border-radius: 9px; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis;
-}
 .lc-drift {
   position: absolute; left: 0; top: 0; width: 320px; padding: 14px 16px; border-radius: 12px;
   background: var(--bg-secondary); border: 1px solid var(--border); font-size: 14px; line-height: 1.45; color: var(--text-secondary);
@@ -3120,7 +3116,7 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 .lc-note.is-note, .lc-note.is-region { background: #fff4e0; color: #4a3200; border: 1.5px solid #f0a23a; width: 200px; }
 .lc-note.is-region .lc-note-text, .lc-note.is-note .lc-note-text { font-size: 13px; font-weight: 400; }
 .lc-note.is-set { background: var(--bg-secondary); color: var(--text); border: 1.5px solid var(--text-dim); }
-.lc-note.is-set .lc-note-text { font-size: 18px; font-weight: 600; }
+.lc-note.is-set .lc-note-text { font-size: 18px; font-weight: 500; }
 
 /* Selection bar, hint, create menu, link label field */
 .lc-selbar {
@@ -3209,8 +3205,14 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 /* Progressive disclosure: your-link count on a card, near items while dragging. */
 .lc-links {
   position: absolute; left: 8px; top: 8px; height: 22px; padding: 0 8px 0 6px; border-radius: 11px;
-  display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500;
   background: rgba(20, 20, 18, 0.78); color: #fff;
 }
 .lc-stage[data-lod="1"] .lc-links { transform: scale(1.4); transform-origin: 0 0; }
 .lc-card.is-near .lc-cover { outline: 2px solid color-mix(in srgb, var(--accent) 80%, transparent); outline-offset: 3px; }
+
+/* Grid <-> canvas morph: clones fly on their own GPU layer above both views. */
+.lc-morph { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; }
+.lc-morph-item { backface-visibility: hidden; }
+.lc-morph-item .card-visual-area { height: 100%; }
+.lc-morph-item .lc-pills, .lc-morph-item .lc-links, .lc-morph-item .lc-mark, .lc-morph-item .lc-visit { display: none; }
