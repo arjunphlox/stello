@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  /* Figma's own theme variables (themeColors: true) with fallbacks. */
+  :root {
+    --bg: var(--figma-color-bg, #fff);
+    --bg2: var(--figma-color-bg-secondary, #f5f5f5);
+    --text: var(--figma-color-text, #1a1a1a);
+    --dim: var(--figma-color-text-secondary, #6f6f6f);
+    --faint: var(--figma-color-text-tertiary, #9a9a9a);
+    --border: var(--figma-color-border, #e6e6e6);
+    --accent: var(--figma-color-bg-brand, #0d99ff);
+    --on-accent: var(--figma-color-text-onbrand, #fff);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 12px/1.4 Inter, system-ui, sans-serif; color: var(--text); background: var(--bg); display: flex; flex-direction: column; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .hidden { display: none !important; }
+
+  /* Connect */
+  .connect { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 24px; }
+  .connect h1 { font-size: 15px; margin: 0; }
+  .connect p { margin: 0; color: var(--dim); }
+  .code { font: 600 24px/1 ui-monospace, Menlo, monospace; letter-spacing: 2px; }
+  .btn { border: 1px solid var(--border); background: transparent; border-radius: 6px; padding: 6px 10px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .link { background: none; border: 0; padding: 0; color: var(--dim); text-decoration: underline; }
+  .field { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; background: var(--bg); color: var(--text); font: inherit; }
+
+  /* Main */
+  .top { padding: 10px 10px 6px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .search { display: flex; gap: 6px; align-items: center; }
+  .kinds { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .kinds::-webkit-scrollbar { display: none; }
+  .chip { border: 1px solid var(--border); background: transparent; border-radius: 999px; padding: 2px 8px; white-space: nowrap; color: var(--dim); }
+  .chip.on { background: var(--text); border-color: var(--text); color: var(--bg); }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: 26px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px; z-index: 5; min-width: 150px; box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+  .menu-list button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 4px; }
+  .menu-list button:hover { background: var(--bg2); }
+
+  .context { padding: 8px 10px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+  .context-head { display: flex; justify-content: space-between; align-items: center; color: var(--dim); }
+  .strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+  .mini { flex: 0 0 96px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg); text-align: left; padding: 0; }
+  .mini img, .mini .ph { width: 96px; height: 64px; object-fit: cover; display: block; background: var(--bg2); }
+  .mini .why { padding: 3px 5px; font-size: 10px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini .t { padding: 0 5px 4px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .results { flex: 1; overflow-y: auto; padding: 10px; display: flex; gap: 8px; align-items: flex-start; }
+  .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .tile { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg); cursor: grab; position: relative; }
+  .tile.sel { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .tile img { width: 100%; display: block; background: var(--bg2); min-height: 40px; }
+  .tile .ph { height: 60px; }
+  .tile .meta { padding: 6px 8px 7px; }
+  .tile .title { font-weight: 600; font-size: 11.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .tile .sub { color: var(--faint); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty { color: var(--dim); padding: 24px 6px; text-align: center; flex: 1; }
+
+  .bar { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .bar .grow { flex: 1; min-width: 0; }
+  .bar select { width: 100%; }
+  .status { color: var(--dim); font-size: 11px; width: 100%; }
+  .status:empty { display: none; }
+  .toggle { display: flex; align-items: center; gap: 4px; color: var(--dim); }
+</style>
+</head>
+<body>
+
+<!-- Connect -->
+<section class="connect" id="connect">
+  <h1>Connect to Stello</h1>
+  <p id="connect-text">Bring your library into Figma and FigJam. You approve the connection in Stello, so no password goes in here.</p>
+  <div class="code hidden" id="pair-code"></div>
+  <div><button class="btn primary" id="connect-btn">Connect</button></div>
+  <button class="link" id="server-toggle">Server</button>
+  <input class="field hidden" id="server" spellcheck="false">
+</section>
+
+<!-- Main -->
+<section class="hidden" id="main" style="display:flex;flex-direction:column;flex:1;min-height:0">
+  <div class="top">
+    <div class="search">
+      <input class="field" id="q" placeholder="Search your library" autocomplete="off" spellcheck="false">
+      <div class="menu">
+        <button class="btn" id="menu-btn" title="More" aria-label="More">⋯</button>
+        <div class="menu-list hidden" id="menu-list">
+          <button id="reload">Refresh library</button>
+          <button id="agent">Connect an AI agent…</button>
+          <button id="signout">Disconnect</button>
+        </div>
+      </div>
+    </div>
+    <div class="kinds" id="kinds"></div>
+  </div>
+
+  <div class="context hidden" id="context">
+    <div class="context-head"><span id="context-title">Related to your selection</span><button class="link hidden" id="place-related">Place all</button></div>
+    <div class="strip" id="strip"></div>
+    <div class="hidden" id="save-row"><button class="btn" id="save-btn">Save selection to Stello</button></div>
+  </div>
+
+  <div class="results" id="results"></div>
+
+  <div class="bar hidden" id="pick-bar">
+    <span class="grow" id="pick-count"></span>
+    <button class="link" id="pick-clear">Clear</button>
+    <button class="btn primary" id="pick-place">Place</button>
+  </div>
+
+  <div class="bar hidden" id="board-bar">
+    <select class="field" id="project" title="The Stello canvas this board syncs with"></select>
+    <button class="btn" id="layout" title="Lay this project out on the board">Lay out</button>
+    <button class="btn primary" id="sync" title="Save this board's groups, links and notes to Stello">Sync to Stello</button>
+    <label class="toggle"><input type="checkbox" id="similar"> Similar lines</label>
+    <div class="status" id="board-status"></div>
+  </div>
+</section>
+
+<script>
+const DEFAULT_SERVER = 'https://stello.arjunphlox.workers.dev';
+const KINDS = [['', 'All'], ['website', 'Website'], ['tool', 'Tool'], ['post', 'Post'], ['product', 'Product'], ['article', 'Article'],
+  ['resource', 'Resource'], ['image', 'Image'], ['course', 'Course'], ['book', 'Book'], ['video', 'Video']];
+const REASON = { same_colour: 'Same colour', same_style: 'Same style', same_idea: 'Same idea', same_kind: 'Same kind', same_place: 'Same place', same_source: 'Same source' };
+
+const state = { server: DEFAULT_SERVER, token: null, editor: 'figma', library: [], bySlug: new Map(), kind: '', picked: new Set(), selection: null, projects: [], project: '', related: [] };
+const $ = (id) => document.getElementById(id);
+
+// ---- main-thread RPC
+let seq = 0;
+const waiting = new Map();
+function call(type, data = {}) {
+  const id = ++seq;
+  parent.postMessage({ pluginMessage: { type, id, ...data } }, '*');
+  return new Promise((resolve, reject) => waiting.set(id, { resolve, reject }));
+}
+window.onmessage = (e) => {
+  const msg = e.data && e.data.pluginMessage;
+  if (!msg) return;
+  if (msg.type === 'reply') {
+    const w = waiting.get(msg.id);
+    if (!w) return;
+    waiting.delete(msg.id);
+    msg.error ? w.reject(new Error(msg.error)) : w.resolve(msg);
+  } else if (msg.type === 'selection') {
+    onSelection(msg.selection);
+  }
+};
+const notify = (text) => call('notify', { text });
+
+// ---- network
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (state.token) headers.Authorization = 'Bearer ' + state.token;
+  if (opts.json !== undefined) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
+  const res = await fetch(state.server + path, { method: opts.method || 'GET', headers, body: opts.body });
+  if (res.status === 401 && state.token) { await signOut(); throw new Error('Signed out. Connect again.'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok && res.status !== 409) throw new Error(data.error || `Stello said ${res.status}`);
+  return { status: res.status, data };
+}
+
+// ---- connect (pairing)
+let pairing = null;
+$('server-toggle').onclick = () => $('server').classList.toggle('hidden');
+$('connect-btn').onclick = async () => {
+  state.server = ($('server').value.trim() || DEFAULT_SERVER).replace(/\/+$/, '');
+  await call('store', { key: 'origin', value: state.server });
+  $('connect-btn').disabled = true;
+  try {
+    const { data } = await api('/api/pair/start', { method: 'POST', json: { label: state.editor === 'figjam' ? 'FigJam plugin' : 'Figma plugin' } });
+    pairing = data;
+    $('pair-code').textContent = data.code;
+    $('pair-code').classList.remove('hidden');
+    $('connect-text').textContent = 'Approve this code in the Stello tab that just opened. If nothing opened, press Open Stello.';
+    $('connect-btn').textContent = 'Open Stello';
+    $('connect-btn').disabled = false;
+    $('connect-btn').onclick = () => call('open', { url: data.url });
+    call('open', { url: data.url });
+    poll();
+  } catch (err) {
+    $('connect-text').textContent = 'Couldn’t reach Stello: ' + err.message;
+    $('connect-btn').disabled = false;
+  }
+};
+async function poll() {
+  const started = Date.now();
+  while (pairing && Date.now() - started < 10 * 60 * 1000) {
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      const res = await fetch(state.server + '/api/pair/poll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: pairing.code, poll: pairing.poll }) });
+      const data = await res.json().catch(() => ({}));
+      if (data.token) {
+        state.token = data.token;
+        pairing = null;
+        await call('store', { key: 'token', value: data.token });
+        notify('Connected to Stello');
+        return start();
+      }
+      if (res.status === 410) break;
+    } catch (_) { /* keep trying */ }
+  }
+  pairing = null;
+  $('connect-text').textContent = 'That code expired. Connect again.';
+  $('pair-code').classList.add('hidden');
+  resetConnect();
+}
+function resetConnect() {
+  $('connect-btn').textContent = 'Connect';
+  $('connect-btn').disabled = false;
+  $('connect-btn').onclick = null;
+  $('connect-btn').addEventListener('click', () => location.reload(), { once: true });
+}
+async function signOut() {
+  state.token = null;
+  await call('store', { key: 'token', value: null });
+  $('main').classList.add('hidden');
+  $('connect').classList.remove('hidden');
+}
+
+// ---- library
+async function loadLibrary() {
+  $('results').innerHTML = '<div class="empty">Loading your library…</div>';
+  const items = [];
+  for (let offset = 0; ; offset += 2000) {
+    const { data } = await api(`/api/library?offset=${offset}&limit=2000`);
+    items.push(...data.items);
+    if (items.length >= data.total || !data.items.length) break;
+  }
+  state.library = items;
+  state.bySlug = new Map(items.map((i) => [i.slug, i]));
+  render();
+}
+
+function words(s) { return String(s || '').toLowerCase().split(/[^a-z0-9À-ɏ#]+/).filter((w) => w.length > 1); }
+function matches() {
+  const q = words($('q').value);
+  const out = [];
+  for (const it of state.library) {
+    if (state.kind && it.kind !== state.kind) continue;
+    if (q.length) {
+      const hay = [it.title, it.domain, it.author, it.place, it.summary, ...it.tags.map((t) => t.tag), ...it.collections, ...it.colours.map((c) => c.name)].join(' ').toLowerCase();
+      if (!q.every((w) => hay.includes(w))) continue;
+    }
+    out.push(it);
+    if (out.length >= 120) break;
+  }
+  return out;
+}
+const thumb = (it) => (it.image ? it.image + (it.image.includes('/img/') ? '?w=1200' : '') : '');
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function render() {
+  const list = matches();
+  const box = $('results');
+  if (!list.length) { box.innerHTML = `<div class="empty">${state.library.length ? 'Nothing matches.' : 'Your library is empty.'}</div>`; return; }
+  // Two-column masonry, like the Stello grid: each tile goes to the shorter column.
+  const cols = [[], []], h = [0, 0];
+  for (const it of list) {
+    const ratio = it.image ? 1 / Math.max(.33, Math.min(3, it.aspect || 1.33)) : .35; // height per unit width
+    const c = h[0] <= h[1] ? 0 : 1;
+    cols[c].push(it); h[c] += ratio + .35;
+  }
+  box.innerHTML = cols.map((col) => `<div class="col">${col.map(tile).join('')}</div>`).join('');
+}
+function tile(it) {
+  return `
+    <div class="tile${state.picked.has(it.slug) ? ' sel' : ''}" draggable="true" data-slug="${esc(it.slug)}" title="${esc(it.title)}">
+      ${it.image ? `<img loading="lazy" src="${esc(thumb(it))}" alt="" style="aspect-ratio:${it.aspect ? Math.max(.33, Math.min(3, it.aspect)) : 'auto'}">` : `<div class="ph" style="background:${esc((it.colours[0] && it.colours[0].hex) || 'var(--bg2)')}"></div>`}
+      <div class="meta"><div class="title">${esc(it.title)}</div><div class="sub">${esc([it.kind, it.domain].filter(Boolean).join(' · '))}</div></div>
+    </div>`;
+}
+
+function itemsFor(slugs) { return slugs.map((s) => state.bySlug.get(s)).filter(Boolean); }
+async function place(slugs, beside = false) {
+  const items = itemsFor(slugs);
+  if (!items.length) return;
+  try { await call('insert', { items, beside }); } catch (err) { notify('Couldn’t place: ' + err.message); }
+}
+
+$('results').addEventListener('click', (e) => {
+  const tile = e.target.closest('.tile');
+  if (!tile) return;
+  const slug = tile.dataset.slug;
+  if (e.shiftKey || e.metaKey || e.ctrlKey || state.picked.size) {
+    state.picked.has(slug) ? state.picked.delete(slug) : state.picked.add(slug);
+    tile.classList.toggle('sel');
+    updatePickBar();
+  } else {
+    place([slug]);
+  }
+});
+$('results').addEventListener('dragstart', (e) => {
+  const tile = e.target.closest('.tile');
+  if (!tile) return;
+  e.dataTransfer.setData('text/plain', tile.dataset.slug);
+});
+$('results').addEventListener('dragend', (e) => {
+  const tile = e.target.closest('.tile');
+  if (!tile) return;
+  // Dropped outside the panel: hand it to the canvas (figma.on('drop')).
+  if (e.clientX >= 0 && e.clientY >= 0 && e.clientX <= window.innerWidth && e.clientY <= window.innerHeight) return;
+  const slugs = state.picked.has(tile.dataset.slug) ? [...state.picked] : [tile.dataset.slug];
+  parent.postMessage({ pluginDrop: { clientX: e.clientX, clientY: e.clientY, items: [], dropMetadata: { stello: true, items: itemsFor(slugs) } } }, '*');
+});
+function updatePickBar() {
+  $('pick-bar').classList.toggle('hidden', !state.picked.size);
+  $('pick-count').textContent = `${state.picked.size} selected`;
+}
+$('pick-clear').onclick = () => { state.picked.clear(); updatePickBar(); render(); };
+$('pick-place').onclick = () => { place([...state.picked]); state.picked.clear(); updatePickBar(); render(); };
+
+let qTimer = null;
+$('q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(render, 120); });
+$('kinds').innerHTML = KINDS.map(([k, label]) => `<button class="chip${k === '' ? ' on' : ''}" data-kind="${k}">${label}</button>`).join('');
+$('kinds').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  state.kind = chip.dataset.kind;
+  [...$('kinds').children].forEach((c) => c.classList.toggle('on', c === chip));
+  render();
+});
+
+// ---- menu
+$('menu-btn').onclick = () => $('menu-list').classList.toggle('hidden');
+document.addEventListener('click', (e) => { if (!e.target.closest('.menu')) $('menu-list').classList.add('hidden'); });
+$('reload').onclick = () => loadLibrary().catch((err) => notify(err.message));
+$('agent').onclick = () => call('open', { url: state.server + '/pair.html?new=1' });
+$('signout').onclick = () => signOut();
+
+// ---- selection → related, or save
+let relTimer = null;
+function onSelection(sel) {
+  state.selection = sel;
+  clearTimeout(relTimer);
+  relTimer = setTimeout(showContext, 200);
+}
+async function showContext() {
+  const sel = state.selection;
+  const ctx = $('context');
+  if (!state.token || !sel || !sel.count) { ctx.classList.add('hidden'); return; }
+  ctx.classList.remove('hidden');
+  $('save-row').classList.toggle('hidden', !sel.exportable);
+  $('save-btn').textContent = sel.exportable > 1 ? `Save ${sel.exportable} frames to Stello` : 'Save selection to Stello';
+  $('strip').innerHTML = '<span style="color:var(--faint)">Looking…</span>';
+  try {
+    let related = [];
+    if (sel.slugs.length) {
+      $('context-title').textContent = 'Related saves';
+      const { data } = await api(`/api/library/related?slug=${encodeURIComponent(sel.slugs[0])}&limit=12`);
+      related = data.related;
+    } else if (sel.text || sel.colours.length) {
+      $('context-title').textContent = 'From your library, for this selection';
+      const { data } = await api('/api/library/match', { method: 'POST', json: { text: sel.text, colours: sel.colours, limit: 12 } });
+      related = data.related;
+    }
+    if (state.selection !== sel) return;
+    state.related = related;
+    $('place-related').classList.toggle('hidden', related.length < 2);
+    $('strip').innerHTML = related.length ? related.map((r) => `
+      <button class="mini" data-slug="${esc(r.item.slug)}" title="${esc(r.item.title)}">
+        ${r.item.image ? `<img loading="lazy" src="${esc(thumb(r.item))}" alt="">` : '<div class="ph"></div>'}
+        <div class="why">${esc(r.reasons[0] ? `${REASON[r.reasons[0].type]} · ${r.reasons[0].value}` : '')}</div>
+        <div class="t">${esc(r.item.title)}</div>
+      </button>`).join('') : '<span style="color:var(--faint)">Nothing close in your library.</span>';
+  } catch (err) {
+    $('strip').innerHTML = `<span style="color:var(--faint)">${esc(err.message)}</span>`;
+  }
+}
+$('strip').addEventListener('click', (e) => {
+  const b = e.target.closest('.mini');
+  if (!b) return;
+  const r = state.related.find((x) => x.item.slug === b.dataset.slug);
+  if (r) { state.bySlug.set(r.item.slug, r.item); place([r.item.slug], true); }
+});
+$('place-related').onclick = () => {
+  state.related.forEach((r) => state.bySlug.set(r.item.slug, r.item));
+  place(state.related.slice(0, 8).map((r) => r.item.slug), true);
+};
+$('save-btn').onclick = async () => {
+  $('save-btn').disabled = true;
+  try {
+    const { files } = await call('export-selection');
+    let saved = 0;
+    for (const f of files) {
+      const qs = new URLSearchParams({ title: f.name.slice(0, 120) });
+      if (f.link) qs.set('source_url', f.link);
+      const res = await fetch(`${state.server}/api/upload-image?${qs}`, {
+        method: 'POST', headers: { Authorization: 'Bearer ' + state.token, 'Content-Type': 'image/png' }, body: f.bytes,
+      });
+      if (res.ok) saved++;
+    }
+    notify(saved ? `Saved ${saved} to Stello` : 'Couldn’t save to Stello');
+    if (saved) loadLibrary().catch(() => {});
+  } catch (err) {
+    notify('Couldn’t save: ' + err.message);
+  } finally {
+    $('save-btn').disabled = false;
+  }
+};
+
+// ---- FigJam Board sync
+function boardStatus(t) { $('board-status').textContent = t || ''; }
+async function loadProjects(selected) {
+  const { data } = await api('/api/projects');
+  state.projects = data.projects;
+  const opts = [['library', 'Library canvas']].concat(data.projects.filter((p) => p.id !== 'library').map((p) => [p.id, p.name || 'Untitled']));
+  opts.push(['__new', 'New project from this board…']);
+  $('project').innerHTML = opts.map(([id, name]) => `<option value="${esc(id)}">${esc(name)}</option>`).join('');
+  $('project').value = opts.some(([id]) => id === selected) ? selected : 'library';
+  state.project = $('project').value;
+}
+$('project').onchange = async () => {
+  state.project = $('project').value;
+  if (state.project !== '__new') await call('set-project', { project: state.project, name: $('project').selectedOptions[0].textContent });
+};
+$('layout').onclick = async () => {
+  if (state.project === '__new') return boardStatus('Pick a project to lay out.');
+  boardStatus('Laying out…');
+  try {
+    const { data } = await api(`/api/projects/${encodeURIComponent(state.project)}`);
+    const p = data.project;
+    const slugs = new Set([...p.doc.cards.map((c) => c.slug), ...p.doc.groups.flatMap((g) => g.slugs)]);
+    const items = {};
+    slugs.forEach((s) => { const it = state.bySlug.get(s); if (it) items[s] = it; });
+    if (!Object.keys(items).length) return boardStatus('That project has no cards yet. Place saves, then Sync to Stello.');
+    const out = await call('push-board', { project: p, items });
+    boardStatus(`Laid out ${out.cards} cards.`);
+  } catch (err) { boardStatus(err.message); }
+};
+$('sync').onclick = async () => {
+  boardStatus('Reading the board…');
+  try {
+    const { board } = await call('read-board');
+    if (!board.cards.length) return boardStatus('No Stello cards on this page yet.');
+    let id = state.project;
+    if (id === '__new') {
+      const { data } = await api('/api/projects', { method: 'POST', json: { doc: { name: board.name } } });
+      id = data.project.id;
+      await loadProjects(id);
+      await call('set-project', { project: id, name: board.name });
+    }
+    const { status, data } = await api(`/api/projects/${encodeURIComponent(id)}/board`, { method: 'POST', json: { board } });
+    if (status === 409) return boardStatus('Someone saved this project just now. Try again.');
+    boardStatus(`Saved to Stello: ${board.cards.length} cards, ${board.groups.length} groups, ${board.links.length} links, ${board.notes.length} notes.`);
+  } catch (err) { boardStatus(err.message); }
+};
+$('similar').onchange = async () => {
+  try {
+    if (!$('similar').checked) { await call('clear-similar'); return boardStatus(''); }
+    boardStatus('Finding similar…');
+    const { slugs } = await call('board-slugs');
+    const { data } = await api('/api/library/links', { method: 'POST', json: { slugs } });
+    const { count } = await call('draw-similar', { links: data.links });
+    boardStatus(count ? `${count} similar lines. They’re a view only and aren’t saved.` : 'No strong similarities on this board.');
+  } catch (err) { boardStatus(err.message); }
+};
+
+// ---- start
+async function start() {
+  $('connect').classList.add('hidden');
+  $('main').classList.remove('hidden');
+  if (state.editor === 'figjam') {
+    $('board-bar').classList.remove('hidden');
+    loadProjects(state.pageProject).catch((err) => boardStatus(err.message));
+  }
+  await loadLibrary().catch((err) => { $('results').innerHTML = `<div class="empty">${esc(err.message)}</div>`; });
+  showContext();
+}
+(async () => {
+  const init = await call('init');
+  state.editor = init.editor;
+  state.server = init.origin || DEFAULT_SERVER;
+  state.pageProject = init.project;
+  state.selection = init.selection;
+  $('server').value = state.server;
+  if (init.token) { state.token = init.token; start(); }
+})();
+</script>
+</body>
+</html>
