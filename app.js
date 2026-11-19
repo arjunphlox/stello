@@ -1028,6 +1028,10 @@
     const mc = document.querySelector('.main-content');
     const sentinel = document.getElementById('grid-sentinel');
     if (!mc || !sentinel) return;
+    // Grid hidden (canvas view): the sentinel sits at the top and would look
+    // "in view" forever, rendering the whole library. Fill only a visible grid.
+    const grid = document.querySelector('.grid-container');
+    if (!grid || grid.offsetParent === null || !grid.getClientRects().length) return;
     let guard = 0;
     while (renderedCount < filteredCache.length && guard++ < 40) {
       const r = sentinel.getBoundingClientRect();
