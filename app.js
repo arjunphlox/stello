@@ -690,60 +690,47 @@
   //   • A and B share a tag in category `format` OR `domain` (category match)
   //   • A and B share ≥ 3 tags with weight ≥ 0.5 (any category)
   // A category match alone isn't enough; tag overlap alone isn't enough.
-  function buildRelatedIndex() {
-    const slugsByFormat = {};
-    const slugsByDomain = {};
-    const slugsByHeavyTag = {};
-
+  // Built lazily: load only makes the inverted maps (linear in tags); each
+  // item's related set is worked out the first time it is asked for. The old
+  // eager pass compared every item with its whole format/domain pool, which
+  // is quadratic and froze the page for seconds on a large library.
+  let relMaps = null;
+  function buildRelatedIndex() { relMaps = null; relatedIndex = {}; }
+  function relMapsGet() {
+    if (relMaps) return relMaps;
+    const fmt = {}, dom = {}, heavy = {};
     allItems.forEach(item => {
       item.tags.forEach(t => {
-        if (t.category === 'format') {
-          (slugsByFormat[t.tag] || (slugsByFormat[t.tag] = [])).push(item.slug);
-        }
-        if (t.category === 'domain') {
-          (slugsByDomain[t.tag] || (slugsByDomain[t.tag] = [])).push(item.slug);
-        }
-        if (t.weight >= 0.5) {
-          const key = t.category + ':' + t.tag;
-          (slugsByHeavyTag[key] || (slugsByHeavyTag[key] = [])).push(item.slug);
-        }
+        if (t.category === 'format') (fmt[t.tag] || (fmt[t.tag] = [])).push(item.slug);
+        if (t.category === 'domain') (dom[t.tag] || (dom[t.tag] = [])).push(item.slug);
+        if (t.weight >= 0.5) { const k = t.category + ':' + t.tag; (heavy[k] || (heavy[k] = [])).push(item.slug); }
       });
     });
-
-    relatedIndex = {};
-    allItems.forEach(item => {
-      // Candidate pool: items sharing the item's format or domain.
+    relMaps = { fmt, dom, heavy, bySlug: new Map(allItems.map(i => [i.slug, i])) };
+    return relMaps;
+  }
+  function relatedOf(slug) {
+    if (relatedIndex[slug]) return relatedIndex[slug];
+    const m = relMapsGet();
+    const item = m.bySlug.get(slug);
+    const related = new Set();
+    if (item) {
       const candidates = new Set();
       item.tags.forEach(t => {
-        if (t.category === 'format') {
-          (slugsByFormat[t.tag] || []).forEach(slug => {
-            if (slug !== item.slug) candidates.add(slug);
-          });
-        }
-        if (t.category === 'domain') {
-          (slugsByDomain[t.tag] || []).forEach(slug => {
-            if (slug !== item.slug) candidates.add(slug);
-          });
-        }
+        const pool = t.category === 'format' ? m.fmt[t.tag] : t.category === 'domain' ? m.dom[t.tag] : null;
+        if (pool) pool.forEach(s => { if (s !== slug) candidates.add(s); });
       });
-
-      // Tag-overlap counts, scoped to the candidate pool.
-      const overlap = {};
+      const overlap = new Map();
       item.tags.forEach(t => {
         if (t.weight < 0.5) return;
-        const key = t.category + ':' + t.tag;
-        (slugsByHeavyTag[key] || []).forEach(slug => {
-          if (slug === item.slug || !candidates.has(slug)) return;
-          overlap[slug] = (overlap[slug] || 0) + 1;
+        (m.heavy[t.category + ':' + t.tag] || []).forEach(s => {
+          if (s !== slug && candidates.has(s)) overlap.set(s, (overlap.get(s) || 0) + 1);
         });
       });
-
-      const related = new Set();
-      for (const [slug, count] of Object.entries(overlap)) {
-        if (count >= 3) related.add(slug);
-      }
-      relatedIndex[item.slug] = related;
-    });
+      overlap.forEach((c, s) => { if (c >= 3) related.add(s); });
+    }
+    relatedIndex[slug] = related;
+    return related;
   }
 
   // --- Stats (inline count) ---
@@ -2406,7 +2393,7 @@
     slugs.forEach(s => {
       if (!s) return;
       next.add(s);
-      (relatedIndex[s] || new Set()).forEach(r => next.add(r));
+      relatedOf(s).forEach(r => next.add(r));
     });
     const prev = new Set();
     $grid.querySelectorAll('.card.card-focused').forEach(c => {

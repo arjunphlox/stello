@@ -470,9 +470,8 @@ html.arriving-from-login .header {
    (iOS Safari's 100vh runs under its toolbar) plus safe-area insets. */
 .bottom-bar {
   position: sticky;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  bottom: var(--gap-bottom);
   margin-top: auto;
-  margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   z-index: 90;
   display: flex;
   align-items: center;
@@ -1201,14 +1200,12 @@ html.arriving-from-login .header {
   .modal-panel { width: 100vw; }
   .content-inner { --gutter: 16px; padding: 16px var(--gutter) 0; }
   .header { top: 16px; }
-  .bottom-bar { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); margin-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
   .masonry-section { gap: 12px; }
   .masonry-col { gap: 12px; }
 }
 @media (max-width: 500px) {
   .content-inner { --gutter: 12px; padding: 12px var(--gutter) 0; }
   .header { top: 12px; }
-  .bottom-bar { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); margin-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* Under 768px, panels become full-screen overlays */
@@ -3127,7 +3124,7 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 /* Selection bar, hint, create menu, link label field */
 .lc-selbar {
   position: absolute; left: 0; top: 0; z-index: 6; display: flex; align-items: center; gap: 2px; padding: 4px;
-  border-radius: 22px; white-space: nowrap;
+  border-radius: 22px; white-space: nowrap; max-width: calc(100% - 24px); overflow-x: auto; scrollbar-width: none;
   background: color-mix(in srgb, var(--bg-secondary) 88%, transparent); border: 1px solid var(--border);
   -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
@@ -3218,36 +3215,66 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 .lc-card.is-near .lc-cover { outline: 2px solid color-mix(in srgb, var(--accent) 80%, transparent); outline-offset: 3px; }
 
 
-/* Safe areas (notch, status bar, home indicator) with viewport-fit=cover:
-   the gutters and the top grow by the inset, so nothing sits under them. */
+/* Safe areas (notch, status bar, home indicator) with viewport-fit=cover.
+   One gap token per side: the gutter (24 / 16 / 12 px), or the device's
+   safe-area inset where that is larger. Never both added together, so the
+   bottom controls sit the same distance from the edge as the header and grid
+   sit from theirs. The top keeps the status bar clear, so it adds both. */
+:root, .content-inner {
+  --gutter: 24px;
+  --gap-top: calc(var(--gutter) + env(safe-area-inset-top, 0px));
+  --gap-left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  --gap-right: max(var(--gutter), env(safe-area-inset-right, 0px));
+  --gap-bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 768px) { :root, .content-inner { --gutter: 16px; } }
+@media (max-width: 500px) { :root, .content-inner { --gutter: 12px; } }
 .content-inner {
-  padding-top: calc(var(--gutter) + env(safe-area-inset-top, 0px));
-  padding-left: calc(var(--gutter) + env(safe-area-inset-left, 0px));
-  padding-right: calc(var(--gutter) + env(safe-area-inset-right, 0px));
+  padding-top: var(--gap-top);
+  padding-left: var(--gap-left);
+  padding-right: var(--gap-right);
+  padding-bottom: var(--gap-bottom);  /* the bar's gap when the list is short */
 }
 .main-layout:has(.panel) .content-inner { padding-right: 12px; }
-.header { top: calc(var(--gutter, 24px) + env(safe-area-inset-top, 0px)); }
+.header { top: var(--gap-top); }
 @media (min-width: 769px) {
-  .lc-controls { top: calc(24px + env(safe-area-inset-top, 0px)); right: calc(24px + env(safe-area-inset-right, 0px)); }
+  .lc-controls { top: var(--gap-top); right: var(--gap-right); }
 }
 /* Canvas view: pin the bar to the bottom edge of the column directly, so it
    never depends on content height (Safari placed it below the fold). */
 html.view-canvas .bottom-bar {
   position: absolute; margin: 0; width: auto;
-  left: calc(var(--gutter) + env(safe-area-inset-left, 0px));
-  right: calc(var(--gutter) + env(safe-area-inset-right, 0px));
-  bottom: calc(var(--gutter) + env(safe-area-inset-bottom, 0px));
+  left: var(--gap-left); right: var(--gap-right); bottom: var(--gap-bottom);
 }
 html.view-canvas .main-layout:has(.panel) .bottom-bar { right: 12px; }
 
 /* === Split view: grid on the left half, canvas on the right === */
-html.view-split .main-content { flex: 0 0 50%; max-width: 50%; }
+/* The canvas is a panel inside the app, like the item panel: inset from the
+   edges by the same gap as the header and grid, rounded, with its own
+   controls and zoom inside it. */
+html.view-split .main-content { flex: 0 0 46%; max-width: 46%; }
+html.view-split .content-inner { padding-right: 12px; }
 html.view-split .main-layout > .lc {
-  position: relative; inset: auto; flex: 1 1 auto; min-width: 0; height: 100%;
-  border-left: 1px solid var(--border);
+  position: relative; inset: auto; flex: 1 1 auto; min-width: 0;
+  margin: var(--gap-top) var(--gap-right) var(--gap-bottom) 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-secondary);
 }
-html.view-split .lc-zoom { display: none; }
-html.view-split .main-layout:has(.panel) .main-content { flex-basis: 36%; max-width: 36%; }
+html.view-split .main-layout > .lc .lc-stage { border-radius: inherit; }
+html.view-split .main-layout:has(.panel) .main-content { flex-basis: 34%; max-width: 34%; }
+html.view-split .main-layout:has(.panel) > .lc { margin-right: 12px; }
+html.view-split .lc-controls { top: 12px; right: 12px; }
+html.view-split .lc > .lc-zoom { display: flex; position: absolute; z-index: 6; right: 12px; bottom: 12px; }
+@media (max-width: 768px) {
+  /* Phones: grid on top, canvas panel below. */
+  html.view-split .main-layout { flex-direction: column; }
+  html.view-split .main-content { flex: 0 0 50%; max-width: none; height: 50%; }
+  html.view-split .content-inner { padding-right: var(--gap-right); }
+  html.view-split .main-layout > .lc { margin: 0 var(--gap-right) var(--gap-bottom) var(--gap-left); }
+  html.view-split .lc > .lc-zoom { display: none !important; }
+  html.view-split .lc-controls { left: 12px; right: 12px; top: 12px; bottom: auto; }
+}
+html.view-split .lc-hint { display: none; }
 .lc-stage.is-drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
 .lc-drag-ghost {
   position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; border-radius: 10px; overflow: hidden;
@@ -3255,7 +3282,9 @@ html.view-split .main-layout:has(.panel) .main-content { flex-basis: 36%; max-wi
 }
 .lc-drag-ghost img, .lc-drag-ghost > div { width: 100%; height: 100%; object-fit: cover; display: block; }
 html.is-dragging-in, html.is-dragging-in * { cursor: grabbing !important; user-select: none; }
-html.view-split .grid-container .card[data-slug] { cursor: grab; }
+html.view-split .grid-container .card[data-slug] { cursor: grab; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+html.view-split .grid-container .card img { -webkit-user-drag: none; }
+.grid-container .card.is-picked { transform: scale(0.96); opacity: 0.6; transition: transform 0.15s, opacity 0.15s; }
 .grid-container .card.on-canvas .card-visual-area::after {
   content: ''; position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%;
   background: var(--accent); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); z-index: 3;
@@ -3280,3 +3309,10 @@ html:not(.view-split):not(.view-canvas) .grid-container .card.on-canvas .card-vi
 
 /* Cards glide when the layout changes (a drop, a remove). */
 .lc.is-relayout .lc-card, .lc-card.is-landing { transition: transform 0.45s cubic-bezier(.2, .8, .2, 1), opacity 0.3s; }
+
+/* Phones: the bar keeps room for search; canvas controls scroll in one row. */
+@media (max-width: 500px) {
+  .view-switch button { padding: 0 6px; min-width: 32px; }
+  html.view-split .lc-controls, html.view-canvas .lc-controls { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; justify-content: flex-start; }
+  html.view-split .lc-controls > * , html.view-canvas .lc-controls > * { flex: 0 0 auto; }
+}

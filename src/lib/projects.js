@@ -89,12 +89,15 @@ export function normalizeDoc(input) {
     if (kind === 'set') out.slugs = [...new Set(arr(n.slugs, LIMITS.cards).filter(slugOk))];
     notes.push(out);
   }
-  return {
+  const out = {
     name: str(d.name, LIMITS.name),
     groupBy: typeof d.groupBy === 'string' ? d.groupBy.slice(0, 40) : null,
     cards, links, groups, notes,
     dismissed: [...new Set(arr(d.dismissed, LIMITS.dismissed).filter(slugOk))],
   };
+  // Doc format version (web canvas: 2 = starts empty, items only by drag-in).
+  if (Number.isInteger(d.v) && d.v > 0 && d.v < 1000) out.v = d.v;
+  return out;
 }
 
 function rowToProject(row) {
