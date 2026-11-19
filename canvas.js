@@ -805,6 +805,15 @@
     dp.className = 'lc-doc';
     dp.innerHTML = `<button type="button" class="lc-doc-name" data-doc="rename" title="Rename this canvas"></button><input class="lc-doc-input" type="text" maxlength="80" aria-label="Canvas name" hidden><button type="button" class="lc-doc-more" data-doc="menu" aria-label="Canvases and export" aria-haspopup="menu">${IC.caret}</button><div class="lc-doc-menu" role="menu" hidden></div>`;
     els.docpill = dp;
+    // Export: its own button beside the name.
+    const ex = document.createElement('div');
+    ex.className = 'lc-exp';
+    ex.innerHTML = `<button type="button" class="lc-exp-btn" data-doc="export" aria-label="Export this canvas" title="Export" aria-haspopup="menu">${App.icon('share')}</button><div class="lc-doc-menu lc-exp-menu" role="menu" hidden></div>`;
+    els.exp = ex;
+    const box = document.createElement('div');
+    box.className = 'lc-docbox';
+    box.append(dp, ex);
+    els.docbox = box;
     renderDocName();
     renderMenus();
   }
@@ -1405,12 +1414,12 @@
     else if (els.root.parentElement !== mc) mc.appendChild(els.root);
     els.root.hidden = mode === 'grid';
     // Zoom sits in the bottom bar in canvas view, inside the canvas panel in split.
-    if (mode === 'split') { if (els.zoom.parentElement !== els.root) els.root.appendChild(els.zoom); if (els.docpill.parentElement !== els.root) els.root.appendChild(els.docpill); }
+    if (mode === 'split') { if (els.zoom.parentElement !== els.root) els.root.appendChild(els.zoom); if (els.docbox.parentElement !== els.root) els.root.appendChild(els.docbox); }
     else {
       if (els.zoom.previousElementSibling !== els.switch) els.switch.after(els.zoom);
       // Canvas view: first in the bottom bar, on the same line as the zoom.
       const bar = document.querySelector('.bottom-bar');
-      if (bar && els.docpill.parentElement !== bar) bar.prepend(els.docpill);
+      if (bar && els.docbox.parentElement !== bar) bar.prepend(els.docbox);
     }
     closeDocMenu();
     els.switch.querySelectorAll('button').forEach(b => b.classList.toggle('is-on', b.dataset.view === mode));
@@ -1503,7 +1512,11 @@
     if (!els.docpill) return;
     els.docpill.querySelector('.lc-doc-name').textContent = doc.name || 'Untitled canvas';
   }
-  function closeDocMenu() { if (els.docpill) { els.docpill.querySelector('.lc-doc-menu').hidden = true; els.docpill.classList.remove('is-open'); } }
+  function closeDocMenu() {
+    if (!els.docpill) return;
+    els.docpill.querySelector('.lc-doc-menu').hidden = true; els.docpill.classList.remove('is-open');
+    els.exp.querySelector('.lc-exp-menu').hidden = true; els.exp.classList.remove('is-open');
+  }
   function startRename() {
     const btn = els.docpill.querySelector('.lc-doc-name'), inp = els.docpill.querySelector('.lc-doc-input');
     closeDocMenu();
@@ -1596,21 +1609,26 @@
   async function openDocMenu() {
     const menu = els.docpill.querySelector('.lc-doc-menu');
     if (!menu.hidden) { closeDocMenu(); return; }
-    const F = (window.StelloCanvasExport && StelloCanvasExport.FORMATS) || {};
+    closeDocMenu();
     const draw = (list) => {
-      menu.innerHTML = `<div class="lc-mi-head lc-doc-status">${esc(doc.name || 'Untitled canvas')}<em>${canSync() ? 'Saved and synced' : 'Saved on this device'}</em></div>
-        <div class="lc-doc-sec">Canvases</div>
+      menu.innerHTML = `<div class="lc-doc-sec">Canvases</div>
         ${list.map(c => `<button type="button" class="lc-mi${c.id === curId ? ' is-on' : ''}" data-open-canvas="${esc(c.id)}" role="menuitemradio" aria-checked="${c.id === curId}">${esc(c.id === curId ? doc.name : c.name)}${c.cards != null ? `<em>${c.cards}</em>` : ''}</button>`).join('')}
         <button type="button" class="lc-mi" data-doc="new">+ New canvas</button>
         <button type="button" class="lc-mi" data-doc="copy">Save as a new canvas</button>
         <button type="button" class="lc-mi" data-doc="rename">Rename</button>
-        ${curId !== 'library' ? '<button type="button" class="lc-mi is-danger" data-doc="delete">Delete this canvas</button>' : ''}
-        <div class="lc-doc-sec">Export</div>
-        ${Object.entries(F).map(([k, v]) => `<button type="button" class="lc-mi" data-export="${k}" role="menuitem">${esc(v.label)}<em>${esc(v.hint)}</em></button>`).join('')}`;
+        ${curId !== 'library' ? '<button type="button" class="lc-mi is-danger" data-doc="delete">Delete this canvas</button>' : ''}`;
     };
     draw(knownCanvases().length ? knownCanvases() : [{ id: curId, name: doc.name }]);
     menu.hidden = false; els.docpill.classList.add('is-open');
     draw(await listCanvases());
+  }
+  function openExpMenu() {
+    const menu = els.exp.querySelector('.lc-exp-menu');
+    if (!menu.hidden) { closeDocMenu(); return; }
+    closeDocMenu();
+    const F = (window.StelloCanvasExport && StelloCanvasExport.FORMATS) || {};
+    menu.innerHTML = `<div class="lc-doc-sec">Export</div>` + Object.entries(F).map(([k, v]) => `<button type="button" class="lc-mi" data-export="${k}" role="menuitem">${esc(v.label)}<em>${esc(v.hint)}</em></button>`).join('');
+    menu.hidden = false; els.exp.classList.add('is-open');
   }
   // The canvas as plain data for the exporters: cards at their spots, groups
   // with their pills, links and notes.
@@ -1655,7 +1673,7 @@
     catch (err) { console.error(err); App.toast('Export failed: ' + (err && err.message || 'unknown error')); }
   }
   function bindDoc() {
-    const dp = els.docpill, inp = dp.querySelector('.lc-doc-input');
+    const dp = els.docbox, inp = dp.querySelector('.lc-doc-input');
     dp.addEventListener('pointerdown', (e) => e.stopPropagation());
     dp.addEventListener('click', (e) => {
       const b = e.target.closest('[data-doc], [data-open-canvas], [data-export]'); if (!b) return;
@@ -1664,6 +1682,7 @@
       const a = b.dataset.doc;
       if (a === 'rename') startRename();
       else if (a === 'menu') openDocMenu();
+      else if (a === 'export') openExpMenu();
       else if (a === 'new') { closeDocMenu(); newCanvas(false); }
       else if (a === 'copy') { closeDocMenu(); newCanvas(true); }
       else if (a === 'delete') {
@@ -1673,7 +1692,7 @@
     });
     inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') endRename(true); if (e.key === 'Escape') endRename(false); });
     inp.addEventListener('blur', () => endRename(true));
-    document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.lc-doc')) closeDocMenu(); }, true);
+    document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.lc-docbox')) closeDocMenu(); }, true);
   }
 
   // ---------- Group pills ----------

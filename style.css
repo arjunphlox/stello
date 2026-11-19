@@ -3355,9 +3355,19 @@ html:not(.view-split):not(.view-canvas) .grid-container .card.on-canvas .card-vi
   border-radius: 999px; background: color-mix(in srgb, var(--bg-secondary) 62%, transparent); border: 1px solid var(--border);
   -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
-html.view-canvas .lc-doc, html.view-split .lc > .lc-doc { display: inline-flex; }
-html.view-split .lc > .lc-doc { position: absolute; z-index: 6; left: 12px; bottom: 12px; max-width: calc(100% - 240px); }
-html.view-canvas .bottom-bar .lc-doc { max-width: 260px; }
+html.view-canvas .lc-docbox, html.view-split .lc > .lc-docbox { display: inline-flex; }
+.lc-docbox { display: none; flex: 0 1 auto; min-width: 0; align-items: center; gap: 8px; }
+.lc-docbox .lc-doc { display: inline-flex; }
+html.view-split .lc > .lc-docbox { position: absolute; z-index: 6; left: 12px; bottom: 12px; max-width: calc(100% - 240px); }
+html.view-canvas .bottom-bar .lc-docbox { max-width: 312px; }
+.lc-exp { position: relative; flex: none; }
+.lc-exp-btn {
+  width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; color: var(--text);
+  border-radius: 999px; background: color-mix(in srgb, var(--bg-secondary) 62%, transparent); border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.lc-exp-btn svg { width: 18px; height: 18px; display: block; }
+.lc-exp-btn:hover, .lc-exp.is-open .lc-exp-btn { background: color-mix(in srgb, var(--card-hover) 80%, transparent); }
 .lc-doc-name, .lc-doc-more {
   height: 36px; border: 0; border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
 }
@@ -3380,14 +3390,12 @@ html.view-canvas .bottom-bar .lc-doc { max-width: 260px; }
 .lc-doc-menu .lc-mi { justify-content: space-between; }
 .lc-doc-menu .lc-mi em { font-style: normal; color: var(--text-dim); font-size: 12px; white-space: nowrap; }
 .lc-doc-menu .lc-mi.is-danger { color: #e5484d; }
-.lc-doc-status { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; font-size: 14px; color: var(--text); }
-.lc-doc-status em { font-style: normal; font-size: 12px; color: var(--text-dim); }
 .lc-doc-sec { padding: 10px 10px 4px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
-@media (max-width: 500px) { html.view-canvas .bottom-bar .lc-doc { max-width: 120px; } }
+@media (max-width: 500px) { html.view-canvas .bottom-bar .lc-docbox { max-width: 172px; } }
 /* Phones in canvas view: the canvas name takes the room of the grid's add and filter buttons. */
 @media (max-width: 500px) {
   html.view-canvas #import-btn, html.view-canvas #filter-panel-btn { display: none; }
-  html.view-canvas .bottom-bar .lc-doc { flex: 1 1 auto; max-width: none; }
+  html.view-canvas .bottom-bar .lc-docbox { flex: 1 1 auto; max-width: none; }
   html.view-canvas .bottom-bar .bar-search { flex: 0 0 44px; }
 }
 
@@ -3430,3 +3438,8 @@ html.is-carrying, html.is-carrying * { user-select: none; -webkit-user-select: n
   .grid-container .card[data-slug] { -webkit-touch-callout: none; }
 }
 html.is-carrying .header { visibility: hidden; }
+@media (max-width: 500px) {
+  .lc-atoast { width: calc(100vw - 2 * var(--gap-left, 12px)); }
+  .lc-atoast > span { flex: 1 1 auto; }
+  .lc-atoast button { padding: 0 12px; }
+}
