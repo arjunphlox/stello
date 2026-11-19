@@ -69,6 +69,7 @@ body {
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -364,6 +365,7 @@ html.arriving-from-login .header {
   align-items: stretch;
   width: 100%;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 .main-content {
@@ -464,11 +466,13 @@ html.arriving-from-login .header {
    Add · Filters · Search · Profile. Sticky to the bottom of the grid
    column, so it never covers the side panel. Translucent blur stands in
    for the native Liquid Glass material. */
+/* Inside the visible viewport on every device: dvh for the layout height
+   (iOS Safari's 100vh runs under its toolbar) plus safe-area insets. */
 .bottom-bar {
   position: sticky;
-  bottom: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   margin-top: auto;
-  margin-bottom: 24px;
+  margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   z-index: 90;
   display: flex;
   align-items: center;
@@ -1197,14 +1201,14 @@ html.arriving-from-login .header {
   .modal-panel { width: 100vw; }
   .content-inner { --gutter: 16px; padding: 16px var(--gutter) 0; }
   .header { top: 16px; }
-  .bottom-bar { bottom: 16px; margin-bottom: 16px; }
+  .bottom-bar { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); margin-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
   .masonry-section { gap: 12px; }
   .masonry-col { gap: 12px; }
 }
 @media (max-width: 500px) {
   .content-inner { --gutter: 12px; padding: 12px var(--gutter) 0; }
   .header { top: 12px; }
-  .bottom-bar { bottom: 12px; margin-bottom: 12px; }
+  .bottom-bar { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); margin-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* Under 768px, panels become full-screen overlays */
@@ -1215,6 +1219,7 @@ html.arriving-from-login .header {
     z-index: 900;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     background: var(--bg);
   }
   .panel { width: 100vw !important; }
@@ -1967,6 +1972,7 @@ html.arriving-from-login .header {
 .login-layout {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 24px;
 }
 .login-header {
@@ -3198,7 +3204,7 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 .lc-menu-note { font-size: 11px; color: var(--text-dim); padding: 6px 10px 4px; line-height: 1.4; margin: 0; }
 
 @media (max-width: 768px) {
-  .lc-controls { top: auto; bottom: 84px; right: 12px; left: 12px; flex-wrap: wrap; }
+  .lc-controls { top: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); right: 12px; left: 12px; flex-wrap: wrap; }
   .lc-zoom { display: none !important; }
 }
 
@@ -3216,3 +3222,25 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 .lc-morph-item { backface-visibility: hidden; }
 .lc-morph-item .card-visual-area { height: 100%; }
 .lc-morph-item .lc-pills, .lc-morph-item .lc-links, .lc-morph-item .lc-mark, .lc-morph-item .lc-visit { display: none; }
+
+/* Safe areas (notch, status bar, home indicator) with viewport-fit=cover:
+   the gutters and the top grow by the inset, so nothing sits under them. */
+.content-inner {
+  padding-top: calc(var(--gutter) + env(safe-area-inset-top, 0px));
+  padding-left: calc(var(--gutter) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--gutter) + env(safe-area-inset-right, 0px));
+}
+.main-layout:has(.panel) .content-inner { padding-right: 12px; }
+.header { top: calc(var(--gutter, 24px) + env(safe-area-inset-top, 0px)); }
+@media (min-width: 769px) {
+  .lc-controls { top: calc(24px + env(safe-area-inset-top, 0px)); right: calc(24px + env(safe-area-inset-right, 0px)); }
+}
+/* Canvas view: pin the bar to the bottom edge of the column directly, so it
+   never depends on content height (Safari placed it below the fold). */
+html.view-canvas .bottom-bar {
+  position: absolute; margin: 0; width: auto;
+  left: calc(var(--gutter) + env(safe-area-inset-left, 0px));
+  right: calc(var(--gutter) + env(safe-area-inset-right, 0px));
+  bottom: calc(var(--gutter) + env(safe-area-inset-bottom, 0px));
+}
+html.view-canvas .main-layout:has(.panel) .bottom-bar { right: 12px; }

@@ -4,6 +4,7 @@
 
 | Task | Tool | Platform | Model | Status |
 |---|---|---|---|---|
+| **iOS bottom bar inside the safe area** — the bottom controls sit below the visible edge on iPhone and the controls are a little too big (Arjun, Nov 19 2026). Inset them from the bottom and side edges with clear gaps and shrink them slightly. The web fix shipped with PR #92: dvh + safe-area insets | Claude Code | iOS | Sonnet | Open |
 | **Desktop-context e2e smoke** — run the plan's end-to-end checklist: drop 3 PNGs + `.md` into `~/Downloads/Stello Watcher`, Sketch dwell 60s, Safari tabs (incl. blocklisted), then `await stelloDesktop.fetchRelated(10)` from localhost DevTools; verify ranking + blocklist. See `desktop-context/README.md` | Cursor | Desktop | Sonnet | Open |
 | **Visual card variants** — visually distinguish cards by content type (typefaces, products, articles, tools) using `domain` tag; subtle border/accent/icon differences per type | Claude Code | Desktop | Opus | Open |
 | **Add new item from app** — URL input in UI, local Python server to fetch metadata + analyze + save to `_items/`; needs `scripts/serve.py` with Flask | Claude Code | Desktop | Opus | Open |
