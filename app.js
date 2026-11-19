@@ -958,7 +958,8 @@
     const padL = parseFloat(cs.paddingLeft) || 0;
     const maxW = parseFloat(cs.maxWidth);
     const sb = mc ? (mc.offsetWidth - mc.clientWidth) : 0;
-    const base = window.innerWidth - sb;
+    // Split view: the grid owns only its half of the window.
+    const base = document.documentElement.classList.contains('view-split') && mc ? mc.clientWidth - sb : window.innerWidth - sb;
     const innerW = Math.min(base, Number.isFinite(maxW) ? maxW : Infinity);
     return Math.max(0, innerW - 2 * padL);
   }

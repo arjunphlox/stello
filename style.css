@@ -3217,11 +3217,6 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 .lc-stage[data-lod="1"] .lc-links { transform: scale(1.4); transform-origin: 0 0; }
 .lc-card.is-near .lc-cover { outline: 2px solid color-mix(in srgb, var(--accent) 80%, transparent); outline-offset: 3px; }
 
-/* Grid <-> canvas morph: clones fly on their own GPU layer above both views. */
-.lc-morph { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; }
-.lc-morph-item { backface-visibility: hidden; }
-.lc-morph-item .card-visual-area { height: 100%; }
-.lc-morph-item .lc-pills, .lc-morph-item .lc-links, .lc-morph-item .lc-mark, .lc-morph-item .lc-visit { display: none; }
 
 /* Safe areas (notch, status bar, home indicator) with viewport-fit=cover:
    the gutters and the top grow by the inset, so nothing sits under them. */
@@ -3244,3 +3239,44 @@ html.view-canvas .bottom-bar {
   bottom: calc(var(--gutter) + env(safe-area-inset-bottom, 0px));
 }
 html.view-canvas .main-layout:has(.panel) .bottom-bar { right: 12px; }
+
+/* === Split view: grid on the left half, canvas on the right === */
+html.view-split .main-content { flex: 0 0 50%; max-width: 50%; }
+html.view-split .main-layout > .lc {
+  position: relative; inset: auto; flex: 1 1 auto; min-width: 0; height: 100%;
+  border-left: 1px solid var(--border);
+}
+html.view-split .lc-zoom { display: none; }
+html.view-split .main-layout:has(.panel) .main-content { flex-basis: 36%; max-width: 36%; }
+.lc-stage.is-drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
+.lc-drag-ghost {
+  position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; border-radius: 10px; overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); opacity: 0.92; background: var(--card-bg);
+}
+.lc-drag-ghost img, .lc-drag-ghost > div { width: 100%; height: 100%; object-fit: cover; display: block; }
+html.is-dragging-in, html.is-dragging-in * { cursor: grabbing !important; user-select: none; }
+html.view-split .grid-container .card[data-slug] { cursor: grab; }
+.grid-container .card.on-canvas .card-visual-area::after {
+  content: ''; position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); z-index: 3;
+}
+html:not(.view-split):not(.view-canvas) .grid-container .card.on-canvas .card-visual-area::after { display: none; }
+
+/* Empty canvas */
+.lc-empty-state {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 4;
+  width: min(360px, calc(100% - 48px)); text-align: center; color: var(--text-secondary);
+}
+.lc-empty-state[hidden] { display: none; }
+.lc-empty-icon { display: inline-flex; width: 48px; height: 48px; align-items: center; justify-content: center; border-radius: 50%; border: 1px dashed var(--border-light, var(--border)); color: var(--text-dim); }
+.lc-empty-icon svg { width: 22px; height: 22px; }
+.lc-empty-title { margin: 14px 0 6px; font-size: 18px; color: var(--text); }
+.lc-empty-sub { margin: 0; font-size: 14px; line-height: 20px; }
+.lc-empty-state button {
+  margin-top: 16px; height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid var(--border);
+  background: var(--bg-secondary); color: var(--text); font: inherit; cursor: pointer;
+}
+.lc-empty-state button[hidden] { display: none; }
+
+/* Cards glide when the layout changes (a drop, a remove). */
+.lc.is-relayout .lc-card, .lc-card.is-landing { transition: transform 0.45s cubic-bezier(.2, .8, .2, 1), opacity 0.3s; }
