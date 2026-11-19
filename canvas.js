@@ -24,7 +24,14 @@
 (function () {
   'use strict';
 
-  const DOC_KEY = 'stello.canvas.v1';
+  // Several canvases: `library` (the first one, kept under its old keys) and
+  // named ones, each a project on the server (/api/projects/:id).
+  const CUR_KEY = 'stello.canvas.current';
+  let curId = localStorage.getItem(CUR_KEY) || 'library';
+  const docKey = () => curId === 'library' ? 'stello.canvas.v1' : 'stello.canvas.doc.' + curId;
+  const revKey = () => curId === 'library' ? 'stello.canvas.rev' : 'stello.canvas.rev.' + curId;
+  const apiPath = () => '/api/projects/' + encodeURIComponent(curId);
+  const isLocalId = () => curId.startsWith('local-');
   const VIEW_KEY = 'stello.view';           // 'grid' | 'canvas'
   const W = 274;                            // card width (world px)
   const COL_GAP = 28, ROW_GAP = 28, CL_GAP_X = 200, CL_GAP_Y = 220;
@@ -132,32 +139,32 @@
   function blankDoc() { return { v: DOC_V, name: 'Library canvas', groupBy: 'collection', cards: [], links: [], groups: [], notes: [], dismissed: [], layers: null }; }
   function upgrade(d) {
     if (d.v === DOC_V) return false;
+    if (curId !== 'library') { d.v = DOC_V; return false; }   // named canvases were never auto-filled
     d.v = DOC_V; d.cards = []; d.groups = []; d.notes = [];
     return true;
   }
   let upgraded = false;
   function loadDoc() {
-    try { doc = JSON.parse(localStorage.getItem(DOC_KEY)); } catch { doc = null; }
+    try { doc = JSON.parse(localStorage.getItem(docKey())); } catch { doc = null; }
     if (!doc || typeof doc !== 'object') doc = blankDoc();
     const b = blankDoc();
     if (doc.v == null) doc.v = 1;
     Object.keys(b).forEach(k => { if (doc[k] == null) doc[k] = b[k]; });
-    if (upgrade(doc)) { upgraded = true; localStorage.setItem(DOC_KEY, JSON.stringify(doc)); }
+    if (upgrade(doc)) { upgraded = true; localStorage.setItem(docKey(), JSON.stringify(doc)); }
     if (doc.layers) {
       layers.sim = Object.assign(layers.sim, doc.layers.sim || {});
       layers.ins = Object.assign(layers.ins, doc.layers.ins || {});
     }
   }
-  function saveDoc() { doc.layers = layers; localStorage.setItem(DOC_KEY, JSON.stringify(doc)); queuePush(); }
+  function saveDoc() { doc.layers = layers; localStorage.setItem(docKey(), JSON.stringify(doc)); queuePush(); }
 
   // ---------- Sync with D1 (/api/projects/library) ----------
   // The server keeps marks, links, notes and the grouping; this device keeps
   // its own hand-placed positions (`by`) and layer toggles. Positions from
   // other clients (FigJam, MCP) use other coordinates, so they never move
   // cards here. A stale rev gets 409 and we adopt the server copy.
-  const REV_KEY = 'stello.canvas.rev';
-  let rev = +(localStorage.getItem(REV_KEY) || 0), pushTimer = 0, pushing = false, dirty = false;
-  const canSync = () => !!(window.Stello && Stello.apiFetch && Stello.getUserId && Stello.getUserId());
+  let rev = +(localStorage.getItem(revKey()) || 0), pushTimer = 0, pushing = false, dirty = false;
+  const canSync = () => !isLocalId() && !!(window.Stello && Stello.apiFetch && Stello.getUserId && Stello.getUserId());
   function toServer(d) {
     return {
       v: DOC_V, name: d.name, groupBy: d.groupBy,
@@ -192,14 +199,14 @@
     return next;
   }
   function adopt(project) {
-    rev = project.rev || 0; localStorage.setItem(REV_KEY, String(rev));
+    rev = project.rev || 0; localStorage.setItem(revKey(), String(rev));
     doc = fromServer(project.doc || {});
-    localStorage.setItem(DOC_KEY, JSON.stringify(doc));
+    localStorage.setItem(docKey(), JSON.stringify(doc));
   }
   async function pullDoc() {
     if (!canSync()) return;
     try {
-      const body = await Stello.apiGet('/api/projects/library');
+      const body = await Stello.apiGet(apiPath());
       const p = body && body.project;
       if (!p) return;
       if (p.rev > rev && !dirty) { adopt(p); markLayout(); afterLoad(); }
@@ -210,6 +217,7 @@
   // A doc cleared by the v2 upgrade is written back once, so every device agrees.
   function afterLoad() {
     if (upgraded) { upgraded = false; queuePush(); }
+    renderDocName(); rememberCanvas(curId, doc.name);
     if (mode !== 'grid') { markGrid(); emptyState(); }
   }
   function queuePush() {
@@ -222,12 +230,12 @@
     if (pushing) { queuePush(); return; }
     pushing = true; dirty = false;
     try {
-      const res = await Stello.apiFetch('/api/projects/library', {
+      const res = await Stello.apiFetch(apiPath(), {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rev, doc: toServer(doc) }),
       });
       const body = await res.json().catch(() => null);
-      if (res.ok && body && body.project) { rev = body.project.rev; localStorage.setItem(REV_KEY, String(rev)); }
+      if (res.ok && body && body.project) { rev = body.project.rev; localStorage.setItem(revKey(), String(rev)); }
       else if (res.status === 409 && body && body.project) {
         adopt(body.project); markLayout(); afterLoad();
         App.toast('Canvas changed on another device; showing the latest copy');
@@ -487,7 +495,7 @@
     });
 
     // Gaps per group (computed hints).
-    clusters.forEach(cl => { cl.empty = emptySpot(cl); cl.ghost = ghostFor(cl); });
+    clusters.forEach(cl => { cl.empty = null; cl.ghost = null; });
 
     // Shelf-pack the groups into rows.
     const footW = (cl) => cl.w + (cl.ghost ? 60 + W : 0);
@@ -521,7 +529,7 @@
     }
     unplaced.forEach(([c, n]) => { c.x = n.x; c.y = n.y; c.by = by; wrote = true; });
     if (placedAny) settleSpatial();
-    if (wrote) { localStorage.setItem(DOC_KEY, JSON.stringify(doc)); queuePush(); }
+    if (wrote) { localStorage.setItem(docKey(), JSON.stringify(doc)); queuePush(); }
 
     // Bounds.
     let x0 = 0, y0 = -TITLE_H, x1 = 0, y1 = 0;
@@ -567,7 +575,7 @@
         const items = sl.map(x => nodes.get(x).item);
         const c = { ...cl, x: x0, y: y0, w: x1 - x0, h: y1 - y0, slugs: sl, items, sub: subtitleFor(items) };
         if (ci > 0) { c.empty = null; c.ghost = null; }
-        else { c.empty = emptySpot(c); c.ghost = cl.ghost; }
+        else { c.empty = null; c.ghost = null; }
         next.push(c);
       });
     });
@@ -738,6 +746,7 @@
       <div class="lc-stage" tabindex="0">
         <canvas class="lc-ink" aria-hidden="true"></canvas>
         <div class="lc-world"><div class="lc-static"></div><div class="lc-cards"></div></div>
+        <div class="lc-fams"></div>
         <div class="lc-labels" aria-hidden="true"></div>
         <div class="lc-selbar" hidden></div>
         <div class="lc-hint" hidden></div>
@@ -749,8 +758,6 @@
         </div>
       </div>
       <div class="lc-controls">
-        <div class="lc-ctl" data-menu="group"><button type="button" class="lc-ctl-btn" data-open="group"><span class="lc-ctl-k">Group by</span> <b data-groupname></b>${IC.caret}</button>
-          <div class="lc-menu" data-menu-for="group" hidden></div></div>
         <div class="lc-ctl" data-menu="sim"><button type="button" class="lc-ctl-btn" data-open="sim"><span class="lc-swatches" data-swatches></span> Similarity${IC.caret}</button>
           <div class="lc-menu" data-menu-for="sim" hidden></div></div>
         <div class="lc-ctl" data-menu="ins"><button type="button" class="lc-ctl-btn" data-open="ins">Intent, time &amp; gaps${IC.caret}</button>
@@ -769,6 +776,7 @@
     els.static = root.querySelector('.lc-static');
     els.cards = root.querySelector('.lc-cards');
     els.labels = root.querySelector('.lc-labels');
+    els.fams = root.querySelector('.lc-fams');
     els.selbar = root.querySelector('.lc-selbar');
     els.hint = root.querySelector('.lc-hint');
     els.controls = root.querySelector('.lc-controls');
@@ -792,13 +800,16 @@
     zm.innerHTML = `<button type="button" data-z="out" aria-label="Zoom out">−</button><button type="button" data-z="reset" class="lc-zoom-pct" aria-label="Zoom to 100%">100%</button><button type="button" data-z="in" aria-label="Zoom in">+</button><button type="button" data-z="fit" aria-label="Fit everything">Fit</button>`;
     sw.after(zm);
     els.zoom = zm;
+    // This canvas: its name (click to rename) and a chevron for canvases and export.
+    const dp = document.createElement('div');
+    dp.className = 'lc-doc';
+    dp.innerHTML = `<button type="button" class="lc-doc-name" data-doc="rename" title="Rename this canvas"></button><input class="lc-doc-input" type="text" maxlength="80" aria-label="Canvas name" hidden><button type="button" class="lc-doc-more" data-doc="menu" aria-label="Canvases and export" aria-haspopup="menu">${IC.caret}</button><div class="lc-doc-menu" role="menu" hidden></div>`;
+    els.docpill = dp;
+    renderDocName();
     renderMenus();
   }
 
   function renderMenus() {
-    els.controls.querySelector('[data-groupname]').textContent = GROUPS[doc.groupBy] || 'Collection';
-    els.controls.querySelector('[data-menu-for="group"]').innerHTML = Object.entries(GROUPS)
-      .map(([k, v]) => `<button type="button" class="lc-mi${k === doc.groupBy ? ' is-on' : ''}" data-group="${k}">${v}</button>`).join('');
     const sw = Object.entries(SIM).filter(([k]) => layers.sim.on && layers.sim[k]).map(([, d]) => `<i style="background:${d.color || 'var(--text)'}"></i>`).join('');
     els.controls.querySelector('[data-swatches]').innerHTML = sw;
     els.controls.querySelector('[data-menu-for="sim"]').innerHTML =
@@ -814,26 +825,10 @@
   }
 
   // ---------- Static world layer: group titles, empty spots, ghosts, notes ----------
+  // Groups have no captions in the world any more: their names are pills in
+  // screen space (renderFams), so they stay one size at every zoom.
   function renderStatic() {
-    let h = '';
-    clusters.forEach(cl => {
-      // A caption names a broad group only where it has gathered: not over a
-      // lone card, and not for "No collection"-style leftovers.
-      if (cl.slugs.length > 1 && !/^(no |other$|undated$)/i.test(cl.key)) h += `<div class="lc-group" style="transform:translate(${cl.x}px,${cl.y - TITLE_H}px);width:${Math.max(cl.w, 320)}px">
-        <h3><i style="background:${cl.color}"></i><span>${esc(cl.name)}</span></h3><p>${esc(cl.sub)}</p></div>`;
-      if (cl.empty) h += `<div class="lc-empty" data-ins-part="gaps" style="transform:translate(${cl.x}px,${cl.y + cl.h + 60}px);width:${Math.max(cl.w, 300)}px"><span>Empty spot</span>${esc(cl.empty)}</div>`;
-      if (cl.ghost) {
-        const g = cl.ghost, it = g.item, ch = Math.round(W * coverRatio(it) * 0.62);
-        h += `<div class="lc-ghost" data-ins-part="gaps" data-ghost="${esc(g.slug)}" style="transform:translate(${cl.x + cl.w + 60}px,${cl.y}px)">
-          <div class="lc-ghost-head"><b>Maybe related</b> · from your library</div>
-          <div class="lc-ghost-cover" style="height:${ch}px">${App.thumbHTML(it)}</div>
-          <div class="lc-ghost-title">${esc(it.title || it.domain)}</div>
-          <div class="lc-ghost-meta">${esc([it.domain, kindName(it), savedLabel(it).replace('Saved ', 'saved ')].filter(Boolean).join(' · '))}</div>
-          <div class="lc-ghost-why">Shares: ${esc(g.shared.join(', ') || 'similar tags')}.</div>
-          <div class="lc-ghost-act"><button type="button" data-accept="${esc(g.slug)}">Accept</button><button type="button" data-dismiss="${esc(g.slug)}">Dismiss</button></div></div>`;
-      }
-    });
-    els.static.innerHTML = h + '<div class="lc-notes"></div>';
+    els.static.innerHTML = '<div class="lc-notes"></div>';
     els.notes = els.static.querySelector('.lc-notes');
     renderNotes();
   }
@@ -941,9 +936,12 @@
     const r = stageRect();
     const k = view.k, lod = lodFor(k);
     els.world.style.transform = `translate3d(${view.x}px,${view.y}px,0) scale(${k})`;
-    // Counter-scaled titles: only touch the variable when it changes enough to see.
-    const ts = Math.max(1, 0.55 / k);
-    if (Math.abs(ts / (render.ts || 1) - 1) > 0.03 || (ts === 1) !== (render.ts === 1)) { render.ts = ts; els.root.style.setProperty('--title-scale', ts.toFixed(3)); }
+    // Text, labels and controls on the canvas stay one size at every zoom:
+    // they are counter-scaled by 1/k (CSS `scale: var(--ik)`). Too small a card
+    // to hold its pills hides them instead.
+    if (render.k !== k) { render.k = k; els.world.style.setProperty('--ik', (1 / k).toFixed(4)); }
+    const tiny = W * k < 120;
+    if (render.tiny !== tiny) { render.tiny = tiny; els.stage.classList.toggle('is-tiny', tiny); }
     const pct = Math.round(k * 100) + '%';
     if (render.pct !== pct) { render.pct = pct; els.zoom.querySelector('.lc-zoom-pct').textContent = pct; }
     if (schedule.full) Object.keys(INSIGHTS).forEach(p => els.root.classList.toggle('hide-' + p, !layers.ins[p]));
@@ -1003,6 +1001,7 @@
     els.root.classList.toggle('has-focus', !!linked);
     els.root.classList.toggle('is-connecting', !!(connect || pinFor));
     drawInk(r, blocks ? 0 : Math.max(1, lod), vis, focus, linked);
+    renderFams(r, linked);
     if (hover && !blocks && !rendered.has(hover) && !doc.notes.some(n => n.id === hover)) hover = null;
     renderSelbar(r);
     schedule.full = false;
@@ -1044,7 +1043,7 @@
   }
   function noteAnchor(note, toward) {
     const sz = noteSize.get(note.id) || { w: 220, h: 90 };
-    const w = sz.w, h = sz.h;
+    const w = sz.w / view.k, h = sz.h / view.k;   // notes stay one size on screen
     const cx = note.x + w / 2, cy = note.y + h / 2, dx = toward.x - cx, dy = toward.y - cy;
     if (Math.abs(dx) * h > Math.abs(dy) * w) return { x: dx > 0 ? note.x + w : note.x, y: cy, nx: Math.sign(dx), ny: 0 };
     return dy > 0 ? { x: cx, y: note.y + h, nx: 0, ny: 1 } : { x: cx, y: note.y, nx: 0, ny: -1 };
@@ -1121,24 +1120,6 @@
         ctx.globalAlpha = dim ? 0.03 : 0.09;
         ctx.fillStyle = col;
         ctx.beginPath(); ctx.roundRect(b.x - FAM_PAD, b.y - FAM_PAD, b.w + FAM_PAD * 2, b.h + FAM_PAD * 2, 22); ctx.fill();
-        if (k >= 0.12) {
-          ctx.globalAlpha = dim ? 0.25 : 1;
-          const tx = b.x - FAM_PAD + 4, ty = b.y - FAM_PAD - 12;
-          ctx.beginPath(); ctx.arc(tx + fs * 0.32, ty - fs * 0.34, fs * 0.3, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = col;
-          // Fit the caption to the family's width: tag first, then the type and count.
-          const room = b.w + FAM_PAD * 2 + FAM_GAP_X * 0.6 - fs * 0.9 - 4;
-          const fit = (t) => { if (ctx.measureText(t).width <= room) return t; while (t.length > 2 && ctx.measureText(t + '…').width > room) t = t.slice(0, -1); return t + '…'; };
-          const t1 = fit(cap(f.tag));
-          ctx.fillText(t1, tx + fs * 0.9, ty);
-          const w1 = ctx.measureText(t1).width;
-          ctx.globalAlpha = dim ? 0.15 : 0.55;
-          ctx.fillStyle = textCol;
-          ctx.font = `400 ${fs * 0.86}px Inter, system-ui, sans-serif`;
-          const t2 = `  ${f.type === 'user' ? 'your group' : SIM[f.type].label.toLowerCase()} · ${f.slugs.length}`;
-          if (w1 + ctx.measureText(t2).width <= room) ctx.fillText(t2, tx + fs * 0.9 + w1, ty);
-          ctx.font = `500 ${fs}px Inter, system-ui, sans-serif`;
-        }
       });
       ctx.globalAlpha = 1;
     }
@@ -1243,17 +1224,6 @@
       drawLink(l.a, l.b, d.color, d.dash, on || !focus ? 0.95 : 0.12, 2, l.kind === 'influence' ? 'both' : (l.kind === 'part_of' || l.kind === 'question') ? 'end' : false, (on || k >= LABEL_K) ? label : null, 'l2');
     });
     // Gaps: ghost to its anchor.
-    if (layers.ins.gaps && lod > 0) clusters.forEach(cl => {
-      if (!cl.ghost || !cl.ghost.anchor) return;
-      if (!always && focus !== cl.ghost.anchor && hoverGhost !== cl.ghost.slug) return;
-      const n = nodes.get(cl.ghost.anchor); if (!n) return;
-      const gx = cl.x + cl.w + 60, gy = cl.y + 60;
-      const pts = route(anchor(n, { x: gx, y: gy }), { x: gx, y: gy, nx: -1, ny: 0 });
-      ctx.strokeStyle = textCol; ctx.globalAlpha = 0.55; ctx.lineWidth = lw(1.2); ctx.setLineDash([lw(4), lw(4)]);
-      strokeRoute(ctx, pts);
-      ctx.setLineDash([]); ctx.globalAlpha = 1;
-      if (cl.ghost.shared[0]) { const m = routeMid(pts); labels.push({ x: m.x, y: m.y, text: 'maybe: ' + cl.ghost.shared[0], color: null, cls: 'maybe' }); }
-    });
     // Region notes: a line to the point on the image.
     if (layers.ins.notes) doc.notes.forEach(note => {
       if (note.kind !== 'region' || !note.slug) return;
@@ -1434,8 +1404,14 @@
     else if (els.root.parentElement !== mc) mc.appendChild(els.root);
     els.root.hidden = mode === 'grid';
     // Zoom sits in the bottom bar in canvas view, inside the canvas panel in split.
-    if (mode === 'split') { if (els.zoom.parentElement !== els.root) els.root.appendChild(els.zoom); }
-    else if (els.zoom.previousElementSibling !== els.switch) els.switch.after(els.zoom);
+    if (mode === 'split') { if (els.zoom.parentElement !== els.root) els.root.appendChild(els.zoom); if (els.docpill.parentElement !== els.root) els.root.appendChild(els.docpill); }
+    else {
+      if (els.zoom.previousElementSibling !== els.switch) els.switch.after(els.zoom);
+      // Canvas view: first in the bottom bar, on the same line as the zoom.
+      const bar = document.querySelector('.bottom-bar');
+      if (bar && els.docpill.parentElement !== bar) bar.prepend(els.docpill);
+    }
+    closeDocMenu();
     els.switch.querySelectorAll('button').forEach(b => b.classList.toggle('is-on', b.dataset.view === mode));
     stageBox = null;
     if (mode === 'grid') {
@@ -1514,6 +1490,290 @@
     dropAnim = { slug: slugs[0] };
     camSet = true;
     markGrid(); emptyState();
+  }
+  // ---------- Canvases: name, new, switch, delete, export ----------
+  function renderDocName() {
+    if (!els.docpill) return;
+    els.docpill.querySelector('.lc-doc-name').textContent = doc.name || 'Untitled canvas';
+  }
+  function closeDocMenu() { if (els.docpill) { els.docpill.querySelector('.lc-doc-menu').hidden = true; els.docpill.classList.remove('is-open'); } }
+  function startRename() {
+    const btn = els.docpill.querySelector('.lc-doc-name'), inp = els.docpill.querySelector('.lc-doc-input');
+    closeDocMenu();
+    inp.value = doc.name || ''; inp.placeholder = 'Name this canvas';
+    inp.style.width = Math.max(140, btn.offsetWidth + 24) + 'px';
+    btn.hidden = true; inp.hidden = false; inp.focus(); inp.select();
+    els.docpill.classList.add('is-editing');
+  }
+  function endRename(ok) {
+    const btn = els.docpill.querySelector('.lc-doc-name'), inp = els.docpill.querySelector('.lc-doc-input');
+    if (inp.hidden) return;
+    const v = inp.value.trim();
+    inp.hidden = true; btn.hidden = false; els.docpill.classList.remove('is-editing');
+    if (ok && v && v !== doc.name) { change(() => { doc.name = v; }); rememberCanvas(curId, v); renderDocName(); App.toast('Saved'); }
+  }
+  // Canvases this device knows about, so the list works offline too.
+  const LIST_KEY = 'stello.canvas.list';
+  function knownCanvases() { try { return JSON.parse(localStorage.getItem(LIST_KEY)) || []; } catch { return []; } }
+  function rememberCanvas(id, name, drop) {
+    const l = knownCanvases().filter(c => c.id !== id);
+    if (!drop) l.unshift({ id, name: name || 'Untitled canvas' });
+    localStorage.setItem(LIST_KEY, JSON.stringify(l.slice(0, 100)));
+  }
+  async function listCanvases() {
+    let list = knownCanvases();
+    if (window.Stello && Stello.getUserId && Stello.getUserId()) {
+      try {
+        const body = await Stello.apiGet('/api/projects');
+        if (body && body.projects) {
+          const local = list.filter(c => c.id.startsWith('local-'));
+          list = body.projects.map(p => ({ id: p.id, name: p.name || (p.id === 'library' ? 'Library canvas' : 'Untitled canvas'), cards: p.cards }));
+          list = list.concat(local);
+          localStorage.setItem(LIST_KEY, JSON.stringify(list.map(({ id, name }) => ({ id, name }))));
+        }
+      } catch { /* offline: the device list */ }
+    }
+    if (!list.some(c => c.id === 'library')) list.push({ id: 'library', name: curId === 'library' ? doc.name : 'Library canvas' });
+    if (!list.some(c => c.id === curId)) list.unshift({ id: curId, name: doc.name });
+    return list;
+  }
+  async function flushPush() {
+    if (!canSync() || !dirty) return;
+    clearTimeout(pushTimer);
+    await pushDoc();
+  }
+  async function switchCanvas(id) {
+    if (id === curId) return;
+    await flushPush();
+    curId = id; localStorage.setItem(CUR_KEY, id);
+    rev = +(localStorage.getItem(revKey()) || 0); dirty = false; undoStack = [];
+    sel = null; selNote = null; connect = null; pinFor = null; camSet = false;
+    rendered.forEach(el => el.remove()); rendered.clear();
+    loadDoc();
+    renderDocName(); renderMenus();
+    layout(); schedule(true); markGrid(); emptyState();
+    requestAnimationFrame(() => { if (nodes.size) { fit(false); camSet = true; } else { view.x = 0; view.y = 0; } render(); });
+    await pullDoc();
+    renderDocName(); markGrid(); emptyState();
+    if (!camSet && nodes.size) { fit(false); camSet = true; }
+  }
+  async function newCanvas(copy) {
+    await flushPush();
+    const fresh = blankDoc();
+    fresh.name = copy ? `${doc.name || 'Canvas'} copy` : 'Untitled canvas';
+    if (copy) { const d = JSON.parse(JSON.stringify(doc)); Object.assign(fresh, d, { name: fresh.name, v: DOC_V }); }
+    let id = 'local-' + uid();
+    if (window.Stello && Stello.getUserId && Stello.getUserId()) {
+      try {
+        const res = await Stello.apiFetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doc: toServer(fresh) }) });
+        const body = await res.json().catch(() => null);
+        if (res.ok && body && body.project) { id = body.project.id; localStorage.setItem('stello.canvas.rev.' + id, String(body.project.rev || 0)); }
+      } catch { /* offline: a device-only canvas */ }
+    }
+    localStorage.setItem(id === 'library' ? 'stello.canvas.v1' : 'stello.canvas.doc.' + id, JSON.stringify(fresh));
+    rememberCanvas(id, fresh.name);
+    await switchCanvas(id);
+    if (!copy) startRename();
+    else App.toast('Saved as a new canvas');
+  }
+  async function deleteCanvas() {
+    if (curId === 'library') return;
+    const id = curId;
+    if (canSync()) { try { await Stello.apiFetch('/api/projects/' + encodeURIComponent(id), { method: 'DELETE' }); } catch { /* keep going locally */ } }
+    localStorage.removeItem('stello.canvas.doc.' + id); localStorage.removeItem('stello.canvas.rev.' + id);
+    rememberCanvas(id, null, true);
+    dirty = false;
+    await switchCanvas('library');
+    App.toast('Canvas deleted');
+  }
+  async function openDocMenu() {
+    const menu = els.docpill.querySelector('.lc-doc-menu');
+    if (!menu.hidden) { closeDocMenu(); return; }
+    const F = (window.StelloCanvasExport && StelloCanvasExport.FORMATS) || {};
+    const draw = (list) => {
+      menu.innerHTML = `<div class="lc-mi-head lc-doc-status">${esc(doc.name || 'Untitled canvas')}<em>${canSync() ? 'Saved and synced' : 'Saved on this device'}</em></div>
+        <div class="lc-doc-sec">Canvases</div>
+        ${list.map(c => `<button type="button" class="lc-mi${c.id === curId ? ' is-on' : ''}" data-open-canvas="${esc(c.id)}" role="menuitemradio" aria-checked="${c.id === curId}">${esc(c.id === curId ? doc.name : c.name)}${c.cards != null ? `<em>${c.cards}</em>` : ''}</button>`).join('')}
+        <button type="button" class="lc-mi" data-doc="new">+ New canvas</button>
+        <button type="button" class="lc-mi" data-doc="copy">Save as a new canvas</button>
+        <button type="button" class="lc-mi" data-doc="rename">Rename</button>
+        ${curId !== 'library' ? '<button type="button" class="lc-mi is-danger" data-doc="delete">Delete this canvas</button>' : ''}
+        <div class="lc-doc-sec">Export</div>
+        ${Object.entries(F).map(([k, v]) => `<button type="button" class="lc-mi" data-export="${k}" role="menuitem">${esc(v.label)}<em>${esc(v.hint)}</em></button>`).join('')}`;
+    };
+    draw(knownCanvases().length ? knownCanvases() : [{ id: curId, name: doc.name }]);
+    menu.hidden = false; els.docpill.classList.add('is-open');
+    draw(await listCanvases());
+  }
+  // The canvas as plain data for the exporters: cards at their spots, groups
+  // with their pills, links and notes.
+  function exportModel() {
+    const cards = [];
+    nodes.forEach(n => {
+      const rec = cardRec(n.slug) || {};
+      cards.push({ slug: n.slug, item: n.item, x: n.x, y: n.y, w: W, h: n.ch, state: rec.state || null, reason: rec.reason || '', image: n.item.has_image ? n.item.image_path : null, groups: [] });
+    });
+    const bySlug = new Map(cards.map(c => [c.slug, c]));
+    const groups = [];
+    families.forEach(f => {
+      if (!f.box || f.loose || f.slugs.length < 2) return;
+      const meta = famMeta(f);
+      const pills = meta.pills.map(p => p.text);
+      f.slugs.forEach(sl => { const c = bySlug.get(sl); if (c) c.groups.push(pills[0]); });
+      const col = f.color === 'accent' ? theme.accent : f.color || theme.text;
+      groups.push({ x: f.box.x - FAM_PAD, y: f.box.y - FAM_PAD, w: f.box.w + FAM_PAD * 2, h: f.box.h + FAM_PAD * 2, pills, user: f.type === 'user', slugs: [...f.slugs], tint: hexA(col, 0.12) });
+    });
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    cards.forEach(c => { x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + c.h); });
+    groups.forEach(g => { x0 = Math.min(x0, g.x); y0 = Math.min(y0, g.y - 40); x1 = Math.max(x1, g.x + g.w); y1 = Math.max(y1, g.y + g.h); });
+    doc.notes.forEach(n => { x0 = Math.min(x0, n.x || 0); y0 = Math.min(y0, n.y || 0); x1 = Math.max(x1, (n.x || 0) + 220); y1 = Math.max(y1, (n.y || 0) + 80); });
+    if (!Number.isFinite(x0)) { x0 = 0; y0 = 0; x1 = 400; y1 = 300; }
+    const label = (id) => { const c = bySlug.get(id); if (c) return c.item.title || c.item.domain || id; const n = doc.notes.find(x => x.id === id); return n ? `“${n.text || n.kind}”` : id; };
+    const centre = (id) => { const c = bySlug.get(id); if (c) return { x: c.x + c.w / 2, y: c.y + c.h / 2 }; const n = doc.notes.find(x => x.id === id); return n ? { x: (n.x || 0) + 110, y: (n.y || 0) + 35 } : null; };
+    const links = doc.links.filter(l => (bySlug.has(l.a) || doc.notes.some(n => n.id === l.a)) && (bySlug.has(l.b) || doc.notes.some(n => n.id === l.b)))
+      .map(l => ({ ...l, color: (L2[l.kind] && L2[l.kind].color) || '#888888' }));
+    return { name: doc.name || 'Untitled canvas', doc: toServer(doc), cards, bySlug, groups, links, notes: doc.notes.slice(), bounds: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, label, centre };
+  }
+  function hexA(c, a) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(c).trim());
+    if (!m) return `rgba(255,197,61,${a})`;
+    const v = parseInt(m[1], 16);
+    return `rgba(${v >> 16},${(v >> 8) & 255},${v & 255},${a})`;
+  }
+  async function exportAs(fmt) {
+    closeDocMenu();
+    if (!nodes.size) { App.toast('Nothing on this canvas to export yet'); return; }
+    if (!window.StelloCanvasExport) { App.toast('Export is still loading, try again'); return; }
+    try { await StelloCanvasExport.run(fmt, exportModel(), App.toast); }
+    catch (err) { console.error(err); App.toast('Export failed: ' + (err && err.message || 'unknown error')); }
+  }
+  function bindDoc() {
+    const dp = els.docpill, inp = dp.querySelector('.lc-doc-input');
+    dp.addEventListener('pointerdown', (e) => e.stopPropagation());
+    dp.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-doc], [data-open-canvas], [data-export]'); if (!b) return;
+      if (b.dataset.openCanvas) { closeDocMenu(); switchCanvas(b.dataset.openCanvas); return; }
+      if (b.dataset.export) { exportAs(b.dataset.export); return; }
+      const a = b.dataset.doc;
+      if (a === 'rename') startRename();
+      else if (a === 'menu') openDocMenu();
+      else if (a === 'new') { closeDocMenu(); newCanvas(false); }
+      else if (a === 'copy') { closeDocMenu(); newCanvas(true); }
+      else if (a === 'delete') {
+        if (b.dataset.step !== '1') { b.dataset.step = '1'; b.textContent = 'Click again to delete'; return; }
+        closeDocMenu(); deleteCanvas();
+      }
+    });
+    inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') endRename(true); if (e.key === 'Escape') endRename(false); });
+    inp.addEventListener('blur', () => endRename(true));
+    document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.lc-doc')) closeDocMenu(); }, true);
+  }
+
+  // ---------- Group pills ----------
+  // A group's name and what its members share, as pills on the top-left of
+  // its tint, in screen space. Your group: its name first (accent), then the
+  // shared traits. A similarity group: one pill per trait all members share.
+  // A dashed "+ maybe" pill offers one more save from the library that fits.
+  const famEls = new Map();      // family index -> element
+  const looseFeat = new Map();   // slug -> features, for the library scan
+  function featLoose(it) { let f = looseFeat.get(it.slug); if (!f) { f = featuresLoose(it); looseFeat.set(it.slug, f); } return f; }
+  let scanBudget = 0;             // library scans (maybe pills) allowed this frame
+  function famMeta(f) {
+    const sig = f.slugs.join(',') + '|' + f.tag + '|' + f.type + '|' + doc.dismissed.length + '|' + set.length;
+    if (f._sig === sig && (f._meta.ghost !== undefined || scanBudget <= 0)) return f._meta;
+    f._sig = sig;
+    const pills = [];
+    if (f.type === 'user') pills.push({ text: cap(f.tag || 'Group'), cls: 'is-name' });
+    // Traits every member shares, strongest first.
+    let common = null;
+    f.slugs.forEach(sl => {
+      const fs = new Map((featOf.get(sl) || []).filter(x => layers.sim[x.type]).map(x => [x.f, x]));
+      if (!common) common = fs; else common.forEach((v, key) => { if (!fs.has(key)) common.delete(key); });
+    });
+    const traits = [...(common ? common.values() : [])].sort((a, b) => SIM[b.type].w - SIM[a.type].w);
+    if (f.type !== 'user' && f.tag) {
+      const i = traits.findIndex(x => x.tag === f.tag);
+      if (i > 0) traits.unshift(traits.splice(i, 1)[0]);
+      else if (i < 0) traits.unshift({ tag: f.tag, type: f.type });
+    }
+    const seen = new Set(pills.map(p => p.text.toLowerCase()));
+    traits.forEach(x => {
+      if (pills.length >= 4 || seen.has(String(x.tag).toLowerCase())) return;
+      seen.add(String(x.tag).toLowerCase());
+      pills.push({ text: cap(x.tag), cls: 'is-trait', color: (SIM[x.type] && SIM[x.type].color) || theme.text, title: SIM[x.type] ? SIM[x.type].label : '' });
+    });
+    if (!pills.length) pills.push({ text: 'Group', cls: 'is-name' });
+    // One maybe-related save, scanning the library once per change of the group.
+    let ghost = null;
+    if (layers.ins.gaps && f.slugs.length >= 2 && scanBudget <= 0) ghost = undefined;   // next frame
+    else if (layers.ins.gaps && f.slugs.length >= 2) {
+      scanBudget--;
+      const all = App.items(), dismissed = new Set(doc.dismissed), want = new Map();
+      f.slugs.slice(0, 24).forEach(sl => { const it = App.item(sl); if (it) featLoose(it).forEach(x => want.set(x.f, (want.get(x.f) || 0) + SIM[x.type].w)); });
+      let best = null;
+      for (const it of all) {
+        if (setIndex.has(it.slug) || dismissed.has(it.slug)) continue;
+        let sc = 0; const shared = [];
+        featLoose(it).forEach(x => { const w = want.get(x.f); if (w) { sc += w; shared.push(x.tag); } });
+        if (!best || sc > best.s) best = { it, s: sc, shared };
+      }
+      if (best && best.shared.length >= 2 && best.s >= Math.max(3, f.slugs.length * 0.35)) ghost = { slug: best.it.slug, title: best.it.title || best.it.domain || 'Untitled', shared: [...new Set(best.shared)].slice(0, 3) };
+    }
+    f._meta = { pills, ghost };
+    return f._meta;
+  }
+  function shortTitle(t) {
+    t = String(t).split(/\s[|•·–—-]\s/)[0].trim();
+    if (t.length <= 24) return t;
+    const cut = t.slice(0, 24); const sp = cut.lastIndexOf(' ');
+    return (sp > 10 ? cut.slice(0, sp) : cut) + '…';
+  }
+  function renderFams(r, linked) {
+    const k = view.k, show = layers.sim.on && k >= 0.04 && mode !== 'grid';
+    const seen = new Set();
+    scanBudget = moving ? 0 : 2;
+    let pending = false;
+    if (show) families.forEach((f, fi) => {
+      const b = f.box;
+      if (!b || f.loose || f.slugs.length < 2) return;
+      const sx = (b.x - FAM_PAD) * k + view.x, sy = (b.y - FAM_PAD) * k + view.y;
+      const w = (b.w + FAM_PAD * 2) * k;
+      if (seen.size >= 80) return;
+      if (w < 40 || sx > r.width || sy > r.height + 40 || sx + w < 0 || sy + (b.h + FAM_PAD * 2) * k < -40) return;
+      let el = famEls.get(fi);
+      const meta = famMeta(f);
+      if (meta.ghost === undefined) pending = true;
+      const key = JSON.stringify(meta) + (dragging ? 'd' : '');
+      if (!el) { el = document.createElement('div'); el.className = 'lc-fam'; el.dataset.fam = fi; els.fams.appendChild(el); famEls.set(fi, el); }
+      if (el._key !== key) {
+        el._key = key;
+        el.innerHTML = meta.pills.map(p => `<button type="button" class="lc-pill ${p.cls}"${p.title ? ` title="${esc(p.title)}"` : ''} data-rename="${fi}">${p.color ? `<i style="background:${p.color}"></i>` : ''}${esc(p.text)}</button>`).join('') +
+          (meta.ghost ? `<button type="button" class="lc-pill is-maybe" data-maybe="${fi}" title="Maybe related: shares ${esc(meta.ghost.shared.join(', '))}. Click to add.">+ Maybe: ${esc(shortTitle(meta.ghost.title))}</button><button type="button" class="lc-pill is-maybe-x" data-dismiss="${esc(meta.ghost.slug)}" aria-label="Not related" title="Not related">${IC.x}</button>` : '');
+      }
+      el.style.transform = `translate(${Math.round(sx)}px,${Math.round(sy - 8)}px) translateY(-100%)`;
+      el.style.maxWidth = Math.max(120, w + 160) + 'px';
+      el.classList.toggle('is-dim', !!(linked && !f.slugs.some(x => linked.has(x))));
+      seen.add(fi);
+    });
+    famEls.forEach((el, fi) => { if (!seen.has(fi)) { el.remove(); famEls.delete(fi); } });
+    if (pending && !moving) setTimeout(() => schedule(), 50);
+  }
+  function bindFams() {
+    els.fams.addEventListener('pointerdown', (e) => e.stopPropagation());
+    els.fams.addEventListener('click', (e) => {
+      const rn = e.target.closest('[data-rename]');
+      if (rn) { const b = rn.getBoundingClientRect(); renameFamily(+rn.dataset.rename, b.left + 10, b.top + b.height / 2); return; }
+      const mb = e.target.closest('[data-maybe]');
+      if (mb) {
+        const f = families[+mb.dataset.maybe], meta = f && f._meta; if (!meta || !meta.ghost) return;
+        const g = meta.ghost, anchorSlug = f.slugs[f.slugs.length - 1], an = nodes.get(anchorSlug);
+        change(() => { doc.links.push({ id: uid(), a: anchorSlug, b: g.slug, kind: 'related', label: g.shared[0] || '', source: 'maybe' }); });
+        addToCanvas([g.slug], an ? { x: an.x + W + 10, y: an.y + 10 } : null);
+        return;
+      }
+      const dis = e.target.closest('[data-dismiss]');
+      if (dis) { change(() => doc.dismissed.push(dis.dataset.dismiss)); schedule(true); }
+    });
   }
   function renameFamily(fi, cx, cy) {
     const f = families[fi];
@@ -1910,8 +2170,6 @@
     els.stage.addEventListener('dblclick', (e) => {
       // Double-click a group's name to rename it.
       const w = screenToWorld(e.clientX, e.clientY);
-      const fi = families.findIndex(f => f.box && !f.loose && f.slugs.length > 1 && w.x >= f.box.x - FAM_PAD && w.x <= f.box.x + Math.max(f.box.w, 240) && w.y >= f.box.y - FAM_PAD - Math.max(30, 26 / view.k) && w.y <= f.box.y - FAM_PAD + 4);
-      if (fi >= 0) { renameFamily(fi, e.clientX, e.clientY); return; }
       const hs = hitSlug(e);
       if (hs) { App.openItem(hs); return; }
       if (e.target.closest('.lc-note, .lc-ghost, .lc-selbar, input')) return;
@@ -2204,6 +2462,8 @@
     loadDoc();
     build();
     bind();
+    bindFams();
+    bindDoc();
     bindGridDrag();
     const q = new URLSearchParams(location.search).get('view');
     const start = q || localStorage.getItem(VIEW_KEY) || 'grid';

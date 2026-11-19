@@ -32,6 +32,7 @@ const FILES = [
   'version.json',
   'offline.js',
   'canvas.js',
+  'canvas-export.js',
   'sw.js',
   'manifest.webmanifest',
 ];
