@@ -339,9 +339,11 @@
     ProfileManager.init();
     OfflineUI.init();
 
-    // Projects canvas (projects.js) reads the library through this small hook.
+    // The canvas view (canvas.js) reads the library through this small hook.
     window.StelloApp = {
       items: () => allItems,
+      filtered: () => filteredCache,
+      colorHex: (name) => COLOR_MAP[name] || COLOR_MAP[String(name).replace(/[-_\s]/g, '_')] || '#888888',
       item: (slug) => itemsBySlug[slug] || null,
       openItem: (slug) => PanelManager.open(slug),
       thumbHTML: canvasThumbHTML,
@@ -956,8 +958,7 @@
     const padL = parseFloat(cs.paddingLeft) || 0;
     const maxW = parseFloat(cs.maxWidth);
     const sb = mc ? (mc.offsetWidth - mc.clientWidth) : 0;
-    // With the project board open the library is a column beside it: size cards to that column.
-    const base = document.documentElement.classList.contains('canvas-open') && mc ? mc.clientWidth : window.innerWidth - sb;
+    const base = window.innerWidth - sb;
     const innerW = Math.min(base, Number.isFinite(maxW) ? maxW : Infinity);
     return Math.max(0, innerW - 2 * padL);
   }
@@ -1011,6 +1012,7 @@
       renderedCount = 0;
       scheduleTimeline();
       PanelManager.refreshAfterGridRender();
+      document.dispatchEvent(new CustomEvent('stello:results'));
       return;
     }
     const cols = gridCols || 1;
@@ -1029,6 +1031,7 @@
     scheduleTimeline();
     updateFilterButtonState();
     requestAnimationFrame(fillViewport);
+    document.dispatchEvent(new CustomEvent('stello:results'));
   }
 
   // Keep rendering until the sentinel is past the viewport bottom.
@@ -1051,6 +1054,7 @@
     filteredCache = getFilteredItems();
     if (renderedCount === 0) { renderGrid(); return; }
     fillViewport();
+    document.dispatchEvent(new CustomEvent('stello:results'));
   }
 
   // Reflow for a column-count change, keeping the first visible card in place.
@@ -1519,7 +1523,7 @@
     area.querySelectorAll('.card-badges').forEach(n => n.remove());
   };
 
-  // Cover for a projects-canvas card: the grid's image, or its neutral icon tile.
+  // Cover for a canvas card: the grid's image, or its neutral icon tile.
   function canvasThumbHTML(item) {
     const glyph = glyphTileFor(item);
     const isNote = (!item.kind || item.kind === 'link') && !item.source_url;
