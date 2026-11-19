@@ -101,7 +101,7 @@
     return fm.join('\n') + body.join('\n');
   }
   function overviewMd(m) {
-    const L = [`# ${m.name}`, '', `${m.cards.length} items · exported from Stello ${new Date().toISOString().slice(0, 10)}`, ''];
+    const L = [`# ${m.name}`, '', `${m.cards.length} items · exported from Stello ${new Date().toISOString().slice(0, 10)}`, '', 'In this folder: `items/` (one Markdown file per item), `images/` (covers), `canvas.json` (the canvas and item data).', ''];
     if (m.groups.length) {
       L.push('## Groups', '');
       m.groups.forEach(g => { L.push(`### ${g.pills.join(' · ')}`, ''); g.slugs.forEach(s => { const c = m.bySlug.get(s); if (c) L.push(`- [${c.item.title || c.item.domain || s}](items/${c.file})`); }); L.push(''); });
@@ -188,32 +188,23 @@ ${opts && opts.print ? `@page{size:${Wd > Ht ? 'landscape' : 'portrait'};margin:
     pdf: { label: 'PDF', hint: 'Print, then Save as PDF' },
     html: { label: 'HTML', hint: 'One web page' },
     claude: { label: 'Claude Design', hint: 'Copy a design brief' },
-    markdown: { label: 'Folder with Markdown', hint: 'Zip: one file per item' },
-    json: { label: 'JSON', hint: 'Canvas and item data' },
-    images: { label: 'Images', hint: 'Zip of every cover' },
+    package: { label: 'Package', hint: 'Markdown, JSON, images' },
   };
   async function run(fmt, m, toast) {
     const base = slugName(m.name);
-    if (fmt === 'json') {
-      download(base + '.json', JSON.stringify({ format: 'stello-canvas', version: 2, exported_at: new Date().toISOString(), canvas: m.doc, items: m.cards.map(c => ({ slug: c.slug, title: c.item.title, url: urlOf(c.item), domain: c.item.domain, kind: c.item.kind, image: c.image ? abs(c.image) : null, tags: c.item.tags, summary: c.item.summary, x: c.x, y: c.y, w: c.w, h: c.h, groups: c.groups })) }, null, 2), 'application/json');
-      return toast('JSON downloaded');
-    }
-    if (fmt === 'markdown' || fmt === 'images') {
+    const json = () => JSON.stringify({ format: 'stello-canvas', version: 2, exported_at: new Date().toISOString(), canvas: m.doc, items: m.cards.map(c => ({ slug: c.slug, title: c.item.title, url: urlOf(c.item), domain: c.item.domain, kind: c.item.kind, image: c.image ? abs(c.image) : null, tags: c.item.tags, summary: c.item.summary, x: c.x, y: c.y, w: c.w, h: c.h, groups: c.groups, file: c.file ? 'items/' + c.file : null, image_file: c.imageFile ? 'images/' + c.imageFile : null })) }, null, 2);
+    if (fmt === 'package') {
       toast(`Preparing ${m.cards.length} items…`);
       const files = [];
       const imgs = await pool(m.cards, 6, async (c, i) => { if (!c.image) return null; const r = await fetchBytes(c.image); if (!r) return null; const name = `${String(i + 1).padStart(3, '0')}-${slugName(c.item.title || c.item.domain || c.slug).slice(0, 40)}.${extFor(r.type, c.image)}`; c.imageFile = name; return { name, bytes: r.bytes }; });
-      if (fmt === 'images') {
-        imgs.forEach(f => f && files.push({ name: `${base}/${f.name}`, data: f.bytes }));
-        if (!files.length) return toast('No images on this canvas');
-        download(base + '-images.zip', zip(files));
-        return toast(`${files.length} images downloaded`);
-      }
       m.cards.forEach((c, i) => { c.file = `${String(i + 1).padStart(3, '0')}-${slugName(c.item.title || c.item.domain || c.slug).slice(0, 50)}.md`; });
       files.push({ name: `${base}/README.md`, data: overviewMd(m) });
       m.cards.forEach(c => files.push({ name: `${base}/items/${c.file}`, data: itemMd(c) }));
+      files.push({ name: `${base}/canvas.json`, data: json() });
       imgs.forEach(f => f && files.push({ name: `${base}/images/${f.name}`, data: f.bytes }));
       download(base + '.zip', zip(files));
-      return toast('Markdown folder downloaded');
+      const n = imgs.filter(Boolean).length;
+      return toast(`Package downloaded: ${m.cards.length} items, ${n} image${n === 1 ? '' : 's'}`);
     }
     if (fmt === 'html' || fmt === 'pdf' || fmt === 'figma') {
       toast('Preparing images…');
