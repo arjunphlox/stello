@@ -38,6 +38,8 @@ final class SyncBridge {
     /// never walks the whole import history.
     private static let linkedAtKey = "webSync.linkedAt"
     private static let batch = 100
+    /// Image uploads and downloads in flight at once.
+    private static let imageConcurrency = 6
 
     private var container: ModelContainer?
     private var running = false
@@ -103,16 +105,13 @@ final class SyncBridge {
         defer { running = false }
         repeat {
             again = false
-            let context = ModelContext(container)
-            context.author = Self.author
-            context.autosaveEnabled = false
             do {
                 if !UserDefaults.standard.bool(forKey: Self.linkedKey) {
-                    try await linkUp(api: api, context: context)
+                    try await linkUp(api: api, container: container)
                 } else {
-                    try await pushHistory(api: api, context: context)
+                    try await pushHistory(api: api, container: container)
                 }
-                try await pull(api: api, context: context)
+                try await pull(api: api, container: container)
                 // The profile header rides along; its failures don't hold up the library.
                 do { try await ProfileSync.sync(api: api) }
                 catch SyncAPI.Failure.unauthorized { throw SyncAPI.Failure.unauthorized }
@@ -131,15 +130,25 @@ final class SyncBridge {
         } while again
     }
 
+    /// A fresh context per batch: when it goes, so do the rows and image bytes it
+    /// loaded, so memory stays at one batch however big the library is.
+    private func makeContext(_ container: ModelContainer) -> ModelContext {
+        let context = ModelContext(container)
+        context.author = Self.author
+        context.autosaveEnabled = false
+        return context
+    }
+
     // MARK: - First link-up
 
     /// First run on this device: send every item in full (clock = its `updatedAt`) so the
     /// server keeps whichever side is newer per field, then the pull brings back the result.
-    private func linkUp(api: SyncAPI, context: ModelContext) async throws {
+    private func linkUp(api: SyncAPI, container: ModelContainer) async throws {
         // History from now on is read normally; everything before is covered by the full push.
         UserDefaults.standard.set(Date.now.addingTimeInterval(-1).timeIntervalSince1970, forKey: Self.linkedAtKey)
         var offset = 0
         while true {
+            let context = makeContext(container)
             var descriptor = FetchDescriptor<Item>(sortBy: [SortDescriptor(\.addedAt)])
             descriptor.fetchOffset = offset
             descriptor.fetchLimit = Self.batch
@@ -162,13 +171,14 @@ final class SyncBridge {
 
     // MARK: - Push
 
-    private func pushHistory(api: SyncAPI, context: ModelContext) async throws {
-        let read = try readHistory(context: context, after: loadToken())
+    private func pushHistory(api: SyncAPI, container: ModelContainer) async throws {
+        let read = try readHistory(context: makeContext(container), after: loadToken())
         guard !read.changes.isEmpty else { saveToken(read.lastToken); return }
 
         let ids = Array(read.changes.keys)
         for start in stride(from: 0, to: ids.count, by: Self.batch) {
             let slice = Array(ids[start..<min(start + Self.batch, ids.count)])
+            let context = makeContext(container)
             var changes: [SyncWire.Change] = []
             var live: [Item] = []
             for id in slice {
@@ -205,16 +215,31 @@ final class SyncBridge {
     }
 
     /// Uploads covers this device captured itself, so the web copy can show them.
+    /// Several at a time; each image's bytes are read only when its upload starts.
     private func uploadMissingImages(_ items: [Item], api: SyncAPI, context: ModelContext) async throws {
-        var uploaded = false
-        for item in items {
-            for image in item.images ?? [] where SyncWire.webPath(of: image) == nil {
-                guard let data = image.data, !data.isEmpty else { continue }
-                image.remotePath = try await api.uploadImage(data, contentType: Self.contentType(of: data))
-                uploaded = true
+        let pending = items.flatMap { ($0.images ?? []).filter { SyncWire.webPath(of: $0) == nil } }
+        guard !pending.isEmpty else { return }
+        var paths: [Int: String] = [:]
+        try await withThrowingTaskGroup(of: (Int, String).self) { group in
+            var next = 0
+            func startNext() {
+                while next < pending.count {
+                    let index = next
+                    next += 1
+                    guard let data = pending[index].data, !data.isEmpty else { continue }
+                    let type = Self.contentType(of: data)
+                    group.addTask { (index, try await api.uploadImage(data, contentType: type)) }
+                    return
+                }
+            }
+            for _ in 0..<Self.imageConcurrency { startNext() }
+            while let (index, path) = try await group.next() {
+                paths[index] = path
+                startNext()
             }
         }
-        if uploaded { try context.save() }
+        for (index, path) in paths { pending[index].remotePath = path }
+        if !paths.isEmpty { try context.save() }
     }
 
     nonisolated static func contentType(of data: Data) -> String {
@@ -228,17 +253,18 @@ final class SyncBridge {
 
     // MARK: - Pull
 
-    private func pull(api: SyncAPI, context: ModelContext) async throws {
+    private func pull(api: SyncAPI, container: ModelContainer) async throws {
         var cursor = UserDefaults.standard.integer(forKey: Self.cursorKey)
         // The first pull brings the whole web library; only later pulls carry new web saves.
         let queueClassify = cursor > 0
         var queued = 0
         // Edits made since the push (here, or arriving from another Apple device) are
         // newer than anything the server sent before them.
-        let pendingIDs = Set(try readHistory(context: context, after: loadToken()).changes.keys)
+        let pendingIDs = Set(try readHistory(context: makeContext(container), after: loadToken()).changes.keys)
 
         while true {
             let page = try await api.pull(since: cursor)
+            let context = makeContext(container)
             var downloads: [(ItemImage, String)] = []
             for start in stride(from: 0, to: page.items.count, by: Self.batch) {
                 for row in page.items[start..<min(start + Self.batch, page.items.count)] {
@@ -281,10 +307,12 @@ final class SyncBridge {
         return skip.contains("images") ? [] : SyncWire.applyImages(row, to: item)
     }
 
-    /// Fetches web images 6 at a time and stores the bytes on the new rows.
+    /// Fetches web images a few at a time and stores the bytes on the new rows, saving
+    /// after each group so the bytes leave memory as they land.
     private func download(_ jobs: [(ItemImage, String)], api: SyncAPI, context: ModelContext) async throws {
-        for start in stride(from: 0, to: jobs.count, by: 6) {
-            let slice = Array(jobs[start..<min(start + 6, jobs.count)])
+        let step = Self.imageConcurrency
+        for start in stride(from: 0, to: jobs.count, by: step) {
+            let slice = Array(jobs[start..<min(start + step, jobs.count)])
             let paths = slice.map(\.1)
             let results: [Int: Data] = await withTaskGroup(of: (Int, Data?).self) { group in
                 for (i, path) in paths.enumerated() {
