@@ -20,6 +20,9 @@ struct ContentView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var isResizingPanel = false
     @State private var isDropTargeted = false
+    @State private var showCompactSettings = false
+    @State private var showCompactCapture = false
+    private var canvasStore: CanvasStore { .shared }
 
     private var isRegular: Bool { hSizeClass == .regular }
 
@@ -102,6 +105,22 @@ struct ContentView: View {
         guard args.contains(where: { $0.hasPrefix("-screenshot") }) else { return }
 
         let sortedItems = screenshotItems
+
+        // Canvas screenshots: a throwaway local canvas with the first few items.
+        if args.contains("-screenshotCanvas") || args.contains("-screenshotSplit") {
+            canvasStore.viewMode = args.contains("-screenshotSplit") ? .split : .canvas
+            if canvasStore.doc.cards.isEmpty, sortedItems.count >= 6 {
+                var x: CGFloat = 0
+                for item in sortedItems.prefix(6) {
+                    let img = item.coverImage
+                    let h = CanvasMetrics.cardHeight(imageWidth: img?.width, imageHeight: img?.height,
+                                                     hasImage: !(img?.data?.isEmpty ?? true))
+                    canvasStore.add([item.slug], at: CGPoint(x: x, y: 0), height: { _ in h })
+                    x += CanvasMetrics.cardWidth + 60
+                }
+                canvasStore.cameraPlaced = false
+            }
+        }
 
         if args.contains("-screenshotPanelHalf") {
             panelWidthFraction = 0.5
@@ -216,7 +235,16 @@ struct ContentView: View {
             // Cards + header keep their exact baseline x via compensating padding/frames.
             let gridColumnWidth = gridWidth + StelloLayout.windowInset
 
+            // Grid / Split / Canvas (web #94-#99). Split: grid on the left (46%),
+            // the canvas as an inset panel on the right. Canvas: the grid leaves the
+            // hierarchy entirely, so nothing renders behind it (web #98 lesson).
+            let mode = canvasStore.viewMode
+            let splitGridWidth = ((gridWidth - StelloLayout.columnGap) * 0.46).rounded()
+            let shownGridWidth = mode == .split ? splitGridWidth : gridWidth
+            let canvasFullBleed = mode == .canvas && !panelOpen
+
             HStack(alignment: .top, spacing: StelloLayout.columnGap) {
+                if mode != .canvas {
                 ZStack(alignment: .topTrailing) {
                     MasonryGridView(
                         embedInPanelLayout: true,
@@ -232,21 +260,43 @@ struct ContentView: View {
                         onImport: { togglePanel(.import) },
                         onSettings: { togglePanel(.settings) }
                     )
-                    .frame(width: gridColumnWidth)
+                    .frame(width: shownGridWidth + StelloLayout.windowInset)
                     .frame(maxHeight: .infinity)
 
                     headerOverlay(
                         itemCount: allItems.count,
                         headerScrollProgress: headerScrollProgress
                     )
-                    .frame(width: gridWidth)
+                    .frame(width: shownGridWidth)
                 }
-                .frame(width: gridColumnWidth)
+                .frame(width: shownGridWidth + StelloLayout.windowInset)
                 .frame(maxHeight: .infinity)
                 // Horizontal outset keeps the selection ring visible on edge cards,
                 // which sit flush with the header edges (ring slack, not card inset).
                 .clipShape(HorizontalOutsetClip(outset: StelloLayout.gridRingClipOutset))
                 .layoutPriority(0)
+                }
+
+                if mode == .split {
+                    CanvasView(isPanel: true, onOpen: openFromCanvas)
+                        .frame(width: max(0, gridWidth - StelloLayout.columnGap - splitGridWidth))
+                        .padding(.top, StelloLayout.windowInset)
+                        .padding(.bottom, StelloLayout.bottomEdgeGap())
+                        .transition(.opacity)
+                } else if mode == .canvas {
+                    CanvasView(showsZoom: false, onOpen: openFromCanvas)
+                        .overlay(alignment: .bottom) {
+                            CanvasBottomBar(
+                                onAdd: { togglePanel(.import) },
+                                onSettings: { togglePanel(.settings) }
+                            )
+                            .padding(.leading, StelloLayout.windowInset)
+                            .padding(.trailing, canvasFullBleed ? StelloLayout.windowInset : 0)
+                            .padding(.bottom, StelloLayout.bottomEdgeGap())
+                        }
+                        .frame(width: canvasFullBleed ? geo.size.width : gridColumnWidth)
+                        .transition(.opacity)
+                }
 
                 if panelOpen {
                     SidePanelView(
@@ -276,7 +326,7 @@ struct ContentView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            .padding(.trailing, StelloLayout.windowInset)
+            .padding(.trailing, canvasFullBleed ? 0 : StelloLayout.windowInset)
         }
         .clipped()
         #if os(macOS)
@@ -298,13 +348,43 @@ struct ContentView: View {
 
     private var compactLayout: some View {
         NavigationStack {
-            MasonryGridView(
-                catalogItems: allItems,
-                selectedTagNames: $selectedTagNames,
-                needsReviewOnly: $needsReviewOnly,
-                onCardTap: { selectedItem = $0 },
-                isDropTargeted: isDropTargeted
-            )
+            // Phones: Grid or Canvas (Split falls back to Canvas, web #97).
+            if canvasStore.viewMode == .grid {
+                MasonryGridView(
+                    catalogItems: allItems,
+                    selectedTagNames: $selectedTagNames,
+                    needsReviewOnly: $needsReviewOnly,
+                    onCardTap: { selectedItem = $0 },
+                    isDropTargeted: isDropTargeted
+                )
+            } else {
+                CanvasView(showsZoom: false, onOpen: openFromCanvas)
+                    .ignoresSafeArea(edges: .bottom)
+                    .overlay(alignment: .bottom) {
+                        CanvasBottomBar(
+                            compactPhone: true,
+                            onAdd: { showCompactCapture = true },
+                            onSettings: { showCompactSettings = true }
+                        )
+                        .padding(.horizontal, StelloLayout.windowInset)
+                        .padding(.bottom, StelloLayout.bottomEdgeGap())
+                        .ignoresSafeArea(edges: .bottom)
+                    }
+                    #if os(iOS)
+                    .navigationBarHidden(true)
+                    #endif
+                    .sheet(isPresented: $showCompactSettings) {
+                        SettingsView()
+                            .environment(\.appTheme, theme)
+                            .environment(UserProfileStore.shared)
+                            .preferredColorScheme(theme.colorScheme)
+                    }
+                    .sheet(isPresented: $showCompactCapture) {
+                        CaptureSheet()
+                            .environment(\.appTheme, theme)
+                            .preferredColorScheme(theme.colorScheme)
+                    }
+            }
         }
         #if os(iOS)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -328,6 +408,16 @@ struct ContentView: View {
         } else {
             selectedItem = item
             panelContent = .itemDetail
+        }
+    }
+
+    /// Double-click / Open on a canvas card: the item panel, as in the grid.
+    private func openFromCanvas(_ item: Item) {
+        if isRegular {
+            selectedItem = item
+            panelContent = .itemDetail
+        } else {
+            selectedItem = item
         }
     }
 

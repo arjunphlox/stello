@@ -586,6 +586,24 @@ struct ItemCardView: View {
             }
         }
 
+        // Web #97: every platform can send a card to the canvas from its menu.
+        if CanvasStore.shared.doc.contains(item.slug) {
+            Button {
+                CanvasStore.shared.showOnCanvas(item.slug)
+            } label: {
+                Label("Show on Canvas", systemImage: "point.3.connected.trianglepath.dotted")
+            }
+        } else {
+            Button {
+                let img = item.coverImage
+                CanvasStore.shared.addFromMenu(item.slug, height: CanvasMetrics.cardHeight(
+                    imageWidth: img?.width, imageHeight: img?.height,
+                    hasImage: !(img?.data?.isEmpty ?? true)))
+            } label: {
+                Label("Add to Canvas", systemImage: "plus.rectangle.on.rectangle")
+            }
+        }
+
         Button {
             enrichmentCoordinator.scheduleEnrichment(for: item, context: context, force: true)
         } label: {

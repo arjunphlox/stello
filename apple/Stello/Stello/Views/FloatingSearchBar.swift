@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Bottom control row — account, search, Filter, Add (web order, PR #99) — floats over the grid.
+/// Bottom control row — account, view switch, search, Filter, Add (web order, PR #99) — floats over the grid.
 struct GridBottomControlBar: View {
     @Binding var searchText: String
     var hasActiveFilters: Bool = false
@@ -37,6 +37,7 @@ struct GridBottomControlBar: View {
                 action: onSettings
             )
             .id(profile.avatarRevision)
+            CanvasModeSwitch(compactPhone: compactPhone)
             FloatingSearchField(text: $searchText, compactPhone: compactPhone)
             StelloGlassIconButton(
                 systemName: "line.3.horizontal.decrease",

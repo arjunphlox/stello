@@ -21,6 +21,17 @@
         { "path": "StelloApp.swift", "target-membership": [ "Stello/compile-sources" ] },
         {
           "kind": "group",
+          "path": "Canvas",
+          "children": [
+            { "path": "CanvasAPI.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "CanvasCardView.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "CanvasDoc.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "CanvasModeSwitch.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "CanvasStore.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "CanvasView.swift", "target-membership": [ "Stello/compile-sources" ] },
+          ],
+        }, {
+          "kind": "group",
           "path": "Capture",
           "children": [
             {
@@ -261,6 +272,7 @@
         { "path": "RevisitTrackingTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "SearchBlobTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ProfileSyncTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "CanvasDocTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "SyncWireTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "StelloTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ToolKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
