@@ -30,6 +30,15 @@ struct CanvasView: View {
     @State private var panStart: CanvasCamera?
     @State private var pinchStart: CanvasCamera?
     @State private var dropTargeted = false
+    // Layer 1 (stage 3): features of the canvas items, families, and what the
+    // lines follow (dragged ?? selected ?? hovered card).
+    @State private var features: [String: [SimFeature]] = [:]
+    @State private var inverted: [String: [String]] = [:]
+    @State private var families: [CanvasFamily] = []
+    @State private var hoverSlug: String?
+    @State private var openDetails: Set<String> = []
+    @State private var suggestion: CanvasGroupSuggestion?
+    @State private var nearLinks: [SimNear] = []
     @FocusState private var focused: Bool
 
     private var store: CanvasStore { .shared }
@@ -40,7 +49,9 @@ struct CanvasView: View {
                 dotGrid(store.camera)
                     .contentShape(Rectangle())
                     .gesture(panGesture)
-                    .onTapGesture { store.selected = nil; focused = true }
+                    .onTapGesture { store.selected = nil; openDetails = []; focused = true }
+
+                annotations(size: geo.size)
 
                 world(size: geo.size)
 
@@ -98,6 +109,7 @@ struct CanvasView: View {
             }
             .onChange(of: store.cameraPlaced) { _, placed in if !placed { placeCamera(size: geo.size) } }
             .onChange(of: store.slugs) { _, _ in refreshIndex() }
+            .onChange(of: store.doc) { _, _ in refreshFamilies() }
             .onChange(of: store.focusSlug) { _, _ in focusIfAsked(size: geo.size) }
             .task { await store.pull(); refreshIndex() }
         }
@@ -146,25 +158,139 @@ struct CanvasView: View {
             ForEach(visible, id: \.slug) { c in
                 if let item = index[c.slug] {
                     let moving = dragSlug == c.slug
+                    let open = openDetails.contains(c.slug)
                     CanvasCardView(item: item, height: height(item),
                                    isSelected: store.selected == c.slug,
-                                   counterScale: 1 / cam.k)
+                                   counterScale: 1 / cam.k,
+                                   detailsOpen: open,
+                                   onDetails: { toggleDetails(c.slug) })
                         .shadow(color: .black.opacity(moving ? 0.28 : 0), radius: 12, y: 6)
                         .offset(x: c.x + (moving ? dragDelta.width : 0),
                                 y: c.y + (moving ? dragDelta.height : 0))
                         .gesture(cardDrag(c.slug))
                         .onTapGesture(count: 2) { onOpen(item) }
                         .onTapGesture { store.selected = c.slug; focused = true }
+                        .onHover { inside in
+                            if inside { hoverSlug = c.slug } else if hoverSlug == c.slug { hoverSlug = nil }
+                        }
                         .contextMenu {
                             Button("Open") { onOpen(item) }
+                            Button(open ? "Hide Details" : "Show Details") { toggleDetails(c.slug) }
+                            if store.doc.groups.contains(where: { $0.slugs.contains(c.slug) }) {
+                                Button("Remove from Group") { store.leaveGroup(c.slug) }
+                            }
                             Button("Remove from Canvas", role: .destructive) { store.remove([c.slug]) }
                         }
-                        .zIndex(moving ? 1 : 0)
+                        .zIndex(moving ? 2 : open ? 1 : 0)
                 }
             }
         }
         .scaleEffect(cam.k, anchor: .topLeading)
         .offset(x: cam.x, y: cam.y)
+    }
+
+    /// Families, Layer 1 lines and the "Drop to group" box, drawn in screen space
+    /// under the cards (web canvas draw pass). Lines show only for the card you
+    /// drag, select or hover, so the canvas stays quiet otherwise.
+    private func annotations(size: CGSize) -> some View {
+        let cam = store.camera
+        let live = rects()
+        let view = CGRect(origin: .zero, size: size).insetBy(dx: -200, dy: -200)
+        let text = theme.textPrimary
+        let accent = theme.accentColor
+        let surface = theme.surfaceRaised
+        let focus = dragSlug ?? store.selected ?? hoverSlug
+        let lines: [(a: String, b: String, kind: SimKind, label: String?, alpha: Double, width: CGFloat)]
+        if let d = dragSlug {
+            lines = nearLinks.map { n in
+                let a = max(0.3, 1 - Double(n.distance) / 720)
+                return (d, n.b, n.kind, n.distance < 720 * 0.65 ? n.label : nil, a, CGFloat(1.4 + a))
+            }
+        } else if let f = focus, features[f] != nil {
+            lines = CanvasSimilarity.neighbours(of: f, features: features, inverted: inverted)
+                .map { ($0.a, $0.b, $0.kind, cam.k >= 0.25 ? $0.label : nil, 0.95, 2) }
+        } else {
+            lines = []
+        }
+        let fams = families
+        let sug = suggestion
+        let dragging = dragSlug
+        return Canvas { ctx, _ in
+            func screen(_ r: CGRect) -> CGRect {
+                CGRect(x: r.minX * cam.k + cam.x, y: r.minY * cam.k + cam.y, width: r.width * cam.k, height: r.height * cam.k)
+            }
+            func pt(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x * cam.k + cam.x, y: p.y * cam.k + cam.y) }
+            func pill(_ label: String, at p: CGPoint, color: Color, anchor: UnitPoint, filled: Bool = false) -> CGRect {
+                let t = ctx.resolve(Text(label).font(.karst(size: 11, weight: .medium))
+                    .foregroundColor(filled ? .white : color))
+                let m = t.measure(in: CGSize(width: 320, height: 30))
+                let w = m.width + 14, h = m.height + 6
+                let r = CGRect(x: p.x - w * anchor.x, y: p.y - h * anchor.y, width: w, height: h)
+                let shape = Path(roundedRect: r, cornerRadius: h / 2)
+                ctx.fill(shape, with: .color(filled ? color : surface))
+                if !filled { ctx.stroke(shape, with: .color(color.opacity(0.35)), lineWidth: 1) }
+                ctx.draw(t, at: CGPoint(x: r.midX, y: r.midY), anchor: .center)
+                return r
+            }
+
+            // Families: a soft tint behind the members, pills naming what they share.
+            for fam in fams {
+                let members = fam.slugs.filter { $0 != dragging || fam.slugs.count == 1 }.compactMap { live[$0] }
+                guard let first = members.first else { continue }
+                let box = screen(members.dropFirst().reduce(first) { $0.union($1) }.insetBy(dx: -18, dy: -18))
+                guard box.intersects(view) else { continue }
+                let color = fam.groupID != nil ? accent : (fam.kind?.color(text: text) ?? text)
+                let shape = Path(roundedRect: box, cornerRadius: max(6, 20 * cam.k))
+                ctx.fill(shape, with: .color(color.opacity(0.07)))
+                ctx.stroke(shape, with: .color(color.opacity(0.25)), style: StrokeStyle(lineWidth: 1, dash: fam.groupID != nil ? [] : [4, 4]))
+                guard box.width >= 90 else { continue }
+                var x = box.minX
+                for (i, p) in fam.pills.enumerated() {
+                    let r = pill(p, at: CGPoint(x: x, y: box.minY - 6), color: color, anchor: .bottomLeading, filled: i == 0)
+                    x = r.maxX + 4
+                    if x > box.maxX - 40 { break }
+                }
+            }
+
+            // Layer 1 lines: right-angle runs, a dot at each end, the shared trait midway.
+            for l in lines {
+                guard let ra = live[l.a], let rb = live[l.b] else { continue }
+                let pts = CanvasSimilarity.route(from: ra, to: rb).map(pt)
+                guard pts.count >= 2 else { continue }
+                let color = l.kind.color(text: text).opacity(l.alpha)
+                var path = Path()
+                path.move(to: pts[0])
+                if pts.count > 2 {
+                    for i in 1..<(pts.count - 1) {
+                        let r = min(10, hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y) / 2,
+                                    hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y) / 2)
+                        path.addArc(tangent1End: pts[i], tangent2End: pts[i + 1], radius: r)
+                    }
+                }
+                path.addLine(to: pts[pts.count - 1])
+                ctx.stroke(path, with: .color(color),
+                           style: StrokeStyle(lineWidth: l.width, lineCap: .round, dash: l.kind.dashed ? [6, 5] : []))
+                for e in [pts[0], pts[pts.count - 1]] {
+                    ctx.fill(Path(ellipseIn: CGRect(x: e.x - 3.2, y: e.y - 3.2, width: 6.4, height: 6.4)), with: .color(color))
+                }
+                if let label = l.label {
+                    let mid = pts.count == 4
+                        ? CGPoint(x: (pts[1].x + pts[2].x) / 2, y: (pts[1].y + pts[2].y) / 2)
+                        : CGPoint(x: (pts[0].x + pts[pts.count - 1].x) / 2, y: (pts[0].y + pts[pts.count - 1].y) / 2)
+                    _ = pill(CanvasSimilarity.cap(label), at: mid, color: l.kind.color(text: text), anchor: .center)
+                }
+            }
+
+            // "Drop to group": a dotted box around what dropping would group.
+            if let sug {
+                let box = screen(sug.box).insetBy(dx: -16 * cam.k, dy: -16 * cam.k)
+                let shape = Path(roundedRect: box, cornerRadius: max(6, 20 * cam.k))
+                ctx.fill(shape, with: .color(accent.opacity(0.06)))
+                ctx.stroke(shape, with: .color(accent), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+                _ = pill(sug.label, at: CGPoint(x: box.midX, y: box.minY - 6), color: accent, anchor: .bottom, filled: true)
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     private var emptyState: some View {
@@ -237,13 +363,32 @@ struct CanvasView: View {
                 if dragSlug != slug { dragSlug = slug; store.selected = slug }
                 let k = store.camera.k
                 dragDelta = CGSize(width: v.translation.width / k, height: v.translation.height / k)
+                let all = rects()
+                if let r = all[slug] {
+                    var others = all
+                    others[slug] = nil
+                    suggestion = CanvasSimilarity.suggestion(for: slug, at: r, rects: others,
+                                                             families: families, features: features)
+                    nearLinks = CanvasSimilarity.near(slug, at: r, rects: others, features: features)
+                }
             }
             .onEnded { _ in
                 if let c = store.doc.card(slug) {
-                    store.move(slug, to: CGPoint(x: c.x + dragDelta.width, y: c.y + dragDelta.height))
+                    let to = CGPoint(x: c.x + dragDelta.width, y: c.y + dragDelta.height)
+                    let r = CGRect(origin: to, size: CGSize(width: CanvasMetrics.cardWidth, height: height(slug: slug)))
+                    let all = rects()
+                    let group = store.doc.groups.first { $0.slugs.contains(slug) }
+                    let leave = suggestion == nil && group.map { g in
+                        CanvasSimilarity.leaves(r, others: g.slugs.filter { $0 != slug }.compactMap { all[$0] })
+                    } == true
+                    let joined = suggestion
+                    store.move(slug, to: to, join: joined, leave: leave)
+                    if let joined { store.notice = joined.joining ? "Added to \(joined.name)" : "Grouped as \(joined.name)" }
                 }
                 dragSlug = nil
                 dragDelta = .zero
+                suggestion = nil
+                nearLinks = []
             }
     }
 
@@ -335,7 +480,49 @@ struct CanvasView: View {
         let missing = slugs.filter { index[$0] == nil }
         var next = index.filter { store.slugs.contains($0.key) }
         for item in fetch(missing) where next[item.slug] == nil { next[item.slug] = item }
-        if next.count != index.count || !missing.isEmpty { index = next }
+        if next.count != index.count || !missing.isEmpty {
+            index = next
+            refreshFeatures()
+        } else if Set(features.keys) != Set(index.keys) {
+            refreshFeatures()
+        }
+    }
+
+    /// World rects of the cards on the canvas, with the dragged card where it is now.
+    private func rects() -> [String: CGRect] {
+        var out: [String: CGRect] = [:]
+        for c in store.doc.cards {
+            guard let item = index[c.slug] else { continue }
+            let moving = c.slug == dragSlug
+            out[c.slug] = CGRect(x: c.x + (moving ? dragDelta.width : 0), y: c.y + (moving ? dragDelta.height : 0),
+                                 width: CanvasMetrics.cardWidth, height: height(item))
+        }
+        return out
+    }
+
+    /// Features of every item on the canvas; only the canvas items, never the library.
+    private func refreshFeatures() {
+        var next: [String: [SimFeature]] = [:]
+        for (slug, item) in index {
+            let kind = CanvasSimilarity.kindName(kindLine: item.cardKindLine, kind: item.kind,
+                                                 hasURL: !(item.sourceURL ?? "").isEmpty)
+            next[slug] = CanvasSimilarity.features(tags: item.tags, kindName: kind, domain: item.domain)
+        }
+        features = next
+        inverted = CanvasSimilarity.invert(next)
+        refreshFamilies()
+    }
+
+    private func refreshFamilies() {
+        var all = rects()
+        if let d = dragSlug, let c = store.doc.card(d), let r = all[d] { all[d] = CGRect(origin: CGPoint(x: c.x, y: c.y), size: r.size) }
+        families = CanvasSimilarity.families(groups: store.doc.groups, rects: all, features: features, inverted: inverted)
+        openDetails = openDetails.filter { store.slugs.contains($0) }
+    }
+
+    private func toggleDetails(_ slug: String) {
+        if openDetails.contains(slug) { openDetails.remove(slug) } else { openDetails.insert(slug) }
+        store.selected = slug
     }
 
     private func drop(_ slugs: [String], at location: CGPoint) -> Bool {

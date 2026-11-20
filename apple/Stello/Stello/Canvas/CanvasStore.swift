@@ -227,6 +227,41 @@ final class CanvasStore {
         }
     }
 
+    /// Move a card and settle its group in the same undo step (web `acceptSuggest` /
+    /// `refamily`). With `join`, it joins that group or starts one with `join.members`;
+    /// with `leave`, it leaves the group it was in. Groups under two cards go away.
+    func move(_ slug: String, to p: CGPoint, join: CanvasGroupSuggestion?, leave: Bool) {
+        change { d in
+            guard let i = d.cards.firstIndex(where: { $0.slug == slug }) else { return }
+            d.cards[i].x = Double(p.x.rounded())
+            d.cards[i].y = Double(p.y.rounded())
+            if let join {
+                for g in d.groups.indices where d.groups[g].id != join.groupID {
+                    d.groups[g].slugs.removeAll { $0 == slug }
+                }
+                if let id = join.groupID, let g = d.groups.firstIndex(where: { $0.id == id }) {
+                    if !d.groups[g].slugs.contains(slug) { d.groups[g].slugs.append(slug) }
+                } else {
+                    // A new group takes its members out of any group they were in.
+                    let members = join.members.filter { $0 != slug } + [slug]
+                    for g in d.groups.indices { d.groups[g].slugs.removeAll { members.contains($0) } }
+                    d.groups.append(.init(id: CanvasDoc.newID(), name: join.name, slugs: members))
+                }
+            } else if leave {
+                for g in d.groups.indices { d.groups[g].slugs.removeAll { $0 == slug } }
+            }
+            d.groups.removeAll { $0.slugs.count < 2 }
+        }
+    }
+
+    /// Take a card out of your group, leaving it where it is.
+    func leaveGroup(_ slug: String) {
+        change { d in
+            for g in d.groups.indices { d.groups[g].slugs.removeAll { $0 == slug } }
+            d.groups.removeAll { $0.slugs.count < 2 }
+        }
+    }
+
     func remove(_ slugs: Set<String>) {
         change { d in
             d.cards.removeAll { slugs.contains($0.slug) }
