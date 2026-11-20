@@ -20,12 +20,18 @@ final class CanvasStore {
 
     /// Grid, Split or Canvas (web `stello.view`). Phones treat Split as Canvas.
     var viewMode: CanvasViewMode {
-        didSet { UserDefaults.standard.set(viewMode.rawValue, forKey: Self.viewKey) }
+        didSet {
+            // Screenshot runs share the real app's settings; they must not change them.
+            guard !currentID.hasPrefix("local-screenshot") else { return }
+            UserDefaults.standard.set(viewMode.rawValue, forKey: Self.viewKey)
+        }
     }
     /// The canvas camera. Only the canvas and its zoom pill read it.
     var camera = CanvasCamera()
     /// The camera has been placed for the current canvas (fit once on first show).
     var cameraPlaced = false
+    /// You panned or zoomed; until then a resize refits the canvas.
+    @ObservationIgnored var cameraMoved = false
     /// Card to frame and select the next time the canvas shows ("Show on Canvas").
     var focusSlug: String?
     /// Selected card on the canvas.

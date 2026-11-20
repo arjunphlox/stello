@@ -65,19 +65,24 @@ struct CanvasCardView: View {
         }
     }
 
+    /// The source pill keeps 11pt on screen at any zoom (world size = 11 / zoom) and
+    /// truncates inside the card. It hides once the card is too small on screen to
+    /// hold it, so pills never outgrow their cards or run into each other.
     @ViewBuilder private var pill: some View {
         let label = item.displayLink
-        if !label.isEmpty {
+        let onScreen = CanvasMetrics.cardWidth / counterScale
+        if !label.isEmpty, onScreen >= 110 {
+            let s = counterScale
             Text(label)
-                .font(.karst(size: 11, weight: .medium))
+                .font(.karst(size: 11 * s, weight: .medium))
                 .lineLimit(1)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
+                .truncationMode(.middle)
+                .padding(.horizontal, 7 * s)
+                .padding(.vertical, 3 * s)
                 .background(.black.opacity(0.45))
                 .foregroundStyle(.white)
                 .clipShape(Capsule())
-                .scaleEffect(min(counterScale, 4), anchor: .bottomTrailing)
-                .padding(10)
+                .padding(8 * s)
                 .frame(maxWidth: CanvasMetrics.cardWidth, alignment: .trailing)
         }
     }

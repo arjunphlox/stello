@@ -90,7 +90,12 @@ struct CanvasView: View {
                 placeCamera(size: geo.size)
                 focusIfAsked(size: geo.size)
             }
-            .onChange(of: geo.size) { _, size in store.viewportSize = size }
+            .onChange(of: geo.size) { _, size in
+                store.viewportSize = size
+                // Until you move the camera, keep the opening fit centred as the
+                // window or the split settles.
+                if !store.cameraMoved && !store.doc.cards.isEmpty { fitAll(size: size, animated: false) }
+            }
             .onChange(of: store.cameraPlaced) { _, placed in if !placed { placeCamera(size: geo.size) } }
             .onChange(of: store.slugs) { _, _ in refreshIndex() }
             .onChange(of: store.focusSlug) { _, _ in focusIfAsked(size: geo.size) }
@@ -204,6 +209,7 @@ struct CanvasView: View {
                 if pinchStart != nil { return }
                 let start = panStart ?? store.camera
                 panStart = start
+                store.cameraMoved = true
                 var cam = start
                 cam.pan(by: v.translation)
                 store.camera = cam
@@ -217,6 +223,7 @@ struct CanvasView: View {
                 let start = pinchStart ?? store.camera
                 pinchStart = start
                 panStart = nil
+                store.cameraMoved = true
                 var cam = start
                 cam.zoom(to: start.k * v.magnification, anchor: v.startLocation)
                 store.camera = cam
@@ -244,6 +251,7 @@ struct CanvasView: View {
     /// Trackpad: two-finger scroll pans. Mouse wheel pans too; ⌘ or ⌃ + wheel zooms
     /// at the pointer (pinch comes through `MagnifyGesture`).
     private func handleScroll(_ e: NSEvent, at p: CGPoint) {
+        store.cameraMoved = true
         var cam = store.camera
         if e.modifierFlags.contains(.command) || e.modifierFlags.contains(.control) {
             let dy = e.hasPreciseScrollingDeltas ? e.scrollingDeltaY : e.scrollingDeltaY * 8
@@ -295,6 +303,7 @@ struct CanvasView: View {
     }
 
     private func animateCamera(_ edit: (inout CanvasCamera) -> Void) {
+        store.cameraMoved = true
         var cam = store.camera
         edit(&cam)
         withAnimation(.smooth(duration: 0.22)) { store.camera = cam }
@@ -357,6 +366,7 @@ struct CanvasView: View {
         guard let slug = store.focusSlug, let c = store.doc.card(slug), size.width > 0 else { return }
         store.focusSlug = nil
         store.cameraPlaced = true
+        store.cameraMoved = true
         store.selected = slug
         let box = CGRect(x: c.x, y: c.y, width: CanvasMetrics.cardWidth, height: height(slug: slug))
         withAnimation(.smooth(duration: 0.3)) {
@@ -377,6 +387,7 @@ struct CanvasZoomPill: View {
         HStack(spacing: 2) {
             button("minus", "Zoom out") { $0.zoom(to: $0.nextStep(up: false), anchor: centre) }
             Button {
+                store.cameraMoved = true
                 withAnimation(.smooth(duration: 0.22)) { store.camera.zoom(to: 1, anchor: centre) }
             } label: {
                 Text("\(Int((store.camera.k * 100).rounded()))%")
@@ -398,6 +409,7 @@ struct CanvasZoomPill: View {
 
     private func button(_ symbol: String, _ label: String, _ edit: @escaping (inout CanvasCamera) -> Void) -> some View {
         Button {
+            store.cameraMoved = true
             var cam = store.camera
             edit(&cam)
             withAnimation(.smooth(duration: 0.22)) { store.camera = cam }

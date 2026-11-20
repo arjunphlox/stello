@@ -91,7 +91,7 @@ struct FloatingSearchField: View {
                 TextField(
                     "",
                     text: $text,
-                    prompt: Text("Search items…").foregroundStyle(theme.textSecondary)
+                    prompt: Text("Search").foregroundStyle(theme.textSecondary)
                 )
                 .textFieldStyle(.plain)
                 .foregroundStyle(theme.textPrimary)
