@@ -210,7 +210,7 @@ private struct ProfileHeaderRow: View {
                         set: { profile.name = $0 }
                     ),
                     placeholder: "Your name",
-                    font: .karst(.title3, weight: .semibold),
+                    font: .karst(.title3, weight: .medium),
                     color: theme.textPrimary
                 )
                 InlineEditableProfileField(

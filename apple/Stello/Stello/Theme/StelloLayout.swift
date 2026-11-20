@@ -1,4 +1,7 @@
 import CoreGraphics
+#if os(iOS)
+import UIKit
+#endif
 
 /// Shared layout constants — mirrors web `.content-inner` / `.header` from `style.css`.
 enum StelloLayout {
@@ -32,39 +35,49 @@ enum StelloLayout {
     static let headerScrollFadeDistance: CGFloat = 48
     /// Floating Liquid Glass control bar — search field height, glass fill, and insets.
     static let floatingSearchBarHeight: CGFloat = 40
-    /// Bottom control bar icon buttons — 40×40 circles (Add, Filter, Avatar).
+    /// Bottom control bar icon buttons — 40×40 circles on Mac and iPad.
     static let controlBarButtonSize: CGFloat = 40
-    /// iPhone compact: taller control row (search + icon buttons).
-    static let compactControlBarHeight: CGFloat = 60
-    static let compactControlBarButtonSize: CGFloat = 60
-    static let compactControlBarSymbolSize: CGFloat = 20
-    /// iPhone compact: lift the control row up from the home-indicator edge.
-    static let controlBarCompactBottomLift: CGFloat = 40
+    /// iPhone: 44pt controls (the web phone bar and Apple's minimum touch target).
+    static let compactControlBarHeight: CGFloat = 44
+    static let compactControlBarButtonSize: CGFloat = 44
+    static let compactControlBarSymbolSize: CGFloat = 18
     /// iPhone: gap between Dynamic Island / notch and the sticky header card.
-    static let compactHeaderBelowSafeAreaGap: CGFloat = 8
+    /// The top is the one edge that adds gutter + safe area (as on the web).
+    static let compactHeaderBelowSafeAreaGap: CGFloat = windowInset
     /// Reduced tint so Liquid Glass occlusion reads through the control cluster.
     static let controlBarGlassFillOpacity: CGFloat = 0.62
     static let controlBarSpacing: CGFloat = 8
-    /// iPhone: inset from rounded screen corners (beyond windowInset).
-    static let controlBarSideInsetCompact: CGFloat = 16
-    /// iPhone: extra margin below the home-indicator safe area.
-    static let controlBarBottomExtraCompact: CGFloat = 10
-    /// iPad / regular width: sit closer to the bottom edge.
-    static let controlBarBottomMarginRegular: CGFloat = 8
-    /// macOS: comfortable bottom inset for the floating row.
-    static let controlBarBottomMarginMac: CGFloat = 12
-    /// Scroll padding so last grid cards clear the floating control overlay.
-    static var floatingSearchScrollInset: CGFloat {
-        floatingSearchBarHeight + controlBarBottomMarginRegular + controlBarBottomExtraCompact
+
+    // MARK: Edge gaps (web `--gap-*`, PR #95)
+    // One gap per side: the gutter, or the device's safe-area inset where that is
+    // larger. Never both added together, so the bottom controls sit as far from the
+    // screen edge as the header and grid sit from theirs.
+
+    /// The gap for one edge: `max(gutter, safe-area inset)`.
+    static func edgeGap(safeInset: CGFloat) -> CGFloat {
+        max(windowInset, safeInset)
     }
-    /// iPhone compact scroll inset below the floating control row.
-    static var compactFloatingSearchScrollInset: CGFloat {
-        compactControlBarHeight + max(0, controlBarBottomExtraCompact - controlBarCompactBottomLift)
+
+    /// The window's real safe-area insets. Views that ignore the bottom safe area
+    /// (so the grid scrolls under the home indicator) read 0 from their own
+    /// GeometryProxy, which put the iPhone control bar under the screen edge.
+    #if os(iOS)
+    @MainActor static var windowSafeArea: UIEdgeInsets {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let windows = scenes.flatMap(\.windows)
+        return (windows.first(where: \.isKeyWindow) ?? windows.first)?.safeAreaInsets ?? .zero
     }
-    /// Top scroll inset when the sticky header floats over the grid on iPhone.
-    static func compactHeaderScrollInset(safeTop: CGFloat) -> CGFloat {
-        safeTop + compactHeaderBelowSafeAreaGap + headerHeight + sectionGap
+    #endif
+
+    /// Bottom edge gap for the floating control bar and the side panel.
+    @MainActor static func bottomEdgeGap(proxySafeBottom: CGFloat = 0) -> CGFloat {
+        #if os(iOS)
+        edgeGap(safeInset: max(proxySafeBottom, windowSafeArea.bottom))
+        #else
+        edgeGap(safeInset: proxySafeBottom)
+        #endif
     }
+
     /// Control bar height for the current layout width.
     static func controlBarHeight(compactPhone: Bool) -> CGFloat {
         compactPhone ? compactControlBarHeight : floatingSearchBarHeight
@@ -75,33 +88,14 @@ enum StelloLayout {
     static func controlBarSymbolSize(compactPhone: Bool) -> CGFloat {
         compactPhone ? compactControlBarSymbolSize : iconButtonSymbolSize
     }
-    /// Bottom padding for the floating control row (safe-area extra added at call site on iOS).
-    static func controlBarBottomPadding(embedInPanelLayout: Bool, compactPhone: Bool = false) -> CGFloat {
-        #if os(macOS)
-        controlBarBottomMarginMac
-        #else
-        if embedInPanelLayout { return controlBarBottomMarginRegular }
-        if compactPhone {
-            return max(0, controlBarBottomExtraCompact - controlBarCompactBottomLift)
-        }
-        return controlBarBottomExtraCompact
-        #endif
+    /// Scroll padding so the last grid cards clear the floating control bar:
+    /// bar + its edge gap + one section gap.
+    static func floatingSearchScrollInset(compactPhone: Bool, bottomGap: CGFloat) -> CGFloat {
+        controlBarHeight(compactPhone: compactPhone) + bottomGap + sectionGap
     }
-    static func floatingSearchScrollInset(embedInPanelLayout: Bool, compactPhone: Bool) -> CGFloat {
-        if embedInPanelLayout { return floatingSearchScrollInset }
-        #if os(iOS)
-        return compactPhone ? compactFloatingSearchScrollInset : floatingSearchScrollInset
-        #else
-        return floatingSearchScrollInset
-        #endif
-    }
-    /// Horizontal padding for the floating control row.
-    static func controlBarHorizontalPadding(embedInPanelLayout: Bool) -> CGFloat {
-        #if os(iOS)
-        embedInPanelLayout ? 0 : controlBarSideInsetCompact
-        #else
-        embedInPanelLayout ? 0 : windowInset
-        #endif
+    /// Top scroll inset when the sticky header floats over the grid on iPhone.
+    static func compactHeaderScrollInset(safeTop: CGFloat) -> CGFloat {
+        safeTop + compactHeaderBelowSafeAreaGap + headerHeight + sectionGap
     }
     /// Top scroll inset when the header floats over the grid (header + gap + top inset).
     static var headerOverlayScrollInset: CGFloat {

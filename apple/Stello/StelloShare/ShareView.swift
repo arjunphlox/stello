@@ -22,14 +22,14 @@ struct ShareView: View {
                     ProgressView()
                         .scaleEffect(1.4)
                     Text("Saving to Stello…")
-                        .font(.headline)
+                        .font(.headline.weight(.medium))
 
                 case .saved(let title):
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 44))
                         .foregroundStyle(.green)
                     Text("Saved ✓")
-                        .font(.headline)
+                        .font(.headline.weight(.medium))
                     if let title {
                         Text(title)
                             .font(.subheadline)
@@ -43,7 +43,7 @@ struct ShareView: View {
                         .font(.system(size: 44))
                         .foregroundStyle(.orange)
                     Text("Couldn't Save")
-                        .font(.headline)
+                        .font(.headline.weight(.medium))
                     Text(message)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

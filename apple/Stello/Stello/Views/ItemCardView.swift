@@ -400,7 +400,7 @@ struct ItemCardView: View {
             if !item.title.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
-                        .font(.karst(.title3, weight: .semibold))
+                        .font(.karst(.title3, weight: .medium))
                         .foregroundStyle(.white)
                         .lineLimit(3)
                     if let kindLine = item.cardKindLine {
@@ -515,7 +515,7 @@ struct ItemCardView: View {
 
     private func cardBadge<Label: View>(@ViewBuilder _ label: () -> Label) -> some View {
         label()
-            .font(.karst(size: scaledPillSize, weight: .semibold))
+            .font(.karst(size: scaledPillSize, weight: .medium))
             .lineLimit(1)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)

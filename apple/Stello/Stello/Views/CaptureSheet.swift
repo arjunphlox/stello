@@ -118,7 +118,7 @@ struct CaptureContent: View {
     private var secondaryImageCapture: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Or pick an image")
-                .font(.karst(.caption, weight: .semibold))
+                .font(.karst(.caption, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
             PhotosPicker(selection: $pickedPhoto, matching: .images) {
                 Label("Choose Photo", systemImage: "photo")
