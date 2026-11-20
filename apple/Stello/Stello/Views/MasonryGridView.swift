@@ -251,6 +251,14 @@ struct MasonryGridView: View {
         min(max(effectiveScrollOffset, 0) / StelloLayout.headerScrollFadeDistance, 1)
     }
 
+    private static func compactSafeTop(_ viewport: GeometryProxy) -> CGFloat {
+        #if os(iOS)
+        StelloLayout.windowSafeArea.top
+        #else
+        viewport.safeAreaInsets.top
+        #endif
+    }
+
     private func compactScrollTopInset(safeTop: CGFloat) -> CGFloat {
         StelloLayout.compactHeaderScrollInset(safeTop: safeTop)
     }
@@ -266,10 +274,11 @@ struct MasonryGridView: View {
         }
         #if os(iOS)
         .navigationBarHidden(true)
-        // Compact: respect top safe area so the sticky header sits below the notch;
-        // ignore bottom so the grid + control bar bleed to the home-indicator edge.
-        // Background still paints edge-to-edge via `.background { … .ignoresSafeArea() }`.
-        .ignoresSafeArea(edges: embedInPanelLayout ? [] : .bottom)
+        // Compact: the grid runs edge to edge (top and bottom) and places the header
+        // and the control bar itself from the window's safe area. Respecting the top
+        // safe area here as well put the header a second safe area lower (iPhone
+        // showed ~136pt above the header instead of 62 + 12).
+        .ignoresSafeArea(edges: embedInPanelLayout ? [] : [.top, .bottom])
         #endif
         .sheet(isPresented: $showFilterSheet) {
             TagFilterSheet(allItems: allItems, selectedTagNames: $selectedTagNames, needsReviewOnly: $needsReviewOnly)
@@ -340,7 +349,9 @@ struct MasonryGridView: View {
     private var gridWithTimeline: some View {
         ScrollViewReader { scrollProxy in
             GeometryReader { viewport in
-                let safeTop = embedInPanelLayout ? 0 : viewport.safeAreaInsets.top
+                // The window's top inset (Dynamic Island / status bar), read from the
+                // window so a hidden navigation bar can't add to it.
+                let safeTop = embedInPanelLayout ? 0 : Self.compactSafeTop(viewport)
                 let compactScrollInset = embedInPanelLayout
                     ? scrollTopInset
                     : compactScrollTopInset(safeTop: safeTop)

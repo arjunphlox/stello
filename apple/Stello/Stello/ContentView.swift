@@ -301,6 +301,12 @@ struct ContentView: View {
                             .padding(.trailing, canvasFullBleed ? StelloLayout.windowInset : 0)
                             .padding(.bottom, StelloLayout.bottomEdgeGap())
                         }
+                        // Canvas mode keeps the header as a small chip (web view-canvas).
+                        .overlay(alignment: .topLeading) {
+                            StelloHeaderView(itemCount: allItems.count, integratesMacTitleBar: isMac, chip: true)
+                                .padding(.leading, StelloLayout.windowInset)
+                                .padding(.top, StelloLayout.windowInset)
+                        }
                         .frame(width: canvasFullBleed ? geo.size.width : gridColumnWidth)
                         .transition(.opacity)
                 }
@@ -365,8 +371,16 @@ struct ContentView: View {
                     isDropTargeted: isDropTargeted
                 )
             } else {
-                CanvasView(showsZoom: false, onOpen: openFromCanvas)
-                    .ignoresSafeArea(edges: .bottom)
+                // The canvas (and its dot grid) runs under the status bar, as the grid
+                // does; the chip and the canvas's own top overlays sit below it.
+                CanvasView(showsZoom: false, topInset: compactSafeTop, onOpen: openFromCanvas)
+                    .ignoresSafeArea(edges: [.top, .bottom])
+                    .overlay(alignment: .topLeading) {
+                        StelloHeaderView(itemCount: allItems.count, chip: true)
+                            .padding(.leading, StelloLayout.windowInset)
+                            .padding(.top, compactSafeTop + StelloLayout.windowInset)
+                            .ignoresSafeArea(edges: .top)
+                    }
                     .overlay(alignment: .bottom) {
                         CanvasBottomBar(
                             compactPhone: true,
@@ -448,6 +462,14 @@ struct ContentView: View {
     private func markPreviouslyViewedItemReviewed(_ item: Item?) {
         guard let item, item.needsReview else { return }
         try? AwaitingReviewFilter.markReviewed(for: item, context: context)
+    }
+
+    private var compactSafeTop: CGFloat {
+        #if os(iOS)
+        StelloLayout.windowSafeArea.top
+        #else
+        0
+        #endif
     }
 
     private var isMac: Bool {

@@ -12,6 +12,9 @@ struct StelloHeaderView: View {
     var scrollProgress: CGFloat = 0
     /// True while a file drag hovers over the window drop target.
     var isDropTargeted: Bool = false
+    /// Canvas mode (web `html.view-canvas .header`): a small chip, 28pt title,
+    /// 14 × 18 padding, as wide as its content.
+    var chip: Bool = false
 
     @Environment(\.appTheme) private var theme
     @Environment(\.horizontalSizeClass) private var hSizeClass
@@ -20,6 +23,37 @@ struct StelloHeaderView: View {
     private var clampedScroll: CGFloat { min(max(scrollProgress, 0), 1) }
 
     var body: some View {
+        if chip { chipBody } else { fullBody }
+    }
+
+    private var chipBody: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("Stello")
+                .font(.karst(size: 28, weight: .regular))
+                .tracking(-0.84)
+                .lineLimit(1)
+                .fixedSize()
+                .foregroundStyle(theme.accentContrast)
+            if itemCount > 0 {
+                Text("\(itemCount)")
+                    .font(.karst(size: StelloLayout.headerCountSize, weight: .regular))
+                    .foregroundStyle(theme.accentContrast.opacity(0.55))
+                    .baselineOffset(8)
+                    .padding(.leading, StelloLayout.headerCountSpacing)
+                    .fixedSize()
+            }
+        }
+        .allowsHitTesting(false)
+        .padding(.vertical, 14)
+        .padding(.horizontal, 18)
+        // macOS: the traffic lights sit in the chip's top-left, as in the full header.
+        .padding(.leading, integratesMacTitleBar ? StelloLayout.macTitleBarLeadingInset - 18 : 0)
+        .background { headerBackground }
+        .clipShape(RoundedRectangle(cornerRadius: StelloLayout.headerCornerRadius, style: .continuous))
+        .fixedSize()
+    }
+
+    private var fullBody: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             wordmarkGroup

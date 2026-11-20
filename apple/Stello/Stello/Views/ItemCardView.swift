@@ -55,7 +55,7 @@ struct ItemCardView: View {
     @State private var exportImageData = Data()
     @State private var exportBundleData = Data()
 
-    private static let visualCornerRadius: CGFloat = 6
+    private static let visualCornerRadius: CGFloat = 4
     private static let selectionOutlineOffset: CGFloat = 4
     private var primaryImage: ItemImage? { item.coverImage }
 
