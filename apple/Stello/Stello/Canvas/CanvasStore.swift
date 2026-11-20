@@ -34,8 +34,14 @@ final class CanvasStore {
     @ObservationIgnored var cameraMoved = false
     /// Card to frame and select the next time the canvas shows ("Show on Canvas").
     var focusSlug: String?
-    /// Selected card on the canvas.
+    /// Selected card (or note id) on the canvas.
     var selected: String?
+    /// Picking a link's second end or a region note's spot (Layer 2).
+    var pick: CanvasPick?
+    /// Canvases for the doc menu: this account's, plus device-only ones.
+    private(set) var canvases: [CanvasListEntry] = []
+    /// Bumped by the export button; the canvas view builds the Package and saves it.
+    var exportRequest = 0
     /// Visible canvas size, so menu actions can drop at the centre of the view.
     @ObservationIgnored var viewportSize: CGSize = .zero
 
@@ -44,7 +50,10 @@ final class CanvasStore {
     @ObservationIgnored private var dirty = false
     @ObservationIgnored private var pushing = false
 
+    private let isShot: Bool
+
     private static let currentKey = "stello.canvas.current"
+    private static let listKey = "stello.canvas.list"
     /// Not "stello.view": an early test run left a stale value under that name in
     /// the real app's settings, so the shipped key starts clean.
     private static let viewKey = "stello.viewMode"
@@ -54,6 +63,7 @@ final class CanvasStore {
         // Screenshot / demo runs use a throwaway local canvas: never the real doc,
         // never pushed to the server, and they start in Grid.
         let isShot = ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore")
+        self.isShot = isShot
         currentID = isShot ? "local-screenshot"
             : UserDefaults.standard.string(forKey: Self.currentKey) ?? Self.libraryID
         viewMode = isShot ? .grid
@@ -76,9 +86,11 @@ final class CanvasStore {
 
     private struct Local: Codable { var rev: Int; var doc: CanvasDoc }
 
-    private var localURL: URL {
-        let safe = currentID.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
-        return Self.folder.appending(path: "\(safe.isEmpty ? Self.libraryID : safe).json")
+    private var localURL: URL { Self.localURL(for: currentID) }
+
+    private static func localURL(for id: String) -> URL {
+        let safe = id.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        return folder.appending(path: "\(safe.isEmpty ? libraryID : safe).json")
     }
 
     private func loadLocal() {
@@ -227,6 +239,41 @@ final class CanvasStore {
         }
     }
 
+    /// Move a card and settle its group in the same undo step (web `acceptSuggest` /
+    /// `refamily`). With `join`, it joins that group or starts one with `join.members`;
+    /// with `leave`, it leaves the group it was in. Groups under two cards go away.
+    func move(_ slug: String, to p: CGPoint, join: CanvasGroupSuggestion?, leave: Bool) {
+        change { d in
+            guard let i = d.cards.firstIndex(where: { $0.slug == slug }) else { return }
+            d.cards[i].x = Double(p.x.rounded())
+            d.cards[i].y = Double(p.y.rounded())
+            if let join {
+                for g in d.groups.indices where d.groups[g].id != join.groupID {
+                    d.groups[g].slugs.removeAll { $0 == slug }
+                }
+                if let id = join.groupID, let g = d.groups.firstIndex(where: { $0.id == id }) {
+                    if !d.groups[g].slugs.contains(slug) { d.groups[g].slugs.append(slug) }
+                } else {
+                    // A new group takes its members out of any group they were in.
+                    let members = join.members.filter { $0 != slug } + [slug]
+                    for g in d.groups.indices { d.groups[g].slugs.removeAll { members.contains($0) } }
+                    d.groups.append(.init(id: CanvasDoc.newID(), name: join.name, slugs: members))
+                }
+            } else if leave {
+                for g in d.groups.indices { d.groups[g].slugs.removeAll { $0 == slug } }
+            }
+            d.groups.removeAll { $0.slugs.count < 2 }
+        }
+    }
+
+    /// Take a card out of your group, leaving it where it is.
+    func leaveGroup(_ slug: String) {
+        change { d in
+            for g in d.groups.indices { d.groups[g].slugs.removeAll { $0 == slug } }
+            d.groups.removeAll { $0.slugs.count < 2 }
+        }
+    }
+
     func remove(_ slugs: Set<String>) {
         change { d in
             d.cards.removeAll { slugs.contains($0.slug) }
@@ -262,6 +309,202 @@ final class CanvasStore {
         }
     }
 
+    // MARK: - Layer 2: marks, links, notes
+
+    /// Use / Rejected; picking the same mark again clears it and its reason.
+    func setMark(_ slug: String, _ mark: CanvasMark) {
+        change { d in
+            guard let i = d.cards.firstIndex(where: { $0.slug == slug }) else { return }
+            if d.cards[i].state == mark.rawValue {
+                d.cards[i].state = nil
+                d.cards[i].note = nil
+            } else {
+                d.cards[i].state = mark.rawValue
+            }
+        }
+    }
+
+    func setReason(_ slug: String, _ reason: String) {
+        let r = String(reason.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
+        change { d in
+            guard let i = d.cards.firstIndex(where: { $0.slug == slug }) else { return }
+            d.cards[i].note = r.isEmpty ? nil : r
+        }
+    }
+
+    /// A link between two cards or notes; an existing one of the same kind is reused.
+    @discardableResult
+    func addLink(_ a: String, _ b: String, kind: L2Kind, label: String? = nil) -> String? {
+        guard a != b else { return nil }
+        if let dup = doc.links.first(where: {
+            $0.kind == kind.rawValue && (($0.a == a && $0.b == b) || ($0.a == b && $0.b == a))
+        }) { return dup.id }
+        let id = CanvasDoc.newID()
+        change { $0.links.append(.init(id: id, a: a, b: b, kind: kind.rawValue, label: label, source: "mac")) }
+        return id
+    }
+
+    func setLinkLabel(_ id: String, _ label: String) {
+        let l = String(label.trimmingCharacters(in: .whitespacesAndNewlines).prefix(50))
+        change { d in
+            guard let i = d.links.firstIndex(where: { $0.id == id }) else { return }
+            d.links[i].label = l.isEmpty ? nil : l
+        }
+    }
+
+    func removeLink(_ id: String) {
+        change { $0.links.removeAll { $0.id == id } }
+    }
+
+    @discardableResult
+    func addNote(_ kind: CanvasNoteKind, at p: CGPoint, slug: String? = nil,
+                 rx: Double? = nil, ry: Double? = nil) -> String {
+        let id = CanvasDoc.newID()
+        change {
+            $0.notes.append(.init(id: id, kind: kind.rawValue, text: "", x: Double(p.x.rounded()),
+                                  y: Double(p.y.rounded()), near: nil, slug: slug, rx: rx, ry: ry, slugs: nil))
+        }
+        return id
+    }
+
+    /// Note text is committed when you finish typing, so one edit is one undo step.
+    func setNoteText(_ id: String, _ text: String) {
+        change { d in
+            guard let i = d.notes.firstIndex(where: { $0.id == id }) else { return }
+            d.notes[i].text = text
+        }
+    }
+
+    func moveNote(_ id: String, to p: CGPoint) {
+        change { d in
+            guard let i = d.notes.firstIndex(where: { $0.id == id }) else { return }
+            d.notes[i].x = Double(p.x.rounded())
+            d.notes[i].y = Double(p.y.rounded())
+        }
+    }
+
+    /// A note goes with every link that touches it (web).
+    func removeNote(_ id: String) {
+        change { d in
+            d.notes.removeAll { $0.id == id }
+            d.links.removeAll { $0.a == id || $0.b == id }
+        }
+        if selected == id { selected = nil }
+    }
+
+    // MARK: - Named canvases
+
+    /// Known canvases: the server list when signed in, plus device-only ones,
+    /// so the menu works offline too (web `listCanvases`).
+    func refreshList() async {
+        var list = known
+        if !isShot, let api = CanvasAPI.current, let remote = try? await api.list() {
+            let local = list.filter { $0.id.hasPrefix("local-") }
+            list = remote.map {
+                CanvasListEntry(id: $0.id, name: $0.name ?? ($0.id == Self.libraryID ? "Library canvas" : "Untitled canvas"),
+                                cards: $0.cards)
+            } + local
+            saveKnown(list)
+        }
+        if !list.contains(where: { $0.id == Self.libraryID }) {
+            list.append(.init(id: Self.libraryID, name: currentID == Self.libraryID ? doc.name : "Library canvas"))
+        }
+        if let i = list.firstIndex(where: { $0.id == currentID }) {
+            list[i].name = doc.name
+        } else {
+            list.insert(.init(id: currentID, name: doc.name), at: 0)
+        }
+        canvases = list
+    }
+
+    /// Open another canvas. Pending edits to this one are saved first.
+    func switchTo(_ id: String) async {
+        guard id != currentID else { return }
+        await flush()
+        currentID = id
+        if !isShot { UserDefaults.standard.set(id, forKey: Self.currentKey) }
+        undoStack = []
+        dirty = false
+        selected = nil
+        pick = nil
+        focusSlug = nil
+        cameraMoved = false
+        loadLocal()
+        cameraPlaced = false
+        let hadCards = !doc.cards.isEmpty
+        await pull()
+        // The server copy brought the cards: frame them once.
+        if !hadCards && !doc.cards.isEmpty && !cameraMoved { cameraPlaced = false }
+        if let i = canvases.firstIndex(where: { $0.id == id }) { canvases[i].name = doc.name }
+    }
+
+    /// A new empty canvas, or a copy of this one ("Save as a new canvas").
+    func newCanvas(copy: Bool) async {
+        await flush()
+        var fresh = copy ? doc : CanvasDoc(name: "Untitled canvas")
+        fresh.name = copy ? "\(doc.name.isEmpty ? "Canvas" : doc.name) copy" : "Untitled canvas"
+        fresh.v = CanvasDoc.version
+        var id = "local-" + CanvasDoc.newID()
+        var newRev = 0
+        if !isShot, let api = CanvasAPI.current, let project = try? await api.create(fresh) {
+            id = project.id
+            newRev = project.rev
+        }
+        if let data = try? JSONEncoder().encode(Local(rev: newRev, doc: fresh)) {
+            try? data.write(to: Self.localURL(for: id), options: .atomic)
+        }
+        remember(id, fresh.name)
+        await switchTo(id)
+        notice = copy ? "Saved as a new canvas" : nil
+        await refreshList()
+    }
+
+    func rename(_ name: String) {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty, n != doc.name else { return }
+        change { $0.name = n }
+        remember(currentID, n)
+        if let i = canvases.firstIndex(where: { $0.id == currentID }) { canvases[i].name = n }
+    }
+
+    /// Delete this canvas (never the library one) and go back to the library canvas.
+    func deleteCurrent() async {
+        guard currentID != Self.libraryID else { return }
+        let id = currentID
+        pushTask?.cancel()
+        dirty = false
+        if !id.hasPrefix("local-"), let api = CanvasAPI.current { try? await api.delete(id) }
+        try? FileManager.default.removeItem(at: Self.localURL(for: id))
+        remember(id, nil, drop: true)
+        await switchTo(Self.libraryID)
+        notice = "Canvas deleted"
+        await refreshList()
+    }
+
+    private func flush() async {
+        guard dirty else { return }
+        pushTask?.cancel()
+        await push()
+    }
+
+    private var known: [CanvasListEntry] {
+        guard let data = UserDefaults.standard.data(forKey: Self.listKey) else { return [] }
+        return (try? JSONDecoder().decode([CanvasListEntry].self, from: data)) ?? []
+    }
+
+    private func saveKnown(_ list: [CanvasListEntry]) {
+        guard !isShot else { return }
+        let slim = list.prefix(100).map { CanvasListEntry(id: $0.id, name: $0.name) }
+        if let data = try? JSONEncoder().encode(Array(slim)) { UserDefaults.standard.set(data, forKey: Self.listKey) }
+    }
+
+    private func remember(_ id: String, _ name: String?, drop: Bool = false) {
+        var list = known.filter { $0.id != id }
+        if !drop { list.insert(.init(id: id, name: name ?? "Untitled canvas"), at: 0) }
+        saveKnown(list)
+        if drop { canvases.removeAll { $0.id == id } }
+    }
+
     // MARK: - Placement helpers
 
     private struct Near { let x: CGFloat; let y: CGFloat }
@@ -294,4 +537,11 @@ final class CanvasStore {
         }
         return CGPoint(x: x, y: y)
     }
+}
+
+/// One canvas in the doc menu.
+nonisolated struct CanvasListEntry: Codable, Identifiable, Equatable, Sendable {
+    var id: String
+    var name: String
+    var cards: Int? = nil
 }

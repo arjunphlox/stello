@@ -102,6 +102,7 @@ struct CanvasBottomBar: View {
             )
             .id(profile.avatarRevision)
             CanvasModeSwitch(compactPhone: compactPhone)
+            CanvasDocBox(compactPhone: compactPhone)
             Spacer(minLength: 0)
             CanvasZoomPill()
             StelloGlassIconButton(
