@@ -79,6 +79,21 @@ enum StelloStore {
         return try ModelContainer(for: schema, configurations: [config])
     }
 
+    #if DEBUG
+    /// Throwaway on-disk store for the 10k scale check: a fresh file in the temp folder
+    /// each run, no App Group, no CloudKit. On disk so cover bytes sit in external
+    /// storage like the real library, not in RAM.
+    static func makeScaleCheckContainer() throws -> ModelContainer {
+        _ = coverAspectTracking
+        let folder = FileManager.default.temporaryDirectory.appending(path: "StelloScaleCheck", directoryHint: .isDirectory)
+        try? FileManager.default.removeItem(at: folder)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let schema = Schema([Item.self, ItemImage.self, Snippet.self, LocalAttachment.self])
+        let config = ModelConfiguration(schema: schema, url: folder.appending(path: "scale.store"), cloudKitDatabase: .none)
+        return try ModelContainer(for: schema, configurations: [config])
+    }
+    #endif
+
     /// In-memory container for unit tests — no App Group, no CloudKit.
     static func makeInMemoryContainer() throws -> ModelContainer {
         _ = coverAspectTracking
