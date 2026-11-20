@@ -27,6 +27,9 @@ struct CanvasCardView: View {
     var counterScale: CGFloat = 1
     var detailsOpen = false
     var onDetails: (() -> Void)? = nil
+    /// Use / Rejected (Layer 2) and its reason.
+    var mark: CanvasMark? = nil
+    var reason: String? = nil
 
     @Environment(\.appTheme) private var theme
     @State private var decodedKey: String?
@@ -52,7 +55,15 @@ struct CanvasCardView: View {
             }
         }
         .frame(width: CanvasMetrics.cardWidth, height: height)
+        .grayscale(mark == .rejected ? 0.6 : 0)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay {
+            if let mark {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(mark.color, lineWidth: 3 * counterScale)
+            }
+        }
+        .overlay(alignment: .topLeading) { markBadge }
         .overlay(alignment: .bottomTrailing) { pillRow }
         .overlay(alignment: .topLeading) {
             if detailsOpen {
@@ -71,6 +82,25 @@ struct CanvasCardView: View {
         .task(id: cacheKey) {
             guard let data = image?.data, !data.isEmpty else { return }
             if await CoverImageCache.decode(data, key: cacheKey) != nil { decodedKey = cacheKey }
+        }
+    }
+
+    /// "USE · reason" above the card (web `mark-badge`), screen sized like the pill.
+    @ViewBuilder private var markBadge: some View {
+        if let mark, CanvasMetrics.cardWidth / counterScale >= 110 {
+            let s = counterScale
+            let r = (reason ?? "").trimmingCharacters(in: .whitespaces)
+            Text(r.isEmpty ? mark.label.uppercased() : "\(mark.label.uppercased()) · \(r)")
+                .font(.karst(size: 10 * s, weight: .medium))
+                .tracking(0.5 * s)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 7 * s)
+                .padding(.vertical, 3 * s)
+                .foregroundStyle(.white)
+                .background(mark.color, in: RoundedRectangle(cornerRadius: 7 * s, style: .continuous))
+                .frame(maxWidth: CanvasMetrics.cardWidth, alignment: .leading)
+                .offset(y: -26 * s)
         }
     }
 

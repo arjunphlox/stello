@@ -83,7 +83,7 @@ enum ItemBundleExporter {
         return "bin"
     }
 
-    private static func zipDirectory(at folderURL: URL) throws -> Data {
+    static func zipDirectory(at folderURL: URL) throws -> Data {
         var coordinatorError: NSError?
         var zipData: Data?
         let coordinator = NSFileCoordinator()

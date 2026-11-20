@@ -39,7 +39,20 @@ struct CanvasView: View {
     @State private var openDetails: Set<String> = []
     @State private var suggestion: CanvasGroupSuggestion?
     @State private var nearLinks: [SimNear] = []
+    // Layer 2 (stage 4): note drags, the label / reason prompts, the pointer for
+    // "add a note here", and the Package export.
+    @State private var noteDragID: String?
+    @State private var noteDragDelta: CGSize = .zero
+    @State private var labelLinkID: String?
+    @State private var labelKind: L2Kind = .influence
+    @State private var labelText = ""
+    @State private var reasonSlug: String?
+    @State private var reasonText = ""
+    @State private var pointer: CGPoint?
+    @State private var exportDoc: CanvasPackageDocument?
+    @State private var exporting = false
     @FocusState private var focused: Bool
+    @FocusState private var noteFocus: String?
 
     private var store: CanvasStore { .shared }
 
@@ -49,7 +62,8 @@ struct CanvasView: View {
                 dotGrid(store.camera)
                     .contentShape(Rectangle())
                     .gesture(panGesture)
-                    .onTapGesture { store.selected = nil; openDetails = []; focused = true }
+                    .onTapGesture(coordinateSpace: .named("canvas")) { loc in backgroundTap(at: loc) }
+                    .contextMenu { backgroundMenu }
 
                 annotations(size: geo.size, over: false)
 
@@ -65,6 +79,13 @@ struct CanvasView: View {
             .clipped()
             .coordinateSpace(name: "canvas")
             .simultaneousGesture(pinchGesture)
+            .onContinuousHover(coordinateSpace: .named("canvas")) { phase in
+                if case .active(let p) = phase { pointer = p } else { pointer = nil }
+            }
+            .overlay(alignment: .top) { pickHint }
+            .overlay(alignment: .bottomLeading) {
+                if isPanel { CanvasDocBox().padding(StelloLayout.windowInset) }
+            }
             .overlay(alignment: .bottomTrailing) {
                 if showsZoom {
                     CanvasZoomPill(viewport: geo.size).padding(StelloLayout.windowInset)
@@ -113,6 +134,7 @@ struct CanvasView: View {
             .onChange(of: store.slugs) { _, _ in refreshIndex() }
             .onChange(of: store.doc) { _, _ in refreshFamilies() }
             .onChange(of: store.focusSlug) { _, _ in focusIfAsked(size: geo.size) }
+            .onChange(of: store.exportRequest) { _, _ in exportPackage() }
             .task { await store.pull(); refreshIndex() }
         }
         .background(isPanel ? theme.backgroundSubtle : theme.background)
@@ -122,6 +144,29 @@ struct CanvasView: View {
                 RoundedRectangle(cornerRadius: StelloLayout.panelCornerRadius, style: .continuous)
                     .stroke(theme.border, lineWidth: 1)
             }
+        }
+        .alert(labelKind.labelPrompt, isPresented: Binding(get: { labelLinkID != nil },
+                                                          set: { if !$0 { labelLinkID = nil } })) {
+            TextField("Optional", text: $labelText)
+            Button("Save") {
+                if let id = labelLinkID { store.setLinkLabel(id, labelText) }
+                labelLinkID = nil
+            }
+            Button("Skip", role: .cancel) { labelLinkID = nil }
+        }
+        .alert("Why? (optional)", isPresented: Binding(get: { reasonSlug != nil },
+                                                      set: { if !$0 { reasonSlug = nil } })) {
+            TextField("A few words", text: $reasonText)
+            Button("Save") {
+                if let s = reasonSlug { store.setReason(s, reasonText) }
+                reasonSlug = nil
+            }
+            Button("Skip", role: .cancel) { reasonSlug = nil }
+        }
+        .fileExporter(isPresented: $exporting, document: exportDoc, contentType: .zip,
+                      defaultFilename: CanvasPackageExporter.slugName(store.doc.name) + ".zip") { result in
+            if case .failure = result { store.notice = "Couldn’t save the Package" }
+            exportDoc = nil
         }
     }
 
@@ -175,26 +220,51 @@ struct CanvasView: View {
                                    isSelected: store.selected == c.slug,
                                    counterScale: 1 / cam.k,
                                    detailsOpen: open,
-                                   onDetails: { toggleDetails(c.slug) })
+                                   onDetails: { toggleDetails(c.slug) },
+                                   mark: c.state.flatMap(CanvasMark.init(rawValue:)),
+                                   reason: c.note)
                         .opacity((linked?.contains(c.slug) ?? true) ? 1 : 0.22)
                         .shadow(color: .black.opacity(moving ? 0.28 : 0), radius: 12, y: 6)
                         .offset(x: c.x + (moving ? dragDelta.width : 0),
                                 y: c.y + (moving ? dragDelta.height : 0))
                         .gesture(cardDrag(c.slug))
                         .onTapGesture(count: 2) { onOpen(item) }
-                        .onTapGesture { store.selected = c.slug; focused = true }
+                        .onTapGesture(coordinateSpace: .named("canvas")) { loc in cardTap(c.slug, at: loc, height: height(item)) }
                         .onHover { inside in
                             if inside { hoverSlug = c.slug } else if hoverSlug == c.slug { hoverSlug = nil }
                         }
                         .contextMenu {
                             Button("Open") { onOpen(item) }
                             Button(open ? "Hide Details" : "Show Details") { toggleDetails(c.slug) }
+                            Divider()
+                            cardLayer2Menu(c)
+                            Divider()
                             if store.doc.groups.contains(where: { $0.slugs.contains(c.slug) }) {
                                 Button("Remove from Group") { store.leaveGroup(c.slug) }
                             }
                             Button("Remove from Canvas", role: .destructive) { store.remove([c.slug]) }
                         }
                         .zIndex(moving ? 2 : open ? 1 : 0)
+                }
+            }
+            ForEach(store.doc.notes, id: \.id) { note in
+                if let x = note.x, let y = note.y {
+                    let moving = noteDragID == note.id
+                    CanvasNoteView(note: note, isSelected: store.selected == note.id, focus: $noteFocus,
+                                   onCommit: { store.setNoteText(note.id, $0) },
+                                   onDelete: { store.removeNote(note.id) })
+                        .offset(x: x + (moving ? noteDragDelta.width : 0), y: y + (moving ? noteDragDelta.height : 0))
+                        .gesture(noteDrag(note.id))
+                        .onTapGesture { noteTap(note.id) }
+                        .contextMenu {
+                            Menu("Link") {
+                                ForEach(L2Kind.allCases, id: \.self) { k in
+                                    Button(k.action) { store.selected = note.id; store.pick = .link(from: note.id, kind: k) }
+                                }
+                            }
+                            Button("Delete Note", role: .destructive) { store.removeNote(note.id) }
+                        }
+                        .zIndex(moving ? 4 : 3)
                 }
             }
         }
@@ -229,6 +299,19 @@ struct CanvasView: View {
         let fams = families
         let sug = suggestion
         let dragging = dragSlug
+        let ends = live.merging(noteRects()) { a, _ in a }
+        let l2 = store.doc.links.compactMap { l -> (a: CGRect, b: CGRect, kind: L2Kind, label: String?, color: Color)? in
+            guard let kind = L2Kind(rawValue: l.kind), let ra = ends[l.a], let rb = ends[l.b] else { return nil }
+            return (ra, rb, kind, kind.text(l.label), kind.color)
+        }
+        let amber = Color(hex: "#f0a23a")
+        let regions = store.doc.notes.compactMap { n -> (note: CGRect, spot: CGPoint)? in
+            guard n.kind == CanvasNoteKind.region.rawValue, let s = n.slug, let r = live[s],
+                  let nr = ends[n.id] else { return nil }
+            let spot = CGPoint(x: r.minX + CGFloat(min(1, max(0, n.rx ?? 0.5))) * r.width,
+                               y: r.minY + CGFloat(min(1, max(0, n.ry ?? 0.5))) * r.height)
+            return (nr, spot)
+        }
         return Canvas { ctx, _ in
             func screen(_ r: CGRect) -> CGRect {
                 CGRect(x: r.minX * cam.k + cam.x, y: r.minY * cam.k + cam.y, width: r.width * cam.k, height: r.height * cam.k)
@@ -299,6 +382,54 @@ struct CanvasView: View {
                            style: StrokeStyle(lineWidth: l.width, lineCap: .round, dash: l.kind.dashed ? [6, 5] : []))
                 for e in [pts[0], pts[pts.count - 1]] {
                     ctx.fill(Path(ellipseIn: CGRect(x: e.x - 3.2, y: e.y - 3.2, width: 6.4, height: 6.4)), with: .color(color))
+                }
+            }
+
+            // Layer 2 links (yours): the kind's colour and dash, arrow heads, the label midway.
+            for l in l2 {
+                let pts = CanvasSimilarity.route(from: l.a, to: l.b).map(pt)
+                guard pts.count >= 2 else { continue }
+                let color = l.color
+                if over {
+                    let run = zip(pts, pts.dropFirst()).reduce(0) { $0 + hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }
+                    if let label = l.label, run >= 90 {
+                        let mid = pts.count == 4
+                            ? CGPoint(x: (pts[1].x + pts[2].x) / 2, y: (pts[1].y + pts[2].y) / 2)
+                            : CGPoint(x: (pts[0].x + pts[pts.count - 1].x) / 2, y: (pts[0].y + pts[pts.count - 1].y) / 2)
+                        _ = pill(label, at: mid, color: color, anchor: .center)
+                    }
+                    continue
+                }
+                var path = Path()
+                path.addLines(pts)
+                ctx.stroke(path, with: .color(color),
+                           style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: l.kind.dash))
+                func arrow(at tip: CGPoint, from tail: CGPoint) {
+                    let a = atan2(tip.y - tail.y, tip.x - tail.x), size: CGFloat = 9
+                    var head = Path()
+                    head.move(to: tip)
+                    head.addLine(to: CGPoint(x: tip.x - size * cos(a - 0.45), y: tip.y - size * sin(a - 0.45)))
+                    head.addLine(to: CGPoint(x: tip.x - size * cos(a + 0.45), y: tip.y - size * sin(a + 0.45)))
+                    head.closeSubpath()
+                    ctx.fill(head, with: .color(color))
+                }
+                if l.kind.arrowEnd { arrow(at: pts[pts.count - 1], from: pts[pts.count - 2]) }
+                if l.kind.arrowStart { arrow(at: pts[0], from: pts[1]) }
+            }
+
+            // Region notes: a line from the note to its spot on the image, a ring on the spot.
+            if over {
+                for r in regions {
+                    let spot = pt(r.spot)
+                    let from = pt(CanvasSimilarity.edgePoint(r.note, toward: r.spot))
+                    var line = Path()
+                    line.move(to: from)
+                    line.addLine(to: spot)
+                    ctx.stroke(line, with: .color(amber), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    let ring = Path(ellipseIn: CGRect(x: spot.x - 10, y: spot.y - 10, width: 20, height: 20))
+                    ctx.fill(ring, with: .color(amber.opacity(0.25)))
+                    ctx.stroke(ring, with: .color(.white), lineWidth: 3)
+                    ctx.stroke(ring, with: .color(amber), lineWidth: 1.5)
                 }
             }
 
@@ -431,6 +562,13 @@ struct CanvasView: View {
     #endif
 
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        // Typing in a note: the keys are the note's.
+        if noteFocus != nil { return .ignored }
+        if press.key == .escape {
+            if store.pick != nil { store.pick = nil; return .handled }
+            if store.selected != nil { store.selected = nil; return .handled }
+            return .ignored
+        }
         let size = store.viewportSize
         let centre = CGPoint(x: size.width / 2, y: size.height / 2)
         if press.modifiers.contains(.command) {
@@ -453,6 +591,7 @@ struct CanvasView: View {
             }
         default:
             if press.key == .delete || press.key == .deleteForward, let s = store.selected {
+                if store.doc.notes.contains(where: { $0.id == s }) { store.removeNote(s); return .handled }
                 store.remove([s]); store.selected = nil
                 return .handled
             }
@@ -473,6 +612,209 @@ struct CanvasView: View {
         var cam = store.camera
         edit(&cam)
         withAnimation(.smooth(duration: 0.22)) { store.camera = cam }
+    }
+
+    // MARK: - Layer 2
+
+    /// "Choose the item it inspired" while picking, with Cancel (web `lc-hint`).
+    @ViewBuilder private var pickHint: some View {
+        if let pick = store.pick {
+            HStack(spacing: 10) {
+                Text(pick.hint)
+                    .font(.karst(.caption, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+                Button("Cancel") { store.pick = nil }
+                    .font(.karst(.caption, weight: .medium))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.accentColor)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 7)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().stroke(theme.border, lineWidth: 1))
+            .padding(.top, StelloLayout.windowInset + (store.notice == nil ? 0 : 40))
+        }
+    }
+
+    /// Use / Rejected, Why…, the link kinds, a note on the image, and your links.
+    @ViewBuilder private func cardLayer2Menu(_ c: CanvasDoc.Card) -> some View {
+        Toggle("Use", isOn: Binding(get: { c.state == CanvasMark.use.rawValue },
+                                    set: { _ in mark(c.slug, .use) }))
+        Toggle("Rejected", isOn: Binding(get: { c.state == CanvasMark.rejected.rawValue },
+                                         set: { _ in mark(c.slug, .rejected) }))
+        if c.state != nil {
+            Button("Why…") { reasonText = c.note ?? ""; reasonSlug = c.slug }
+        }
+        Menu("Link") {
+            ForEach(L2Kind.allCases, id: \.self) { k in
+                Button(k.action) { store.selected = c.slug; store.pick = .link(from: c.slug, kind: k) }
+            }
+        }
+        Button("Note on Image…") { store.selected = c.slug; store.pick = .region(slug: c.slug) }
+        let mine = store.doc.links.filter { $0.a == c.slug || $0.b == c.slug }
+        if !mine.isEmpty {
+            Menu("Remove Link") {
+                ForEach(mine, id: \.id) { l in
+                    let other = l.a == c.slug ? l.b : l.a
+                    let kind = L2Kind(rawValue: l.kind)?.label ?? l.kind
+                    Button("\(kind) · \(endName(other))") { store.removeLink(l.id) }
+                }
+            }
+        }
+    }
+
+    /// Add a question, note or set where you right-clicked (or mid-view on touch).
+    @ViewBuilder private var backgroundMenu: some View {
+        ForEach([CanvasNoteKind.question, .note, .set], id: \.self) { kind in
+            Button("Add \(kind.label)") {
+                let at = pointer.map { store.camera.toWorld($0) } ?? store.viewCenter
+                newNote(kind, centredAt: at)
+            }
+        }
+        if store.pick != nil {
+            Divider()
+            Button("Cancel Linking") { store.pick = nil }
+        }
+    }
+
+    private func endName(_ id: String) -> String {
+        if let item = index[id] { return item.title.isEmpty ? (item.domain ?? "Untitled") : item.title }
+        if let n = store.doc.notes.first(where: { $0.id == id }) {
+            let label = CanvasNoteKind(rawValue: n.kind)?.label ?? "Note"
+            return n.text.isEmpty ? label : "\(label): \(n.text.prefix(30))"
+        }
+        return "Removed item"
+    }
+
+    private func mark(_ slug: String, _ m: CanvasMark) {
+        let wasOn = store.doc.card(slug)?.state == m.rawValue
+        store.setMark(slug, m)
+        // Marking asks why, as the web does; clearing a mark asks nothing.
+        if !wasOn { reasonText = store.doc.card(slug)?.note ?? ""; reasonSlug = slug }
+    }
+
+    @discardableResult
+    private func newNote(_ kind: CanvasNoteKind, centredAt p: CGPoint) -> String {
+        let id = store.addNote(kind, at: CGPoint(x: p.x - kind.width / 2, y: p.y - CanvasNoteKind.height / 2))
+        store.selected = id
+        focusNote(id)
+        return id
+    }
+
+    /// Focus a new note once its field exists.
+    private func focusNote(_ id: String) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(60))
+            noteFocus = id
+        }
+    }
+
+    private func backgroundTap(at loc: CGPoint) {
+        noteFocus = nil
+        if let pick = store.pick {
+            // Part of / Ask on empty canvas make the set or question and link to it.
+            if case .link(let from, let kind) = pick, let raw = kind.noteOnEmpty,
+               let noteKind = CanvasNoteKind(rawValue: raw) {
+                let id = newNote(noteKind, centredAt: store.camera.toWorld(loc))
+                store.addLink(from, id, kind: kind)
+            }
+            store.pick = nil
+            return
+        }
+        store.selected = nil
+        openDetails = []
+        focused = true
+    }
+
+    private func cardTap(_ slug: String, at loc: CGPoint, height h: CGFloat) {
+        noteFocus = nil
+        focused = true
+        switch store.pick {
+        case .link(let from, let kind)?:
+            completeLink(from: from, to: slug, kind: kind)
+        case .region(let target)? where target == slug:
+            if let c = store.doc.card(slug) {
+                let w = store.camera.toWorld(loc)
+                let rx = min(1, max(0, (w.x - c.x) / CanvasMetrics.cardWidth))
+                let ry = min(1, max(0, (w.y - c.y) / h))
+                let at = CGPoint(x: c.x + CanvasMetrics.cardWidth + 40, y: c.y + ry * h - 20)
+                let id = store.addNote(.region, at: at, slug: slug, rx: Double(rx), ry: Double(ry))
+                store.selected = id
+                focusNote(id)
+            }
+            store.pick = nil
+        case .region?:
+            store.pick = nil
+            store.selected = slug
+        case nil:
+            store.selected = slug
+        }
+    }
+
+    private func noteTap(_ id: String) {
+        if case .link(let from, let kind)? = store.pick {
+            completeLink(from: from, to: id, kind: kind)
+            return
+        }
+        store.pick = nil
+        store.selected = id
+        focused = true
+    }
+
+    private func completeLink(from: String, to: String, kind: L2Kind) {
+        store.pick = nil
+        guard from != to, let id = store.addLink(from, to, kind: kind) else { store.selected = to; return }
+        store.selected = from
+        if kind.asksLabel {
+            labelKind = kind
+            labelText = store.doc.links.first { $0.id == id }?.label ?? ""
+            labelLinkID = id
+        }
+    }
+
+    private func noteDrag(_ id: String) -> some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .named("canvas"))
+            .onChanged { v in
+                if noteDragID != id { noteDragID = id; store.selected = id }
+                let k = store.camera.k
+                noteDragDelta = CGSize(width: v.translation.width / k, height: v.translation.height / k)
+            }
+            .onEnded { _ in
+                if let n = store.doc.notes.first(where: { $0.id == id }), let x = n.x, let y = n.y {
+                    store.moveNote(id, to: CGPoint(x: x + noteDragDelta.width, y: y + noteDragDelta.height))
+                }
+                noteDragID = nil
+                noteDragDelta = .zero
+            }
+    }
+
+    /// World rects of the notes, for link ends (the dragged note where it is now).
+    private func noteRects() -> [String: CGRect] {
+        var out: [String: CGRect] = [:]
+        for n in store.doc.notes {
+            guard let x = n.x, let y = n.y else { continue }
+            let kind = CanvasNoteKind(rawValue: n.kind) ?? .note
+            let moving = n.id == noteDragID
+            out[n.id] = CGRect(x: x + (moving ? noteDragDelta.width : 0), y: y + (moving ? noteDragDelta.height : 0),
+                               width: kind.width, height: CanvasNoteKind.height)
+        }
+        return out
+    }
+
+    /// Build the Package (README, one Markdown file per item, covers, canvas.json)
+    /// and hand it to the save panel.
+    private func exportPackage() {
+        guard !store.doc.cards.isEmpty else {
+            store.notice = "Add items to the canvas to export it"
+            return
+        }
+        refreshIndex()
+        do {
+            let data = try CanvasPackageExporter.makeZip(doc: store.doc, items: index, rects: rects(), families: families)
+            exportDoc = CanvasPackageDocument(data: data)
+            exporting = true
+        } catch {
+            store.notice = "Couldn’t build the Package"
+        }
     }
 
     // MARK: - Data
