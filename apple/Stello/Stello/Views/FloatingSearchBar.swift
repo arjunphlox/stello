@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Bottom control row — Add + Filter + search field + avatar — floats over the grid.
+/// Bottom control row — account, search, Filter, Add (web order, PR #99) — floats over the grid.
 struct GridBottomControlBar: View {
     @Binding var searchText: String
     var hasActiveFilters: Bool = false
@@ -8,7 +8,7 @@ struct GridBottomControlBar: View {
     var isImportPanelOpen: Bool = false
     var isSettingsPanelOpen: Bool = false
     var forceFilterHover: Bool = false
-    /// iPhone compact — 60pt controls lifted from the bottom edge.
+    /// iPhone compact — 44pt controls.
     var compactPhone: Bool = false
     let onAdd: () -> Void
     let onFilter: () -> Void
@@ -27,26 +27,6 @@ struct GridBottomControlBar: View {
     var body: some View {
         HStack(spacing: StelloLayout.controlBarSpacing) {
             StelloGlassIconButton(
-                systemName: "plus",
-                style: .controlBar,
-                isActive: isImportPanelOpen,
-                controlBarDiameter: buttonSize,
-                controlBarSymbolSize: symbolSize,
-                label: "Add",
-                action: onAdd
-            )
-            StelloGlassIconButton(
-                systemName: "line.3.horizontal.decrease",
-                style: .controlBar,
-                isActive: isFilterPanelOpen || hasActiveFilters,
-                forceHover: forceFilterHover,
-                controlBarDiameter: buttonSize,
-                controlBarSymbolSize: symbolSize,
-                label: "Filters",
-                action: onFilter
-            )
-            FloatingSearchField(text: $searchText, compactPhone: compactPhone)
-            StelloGlassIconButton(
                 systemName: "person.crop.circle.fill",
                 style: .controlBarAvatar,
                 isActive: isSettingsPanelOpen,
@@ -57,6 +37,26 @@ struct GridBottomControlBar: View {
                 action: onSettings
             )
             .id(profile.avatarRevision)
+            FloatingSearchField(text: $searchText, compactPhone: compactPhone)
+            StelloGlassIconButton(
+                systemName: "line.3.horizontal.decrease",
+                style: .controlBar,
+                isActive: isFilterPanelOpen || hasActiveFilters,
+                forceHover: forceFilterHover,
+                controlBarDiameter: buttonSize,
+                controlBarSymbolSize: symbolSize,
+                label: "Filters",
+                action: onFilter
+            )
+            StelloGlassIconButton(
+                systemName: "plus",
+                style: .controlBar,
+                isActive: isImportPanelOpen,
+                controlBarDiameter: buttonSize,
+                controlBarSymbolSize: symbolSize,
+                label: "Add",
+                action: onAdd
+            )
         }
         .frame(maxWidth: .infinity)
     }

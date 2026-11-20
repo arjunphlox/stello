@@ -678,7 +678,7 @@ struct CardSubcards: View {
         SubCard(title: "") {
             VStack(alignment: .leading, spacing: 6) {
                 Text(header.title)
-                    .font(.karst(.title3, weight: .semibold))
+                    .font(.karst(.title3, weight: .medium))
                     .foregroundStyle(theme.textPrimary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -691,7 +691,7 @@ struct CardSubcards: View {
 
                 if header.showsAIArtBadge {
                     Text("AI art")
-                        .font(.karst(.caption2, weight: .semibold))
+                        .font(.karst(.caption2, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -703,7 +703,7 @@ struct CardSubcards: View {
                     VStack(alignment: .leading, spacing: 2) {
                         if header.mainTextIsAISummary {
                             Text("AI summary")
-                                .font(.karst(.caption2, weight: .semibold))
+                                .font(.karst(.caption2, weight: .medium))
                                 .foregroundStyle(theme.textSecondary)
                         }
                         Text(main)
@@ -954,7 +954,7 @@ struct CardSubcards: View {
                     enrichmentCoordinator.scheduleEnrichment(for: item, context: context, force: true)
                 } label: {
                     Label("Enrich", systemImage: "sparkles")
-                        .font(.karst(.callout, weight: .semibold))
+                        .font(.karst(.callout, weight: .medium))
                         .foregroundStyle(theme.accentContrast)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -1533,7 +1533,7 @@ struct CardSubcards: View {
     private func factRow(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.karst(.caption2, weight: .semibold))
+                .font(.karst(.caption2, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
             Text(value)
                 .font(.karst(.callout))
@@ -1664,7 +1664,7 @@ struct SubCard<Content: View>: View {
 
     private var titleLabel: some View {
         Text(title)
-            .font(.karst(.caption, weight: .semibold))
+            .font(.karst(.caption, weight: .medium))
             .foregroundStyle(theme.textSecondary)
             .textCase(.uppercase)
             .kerning(0.5)
@@ -1733,7 +1733,7 @@ struct FactsSubCardBody: View {
             ForEach(Array(content.rows.enumerated()), id: \.offset) { _, row in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.label)
-                        .font(.karst(.caption2, weight: .semibold))
+                        .font(.karst(.caption2, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
                     if let url = row.url {
                         Link(destination: url) {
@@ -1930,7 +1930,7 @@ struct FAQSubCardBody: View {
                         .padding(.top, 4)
                 } label: {
                     Text(faq.question)
-                        .font(.karst(.callout, weight: .semibold))
+                        .font(.karst(.callout, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                 }
             }

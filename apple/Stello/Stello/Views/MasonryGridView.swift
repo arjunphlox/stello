@@ -418,10 +418,8 @@ struct MasonryGridView: View {
 
     private func bottomControlOverlay(safeBottom: CGFloat) -> some View {
         let screenshotHoverFilters = ProcessInfo.processInfo.arguments.contains("-screenshotHeaderHover")
-        let bottomPadding = StelloLayout.controlBarBottomPadding(
-            embedInPanelLayout: embedInPanelLayout,
-            compactPhone: isCompactPhone
-        ) + (embedInPanelLayout ? 0 : safeBottom)
+        // One gap per edge: max(gutter, safe area), never summed (web --gap-bottom).
+        let bottomPadding = StelloLayout.bottomEdgeGap(proxySafeBottom: safeBottom)
 
         return GridBottomControlBar(
             searchText: $searchText,
@@ -436,14 +434,10 @@ struct MasonryGridView: View {
             onSettings: { onSettings?() ?? (showSettings = true) }
         )
         // Embed: leading pad compensates the gutter now included in the grid column
-        // (see gridScrollContent). Non-embed (iPhone): unchanged 16pt compact side inset.
-        .padding(
-            .leading,
-            embedInPanelLayout
-                ? StelloLayout.windowInset
-                : StelloLayout.controlBarHorizontalPadding(embedInPanelLayout: embedInPanelLayout)
-        )
-        .padding(.trailing, StelloLayout.controlBarHorizontalPadding(embedInPanelLayout: embedInPanelLayout))
+        // (see gridScrollContent); trailing sits flush with the column. iPhone: the
+        // grid's own 12pt gutter on both sides, so the bar lines up with the cards.
+        .padding(.leading, StelloLayout.windowInset)
+        .padding(.trailing, embedInPanelLayout ? 0 : StelloLayout.windowInset)
         .padding(.bottom, bottomPadding)
         .frame(maxWidth: .infinity, alignment: .bottom)
     }
@@ -503,8 +497,8 @@ struct MasonryGridView: View {
         .padding(
             .bottom,
             StelloLayout.floatingSearchScrollInset(
-                embedInPanelLayout: embedInPanelLayout,
-                compactPhone: isCompactPhone
+                compactPhone: isCompactPhone,
+                bottomGap: StelloLayout.bottomEdgeGap()
             )
         )
     }

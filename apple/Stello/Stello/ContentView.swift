@@ -270,7 +270,8 @@ struct ContentView: View {
                         )
                     }
                     .padding(.top, StelloLayout.windowInset)
-                    .padding(.bottom, StelloLayout.windowInset)
+                    // Same bottom gap as the control bar: max(gutter, safe area).
+                    .padding(.bottom, StelloLayout.bottomEdgeGap())
                     .layoutPriority(1)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
@@ -280,6 +281,10 @@ struct ContentView: View {
         .clipped()
         #if os(macOS)
         .ignoresSafeArea(edges: .top)
+        #else
+        // iPad: the grid scrolls under the home indicator; the bar and panel keep
+        // their own max(gutter, safe area) gap instead of gutter + safe area.
+        .ignoresSafeArea(edges: .bottom)
         #endif
         .animation(.spring(duration: 0.28), value: panelContent)
         .animation(isResizingPanel ? nil : .default, value: clampedPanelFraction)

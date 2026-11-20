@@ -84,7 +84,7 @@ struct DetailImageStrip: View {
                     setAsCover(displayed)
                 } label: {
                     Label("Set as cover", systemImage: "scope")
-                        .font(.karst(.caption2, weight: .semibold))
+                        .font(.karst(.caption2, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
