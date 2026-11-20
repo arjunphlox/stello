@@ -51,9 +51,11 @@ struct CanvasView: View {
                     .gesture(panGesture)
                     .onTapGesture { store.selected = nil; openDetails = []; focused = true }
 
-                annotations(size: geo.size)
+                annotations(size: geo.size, over: false)
 
                 world(size: geo.size)
+
+                annotations(size: geo.size, over: true)
 
                 if store.doc.cards.isEmpty {
                     emptyState.frame(width: geo.size.width, height: geo.size.height)
@@ -189,10 +191,11 @@ struct CanvasView: View {
         .offset(x: cam.x, y: cam.y)
     }
 
-    /// Families, Layer 1 lines and the "Drop to group" box, drawn in screen space
-    /// under the cards (web canvas draw pass). Lines show only for the card you
-    /// drag, select or hover, so the canvas stays quiet otherwise.
-    private func annotations(size: CGSize) -> some View {
+    /// Drawn in screen space (web canvas draw pass): family tints under the cards
+    /// (`over` false); Layer 1 lines and the "Drop to group" box over them, so a
+    /// line is never hidden behind a card in its way. Lines show only for the card
+    /// you drag, select or hover, so the canvas stays quiet otherwise.
+    private func annotations(size: CGSize, over: Bool) -> some View {
         let cam = store.camera
         let live = rects()
         let view = CGRect(origin: .zero, size: size).insetBy(dx: -200, dy: -200)
@@ -234,7 +237,7 @@ struct CanvasView: View {
             }
 
             // Families: a soft tint behind the members, pills naming what they share.
-            for fam in fams {
+            for fam in fams where !over {
                 let members = fam.slugs.filter { $0 != dragging || fam.slugs.count == 1 }.compactMap { live[$0] }
                 guard let first = members.first else { continue }
                 let box = screen(members.dropFirst().reduce(first) { $0.union($1) }.insetBy(dx: -18, dy: -18))
@@ -253,7 +256,7 @@ struct CanvasView: View {
             }
 
             // Layer 1 lines: right-angle runs, a dot at each end, the shared trait midway.
-            for l in lines {
+            for l in lines where over {
                 guard let ra = live[l.a], let rb = live[l.b] else { continue }
                 let pts = CanvasSimilarity.route(from: ra, to: rb).map(pt)
                 guard pts.count >= 2 else { continue }
@@ -282,7 +285,7 @@ struct CanvasView: View {
             }
 
             // "Drop to group": a dotted box around what dropping would group.
-            if let sug {
+            if over, let sug {
                 let box = screen(sug.box).insetBy(dx: -16 * cam.k, dy: -16 * cam.k)
                 let shape = Path(roundedRect: box, cornerRadius: max(6, 20 * cam.k))
                 ctx.fill(shape, with: .color(accent.opacity(0.06)))
