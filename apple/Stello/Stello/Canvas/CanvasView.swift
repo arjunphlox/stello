@@ -20,6 +20,8 @@ struct CanvasView: View {
     var isPanel = false
     /// Show the zoom pill inside the canvas (Split; Canvas mode puts it in the bar).
     var showsZoom = true
+    /// Extra top space for overlays when the canvas runs under the status bar (iPhone).
+    var topInset: CGFloat = 0
     var onOpen: (Item) -> Void
 
     @Environment(\.appTheme) private var theme
@@ -98,7 +100,7 @@ struct CanvasView: View {
                         .font(.karst(.caption, weight: .medium))
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(.regularMaterial, in: Capsule())
-                        .padding(.top, StelloLayout.windowInset)
+                        .padding(.top, StelloLayout.windowInset + topInset)
                         .task { try? await Task.sleep(for: .seconds(3)); store.notice = nil }
                 }
             }
@@ -632,7 +634,7 @@ struct CanvasView: View {
             .padding(.horizontal, 14).padding(.vertical, 7)
             .background(.regularMaterial, in: Capsule())
             .overlay(Capsule().stroke(theme.border, lineWidth: 1))
-            .padding(.top, StelloLayout.windowInset + (store.notice == nil ? 0 : 40))
+            .padding(.top, StelloLayout.windowInset + topInset + (store.notice == nil ? 0 : 40))
         }
     }
 
