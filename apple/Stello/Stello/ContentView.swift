@@ -378,7 +378,7 @@ struct ContentView: View {
                     .overlay(alignment: .topLeading) {
                         StelloHeaderView(itemCount: allItems.count, chip: true)
                             .padding(.leading, StelloLayout.windowInset)
-                            .padding(.top, StelloLayout.windowInset)
+                            .padding(.top, compactSafeTop + StelloLayout.windowInset)
                     }
                     .overlay(alignment: .bottom) {
                         CanvasBottomBar(
