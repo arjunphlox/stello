@@ -34,6 +34,9 @@ struct CanvasCardView: View {
     @Environment(\.appTheme) private var theme
     @State private var decodedKey: String?
 
+    /// Web `.lc-dom`: rgba(20, 20, 18, 0.78).
+    private static let pillFill = Color(red: 20 / 255, green: 20 / 255, blue: 18 / 255).opacity(0.78)
+
     private var image: ItemImage? { item.coverImage }
     private var cacheKey: String { "\(item.id.uuidString)-\(image?.data?.count ?? 0)" }
 
@@ -56,10 +59,10 @@ struct CanvasCardView: View {
         }
         .frame(width: CanvasMetrics.cardWidth, height: height)
         .grayscale(mark == .rejected ? 0.6 : 0)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
             if let mark {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(mark.color, lineWidth: 3 * counterScale)
             }
         }
@@ -73,7 +76,7 @@ struct CanvasCardView: View {
         }
         .overlay {
             if isSelected {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(theme.accentColor, lineWidth: 1.5 * counterScale)
                     .padding(-4 * counterScale)
             }
@@ -115,22 +118,22 @@ struct CanvasCardView: View {
             HStack(spacing: 4 * s) {
                 if !label.isEmpty {
                     Text(label)
-                        .font(.karst(size: 11 * s, weight: .medium))
+                        .font(.karst(size: 12 * s, weight: .medium))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .padding(.horizontal, 7 * s)
-                        .padding(.vertical, 3 * s)
-                        .background(.black.opacity(0.45))
-                        .foregroundStyle(.white)
+                        .padding(.horizontal, 9 * s)
+                        .frame(height: 22 * s)
+                        .background(Self.pillFill)
+                        .foregroundStyle(Color(white: 0.933))
                         .clipShape(Capsule())
                 }
                 if let onDetails {
                     Button(action: onDetails) {
                         Image(systemName: "line.3.horizontal")
                             .font(.system(size: 10 * s, weight: .medium))
-                            .frame(width: 20 * s, height: 20 * s)
-                            .background(detailsOpen ? theme.accentColor : .black.opacity(0.45), in: Circle())
-                            .foregroundStyle(detailsOpen ? theme.accentContrast : .white)
+                            .frame(width: 22 * s, height: 22 * s)
+                            .background(detailsOpen ? theme.accentColor : Self.pillFill, in: Circle())
+                            .foregroundStyle(detailsOpen ? theme.accentContrast : Color(white: 0.933))
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)

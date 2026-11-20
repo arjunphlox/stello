@@ -301,6 +301,12 @@ struct ContentView: View {
                             .padding(.trailing, canvasFullBleed ? StelloLayout.windowInset : 0)
                             .padding(.bottom, StelloLayout.bottomEdgeGap())
                         }
+                        // Canvas mode keeps the header as a small chip (web view-canvas).
+                        .overlay(alignment: .topLeading) {
+                            StelloHeaderView(itemCount: allItems.count, integratesMacTitleBar: isMac, chip: true)
+                                .padding(.leading, StelloLayout.windowInset)
+                                .padding(.top, StelloLayout.windowInset)
+                        }
                         .frame(width: canvasFullBleed ? geo.size.width : gridColumnWidth)
                         .transition(.opacity)
                 }
@@ -367,6 +373,11 @@ struct ContentView: View {
             } else {
                 CanvasView(showsZoom: false, onOpen: openFromCanvas)
                     .ignoresSafeArea(edges: .bottom)
+                    .overlay(alignment: .topLeading) {
+                        StelloHeaderView(itemCount: allItems.count, chip: true)
+                            .padding(.leading, StelloLayout.windowInset)
+                            .padding(.top, StelloLayout.windowInset)
+                    }
                     .overlay(alignment: .bottom) {
                         CanvasBottomBar(
                             compactPhone: true,
