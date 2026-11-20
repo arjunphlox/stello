@@ -3,9 +3,10 @@ import Darwin
 import Foundation
 import SwiftData
 
-/// Proves the grid holds up at library scale: `-scaleCheck -screenshotCleanStore` fills the
-/// in-memory store with 10,000 items, scrolls the real grid, and logs PASS or FAIL against
-/// the budgets. Refuses to run without the in-memory flag, so it can't touch a real library.
+/// Proves the grid holds up at library scale: `-scaleCheck -screenshotCleanStore` fills a
+/// throwaway on-disk store (`StelloStore.makeScaleCheckContainer`, never the real library)
+/// with 10,000 items, scrolls the real grid, and logs PASS or FAIL against the budgets.
+/// Sync, demo catalog and cover backfill stay off, so only the grid is measured.
 @MainActor
 enum ScaleCheck {
     static let itemCount = 10_000
@@ -27,6 +28,12 @@ enum ScaleCheck {
 
     static func run(context: ModelContext) async {
         guard isEnabled else { return }
+        // Only ever the throwaway scale store.
+        guard StelloStore.scaleCheckStoreActive else {
+            NSLog("SCALE skipped: not running on the throwaway scale store")
+            return
+        }
+        NSLog("SCALE start store=%@", context.container.configurations.first?.url.path ?? "?")
         seed(context: context)
         NSLog("SCALE seeded items=%d memoryMB=%.0f", itemCount, residentMemoryMB())
         try? await Task.sleep(for: .seconds(3))
