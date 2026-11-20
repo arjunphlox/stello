@@ -141,6 +141,13 @@ struct MasonryGridView: View {
         MasonryLayout(forcedColumns: effectiveForcedColumns).resolvedColumnCount(for: width)
     }
 
+    /// Card width in points, so covers decode at the size they're shown.
+    private var cardColumnWidth: CGFloat {
+        let columns = CGFloat(resolvedColumnCount(for: gridContainerWidth))
+        guard gridContainerWidth > 0, columns > 0 else { return 0 }
+        return (gridContainerWidth - Self.gridSpacing * (columns - 1)) / columns
+    }
+
     private var tagFilteredItems: [Item] { cachedTagFilteredItems }
     private var displayItems: [Item] { cachedDisplayItems }
     private var timelineWeekGroups: [WeekGroup] { cachedTimelineWeekGroups }
@@ -586,6 +593,7 @@ struct MasonryGridView: View {
                     isSelected: selectedItem?.persistentModelID == item.persistentModelID
                         && panelContent == .itemDetail,
                     resolvedColumns: resolvedColumnCount(for: gridContainerWidth),
+                    columnWidth: cardColumnWidth,
                     onOpen: { onCardTap(item) }
                 )
             }
@@ -601,7 +609,8 @@ struct MasonryGridView: View {
             NavigationLink(value: item) {
                 ItemCardView(
                     item: item,
-                    resolvedColumns: resolvedColumnCount(for: gridContainerWidth)
+                    resolvedColumns: resolvedColumnCount(for: gridContainerWidth),
+                    columnWidth: cardColumnWidth
                 )
             }
             .buttonStyle(.plain)

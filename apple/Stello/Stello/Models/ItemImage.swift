@@ -109,8 +109,8 @@ enum CoverImageCache {
 
     private static let cache: NSCache<NSString, CacheBox> = {
         let c = NSCache<NSString, CacheBox>()
-        c.countLimit = 200
-        c.totalCostLimit = 48 * 1024 * 1024
+        c.countLimit = 100
+        c.totalCostLimit = 24 * 1024 * 1024
         return c
     }()
 
@@ -120,11 +120,35 @@ enum CoverImageCache {
     }
 
     /// Decoded bitmaps for grid cards. Cost is decoded bytes, so the limit is real memory.
+    /// 64 MB holds a few screens of display-size covers; scrolling back past that
+    /// re-decodes off the main thread.
     nonisolated private static let decoded: NSCache<NSString, DecodedBox> = {
         let cache = NSCache<NSString, DecodedBox>()
-        cache.totalCostLimit = 192 * 1024 * 1024
+        cache.totalCostLimit = 64 * 1024 * 1024
         return cache
     }()
+
+    /// Empties both caches when the system reports memory pressure. Installed at launch.
+    static let watchMemoryPressure: DispatchSourceMemoryPressure = {
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler { MainActor.assumeIsolated { purge() } }
+        source.resume()
+        return source
+    }()
+
+    static func purge() {
+        decoded.removeAllObjects()
+        cache.removeAllObjects()
+    }
+
+    /// Long side in pixels for a cover shown `columnWidth` points wide: enough to fill
+    /// the card at this scale, rounded up to steps of 200, at most 1200.
+    nonisolated static func decodePixels(columnWidth: CGFloat, scale: CGFloat, aspect: CGFloat) -> Int {
+        guard columnWidth > 0, scale > 0, aspect > 0 else { return 1200 }
+        let long = columnWidth * scale * max(1, 1 / aspect)
+        let stepped = Int((long / 200).rounded(.up)) * 200
+        return min(max(stepped, 200), 1200)
+    }
 
     nonisolated static func decodedImage(forKey key: String) -> CGImage? {
         decoded.object(forKey: key as NSString)?.image
