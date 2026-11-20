@@ -98,9 +98,6 @@ struct CanvasView: View {
             .onAppear {
                 store.viewportSize = geo.size
                 refreshIndex()
-                if ProcessInfo.processInfo.arguments.contains("-screenshotDetails"), let s = store.selected {
-                    openDetails.insert(s)
-                }
                 placeCamera(size: geo.size)
                 focusIfAsked(size: geo.size)
             }
@@ -514,6 +511,22 @@ struct CanvasView: View {
         features = next
         inverted = CanvasSimilarity.invert(next)
         refreshFamilies()
+        screenshotFocus()
+    }
+
+    /// Screenshot runs (-screenshotLayer1): select the card with the most Layer 1
+    /// neighbours so its lines show, and open its details with -screenshotDetails.
+    private func screenshotFocus() {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-screenshotLayer1"), !features.isEmpty else { return }
+        let best = store.doc.cards.map(\.slug).max { a, b in
+            let na = CanvasSimilarity.neighbours(of: a, features: features, inverted: inverted)
+            let nb = CanvasSimilarity.neighbours(of: b, features: features, inverted: inverted)
+            return na.count != nb.count ? na.count < nb.count : a > b
+        }
+        guard let best else { return }
+        store.selected = best
+        if args.contains("-screenshotDetails") { openDetails = [best] }
     }
 
     private func refreshFamilies() {
