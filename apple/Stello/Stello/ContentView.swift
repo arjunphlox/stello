@@ -264,7 +264,8 @@ struct ContentView: View {
                         onCardTap: handleCardTap,
                         onFilters: { togglePanel(.filters) },
                         onImport: { togglePanel(.import) },
-                        onSettings: { togglePanel(.settings) }
+                        onSettings: { togglePanel(.settings) },
+                        autoColumnsWidth: contentWidth
                     )
                     .frame(width: shownGridWidth + StelloLayout.windowInset)
                     .frame(maxHeight: .infinity)

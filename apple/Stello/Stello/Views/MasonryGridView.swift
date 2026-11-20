@@ -48,6 +48,10 @@ struct MasonryGridView: View {
     var isDropTargeted: Bool = false
     /// When set, avoids a second `@Query` in the grid (pass from `ContentView`).
     var catalogItems: [Item]? = nil
+    /// Width the automatic column count is picked from: the grid's width with no
+    /// side panel and no Split. Opening the detail panel or the split canvas then
+    /// narrows the cards but keeps the columns; only a pinch changes them.
+    var autoColumnsWidth: CGFloat? = nil
 
     init(
         embedInPanelLayout: Bool = false,
@@ -62,8 +66,10 @@ struct MasonryGridView: View {
         onFilters: (() -> Void)? = nil,
         onImport: (() -> Void)? = nil,
         onSettings: (() -> Void)? = nil,
-        isDropTargeted: Bool = false
+        isDropTargeted: Bool = false,
+        autoColumnsWidth: CGFloat? = nil
     ) {
+        self.autoColumnsWidth = autoColumnsWidth
         self.embedInPanelLayout = embedInPanelLayout
         self.scrollTopInset = scrollTopInset
         self.scrollOffset = scrollOffset
@@ -138,7 +144,7 @@ struct MasonryGridView: View {
     }
 
     private func resolvedColumnCount(for width: CGFloat) -> Int {
-        MasonryLayout(forcedColumns: effectiveForcedColumns).resolvedColumnCount(for: width)
+        MasonryLayout(forcedColumns: effectiveForcedColumns).resolvedColumnCount(for: autoColumnsWidth ?? width)
     }
 
     /// Card width in points, so covers decode at the size they're shown.
@@ -310,6 +316,13 @@ struct MasonryGridView: View {
         }
         .onChange(of: gridContainerWidth) { _, _ in rebuildGridModel() }
         .onChange(of: gridColumns) { _, _ in rebuildGridModel() }
+        .onChange(of: autoColumnsWidth) { old, new in
+            let layout = MasonryLayout(forcedColumns: effectiveForcedColumns)
+            if layout.resolvedColumnCount(for: old ?? gridContainerWidth)
+                != layout.resolvedColumnCount(for: new ?? gridContainerWidth) {
+                rebuildGridModel()
+            }
+        }
         .onChange(of: weekAnchorYs) { _, _ in
             cacheContentWeekRangesIfNeeded()
         }

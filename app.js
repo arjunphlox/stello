@@ -902,10 +902,9 @@
   // one bar per ISO week, spanning that week's cards. Hover shows the week,
   // click filters the grid to it — same model as the native app.
   //
-  // Card size is set by the column count you get at full width (auto by
-  // breakpoint, or your pinch choice). Opening the side panel keeps that
-  // card width and drops columns instead of squeezing cards; the panel
-  // absorbs the leftover strip so the grid stays edge to edge.
+  // The column count is set at full window width (auto by breakpoint, or
+  // your pinch choice) and never changes when the side panel or the Split
+  // canvas opens: the cards narrow instead. Only a pinch changes columns.
   const BATCH = 120;
   const ZOOM_KEY = 'stello.gridColumns';   // 0 = auto; 1…12 = pinch choice
   const MIN_COLS = 1, MAX_COLS = 12;
@@ -938,7 +937,18 @@
   }
   function isOverlayPanelMode() { return window.innerWidth <= 768; }
 
-  // Grid width with no panel open — the width card size is derived from.
+  // Grid width with no panel and no Split — the auto column count comes from it.
+  function windowGridWidth() {
+    const mc = document.querySelector('.main-content');
+    const inner = document.querySelector('.content-inner');
+    const cs = getComputedStyle(inner);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const maxW = parseFloat(cs.maxWidth);
+    const sb = mc ? (mc.offsetWidth - mc.clientWidth) : 0;
+    const innerW = Math.min(window.innerWidth - sb, Number.isFinite(maxW) ? maxW : Infinity);
+    return Math.max(0, innerW - 2 * padL);
+  }
+  // Grid width with no panel open (half the window in Split).
   function fullGridWidth() {
     const mc = document.querySelector('.main-content');
     const inner = document.querySelector('.content-inner');
@@ -1075,31 +1085,21 @@
     const inner = document.querySelector('.content-inner');
     if (!mc || !inner) return;
     const gap = gridGap();
-    const full = fullGridWidth();
+    const wide = windowGridWidth();
     // A pinch choice made on a wide window shouldn't crush cards on a
-    // narrow one: keep cards at least 110px wide.
-    const maxFit = Math.max(1, Math.floor((full + gap) / (110 + gap)));
-    const baseCols = Math.min(zoomCols || computeGridCols(full), maxFit);
-    cardWidth = Math.max(60, (full - gap * (baseCols - 1)) / baseCols);
+    // narrow one: keep cards at least 110px wide at full window width.
+    const maxFit = Math.max(1, Math.floor((wide + gap) / (110 + gap)));
+    const baseCols = Math.min(zoomCols || computeGridCols(wide), maxFit);
     gridColsAtFullWidth = baseCols;
-    document.documentElement.style.setProperty('--card-w', cardWidth + 'px');
     applyCardDensity(baseCols);
 
+    // Same columns with a panel or Split open; the cards take the width left.
+    setPanelExtra(0);
     const panelOpen = !!document.querySelector('#panels-container .panel');
-    const avail = $grid.clientWidth || full;
-    let cols;
-    if (!panelOpen || isOverlayPanelMode()) {
-      cols = baseCols;
-      setPanelExtra(0);
-    } else {
-      // Width the grid would have at the panel's base width. If the
-      // content column is capped by max-width, growing the panel won't
-      // reclaim space, so leave the strip instead.
-      const capped = inner.offsetWidth < mc.clientWidth - 1;
-      const baseAvail = capped ? avail : avail + panelExtra;
-      cols = Math.min(baseCols, fitCols(baseAvail, cardWidth, gap));
-      setPanelExtra(capped ? 0 : Math.max(0, baseAvail - colsWidth(cols, cardWidth, gap)));
-    }
+    const avail = panelOpen && !isOverlayPanelMode() ? ($grid.clientWidth || fullGridWidth()) : fullGridWidth();
+    const cols = baseCols;
+    cardWidth = Math.max(40, (avail - gap * (cols - 1)) / cols);
+    document.documentElement.style.setProperty('--card-w', cardWidth + 'px');
     document.documentElement.style.setProperty('--grid-cols', String(cols));
     if (cols !== gridCols) {
       gridCols = cols;
