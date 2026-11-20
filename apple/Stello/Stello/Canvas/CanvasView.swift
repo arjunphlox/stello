@@ -147,8 +147,18 @@ struct CanvasView: View {
         }
     }
 
+    /// The selected card and what Layer 1 links it to; the rest dim (web `is-dim`).
+    private var linked: Set<String>? {
+        guard let s = store.selected, features[s] != nil else { return nil }
+        let links = dragSlug == s
+            ? nearLinks.map(\.b)
+            : CanvasSimilarity.neighbours(of: s, features: features, inverted: inverted).map(\.b)
+        return links.isEmpty ? nil : Set(links + [s])
+    }
+
     private func world(size: CGSize) -> some View {
         let cam = store.camera
+        let linked = linked
         let view = CGRect(origin: .zero, size: size).insetBy(dx: -120, dy: -120)
         let visible = store.doc.cards.filter { c in
             guard let item = index[c.slug] else { return false }
@@ -166,6 +176,7 @@ struct CanvasView: View {
                                    counterScale: 1 / cam.k,
                                    detailsOpen: open,
                                    onDetails: { toggleDetails(c.slug) })
+                        .opacity((linked?.contains(c.slug) ?? true) ? 1 : 0.22)
                         .shadow(color: .black.opacity(moving ? 0.28 : 0), radius: 12, y: 6)
                         .offset(x: c.x + (moving ? dragDelta.width : 0),
                                 y: c.y + (moving ? dragDelta.height : 0))
@@ -191,10 +202,10 @@ struct CanvasView: View {
         .offset(x: cam.x, y: cam.y)
     }
 
-    /// Drawn in screen space (web canvas draw pass): family tints under the cards
-    /// (`over` false); Layer 1 lines and the "Drop to group" box over them, so a
-    /// line is never hidden behind a card in its way. Lines show only for the card
-    /// you drag, select or hover, so the canvas stays quiet otherwise.
+    /// Drawn in screen space, as the web does: family tints and line strokes under
+    /// the cards (`over` false), with cards that don't link dimmed so the lines
+    /// read through them; line labels and the "Drop to group" box over the cards.
+    /// Lines show only for the card you drag, select or hover.
     private func annotations(size: CGSize, over: Bool) -> some View {
         let cam = store.camera
         let live = rects()
@@ -256,7 +267,9 @@ struct CanvasView: View {
             }
 
             // Layer 1 lines: right-angle runs, a dot at each end, the shared trait midway.
-            for l in lines where over {
+            // Strokes go under the cards (cards that don't link dim, as on the web);
+            // labels go over them.
+            for l in lines {
                 guard let ra = live[l.a], let rb = live[l.b] else { continue }
                 let pts = CanvasSimilarity.route(from: ra, to: rb).map(pt)
                 guard pts.count >= 2 else { continue }
@@ -271,16 +284,21 @@ struct CanvasView: View {
                     }
                 }
                 path.addLine(to: pts[pts.count - 1])
+                let run = zip(pts, pts.dropFirst()).reduce(0) { $0 + hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }
+                if over {
+                    // Skip labels on short runs, where they would sit on a card's edge.
+                    if let label = l.label, run >= 90 {
+                        let mid = pts.count == 4
+                            ? CGPoint(x: (pts[1].x + pts[2].x) / 2, y: (pts[1].y + pts[2].y) / 2)
+                            : CGPoint(x: (pts[0].x + pts[pts.count - 1].x) / 2, y: (pts[0].y + pts[pts.count - 1].y) / 2)
+                        _ = pill(CanvasSimilarity.cap(label), at: mid, color: l.kind.color(text: text), anchor: .center)
+                    }
+                    continue
+                }
                 ctx.stroke(path, with: .color(color),
                            style: StrokeStyle(lineWidth: l.width, lineCap: .round, dash: l.kind.dashed ? [6, 5] : []))
                 for e in [pts[0], pts[pts.count - 1]] {
                     ctx.fill(Path(ellipseIn: CGRect(x: e.x - 3.2, y: e.y - 3.2, width: 6.4, height: 6.4)), with: .color(color))
-                }
-                if let label = l.label {
-                    let mid = pts.count == 4
-                        ? CGPoint(x: (pts[1].x + pts[2].x) / 2, y: (pts[1].y + pts[2].y) / 2)
-                        : CGPoint(x: (pts[0].x + pts[pts.count - 1].x) / 2, y: (pts[0].y + pts[pts.count - 1].y) / 2)
-                    _ = pill(CanvasSimilarity.cap(label), at: mid, color: l.kind.color(text: text), anchor: .center)
                 }
             }
 
