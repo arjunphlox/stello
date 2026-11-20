@@ -51,13 +51,12 @@ final class CanvasStore {
     static let libraryID = "library"
 
     private init() {
-        currentID = UserDefaults.standard.string(forKey: Self.currentKey) ?? Self.libraryID
         // Screenshot / demo runs use a throwaway local canvas: never the real doc,
-        // never pushed to the server.
-        if ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore") {
-            currentID = "local-screenshot"
-        }
-        viewMode = currentID == "local-screenshot" ? .grid
+        // never pushed to the server, and they start in Grid.
+        let isShot = ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore")
+        currentID = isShot ? "local-screenshot"
+            : UserDefaults.standard.string(forKey: Self.currentKey) ?? Self.libraryID
+        viewMode = isShot ? .grid
             : UserDefaults.standard.string(forKey: Self.viewKey).flatMap(CanvasViewMode.init(rawValue:)) ?? .grid
         if currentID == "local-screenshot" { try? FileManager.default.removeItem(at: localURL) }
         loadLocal()
