@@ -45,7 +45,9 @@ final class CanvasStore {
     @ObservationIgnored private var pushing = false
 
     private static let currentKey = "stello.canvas.current"
-    private static let viewKey = "stello.view"
+    /// Not "stello.view": an early test run left a stale value under that name in
+    /// the real app's settings, so the shipped key starts clean.
+    private static let viewKey = "stello.viewMode"
     static let libraryID = "library"
 
     private init() {
@@ -55,8 +57,8 @@ final class CanvasStore {
         if ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore") {
             currentID = "local-screenshot"
         }
-        viewMode = UserDefaults.standard.string(forKey: Self.viewKey)
-            .flatMap(CanvasViewMode.init(rawValue:)) ?? .grid
+        viewMode = currentID == "local-screenshot" ? .grid
+            : UserDefaults.standard.string(forKey: Self.viewKey).flatMap(CanvasViewMode.init(rawValue:)) ?? .grid
         if currentID == "local-screenshot" { try? FileManager.default.removeItem(at: localURL) }
         loadLocal()
     }

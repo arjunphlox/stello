@@ -4,6 +4,8 @@ import SwiftUI
 /// Phones get Grid and Canvas only.
 struct CanvasModeSwitch: View {
     var compactPhone = false
+    /// Narrow bars: one round button showing the current mode, with a menu.
+    var collapsed = false
     @Environment(\.appTheme) private var theme
     private var store: CanvasStore { .shared }
 
@@ -16,8 +18,38 @@ struct CanvasModeSwitch: View {
     }
 
     var body: some View {
+        if collapsed { menuButton } else { segments }
+    }
+
+    private var menuButton: some View {
         let height = StelloLayout.controlBarHeight(compactPhone: compactPhone)
-        HStack(spacing: 2) {
+        return Menu {
+            ForEach(modes) { mode in
+                Button {
+                    withAnimation(.smooth(duration: 0.25)) { store.viewMode = mode }
+                } label: {
+                    Label(mode.label, systemImage: mode.symbol)
+                }
+            }
+        } label: {
+            Image(systemName: current.symbol)
+                .font(.system(size: StelloLayout.controlBarSymbolSize(compactPhone: compactPhone), weight: .medium))
+                .foregroundStyle(theme.textPrimary)
+                .frame(width: height, height: height)
+                .background(theme.surfaceRaised.opacity(StelloLayout.controlBarGlassFillOpacity), in: Circle())
+                .overlay(Circle().stroke(theme.border, lineWidth: 1))
+                .glassEffect(.regular.interactive(), in: .circle)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("View: \(current.label)")
+    }
+
+    private var segments: some View {
+        let height = StelloLayout.controlBarHeight(compactPhone: compactPhone)
+        return HStack(spacing: 2) {
             ForEach(modes) { mode in
                 let on = current == mode
                 Button {
