@@ -24,10 +24,14 @@ struct ItemCardView: View {
     var isSelected: Bool = false
     /// Concrete grid column count (auto or forced) — drives title scaling and overlay visibility.
     var resolvedColumns: Int = 2
+    /// Width of the card on screen, in points. Covers are decoded at this size, not the
+    /// stored size; 0 means unknown (falls back to 1200 px on the long side).
+    var columnWidth: CGFloat = 0
     var onOpen: (() -> Void)? = nil
 
     @Environment(\.appTheme) private var theme
     @Environment(\.modelContext) private var context
+    @Environment(\.displayScale) private var displayScale
     @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
 
     #if os(macOS)
@@ -62,13 +66,19 @@ struct ItemCardView: View {
 
     private var coverCacheKey: String {
         let count = primaryImage?.data?.count ?? 0
-        return "\(item.id.uuidString)-\(count)"
+        return "\(item.id.uuidString)-\(count)-\(coverDecodePixels)"
+    }
+
+    /// Long side, in pixels, that fills the card at this screen's scale. Rounded up to
+    /// steps of 200 so a small window resize reuses the bitmap already decoded.
+    private var coverDecodePixels: Int {
+        CoverImageCache.decodePixels(columnWidth: columnWidth, scale: displayScale, aspect: aspect)
     }
 
     private func decodeCover() async {
         guard hasImage, let data = primaryImage?.data else { return }
         let key = coverCacheKey
-        if await CoverImageCache.decode(data, key: key) != nil {
+        if await CoverImageCache.decode(data, key: key, maxPixels: coverDecodePixels) != nil {
             decodedCoverKey = key
         } else {
             undecodableCoverKey = key

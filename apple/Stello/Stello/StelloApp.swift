@@ -43,6 +43,7 @@ struct StelloApp: App {
         WorkerSorter.tokenRejected = { SyncAccount.tokenRejected() }
         SeedData.prepareSyncedStore(in: container.mainContext)
         _ = SyncChildTracking.install
+        _ = CoverImageCache.watchMemoryPressure
     }
 
     var body: some Scene {
