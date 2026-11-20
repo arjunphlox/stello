@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Bottom control row — account, search, Filter, Add (web order, PR #99) — floats over the grid.
+/// Bottom control row — account, view switch, search, Filter, Add (web order, PR #99) — floats over the grid.
 struct GridBottomControlBar: View {
     @Binding var searchText: String
     var hasActiveFilters: Bool = false
@@ -25,6 +25,16 @@ struct GridBottomControlBar: View {
     }
 
     var body: some View {
+        // Narrow grid column (Split, small windows): the view switch folds into one
+        // button so the search field keeps room for its prompt.
+        ViewThatFits(in: .horizontal) {
+            row(collapsedSwitch: false)
+            row(collapsedSwitch: true)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func row(collapsedSwitch: Bool) -> some View {
         HStack(spacing: StelloLayout.controlBarSpacing) {
             StelloGlassIconButton(
                 systemName: "person.crop.circle.fill",
@@ -37,6 +47,7 @@ struct GridBottomControlBar: View {
                 action: onSettings
             )
             .id(profile.avatarRevision)
+            CanvasModeSwitch(compactPhone: compactPhone, collapsed: collapsedSwitch)
             FloatingSearchField(text: $searchText, compactPhone: compactPhone)
             StelloGlassIconButton(
                 systemName: "line.3.horizontal.decrease",
@@ -58,7 +69,6 @@ struct GridBottomControlBar: View {
                 action: onAdd
             )
         }
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -90,7 +100,7 @@ struct FloatingSearchField: View {
                 TextField(
                     "",
                     text: $text,
-                    prompt: Text("Search items…").foregroundStyle(theme.textSecondary)
+                    prompt: Text("Search").foregroundStyle(theme.textSecondary)
                 )
                 .textFieldStyle(.plain)
                 .foregroundStyle(theme.textPrimary)
@@ -99,7 +109,8 @@ struct FloatingSearchField: View {
             .padding(.horizontal, compactPhone ? 18 : 16)
         }
         .frame(height: barHeight)
-        .frame(maxWidth: .infinity)
+        // Room for the prompt; ViewThatFits in the bar folds the view switch first.
+        .frame(minWidth: 120, maxWidth: .infinity)
         .glassEffect(.regular.interactive(), in: .capsule)
     }
 }

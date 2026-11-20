@@ -598,6 +598,13 @@ struct MasonryGridView: View {
                 )
             }
             .buttonStyle(.plain)
+            // Mac / iPad: drag a card onto the canvas (Split view). Its own type, so
+            // the window's file/text drop import ignores it.
+            .draggable(CanvasDragItem(slug: item.slug)) {
+                ItemCardView(item: item, resolvedColumns: 6)
+                    .frame(width: 180)
+                    .environment(\.appTheme, theme)
+            }
         } else {
             NavigationLink(value: item) {
                 ItemCardView(
