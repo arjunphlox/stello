@@ -109,15 +109,21 @@ struct ContentView: View {
         // Canvas screenshots: a throwaway local canvas with the first few items.
         if args.contains("-screenshotCanvas") || args.contains("-screenshotSplit") {
             canvasStore.viewMode = args.contains("-screenshotSplit") ? .split : .canvas
-            if canvasStore.doc.cards.isEmpty, sortedItems.count >= 6 {
-                var x: CGFloat = 0
-                for item in sortedItems.prefix(6) {
+            // -screenshotLayer1: a tight 4 × 3 block so families form, with the first
+            // card selected so its Layer 1 lines show (and -screenshotDetails opens ≡).
+            let layer1 = args.contains("-screenshotLayer1")
+            let count = layer1 ? 12 : 6
+            if canvasStore.doc.cards.isEmpty, sortedItems.count >= count {
+                for (i, item) in sortedItems.prefix(count).enumerated() {
                     let img = item.coverImage
                     let h = CanvasMetrics.cardHeight(imageWidth: img?.width, imageHeight: img?.height,
                                                      hasImage: !(img?.data?.isEmpty ?? true))
-                    canvasStore.add([item.slug], at: CGPoint(x: x, y: 0), height: { _ in h })
-                    x += CanvasMetrics.cardWidth + 60
+                    let col = layer1 ? i % 4 : i, row = layer1 ? i / 4 : 0
+                    let x = CGFloat(col) * (CanvasMetrics.cardWidth + (layer1 ? 40 : 60)) + CanvasMetrics.cardWidth / 2
+                    let y = CGFloat(row) * 420 + h / 2
+                    canvasStore.add([item.slug], at: CGPoint(x: x, y: y), height: { _ in h })
                 }
+                if layer1 { canvasStore.selected = sortedItems.first?.slug }
                 canvasStore.cameraPlaced = false
             }
         }

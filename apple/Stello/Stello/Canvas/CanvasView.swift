@@ -98,6 +98,9 @@ struct CanvasView: View {
             .onAppear {
                 store.viewportSize = geo.size
                 refreshIndex()
+                if ProcessInfo.processInfo.arguments.contains("-screenshotDetails"), let s = store.selected {
+                    openDetails.insert(s)
+                }
                 placeCamera(size: geo.size)
                 focusIfAsked(size: geo.size)
             }
