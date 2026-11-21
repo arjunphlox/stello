@@ -3005,13 +3005,11 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
   position: absolute; left: 12px; top: 12px; right: 12px; font-size: 14px; line-height: 18px; color: var(--text);
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.lc-card.has-det { z-index: 5; }
-.lc-det {
-  position: absolute; left: 0; top: calc(100% + 8px); width: 100%;
-  border-radius: 12px; background: var(--bg-secondary); border: 1px solid var(--border);
-  padding: 14px 14px 8px; box-sizing: border-box; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
-}
-.lc-title { font-size: 16px; font-weight: 500; line-height: 20px; color: var(--text); }
+/* Open card: the details grow out of the cover, one card, over what is below. */
+.lc-card.has-det { z-index: 5; border-radius: 10px; background: var(--bg-secondary); box-shadow: 0 0 0 1px var(--border), 0 12px 32px rgba(0, 0, 0, 0.28); }
+.lc-card.has-det .lc-cover { border-radius: 10px 10px 0 0; box-shadow: none; }
+.lc-det { position: relative; width: 100%; padding: 12px 14px 8px; box-sizing: border-box; cursor: default; }
+.lc-title { font-size: 16px; font-weight: 400; line-height: 20px; color: var(--text); }
 .lc-title.l2 { height: 40px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .lc-meta { font-size: 12px; line-height: 16px; color: var(--text-dim); margin-top: 4px; overflow: hidden; }
 .lc-meta.l2 { height: 32px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -3027,7 +3025,8 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 /* Mid zoom: title, meta and colours only (the box keeps its size). */
 
 .lc-card.is-selected .lc-cover { outline: 3px solid var(--accent); outline-offset: 3px; }
-.lc-card.is-selected .lc-det { border-color: var(--accent); }
+.lc-card.is-selected.has-det { outline: 3px solid var(--accent); outline-offset: 3px; }
+.lc-card.is-selected.has-det .lc-cover { outline: 0; }
 .lc-card.is-dim { opacity: 0.22; }
 .lc-card.is-target { cursor: crosshair; }
 .lc-card.is-target:hover .lc-cover { outline: 2px dashed var(--accent); outline-offset: 3px; }
@@ -3136,6 +3135,7 @@ html.view-canvas .active-filters { margin-top: 8px; width: fit-content; }
 .lc-selbar button:hover { background: var(--card-hover); color: var(--text); }
 .lc-selbar button.is-on.use { background: #2b8a3e; color: #fff; }
 .lc-selbar button.is-on.rej { background: #e03131; color: #fff; }
+.lc-reason-k { font-size: 12px; color: var(--text-dim); padding: 0 6px 0 10px; }
 .lc-selbar .sep { width: 1px; height: 18px; background: var(--border); margin: 0 3px; }
 .lc-reason {
   height: 32px; width: 170px; margin-left: 4px; border-radius: 16px; border: 1px solid var(--border);
@@ -3325,7 +3325,6 @@ html:not(.view-split):not(.view-canvas) .grid-container .card.on-canvas .card-vi
 .lc-name { scale: var(--ik); transform-origin: 0 0; left: calc(12px * var(--ik)); top: calc(12px * var(--ik)); right: auto; width: calc(100% / var(--ik) - 24px); }
 .lc-mark { scale: var(--ik); transform-origin: 0 100%; top: auto; bottom: calc(100% + 6px * var(--ik)); max-width: calc(100% / var(--ik)); }
 .lc-visit { scale: var(--ik); transform-origin: 50% 0; bottom: auto; top: calc(100% + 6px * var(--ik)); }
-.lc-det { scale: var(--ik); transform-origin: 0 0; width: 274px; top: calc(100% + 8px * var(--ik)); }
 .lc-note { scale: var(--ik); transform-origin: 0 0; }
 /* Cards too small on screen for their pills: the cover alone. */
 .lc-stage.is-tiny .lc-pills, .lc-stage.is-tiny .lc-links, .lc-stage.is-tiny .lc-name,

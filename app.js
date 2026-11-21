@@ -346,7 +346,8 @@
       colorHex: (name) => COLOR_MAP[name] || COLOR_MAP[String(name).replace(/[-_\s]/g, '_')] || '#888888',
       item: (slug) => itemsBySlug[slug] || null,
       openItem: (slug) => PanelManager.open(slug),
-      openCardMenu: (slug, x, y) => CardMenu.openAt(slug, x, y),
+      openCardMenu: (slug, x, y, more) => CardMenu.openAt(slug, x, y, more),
+      closeCardMenu: () => CardMenu.close(),
       thumbHTML: canvasThumbHTML,
       glyphSVG: (item) => {
         const g = glyphTileFor(item);
@@ -2212,6 +2213,9 @@
   const CardMenu = (function () {
     let $menu = null;
     let slug = null;
+    // The canvas opens this same menu for its cards, with its own entries in
+    // place of the canvas and delete ones (`extra`, see canvas.js).
+    let extra = null;
 
     const ICON_FOR = {
       open: 'arrow-up-right', enrich: 'sparkle', share: 'share', 'copy-link': 'link',
@@ -2223,7 +2227,7 @@
       const hasImage = !!item.image_path;
       const list = [
         { id: 'open', label: 'Open' },
-        ...(window.StelloCanvas ? [{ id: 'canvas', label: window.StelloCanvas.has(item.slug) ? 'Show on Canvas' : 'Add to Canvas' }] : []),
+        ...(extra ? extra.top || [] : window.StelloCanvas ? [{ id: 'canvas', label: window.StelloCanvas.has(item.slug) ? 'Show on Canvas' : 'Add to Canvas' }] : []),
         { id: 'enrich', label: 'Enrich' },
       ];
       if (hasURL && navigator.share) list.push({ id: 'share', label: 'Share' });
@@ -2241,13 +2245,16 @@
         ...(hasImage ? [{ id: 'dl-image', label: 'Download Image' }] : []),
         { id: 'dl-full', label: 'Download Full Item' },
       ] });
-      list.push({ divider: true }, { id: 'delete', label: 'Delete', danger: true });
+      if (extra) list.push(...(extra.bottom || []));
+      else list.push({ divider: true }, { id: 'delete', label: 'Delete', danger: true });
       return list;
     }
 
+    const CHECK = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
     function itemHTML(e) {
       if (e.divider) return '<div class="card-menu-divider" role="separator"></div>';
-      const ic = ICON_FOR[e.id] ? `<span class="card-menu-icon">${icon(ICON_FOR[e.id])}</span>` : '<span class="card-menu-icon"></span>';
+      const ic = e.checked ? `<span class="card-menu-icon">${CHECK}</span>`
+        : ICON_FOR[e.id] ? `<span class="card-menu-icon">${icon(ICON_FOR[e.id])}</span>` : '<span class="card-menu-icon"></span>';
       if (e.sub) {
         return `<div class="card-menu-group">
           <button type="button" class="card-menu-item has-sub" role="menuitem" aria-haspopup="true" data-action="${e.id}">${ic}<span>${escHtml(e.label)}</span><span class="card-menu-chevron">›</span></button>
@@ -2258,14 +2265,15 @@
     }
 
     function close() {
-      if ($menu) { $menu.remove(); $menu = null; slug = null; }
+      if ($menu) { $menu.remove(); $menu = null; slug = null; extra = null; }
     }
 
-    function openAt(cardSlug, x, y) {
+    function openAt(cardSlug, x, y, more) {
       const item = itemsBySlug[cardSlug];
       if (!item) return;
       close();
       slug = cardSlug;
+      extra = more || null;
       $menu = document.createElement('div');
       $menu.className = 'card-menu';
       $menu.setAttribute('role', 'menu');
@@ -2286,8 +2294,10 @@
       if (!btn || btn.classList.contains('has-sub')) return;
       const item = itemsBySlug[slug];
       const action = btn.dataset.action;
+      const ext = extra;
       close();
       if (!item) return;
+      if (ext && ext.onAction && ext.onAction(action, item.slug)) return;
       switch (action) {
         case 'open': PanelManager.open(item.slug); break;
         case 'canvas': window.StelloCanvas && window.StelloCanvas.addAuto(item.slug); break;

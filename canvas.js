@@ -93,6 +93,8 @@
   let simCache = new Map();       // slug -> [{ b, type, label, s }]
   const rendered = new Map();     // slug -> element
   let sel = null;                 // selected slug
+  let lastPointer = 'mouse';      // pointer type of the last press on the canvas
+  let reasonFor = null;           // marked card whose "Why?" field is open
   let selNote = null;             // selected note id
   let hover = null;
   let hoverGhost = null;
@@ -863,8 +865,8 @@
   }
 
   // ---------- Cards ----------
-  // A card is its cover. The details card opens from the info button beside
-  // the source pill, floating over what is below (no reflow).
+  // A card is its cover. A click on it (or its info button) opens the card in
+  // place: the details grow out of the same card, over what is below (no reflow).
   function cardEl(n) {
     const it = n.item;
     const el = document.createElement('div');
@@ -895,6 +897,24 @@
     if (!on && det) det.remove();
     el.classList.toggle('has-det', on);
     if (on) openDet.add(n.slug); else openDet.delete(n.slug);
+  }
+  // Opened by a click: if the card is too small on screen to read its details
+  // (zoomed out, or on a phone), fly in until it is, keeping it in view.
+  function openReadable(el, n) {
+    toggleDet(el, n, true);
+    const r = stageRect();
+    if (W * view.k >= 230) return;
+    const k = Math.min(1, Math.max(view.k, (Math.min(r.width, 420) - 48) / W));
+    requestAnimationFrame(() => {
+      const h = el.offsetHeight || n.h;
+      const top = Math.max(24, Math.min(r.height * 0.18, r.height - 120 - h * k));
+      flyTo({ k, x: r.width / 2 - (n.x + W / 2) * k, y: top - n.y * k });
+    });
+  }
+  // A click on empty canvas folds every open card back to its cover.
+  function closeAllDet() {
+    [...openDet].forEach(s => { const el = rendered.get(s); if (el) toggleDet(el, nodes.get(s), false); });
+    openDet.clear();
   }
   // Marks and revisit state on a card (cheap; re-run when they change).
   function decorate(el, n) {
@@ -1281,27 +1301,19 @@
     els.hint.hidden = true;
     const n = sel && nodes.get(sel);
     if (!n || lastBlocks) { bar.hidden = true; return; }
+    // Actions live in the card menu (right-click, or press and hold on touch),
+    // the same menu as the grid. This bar is only the "Why?" field for a mark.
     const rec = cardRec(sel) || {};
-    if (bar.dataset.for !== sel || bar.dataset.state !== (rec.state || '') || schedule.full) {
+    if (reasonFor !== sel || !rec.state) { bar.hidden = true; return; }
+    if (bar.dataset.for !== sel || bar.dataset.state !== (rec.state || '')) {
       bar.dataset.for = sel; bar.dataset.state = rec.state || '';
-      bar.innerHTML = `
-        <button type="button" data-act="open">${IC.open} Open</button>
-        <span class="sep"></span>
-        <button type="button" data-act="use" class="${rec.state === 'use' ? 'is-on use' : ''}">Use</button>
-        <button type="button" data-act="rejected" class="${rec.state === 'rejected' ? 'is-on rej' : ''}">Reject</button>
-        <span class="sep"></span>
-        <button type="button" data-act="influence">Inspired…</button>
-        <button type="button" data-act="contrast">Vs…</button>
-        <button type="button" data-act="part_of">Part of…</button>
-        <button type="button" data-act="question">Ask…</button>
-        <button type="button" data-act="pin">Note on image</button>
-        <span class="sep"></span>
-        <button type="button" data-act="remove" title="Take it off the canvas (it stays in your library)">Remove</button>
-        ${rec.state ? `<input class="lc-reason" type="text" placeholder="Why? (optional)" value="${esc(rec.reason || '')}" maxlength="60">` : ''}`;
+      bar.innerHTML = `<span class="lc-reason-k">${rec.state === 'use' ? 'Use' : 'Rejected'}</span><input class="lc-reason" type="text" placeholder="Why? (optional)" value="${esc(rec.reason || '')}" maxlength="60">`;
     }
     bar.hidden = false;
     const k = view.k;
-    let sx = n.x * k + view.x, sy = (n.y + n.h) * k + view.y + 10;
+    const el = rendered.get(sel);
+    const hh = el ? el.offsetHeight : n.h;
+    let sx = n.x * k + view.x, sy = n.y * k + view.y + hh * k + 10;
     const bw = bar.offsetWidth || 560, bh = bar.offsetHeight || 40;
     if (sy + bh > r.height - 90) sy = n.y * k + view.y - bh - 10;
     sx = Math.max(12, Math.min(r.width - bw - 12, sx));
@@ -2042,7 +2054,50 @@
     });
     const el = rendered.get(slug); if (el) decorate(el, nodes.get(slug));
     schedule(true);
-    if (cardRec(slug) && cardRec(slug).state) requestAnimationFrame(() => { const i = els.selbar.querySelector('.lc-reason'); if (i) i.focus(); });
+    askReason(slug);
+  }
+  // The "Why?" field under a marked card (web counterpart of the Apple prompt).
+  function askReason(slug) {
+    if (!(cardRec(slug) && cardRec(slug).state)) { reasonFor = null; schedule(true); return; }
+    sel = slug; reasonFor = slug; schedule(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => { const i = els.selbar.querySelector('.lc-reason'); if (i) i.focus(); }));
+  }
+  // The card menu: the grid's right-click menu, with the canvas actions
+  // slotted in (Apple apps: the canvas card's context menu).
+  function openMenu(slug, x, y) {
+    if (!App.openCardMenu || !nodes.get(slug)) return;
+    sel = slug; selNote = null; schedule(true);
+    const rec = cardRec(slug) || {};
+    const fresh = () => nodes.get(slug) && rendered.get(slug);
+    App.openCardMenu(slug, x, y, {
+      top: [{ id: 'lc-details', label: openDet.has(slug) ? 'Hide Details' : 'Show Details' }],
+      bottom: [
+        { divider: true },
+        { id: 'lc-use', label: 'Use', checked: rec.state === 'use' },
+        { id: 'lc-rejected', label: 'Rejected', checked: rec.state === 'rejected' },
+        ...(rec.state ? [{ id: 'lc-why', label: 'Why…' }] : []),
+        { id: 'lc-link', label: 'Link', sub: [
+          { id: 'lc-influence', label: 'Inspired…' },
+          { id: 'lc-contrast', label: 'Vs…' },
+          { id: 'lc-part_of', label: 'Part of…' },
+          { id: 'lc-question', label: 'Ask…' },
+        ] },
+        { id: 'lc-pin', label: 'Note on Image…' },
+        { divider: true },
+        { id: 'lc-remove', label: 'Remove from Canvas', danger: true },
+      ],
+      onAction(a, s) {
+        if (!a.startsWith('lc-')) return false;
+        a = a.slice(3);
+        if (a === 'details') { const el = fresh(); if (el) { if (openDet.has(s)) toggleDet(el, nodes.get(s), false); else openReadable(el, nodes.get(s)); } schedule(true); }
+        else if (a === 'use' || a === 'rejected') setMark(s, a);
+        else if (a === 'why') askReason(s);
+        else if (a === 'pin') { sel = s; pinFor = s; schedule(true); }
+        else if (a === 'remove') removeFromCanvas(s);
+        else { sel = s; connect = { from: s, kind: a }; schedule(true); }
+        return true;
+      },
+    });
   }
   function addLink(a, b, kind, label) {
     if (a === b) return null;
@@ -2172,20 +2227,12 @@
     els.static.addEventListener('keydown', (e) => { if (e.target.closest('.lc-note-text')) { e.stopPropagation(); if (e.key === 'Escape') e.target.blur(); } });
 
     // Selection bar
-    els.selbar.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-act]'); if (!b || !sel) return;
-      const a = b.dataset.act;
-      if (a === 'open') App.openItem(sel);
-      else if (a === 'remove') removeFromCanvas(sel);
-      else if (a === 'use' || a === 'rejected') setMark(sel, a);
-      else if (a === 'pin') { pinFor = sel; schedule(true); }
-      else { connect = { from: sel, kind: a }; schedule(true); }
-    });
     els.selbar.addEventListener('keydown', (e) => {
       if (!e.target.matches('.lc-reason')) return;
       e.stopPropagation();
       if (e.key === 'Enter' || e.key === 'Escape') e.target.blur();
     });
+    els.selbar.addEventListener('focusout', () => { setTimeout(() => { if (!els.selbar.contains(document.activeElement)) { reasonFor = null; schedule(true); } }, 0); });
     els.selbar.addEventListener('change', (e) => {
       if (!e.target.matches('.lc-reason') || !sel) return;
       const v = e.target.value.trim(), s = sel;
@@ -2282,7 +2329,18 @@
       const b = e.target.closest('[data-info]'); if (!b) return;
       e.stopPropagation();
       const el = b.closest('.lc-card'); const n = el && nodes.get(el.dataset.slug);
-      if (n) toggleDet(el, n);
+      if (!n) return;
+      if (openDet.has(n.slug)) toggleDet(el, n, false); else openReadable(el, n);
+      sel = openDet.has(n.slug) ? n.slug : (sel === n.slug ? null : sel);
+      schedule(true);
+    });
+    els.stage.addEventListener('contextmenu', (e) => {
+      const s = hitSlug(e);
+      e.preventDefault(); e.stopPropagation();   // the grid's menu handler would close it
+      if (!s || connect || pinFor) { App.closeCardMenu && App.closeCardMenu(); return; }
+      // Press-and-hold on touch already opened it from the pointer handler.
+      if (lastPointer !== 'mouse') return;
+      openMenu(s, e.clientX, e.clientY);
     });
     els.stage.addEventListener('pointerenter', () => { overCanvas = true; });
     els.stage.addEventListener('pointerleave', () => { overCanvas = false; });
@@ -2327,6 +2385,7 @@
       else if (e.key.startsWith('Arrow') && !sel) { const d = e.shiftKey ? 400 : 80; flyTo({ ...view, x: view.x + (e.key === 'ArrowLeft' ? d : e.key === 'ArrowRight' ? -d : 0), y: view.y + (e.key === 'ArrowUp' ? d : e.key === 'ArrowDown' ? -d : 0) }, 160); }
       else if (e.key === 'Escape') { sel = null; selNote = null; connect = null; pinFor = null; els.create.hidden = true; renderNotes(); schedule(true); }
       else if (e.key === 'Enter' && sel) App.openItem(sel);
+      else if ((e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) && sel && rendered.get(sel)) { const b = rendered.get(sel).getBoundingClientRect(); openMenu(sel, b.left + 16, b.top + 16); }
       else if ((e.key === 'Backspace' || e.key === 'Delete') && sel && !selNote) removeFromCanvas(sel);
       else if ((e.key === 'Backspace' || e.key === 'Delete') && selNote) {
         const id = selNote; selNote = null;
@@ -2373,6 +2432,7 @@
     return hit.length ? hit[hit.length - 1] : null;
   }
   function onDown(e) {
+    lastPointer = e.pointerType;
     if (e.pointerType === 'touch' && (!e.isPrimary || touchPts.size > 1)) return;
     stopInertia();
     if (e.target.closest('input, button, a, [contenteditable="true"], .lc-selbar, .lc-create')) return;
@@ -2420,7 +2480,7 @@
         gesture(); schedule();
       }, (ev) => {
         els.stage.classList.remove('is-panning');
-        if (!moved && (sel || selNote)) { sel = null; selNote = null; renderNotes(); schedule(true); }
+        if (!moved && (sel || selNote || openDet.size)) { sel = null; selNote = null; closeAllDet(); renderNotes(); schedule(true); }
         if (moved && e.pointerType === 'touch' && samples.length > 1) {
           const a = samples[0], b = samples[samples.length - 1], dt = b.t - a.t;
           if (dt > 0 && ev.timeStamp - b.t < 60) glide((b.x - a.x) / dt, (b.y - a.y) / dt);
@@ -2458,16 +2518,21 @@
       const n = nodes.get(s);
       selNote = null;
       const ox = n.x, oy = n.y;
-      let moved = false, snap = null;
+      let moved = false, snap = null, held = false;
+      // Touch and pen: press and hold opens the card menu (mouse: right-click).
+      let hold = e.pointerType !== 'mouse' ? setTimeout(() => { hold = 0; if (!moved) { held = true; openMenu(s, sx, sy); } }, 500) : 0;
       return track(e, (ev) => {
         if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < (e.pointerType === 'touch' ? 8 : 4)) return;
-        if (!moved) { moved = true; snap = JSON.stringify(doc); els.root.classList.add('is-moving'); sel = s; dragging = s; }
+        if (held) return;
+        if (hold) { clearTimeout(hold); hold = 0; }
+        if (!moved) { App.closeCardMenu && App.closeCardMenu(); moved = true; snap = JSON.stringify(doc); els.root.classList.add('is-moving'); sel = s; dragging = s; }
         n.x = Math.round(ox + (ev.clientX - sx) / view.k); n.y = Math.round(oy + (ev.clientY - sy) / view.k);
         near = nearOf(n);
         suggest = suggestOf(n);
         if (families[n.fam]) famBox(families[n.fam]);
         schedule();
       }, () => {
+        if (hold) { clearTimeout(hold); hold = 0; }
         els.root.classList.remove('is-moving');
         dragging = null; near = [];
         const sug = suggest; suggest = null;
@@ -2476,11 +2541,18 @@
           const c = cardRecMake(s); c.x = n.x; c.y = n.y; c.by = doc.groupBy;
           if (sug) acceptSuggest(n, sug); else refamily(n);
           saveDoc(); rebuildHash();
-        } else sel = sel === s ? null : s;
+        } else if (!held) {
+          // A click opens the card in place to show its details; again closes it.
+          const el = rendered.get(s);
+          const open = !openDet.has(s);
+          if (el) { if (open) openReadable(el, n); else toggleDet(el, n, false); }
+          sel = open ? s : (sel === s ? null : sel);
+        }
         renderNotes();
         schedule(true);
       }, () => {
         // A second finger landed: this was the start of a pinch, not a drag.
+        if (hold) { clearTimeout(hold); hold = 0; }
         els.root.classList.remove('is-moving');
         dragging = null; near = []; suggest = null;
         n.x = ox; n.y = oy;
