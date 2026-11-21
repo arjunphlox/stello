@@ -26,6 +26,7 @@ struct CanvasView: View {
 
     @Environment(\.appTheme) private var theme
     @Environment(\.modelContext) private var context
+    @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
 
     @State private var index: [String: Item] = [:]
     @State private var dragSlug: String?
@@ -223,7 +224,7 @@ struct CanvasView: View {
                                    isSelected: store.selected == c.slug,
                                    counterScale: 1 / cam.k,
                                    detailsOpen: open,
-                                   onDetails: { toggleDetails(c.slug) },
+                                   onDetails: { toggleDetails(c.slug, size: size) },
                                    mark: c.state.flatMap(CanvasMark.init(rawValue:)),
                                    reason: c.note)
                         .opacity((linked?.contains(c.slug) ?? true) ? 1 : 0.22)
@@ -232,13 +233,23 @@ struct CanvasView: View {
                                 y: c.y + (moving ? dragDelta.height : 0))
                         .gesture(cardDrag(c.slug))
                         .onTapGesture(count: 2) { onOpen(item) }
-                        .onTapGesture(coordinateSpace: .named("canvas")) { loc in cardTap(c.slug, at: loc, height: height(item)) }
+                        .onTapGesture(coordinateSpace: .named("canvas")) { loc in cardTap(c.slug, at: loc, height: height(item), size: size) }
                         .onHover { inside in
                             if inside { hoverSlug = c.slug } else if hoverSlug == c.slug { hoverSlug = nil }
                         }
                         .contextMenu {
-                            Button("Open") { onOpen(item) }
-                            Button(open ? "Hide Details" : "Show Details") { toggleDetails(c.slug) }
+                            // The grid card's menu, with the canvas actions slotted in
+                            // (web: the same menu on right-click / press and hold).
+                            Button("Open", systemImage: "arrow.up.right") { onOpen(item) }
+                            Button(open ? "Hide Details" : "Show Details") { toggleDetails(c.slug, size: size) }
+                            Button("Enrich", systemImage: "sparkles") {
+                                enrichmentCoordinator.scheduleEnrichment(for: item, context: context, force: true)
+                            }
+                            if let s = item.sourceURL, !s.isEmpty, let url = URL(string: s) {
+                                ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+                                Button("Copy Link", systemImage: "link") { copyText(url.absoluteString) }
+                            }
+                            Button("Copy Title", systemImage: "textformat") { copyText(item.title) }
                             Divider()
                             cardLayer2Menu(c)
                             Divider()
@@ -728,7 +739,7 @@ struct CanvasView: View {
         focused = true
     }
 
-    private func cardTap(_ slug: String, at loc: CGPoint, height h: CGFloat) {
+    private func cardTap(_ slug: String, at loc: CGPoint, height h: CGFloat, size: CGSize) {
         noteFocus = nil
         focused = true
         switch store.pick {
@@ -749,7 +760,8 @@ struct CanvasView: View {
             store.pick = nil
             store.selected = slug
         case nil:
-            store.selected = slug
+            // A tap opens the card in place to show its details; again closes it.
+            toggleDetails(slug, size: size)
         }
     }
 
@@ -902,9 +914,35 @@ struct CanvasView: View {
         openDetails = openDetails.filter { store.slugs.contains($0) }
     }
 
-    private func toggleDetails(_ slug: String) {
-        if openDetails.contains(slug) { openDetails.remove(slug) } else { openDetails.insert(slug) }
+    private func toggleDetails(_ slug: String, size: CGSize) {
+        if openDetails.contains(slug) {
+            openDetails.remove(slug)
+            if store.selected == slug { store.selected = nil }
+            return
+        }
+        openDetails.insert(slug)
         store.selected = slug
+        // Too small on screen to read (zoomed out, or on iPhone): fly in until it is.
+        let cam = store.camera
+        guard let c = store.doc.card(slug), size.width > 0,
+              CanvasMetrics.cardWidth * cam.k < 230 else { return }
+        let w = CanvasMetrics.cardWidth
+        let k = min(1, max(cam.k, (min(size.width, 420) - 48) / w))
+        let h = height(slug: slug) + 220
+        let top = max(24, min(size.height * 0.18, size.height - 120 - h * k))
+        store.cameraMoved = true
+        withAnimation(.smooth(duration: 0.28)) {
+            store.camera = CanvasCamera(x: size.width / 2 - (c.x + w / 2) * k, y: top - c.y * k, k: k)
+        }
+    }
+
+    private func copyText(_ text: String) {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
+        #endif
     }
 
     private func drop(_ slugs: [String], at location: CGPoint) -> Bool {
