@@ -3416,10 +3416,13 @@ html.view-canvas .bottom-bar .lc-docbox { max-width: 312px; }
 @media (max-width: 500px) { html.view-canvas .bottom-bar .lc-docbox { max-width: 172px; } }
 /* Phones in canvas view: the canvas name takes the room of the grid's add and filter buttons. */
 @media (max-width: 500px) {
-  html.view-canvas #import-btn, html.view-canvas #filter-panel-btn { display: none; }
+  html.view-canvas #import-btn { display: none; }
   html.view-canvas .bottom-bar .lc-docbox { flex: 1 1 auto; max-width: none; }
-  html.view-canvas .bottom-bar .bar-search { flex: 0 0 44px; }
 }
+/* Canvas view (no grid on screen): search and filter act on the grid, so they
+   leave the bar, as on the Apple apps' CanvasBottomBar (parity pass, Nov 22 2026).
+   Split view keeps them, since the grid is beside the canvas. */
+html.view-canvas .bottom-bar .bar-search, html.view-canvas #filter-panel-btn { display: none; }
 
 /* Phone carry: press and hold a grid card, the canvas opens under it. */
 .lc-carry-top {

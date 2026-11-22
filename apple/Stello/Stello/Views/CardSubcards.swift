@@ -665,7 +665,8 @@ struct CardSubcards: View {
                 showsThumbnails: true
             )
         } else {
-            SubCard(title: embedsInPanel ? "" : "Images", bleedsToTop: embedsInPanel) {
+            // No "Images" label, as on the web panel (parity pass, Nov 22 2026).
+            SubCard(title: "", bleedsToTop: embedsInPanel) {
                 DetailImageStrip(item: item, bleedsToTop: embedsInPanel)
             }
             .horizontalBleed(active: embedsInPanel)

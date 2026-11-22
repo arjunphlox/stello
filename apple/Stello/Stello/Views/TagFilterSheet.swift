@@ -16,8 +16,7 @@ struct TagFilterContent: View {
     private func categoryLabel(_ category: String) -> String {
         switch category {
         case "intent": "Why saved"
-        case "collection": "Collections"
-        default: category.capitalized
+        default: category.capitalized   // singular, as on the web ("Collection", "Format")
         }
     }
 
@@ -90,7 +89,7 @@ struct TagFilterContent: View {
 
     private func categorySection(category: String, rows: [(name: String, count: Int)]) -> some View {
         let isExpanded = isSearching || expandedCategories.contains(category)
-        let totalCount = rows.reduce(0) { $0 + $1.count }
+        let totalCount = rows.count   // number of tags in the group, as on the web
 
         return VStack(alignment: .leading, spacing: isExpanded ? 8 : 0) {
             Button {
@@ -240,7 +239,7 @@ struct TagFilterSheet: View {
     var body: some View {
         NavigationStack {
             TagFilterContent(allItems: allItems, selectedTagNames: $selectedTagNames, needsReviewOnly: $needsReviewOnly)
-                .navigationTitle("Filter by Tag")
+                .navigationTitle("Filters")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 #endif

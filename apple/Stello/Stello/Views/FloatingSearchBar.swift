@@ -43,7 +43,7 @@ struct GridBottomControlBar: View {
                 avatarImage: profile.avatarImage(),
                 controlBarDiameter: buttonSize,
                 controlBarSymbolSize: symbolSize,
-                label: "User Preferences",
+                label: "Settings",
                 action: onSettings
             )
             .id(profile.avatarRevision)

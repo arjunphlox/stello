@@ -59,6 +59,7 @@ struct CanvasView: View {
     @FocusState private var noteFocus: String?
 
     private var store: CanvasStore { .shared }
+    private var layers: CanvasLayers { store.layers }
 
     var body: some View {
         GeometryReader { geo in
@@ -87,6 +88,12 @@ struct CanvasView: View {
                 if case .active(let p) = phase { pointer = p } else { pointer = nil }
             }
             .overlay(alignment: .top) { pickHint }
+            .overlay(alignment: menusAlignment) {
+                CanvasLayerMenus()
+                    .padding(.top, menusAtBottom ? 0 : StelloLayout.windowInset + topInset)
+                    .padding(.bottom, menusAtBottom ? menusBottomInset : 0)
+                    .padding(.horizontal, StelloLayout.windowInset)
+            }
             .overlay(alignment: .bottomLeading) {
                 if isPanel { CanvasDocBox().padding(StelloLayout.windowInset) }
             }
@@ -137,8 +144,10 @@ struct CanvasView: View {
             .onChange(of: store.cameraPlaced) { _, placed in if !placed { placeCamera(size: geo.size) } }
             .onChange(of: store.slugs) { _, _ in refreshIndex() }
             .onChange(of: store.doc) { _, _ in refreshFamilies() }
+            .onChange(of: store.layers) { _, _ in refreshFeatures() }
             .onChange(of: store.focusSlug) { _, _ in focusIfAsked(size: geo.size) }
             .onChange(of: store.exportRequest) { _, _ in exportPackage() }
+            .onChange(of: store.fitRequest) { _, _ in fitAll(size: geo.size, animated: true) }
             .task { await store.pull(); refreshIndex() }
         }
         .background(isPanel ? theme.backgroundSubtle : theme.background)
@@ -172,6 +181,26 @@ struct CanvasView: View {
             if case .failure = result { store.notice = "Couldn’t save the Package" }
             exportDoc = nil
         }
+    }
+
+    // MARK: - Layer menus placement
+
+    /// Phones put the menus above the bottom bar, as the web phone does; wider
+    /// layouts put them top right.
+    private var menusAtBottom: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        false
+        #endif
+    }
+    private var menusAlignment: Alignment { menusAtBottom ? .bottomLeading : .topTrailing }
+    private var menusBottomInset: CGFloat {
+        #if os(iOS)
+        StelloLayout.bottomEdgeGap() + StelloLayout.compactControlBarHeight + StelloLayout.controlBarSpacing
+        #else
+        0
+        #endif
     }
 
     // MARK: - Layers
@@ -225,8 +254,8 @@ struct CanvasView: View {
                                    counterScale: 1 / cam.k,
                                    detailsOpen: open,
                                    onDetails: { toggleDetails(c.slug, size: size) },
-                                   mark: c.state.flatMap(CanvasMark.init(rawValue:)),
-                                   reason: c.note)
+                                   mark: layers.marks ? c.state.flatMap(CanvasMark.init(rawValue:)) : nil,
+                                   reason: layers.marks ? c.note : nil)
                         .opacity((linked?.contains(c.slug) ?? true) ? 1 : 0.22)
                         .shadow(color: .black.opacity(moving ? 0.28 : 0), radius: 12, y: 6)
                         .offset(x: c.x + (moving ? dragDelta.width : 0),
@@ -262,7 +291,7 @@ struct CanvasView: View {
                 }
             }
             ForEach(store.doc.notes, id: \.id) { note in
-                if let x = note.x, let y = note.y {
+                if layers.notes, let x = note.x, let y = note.y {
                     let moving = noteDragID == note.id
                     CanvasNoteView(note: note, isSelected: store.selected == note.id, focus: $noteFocus,
                                    onCommit: { store.setNoteText(note.id, $0) },
@@ -307,6 +336,17 @@ struct CanvasView: View {
         } else if let f = focus, features[f] != nil {
             lines = CanvasSimilarity.neighbours(of: f, features: features, inverted: inverted)
                 .map { ($0.a, $0.b, $0.kind, cam.k >= 0.25 ? $0.label : nil, 0.95, 2) }
+        } else if layers.alwaysLines {
+            // "Always show lines": every pair once, quieter than a focused card's lines.
+            var seen = Set<String>()
+            var all: [(a: String, b: String, kind: SimKind, label: String?, alpha: Double, width: CGFloat)] = []
+            for c in store.doc.cards {
+                for n in CanvasSimilarity.neighbours(of: c.slug, features: features, inverted: inverted) {
+                    let key = n.a < n.b ? n.a + "|" + n.b : n.b + "|" + n.a
+                    if seen.insert(key).inserted { all.append((n.a, n.b, n.kind, nil, 0.5, 1.4)) }
+                }
+            }
+            lines = all
         } else {
             lines = []
         }
@@ -316,11 +356,12 @@ struct CanvasView: View {
         let ends = live.merging(noteRects()) { a, _ in a }
         let l2 = store.doc.links.compactMap { l -> (a: CGRect, b: CGRect, kind: L2Kind, label: String?, color: Color)? in
             guard let kind = L2Kind(rawValue: l.kind), let ra = ends[l.a], let rb = ends[l.b] else { return nil }
+            if kind == .question || kind == .partOf ? !layers.notes : (!layers.marks && kind != .maybe) { return nil }
             return (ra, rb, kind, kind.text(l.label), kind.color)
         }
         let amber = Color(hex: "#f0a23a")
         let regions = store.doc.notes.compactMap { n -> (note: CGRect, spot: CGPoint)? in
-            guard n.kind == CanvasNoteKind.region.rawValue, let s = n.slug, let r = live[s],
+            guard layers.notes, n.kind == CanvasNoteKind.region.rawValue, let s = n.slug, let r = live[s],
                   let nr = ends[n.id] else { return nil }
             let spot = CGPoint(x: r.minX + CGFloat(min(1, max(0, n.rx ?? 0.5))) * r.width,
                                y: r.minY + CGFloat(min(1, max(0, n.ry ?? 0.5))) * r.height)
@@ -884,7 +925,9 @@ struct CanvasView: View {
         for (slug, item) in index {
             let kind = CanvasSimilarity.kindName(kindLine: item.cardKindLine, kind: item.kind,
                                                  hasURL: !(item.sourceURL ?? "").isEmpty)
+            // Only the kinds switched on in the Similarity menu (web `layers.sim`).
             next[slug] = CanvasSimilarity.features(tags: item.tags, kindName: kind, domain: item.domain)
+                .filter { layers.shows($0.kind) }
         }
         features = next
         inverted = CanvasSimilarity.invert(next)
@@ -1005,6 +1048,18 @@ struct CanvasZoomPill: View {
             .buttonStyle(.plain)
             .help("Zoom to 100%")
             button("plus", "Zoom in") { $0.zoom(to: $0.nextStep(up: true), anchor: centre) }
+            // Fit everything (web "Fit", ⇧1).
+            Button {
+                store.cameraMoved = true
+                store.fitRequest &+= 1
+            } label: {
+                Text("Fit")
+                    .font(.karst(size: 12, weight: .medium))
+                    .frame(minWidth: 32, minHeight: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Fit everything")
         }
         .foregroundStyle(theme.textPrimary)
         .padding(.horizontal, 6)
@@ -1081,3 +1136,83 @@ struct CanvasScrollMonitor: NSViewRepresentable {
     }
 }
 #endif
+
+
+/// The canvas's two layer menus, top right (web `.lc-controls`): Similarity
+/// (Layer 1: on, kinds, always show lines) and Intent, time & gaps (Layer 2 parts).
+struct CanvasLayerMenus: View {
+    @Environment(\.appTheme) private var theme
+    private var store: CanvasStore { .shared }
+
+    private static let hints: [SimKind: String] = [
+        .place: "city or country", .colour: "shared palette", .looks: "similar look",
+        .kind: "tool, studio, portfolio, foundry", .idea: "overlapping topic", .style: "shared style tags",
+    ]
+
+    var body: some View {
+        @Bindable var store = store
+        HStack(spacing: 8) {
+            Menu {
+                Toggle("Sort by similarity", isOn: $store.layers.simOn)
+                Section {
+                    ForEach(SimKind.allCases, id: \.self) { k in
+                        Toggle(isOn: kindBinding(k)) {
+                            Text(k.label)
+                            Text(Self.hints[k] ?? "")
+                        }
+                        .disabled(!store.layers.simOn)
+                    }
+                }
+                Section {
+                    Toggle("Always show lines", isOn: $store.layers.alwaysLines)
+                        .disabled(!store.layers.simOn)
+                }
+            } label: {
+                pill {
+                    HStack(spacing: 2) {
+                        ForEach(SimKind.allCases.filter { store.layers.shows($0) }, id: \.self) { k in
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(k.color(text: theme.textPrimary))
+                                .frame(width: 3, height: 12)
+                        }
+                    }
+                    Text("Similarity")
+                }
+            }
+            Menu {
+                Toggle("Use / rejected", isOn: $store.layers.marks)
+                Toggle("Questions, notes and sets", isOn: $store.layers.notes)
+            } label: {
+                pill { Text("Intent, time & gaps") }
+            }
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+    }
+
+    private func kindBinding(_ k: SimKind) -> Binding<Bool> {
+        Binding(
+            get: { store.layers.kinds.contains(k.rawValue) },
+            set: { on in
+                if on { store.layers.kinds.insert(k.rawValue) } else { store.layers.kinds.remove(k.rawValue) }
+            }
+        )
+    }
+
+    private func pill<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 6) {
+            content()
+            Image(systemName: "chevron.down").font(.system(size: 10, weight: .medium))
+        }
+        .font(.karst(size: 13))
+        .foregroundStyle(theme.textPrimary)
+        .padding(.horizontal, 14)
+        .frame(height: StelloLayout.controlBarButtonSize)
+        .background(theme.surfaceRaised.opacity(StelloLayout.controlBarGlassFillOpacity), in: Capsule())
+        .overlay(Capsule().stroke(theme.border, lineWidth: 1))
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .contentShape(Capsule())
+    }
+}

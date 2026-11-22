@@ -78,8 +78,8 @@ struct CanvasModeSwitch: View {
     }
 }
 
-/// Bottom bar in Canvas mode: account, view switch, then zoom and Add at the right
-/// (web #99: zoom sits at the far right; search and filter act on the grid).
+/// Bottom bar in Canvas mode: account, view switch, canvas name, then Add and zoom
+/// at the far right (web #99). Search and filter act on the grid, so neither shows.
 struct CanvasBottomBar: View {
     var compactPhone = false
     let onAdd: () -> Void
@@ -97,22 +97,27 @@ struct CanvasBottomBar: View {
                 avatarImage: profile.avatarImage(),
                 controlBarDiameter: size,
                 controlBarSymbolSize: symbol,
-                label: "User Preferences",
+                label: "Settings",
                 action: onSettings
             )
             .id(profile.avatarRevision)
             CanvasModeSwitch(compactPhone: compactPhone)
             CanvasDocBox(compactPhone: compactPhone)
+                .layoutPriority(1)
             Spacer(minLength: 0)
-            CanvasZoomPill()
-            StelloGlassIconButton(
-                systemName: "plus",
-                style: .controlBar,
-                controlBarDiameter: size,
-                controlBarSymbolSize: symbol,
-                label: "Add",
-                action: onAdd
-            )
+            // Web order: Add, then zoom at the far right. Phones leave both out so the
+            // canvas name has room (pinch zooms there), as the web phone bar does.
+            if !compactPhone {
+                StelloGlassIconButton(
+                    systemName: "plus",
+                    style: .controlBar,
+                    controlBarDiameter: size,
+                    controlBarSymbolSize: symbol,
+                    label: "Add",
+                    action: onAdd
+                )
+                CanvasZoomPill()
+            }
         }
     }
 }

@@ -95,9 +95,9 @@ struct SidePanelView: View {
         case .itemDetail:
             let t = selectedItem?.title ?? ""
             return t.isEmpty ? "Untitled" : t
-        case .filters:  return "Filter by Tag"
+        case .filters:  return "Filters"
         case .import:   return "Add Item"
-        case .settings: return "User Preferences"
+        case .settings: return "Settings"
         case .none:     return ""
         }
     }
@@ -131,7 +131,7 @@ struct SidePanelView: View {
 struct SettingsPanelContent: View {
     var body: some View {
         ScrollView {
-            UserPreferencesContent(showsSyncSection: true, showsAboutSection: true)
+            UserPreferencesContent(showsGridSection: true, showsSyncSection: true, showsAboutSection: true)
                 .formStyle(.grouped)
                 .padding(.bottom, 24)
         }
