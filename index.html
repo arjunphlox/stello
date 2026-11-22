@@ -34,15 +34,16 @@
 
   <!-- Tool-panel content templates (hidden; content moved into tool panel on open) -->
   <template id="tpl-filters">
+    <!-- Same order as the Apple TagFilterContent: tag search, then Needs review. -->
+    <div class="filter-search-wrap">
+      <input type="text" id="filter-search" class="filter-search" placeholder="Search tags...">
+    </div>
     <button type="button" id="filter-needs-review" class="filter-review-toggle" aria-pressed="false">
       <span class="filter-review-check" aria-hidden="true"></span>Needs review
     </button>
     <button type="button" id="filter-offline" class="filter-review-toggle" aria-pressed="false">
       <span class="filter-review-check" aria-hidden="true"></span>Available offline
     </button>
-    <div class="filter-search-wrap">
-      <input type="text" id="filter-search" class="filter-search" placeholder="Search tags...">
-    </div>
     <div id="filter-tag-drawer"></div>
   </template>
 
@@ -86,17 +87,19 @@
       </div>
       <p class="settings-hint">Pinch the grid to zoom, or set columns here.</p>
     </fieldset>
-    <div class="settings-field">
-      <label>API key profile</label>
-      <input type="text" class="settings-profile" value="personal" placeholder="API key profile">
-    </div>
-    <div class="settings-field">
-      <label>Anthropic API key</label>
-      <input type="password" class="settings-key" placeholder="sk-ant-api03-...">
-    </div>
-    <div class="settings-actions">
-      <button class="settings-save">Save</button>
-      <span class="settings-status"></span>
+    <div class="settings-card">
+      <div class="settings-field">
+        <label>API key profile</label>
+        <input type="text" class="settings-profile" value="personal" placeholder="API key profile">
+      </div>
+      <div class="settings-field">
+        <label>Anthropic API key</label>
+        <input type="password" class="settings-key" placeholder="sk-ant-api03-...">
+      </div>
+      <div class="settings-actions">
+        <button class="settings-save">Save</button>
+        <span class="settings-status"></span>
+      </div>
     </div>
     <div class="settings-field settings-account">
       <label>Account</label>
@@ -162,7 +165,7 @@
           <button class="bar-btn bar-btn-avatar" id="settings-btn" type="button" title="Settings" data-icon="user-circle" aria-label="Settings"></button>
           <label class="bar-search">
             <span class="bar-search-icon" data-icon="magnifying-glass" aria-hidden="true"></span>
-            <input type="search" class="search-input" id="search-input" placeholder="Search items…" aria-label="Search items" autocomplete="off">
+            <input type="search" class="search-input" id="search-input" placeholder="Search" aria-label="Search items" autocomplete="off">
           </label>
           <button class="bar-btn" id="filter-panel-btn" type="button" title="Filters" data-icon="funnel" aria-label="Filters"></button>
           <button class="bar-btn" id="import-btn" type="button" title="Add" data-icon="plus" aria-label="Add"></button>
