@@ -17,7 +17,7 @@ enum TimelineMetrics {
     /// start at `windowInset` from that same origin. So, in `TimelineOverlay`'s own
     /// coordinate space, the card edge sits at `(windowInset + barWidth) / 2` —
     /// exactly where the strip should end.
-    static let interactionStripWidth: CGFloat = (StelloLayout.windowInset + barWidth) / 2
+    static var interactionStripWidth: CGFloat { (StelloLayout.windowInset + barWidth) / 2 }
 }
 
 struct WeekBarLayout {

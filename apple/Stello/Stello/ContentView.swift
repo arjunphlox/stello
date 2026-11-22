@@ -221,6 +221,8 @@ struct ContentView: View {
 
     private var regularLayout: some View {
         GeometryReader { geo in
+            // Edge gutter and card gap follow the window width, as on the web.
+            let _ = StelloLayout.applyWidth(geo.size.width)
             let scrollTopInset = StelloLayout.headerOverlayScrollInset
             let headerScrollProgress = min(
                 max(scrollOffset, 0) / StelloLayout.headerScrollFadeDistance,
@@ -361,6 +363,8 @@ struct ContentView: View {
 
     private var compactLayout: some View {
         NavigationStack {
+            // Phones keep the 12pt gutter and card gap (web, under 500px).
+            let _ = StelloLayout.applyWidth(0)
             // Phones: Grid or Canvas (Split falls back to Canvas, web #97).
             if canvasStore.viewMode == .grid {
                 MasonryGridView(

@@ -135,7 +135,8 @@ struct MasonryGridView: View {
     private static let columnHysteresis: Double = 0.35
     /// How far the grid scrolls before the set of built cards is refreshed.
     private static let visibleWindowStep: CGFloat = 300
-    private static let gridSpacing: CGFloat = 12
+    /// The web's masonry gap for this width (`StelloLayout.cardGap`).
+    private static var gridSpacing: CGFloat { StelloLayout.cardGap }
     /// Minimum scroll delta before updating header / week-spy state.
     private static let scrollOffsetDeadband: CGFloat = 10
 
