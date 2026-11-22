@@ -42,6 +42,16 @@ final class CanvasStore {
     private(set) var canvases: [CanvasListEntry] = []
     /// Bumped by the export button; the canvas view builds the Package and saves it.
     var exportRequest = 0
+    /// Bumped by the zoom pill's Fit; the canvas view frames every card.
+    var fitRequest = 0
+    /// What the canvas draws: the Similarity and "Intent, time & gaps" menus (web
+    /// `layers`). Kept on this device, as the web keeps it in the browser.
+    var layers: CanvasLayers = .load() {
+        didSet {
+            guard !isShot, layers != oldValue else { return }
+            layers.save()
+        }
+    }
     /// Visible canvas size, so menu actions can drop at the centre of the view.
     @ObservationIgnored var viewportSize: CGSize = .zero
 
@@ -544,4 +554,31 @@ nonisolated struct CanvasListEntry: Codable, Identifiable, Equatable, Sendable {
     var id: String
     var name: String
     var cards: Int? = nil
+}
+
+
+/// Canvas layer switches, the web's `layers` (canvas.js): Layer 1 similarity
+/// (on, always show lines, one switch per kind) and the insight parts the Apple
+/// canvas draws (marks, notes).
+nonisolated struct CanvasLayers: Codable, Equatable, Sendable {
+    var simOn = true
+    var alwaysLines = false
+    var kinds: Set<String> = Set(SimKind.allCases.map(\.rawValue))
+    var marks = true
+    var notes = true
+
+    func shows(_ kind: SimKind) -> Bool { simOn && kinds.contains(kind.rawValue) }
+
+    private static let key = "stello.canvas.layers"
+
+    static func load() -> CanvasLayers {
+        guard !ProcessInfo.processInfo.arguments.contains("-screenshotCleanStore"),
+              let data = UserDefaults.standard.data(forKey: key),
+              let layers = try? JSONDecoder().decode(CanvasLayers.self, from: data) else { return CanvasLayers() }
+        return layers
+    }
+
+    func save() {
+        if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: Self.key) }
+    }
 }

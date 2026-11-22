@@ -135,7 +135,8 @@ struct MasonryGridView: View {
     private static let columnHysteresis: Double = 0.35
     /// How far the grid scrolls before the set of built cards is refreshed.
     private static let visibleWindowStep: CGFloat = 300
-    private static let gridSpacing: CGFloat = 12
+    /// The web's masonry gap for this width (`StelloLayout.cardGap`).
+    private static var gridSpacing: CGFloat { StelloLayout.cardGap }
     /// Minimum scroll delta before updating header / week-spy state.
     private static let scrollOffsetDeadband: CGFloat = 10
 
@@ -297,10 +298,14 @@ struct MasonryGridView: View {
             if !embedInPanelLayout && ProcessInfo.processInfo.arguments.contains("-screenshotFilterSheet") {
                 showFilterSheet = true
             }
-            if ProcessInfo.processInfo.arguments.contains(where: {
+            // The sheet is the compact (iPhone) Settings; wider layouts show the side
+            // panel, so -screenshotSettingsPanel there must not open both.
+            let args = ProcessInfo.processInfo.arguments
+            let wantsSettings = args.contains(where: {
                 ["-screenshotSettings", "-screenshotUserPrefs", "-screenshotSettingsPanel",
                  "-screenshotAccentsDark", "-screenshotAccentsLight"].contains($0)
-            }) {
+            })
+            if wantsSettings && !(embedInPanelLayout && args.contains("-screenshotSettingsPanel")) {
                 showSettings = true
             }
         }
@@ -620,6 +625,17 @@ struct MasonryGridView: View {
                     columnWidth: cardColumnWidth,
                     onOpen: { onCardTap(item) }
                 )
+                .overlay(alignment: .topLeading) {
+                    // Split view: a dot on cards already on the canvas (web `.on-canvas`).
+                    if CanvasStore.shared.viewMode == .split, CanvasStore.shared.doc.contains(item.slug) {
+                        Circle()
+                            .fill(theme.accentColor)
+                            .frame(width: 10, height: 10)
+                            .overlay(Circle().stroke(.black.opacity(0.35), lineWidth: 2))
+                            .padding(10)
+                            .allowsHitTesting(false)
+                    }
+                }
             }
             .buttonStyle(.plain)
             // Mac / iPad: drag a card onto the canvas (Split view). Its own type, so

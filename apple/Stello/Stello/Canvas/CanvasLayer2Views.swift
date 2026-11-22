@@ -149,7 +149,7 @@ struct CanvasDocBox: View {
                 .foregroundStyle(theme.textPrimary)
                 .padding(.horizontal, 14)
                 .frame(height: height)
-                .frame(maxWidth: compactPhone ? 130 : 260)
+                .frame(maxWidth: compactPhone ? 170 : 260)
                 .contentShape(Capsule())
             }
             .menuStyle(.button)
@@ -161,16 +161,15 @@ struct CanvasDocBox: View {
             .glassEffect(.regular.interactive(), in: .capsule)
             .help("Canvases")
 
-            if !compactPhone {
-                StelloGlassIconButton(
-                    systemName: "square.and.arrow.up",
-                    style: .controlBar,
-                    controlBarDiameter: height,
-                    controlBarSymbolSize: StelloLayout.controlBarSymbolSize(compactPhone: false),
-                    label: "Export Package",
-                    action: { store.exportRequest += 1 }
-                )
-            }
+            // Share shows on phones too, as on the web phone bar (name, then share).
+            StelloGlassIconButton(
+                systemName: "square.and.arrow.up",
+                style: .controlBar,
+                controlBarDiameter: height,
+                controlBarSymbolSize: StelloLayout.controlBarSymbolSize(compactPhone: compactPhone),
+                label: "Export Package",
+                action: { store.exportRequest += 1 }
+            )
         }
         .task { await store.refreshList() }
         .alert("Name this canvas", isPresented: $renaming) {

@@ -5,8 +5,25 @@ import UIKit
 
 /// Shared layout constants — mirrors web `.content-inner` / `.header` from `style.css`.
 enum StelloLayout {
-    /// Uniform inset — every edge and every gap (header, content, panel, column).
-    static let windowInset: CGFloat = 12
+    /// Edge gutter for the current window width — the web's `--gutter` (24 above
+    /// 768pt, 16 above 500pt, 12 on phones; Arjun's pick, parity pass Nov 22 2026).
+    /// `ContentView` sets it from the window width before laying anything out.
+    static var gutter: CGFloat = 12
+    static func gutter(forWidth width: CGFloat) -> CGFloat {
+        width > 768 ? 24 : width > 500 ? 16 : 12
+    }
+    /// Gap between grid cards — the web's masonry gap (24 above 768pt, else 12).
+    static var cardGap: CGFloat = 12
+    static func cardGap(forWidth width: CGFloat) -> CGFloat { width > 768 ? 24 : 12 }
+    /// Sets both for a window width; call before layout reads them.
+    static func applyWidth(_ width: CGFloat) {
+        let g = gutter(forWidth: width), c = cardGap(forWidth: width)
+        if gutter != g { gutter = g }
+        if cardGap != c { cardGap = c }
+    }
+
+    /// Window edge inset — every outer edge (header, content, panel, bottom bar).
+    static var windowInset: CGFloat { gutter }
     /// Gap below the header before scroll content begins.
     static let sectionGap: CGFloat = 12
     /// Web `.header { border-radius: 12px }`.
@@ -43,7 +60,7 @@ enum StelloLayout {
     static let compactControlBarSymbolSize: CGFloat = 18
     /// iPhone: gap between Dynamic Island / notch and the sticky header card.
     /// The top is the one edge that adds gutter + safe area (as on the web).
-    static let compactHeaderBelowSafeAreaGap: CGFloat = windowInset
+    static var compactHeaderBelowSafeAreaGap: CGFloat { windowInset }
     /// Reduced tint so Liquid Glass occlusion reads through the control cluster.
     static let controlBarGlassFillOpacity: CGFloat = 0.62
     static let controlBarSpacing: CGFloat = 8

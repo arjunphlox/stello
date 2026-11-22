@@ -156,6 +156,17 @@ enum CoverImageCache {
 
     /// Decodes off the main thread and keeps the bitmap, ready to draw. nil if the bytes
     /// aren't a readable image.
+    /// Pixel size from the image header (orientation applied), without decoding pixels.
+    nonisolated static func pixelSize(of data: Data) -> (width: Int, height: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int,
+              let h = props[kCGImagePropertyPixelHeight] as? Int, w > 0, h > 0 else { return nil }
+        // EXIF orientations 5–8 swap width and height.
+        if let o = props[kCGImagePropertyOrientation] as? Int, (5...8).contains(o) { return (h, w) }
+        return (w, h)
+    }
+
     nonisolated static func decode(_ data: Data, key: String, maxPixels: Int = 1200) async -> CGImage? {
         if let cached = decodedImage(forKey: key) { return cached }
         let image = await Task.detached(priority: .userInitiated) { () -> CGImage? in

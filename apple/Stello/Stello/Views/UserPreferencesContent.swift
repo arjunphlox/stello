@@ -65,7 +65,8 @@ struct UserPreferencesContent: View {
                 }
             }
 
-            WebLibraryImportSection()
+            // The old web library import is gone (parity pass, Nov 22 2026): the
+            // library is already in, and running it again could add duplicates.
             WebSyncSection()
 
             if showsAboutSection {

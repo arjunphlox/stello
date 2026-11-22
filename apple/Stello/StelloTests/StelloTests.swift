@@ -243,10 +243,15 @@ struct StelloTests {
         #expect(await SeedData.backfillSeedCovers(in: ctx) == 0)
     }
 
-    @Test("header layout constants use uniform 12pt inset everywhere")
+    @Test("header layout constants; window inset follows the width-based gutter")
     func headerLayoutConstants() {
         #expect(StelloLayout.macTitleBarLeadingInset == 78)
-        #expect(StelloLayout.windowInset == 12)
+        #expect(StelloLayout.gutter(forWidth: 1376) == 24)
+        #expect(StelloLayout.gutter(forWidth: 700) == 16)
+        #expect(StelloLayout.gutter(forWidth: 402) == 12)
+        #expect(StelloLayout.cardGap(forWidth: 1376) == 24)
+        #expect(StelloLayout.cardGap(forWidth: 700) == 12)
+        #expect(StelloLayout.windowInset == StelloLayout.gutter)
         #expect(StelloLayout.sectionGap == 12)
         #expect(StelloLayout.columnGap == 12)
         #expect(StelloLayout.headerCornerRadius == 12)

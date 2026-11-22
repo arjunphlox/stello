@@ -12,7 +12,7 @@ struct SettingsView: View {
         #else
         NavigationStack {
             UserPreferencesContent(showsGridSection: true)
-                .navigationTitle("User Preferences")
+                .navigationTitle("Settings")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {

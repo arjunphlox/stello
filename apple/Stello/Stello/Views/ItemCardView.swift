@@ -79,10 +79,23 @@ struct ItemCardView: View {
         guard hasImage, let data = primaryImage?.data else { return }
         let key = coverCacheKey
         if await CoverImageCache.decode(data, key: key, maxPixels: coverDecodePixels) != nil {
+            await recordCoverSizeIfMissing(data)
             decodedCoverKey = key
         } else {
             undecodableCoverKey = key
         }
+    }
+
+    /// A cover saved without its size got the 1200×630 default box, so a portrait book
+    /// cover sat letterboxed in a short card. Read the real size from the image header
+    /// once and store it, as the web does with /api/item-dims (parity pass, Nov 22 2026).
+    private func recordCoverSizeIfMissing(_ data: Data) async {
+        guard let cover = primaryImage, cover.width == nil || cover.height == nil else { return }
+        let size = await Task.detached(priority: .utility) { CoverImageCache.pixelSize(of: data) }.value
+        guard let size, cover.width == nil || cover.height == nil else { return }
+        cover.width = size.width
+        cover.height = size.height
+        item.refreshCoverAspect()
     }
 
     /// The cover's own aspect ratio (a portrait book cover stays portrait); the OG default
