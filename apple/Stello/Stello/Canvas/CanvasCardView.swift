@@ -16,9 +16,9 @@ struct CanvasDragItem: Codable, Transferable {
     }
 }
 
-/// A card on the canvas: the cover only, at the web's 274-wide world size, with the
-/// source pill. The ≡ button beside the pill opens the details card, which floats
-/// below the cover without moving anything (web round 3).
+/// A card on the canvas: the cover, at the web's 274-wide world size, with the
+/// source pill. A tap on the card or its ≡ button opens it in place: the details
+/// grow out of the same card, over what is below, without moving anything.
 struct CanvasCardView: View {
     let item: Item
     let height: CGFloat
@@ -42,6 +42,48 @@ struct CanvasCardView: View {
 
     var body: some View {
         let _ = decodedKey
+        // Open: the details grow out of the cover inside one card (web
+        // `.lc-card.has-det`), over what is below, without moving other cards.
+        VStack(alignment: .leading, spacing: 0) {
+            cover
+            if detailsOpen {
+                CanvasDetailsCard(item: item)
+            }
+        }
+        .frame(width: CanvasMetrics.cardWidth, alignment: .topLeading)
+        .background {
+            if detailsOpen {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(theme.surfaceRaised)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            if let mark {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(mark.color, lineWidth: 3 * counterScale)
+            } else if detailsOpen {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(theme.border, lineWidth: 1 * counterScale)
+            }
+        }
+        .shadow(color: .black.opacity(detailsOpen ? 0.28 : 0), radius: 16, y: 6)
+        .overlay(alignment: .topLeading) { markBadge }
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(theme.accentColor, lineWidth: 1.5 * counterScale)
+                    .padding(-4 * counterScale)
+            }
+        }
+        .contentShape(Rectangle())
+        .task(id: cacheKey) {
+            guard let data = image?.data, !data.isEmpty else { return }
+            if await CoverImageCache.decode(data, key: cacheKey) != nil { decodedKey = cacheKey }
+        }
+    }
+
+    /// The cover with its source pill and ≡ button.
+    private var cover: some View {
         ZStack {
             if let data = image?.data, !data.isEmpty,
                let cg = CoverImageCache.decodedImage(forKey: cacheKey) {
@@ -59,33 +101,8 @@ struct CanvasCardView: View {
         }
         .frame(width: CanvasMetrics.cardWidth, height: height)
         .grayscale(mark == .rejected ? 0.6 : 0)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            if let mark {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(mark.color, lineWidth: 3 * counterScale)
-            }
-        }
-        .overlay(alignment: .topLeading) { markBadge }
+        .clipped()
         .overlay(alignment: .bottomTrailing) { pillRow }
-        .overlay(alignment: .topLeading) {
-            if detailsOpen {
-                CanvasDetailsCard(item: item)
-                    .offset(y: height + 8)
-            }
-        }
-        .overlay {
-            if isSelected {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(theme.accentColor, lineWidth: 1.5 * counterScale)
-                    .padding(-4 * counterScale)
-            }
-        }
-        .contentShape(Rectangle())
-        .task(id: cacheKey) {
-            guard let data = image?.data, !data.isEmpty else { return }
-            if await CoverImageCache.decode(data, key: cacheKey) != nil { decodedKey = cacheKey }
-        }
     }
 
     /// "USE · reason" above the card (web `mark-badge`), screen sized like the pill.
@@ -147,9 +164,9 @@ struct CanvasCardView: View {
     }
 }
 
-/// The details card (web `details`): title, source · kind · saved date, colour
-/// swatches, style, tags, collection, place, why saved, and a summary quote. World
-/// sized, so it scales with its card. No bold text.
+/// The details inside an open card (web `details`): title, source · kind · saved
+/// date, colour swatches, style, tags, collection, place, why saved, and a summary
+/// quote. World sized, so it scales with its card. No bold text.
 struct CanvasDetailsCard: View {
     let item: Item
     @Environment(\.appTheme) private var theme
@@ -184,7 +201,7 @@ struct CanvasDetailsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(item.title.isEmpty ? (item.domain ?? "Untitled") : item.title)
-                .font(.karst(size: 15, weight: .medium))
+                .font(.karst(size: 15))
                 .foregroundStyle(theme.textPrimary)
                 .lineLimit(2)
             Text(meta)
@@ -212,10 +229,9 @@ struct CanvasDetailsCard: View {
                     .lineLimit(3)
             }
         }
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
         .frame(width: CanvasMetrics.cardWidth, alignment: .leading)
-        .background(theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(theme.border, lineWidth: 1))
-        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
     }
 }
