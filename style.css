@@ -3423,6 +3423,7 @@ html.view-canvas .bottom-bar .lc-docbox { max-width: 312px; }
    leave the bar, as on the Apple apps' CanvasBottomBar (parity pass, Nov 22 2026).
    Split view keeps them, since the grid is beside the canvas. */
 html.view-canvas .bottom-bar .bar-search, html.view-canvas #filter-panel-btn { display: none; }
+html.view-canvas .bottom-bar #import-btn { margin-left: auto; }  /* Add and zoom stay at the right */
 
 /* Phone carry: press and hold a grid card, the canvas opens under it. */
 .lc-carry-top {
