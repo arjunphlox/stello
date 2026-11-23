@@ -227,7 +227,7 @@ struct ItemCardView: View {
         )
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {
-                domainPill.padding(10)
+                domainPill.padding(10).padding(.leading, isAwaitingReview ? 24 : 0)
             }
         }
         .overlay(alignment: .bottomLeading) {
@@ -258,7 +258,7 @@ struct ItemCardView: View {
         )
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {
-                domainPill.padding(10)
+                domainPill.padding(10).padding(.leading, isAwaitingReview ? 24 : 0)
             }
         }
         .overlay(alignment: .bottomLeading) {
@@ -275,7 +275,7 @@ struct ItemCardView: View {
         hoverDim(glyphSurface(glyph: glyph))
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {
-                domainPill.padding(10)
+                domainPill.padding(10).padding(.leading, isAwaitingReview ? 24 : 0)
             }
         }
         .overlay(alignment: .bottomLeading) {

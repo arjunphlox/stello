@@ -1159,7 +1159,10 @@ struct CanvasView: View {
 
     private func fitAll(size: CGSize, animated: Bool) {
         guard let box = store.bounds(height: { height(slug: $0) }) else { return }
-        let cam = CanvasCamera.fit(box, in: size, pad: 64, maxK: 1)
+        // Full canvas: keep the fit below the header chip and layer menus on top.
+        let top: CGFloat = isPanel ? 0 : topInset + 72
+        var cam = CanvasCamera.fit(box, in: CGSize(width: size.width, height: max(1, size.height - top)), pad: 64, maxK: 1)
+        cam.y += top
         if animated { withAnimation(.smooth(duration: 0.25)) { store.camera = cam } } else { store.camera = cam }
     }
 
