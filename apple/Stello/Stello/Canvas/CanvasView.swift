@@ -555,7 +555,9 @@ struct CanvasView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .frame(width: max(120, box.width + 160), alignment: .bottomLeading)
+                    // Also stop at the screen's right edge, so "+ Maybe" truncates and ✕ stays on screen.
+                    .frame(width: max(120, min(box.width + 160, size.width - StelloLayout.windowInset - max(0, box.minX))),
+                           alignment: .bottomLeading)
                     // Bottom-left of the row sits 6pt above the box's top-left corner.
                     .frame(width: 0, height: 0, alignment: .bottomLeading)
                     .offset(x: box.minX, y: box.minY - 6)
