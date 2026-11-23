@@ -536,24 +536,26 @@ struct CanvasView: View {
                     let color = fam.groupID != nil ? accent : (fam.kind?.color(text: text) ?? text)
                     // Looks-alike families use the text colour: their filled pill needs dark text.
                     let ink: Color = fam.groupID == nil && (fam.kind == nil || fam.kind?.hex == nil) ? theme.background : .white
-                    HStack(spacing: 4) {
+                    let traits = HStack(spacing: 4) {
                         ForEach(Array(fam.pills.enumerated()), id: \.offset) { i, p in
                             familyPill(p, color: color, ink: ink, filled: i == 0)
                         }
-                        if layers.gaps, let m = maybes[fam.id], dragSlug == nil {
-                            Button { acceptMaybe(m, in: fam) } label: {
-                                maybePill { Text("+ Maybe: \(CanvasSimilarity.shortTitle(m.title))") }
-                            }
-                            .help("Maybe related: shares \(m.shared.joined(separator: ", ")). Click to add.")
-                            Button { store.dismissMaybe(m.slug) } label: {
-                                maybePill { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
-                            }
-                            .help("Not related")
-                            .accessibilityLabel("Not related")
+                    }
+                    let maybe = layers.gaps && dragSlug == nil ? maybes[fam.id] : nil
+                    // Web `.lc-fam`: up to the box width + 160 (at least 120), wrapping
+                    // upwards, so a long "+ Maybe" goes on a row above, not off screen.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 4) {
+                            traits
+                            if let maybe { maybeButtons(maybe, in: fam) }
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let maybe { HStack(spacing: 4) { maybeButtons(maybe, in: fam) } }
+                            traits
                         }
                     }
                     .buttonStyle(.plain)
-                    .fixedSize()
+                    .frame(width: max(120, box.width + 160), alignment: .bottomLeading)
                     // Bottom-left of the row sits 6pt above the box's top-left corner.
                     .frame(width: 0, height: 0, alignment: .bottomLeading)
                     .offset(x: box.minX, y: box.minY - 6)
@@ -561,6 +563,18 @@ struct CanvasView: View {
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    @ViewBuilder private func maybeButtons(_ m: MaybePick, in fam: CanvasFamily) -> some View {
+        Button { acceptMaybe(m, in: fam) } label: {
+            maybePill { Text("+ Maybe: \(CanvasSimilarity.shortTitle(m.title))") }
+        }
+        .help("Maybe related: shares \(m.shared.joined(separator: ", ")). Click to add.")
+        Button { store.dismissMaybe(m.slug) } label: {
+            maybePill { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
+        }
+        .help("Not related")
+        .accessibilityLabel("Not related")
     }
 
     private func familyPill(_ label: String, color: Color, ink: Color, filled: Bool) -> some View {
