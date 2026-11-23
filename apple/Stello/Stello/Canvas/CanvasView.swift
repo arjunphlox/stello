@@ -534,9 +534,11 @@ struct CanvasView: View {
             ForEach(families) { fam in
                 if let box = familyBox(fam, rects: live, cam: cam), box.intersects(view), box.width >= 90 {
                     let color = fam.groupID != nil ? accent : (fam.kind?.color(text: text) ?? text)
+                    // Looks-alike families use the text colour: their filled pill needs dark text.
+                    let ink: Color = fam.groupID == nil && (fam.kind == nil || fam.kind?.hex == nil) ? theme.background : .white
                     HStack(spacing: 4) {
                         ForEach(Array(fam.pills.enumerated()), id: \.offset) { i, p in
-                            familyPill(p, color: color, filled: i == 0)
+                            familyPill(p, color: color, ink: ink, filled: i == 0)
                         }
                         if layers.gaps, let m = maybes[fam.id], dragSlug == nil {
                             Button { acceptMaybe(m, in: fam) } label: {
@@ -561,11 +563,11 @@ struct CanvasView: View {
         .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
-    private func familyPill(_ label: String, color: Color, filled: Bool) -> some View {
+    private func familyPill(_ label: String, color: Color, ink: Color, filled: Bool) -> some View {
         Text(label)
             .font(.karst(size: 11, weight: .medium))
             .lineLimit(1)
-            .foregroundStyle(filled ? .white : color)
+            .foregroundStyle(filled ? ink : color)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(filled ? color : theme.surfaceRaised, in: Capsule())
@@ -1072,7 +1074,7 @@ struct CanvasView: View {
     /// neighbours so its lines show, and open its details with -screenshotDetails.
     private func screenshotFocus() {
         let args = ProcessInfo.processInfo.arguments
-        guard args.contains("-screenshotLayer1"), !features.isEmpty else { return }
+        guard args.contains("-screenshotLayer1"), !args.contains("-screenshotRevisits"), !features.isEmpty else { return }
         let best = store.doc.cards.map(\.slug).max { a, b in
             let na = CanvasSimilarity.neighbours(of: a, features: features, inverted: inverted)
             let nb = CanvasSimilarity.neighbours(of: b, features: features, inverted: inverted)
