@@ -124,6 +124,17 @@ struct ContentView: View {
                     canvasStore.add([item.slug], at: CGPoint(x: x, y: y), height: { _ in h })
                 }
                 if layer1 { canvasStore.selected = sortedItems.first?.slug }
+                // -screenshotRevisits: card 2 opened 3× this week (glow), card 4 last
+                // opened seven months ago (fade). Throwaway store only.
+                if args.contains("-screenshotRevisits"), args.contains("-screenshotCleanStore") {
+                    let shown = Array(sortedItems.prefix(count))
+                    if shown.count > 3 {
+                        shown[1].lastOpenedAt = .now.addingTimeInterval(-86_400)
+                        shown[1].openCount = 3
+                        shown[3].lastOpenedAt = .now.addingTimeInterval(-210 * 86_400)
+                        shown[3].openCount = 1
+                    }
+                }
                 canvasStore.cameraPlaced = false
             }
         }
