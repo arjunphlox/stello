@@ -162,7 +162,10 @@ struct CanvasCardView: View {
                 .foregroundStyle(glow ? theme.accentContrast : theme.textSecondary)
                 .background(glow ? theme.accentColor : theme.borderSubtle,
                             in: RoundedRectangle(cornerRadius: 10 * s, style: .continuous))
-                .alignmentGuide(.bottom) { $0[.top] - 6 * s }
+                // A zero-height strip on the card's bottom edge, the pill hanging
+                // below it, so the pill sits under the card and never over its pills.
+                .frame(width: CanvasMetrics.cardWidth, height: 0, alignment: .top)
+                .offset(y: 6 * s)
                 .allowsHitTesting(false)
         }
     }
