@@ -131,3 +131,35 @@ extension L2Kind {
 extension CanvasMark {
     var color: Color { Color(hex: hex) }
 }
+
+/// Revisits (web canvas.js `visit`): a card opened in the last 14 days glows, one not
+/// opened for 120 days or more fades. Never-opened cards show neither.
+nonisolated enum CanvasVisit: Equatable, Sendable {
+    case glow(count: Int)
+    case fade(since: Date)
+
+    static func of(lastOpened: Date?, count: Int, now: Date = .now) -> CanvasVisit? {
+        guard let lastOpened else { return nil }
+        let days = now.timeIntervalSince(lastOpened) / 86_400
+        if days <= 14 { return .glow(count: count) }
+        if days >= 120 { return .fade(since: lastOpened) }
+        return nil
+    }
+
+    var isGlow: Bool { if case .glow = self { true } else { false } }
+
+    /// The pill under the card, as the web words it.
+    var text: String {
+        switch self {
+        case .glow(let n): n > 1 ? "Opened \(n)× recently" : "Opened recently"
+        case .fade(let d): "Not opened since \(Self.monthYear.string(from: d))"
+        }
+    }
+
+    private static let monthYear: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US")
+        f.dateFormat = "MMM yyyy"
+        return f
+    }()
+}

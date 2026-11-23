@@ -43,6 +43,8 @@ struct CanvasView: View {
     @State private var openDetails: Set<String> = []
     @State private var suggestion: CanvasGroupSuggestion?
     @State private var nearLinks: [SimNear] = []
+    /// Gaps: the "+ Maybe" save for each group, by family id.
+    @State private var maybes: [String: MaybePick] = [:]
     // Layer 2 (stage 4): note drags, the label / reason prompts, the pointer for
     // "add a note here", and the Package export.
     @State private var noteDragID: String?
@@ -73,6 +75,8 @@ struct CanvasView: View {
                 annotations(size: geo.size, over: false)
 
                 world(size: geo.size)
+
+                familyPills(size: geo.size)
 
                 annotations(size: geo.size, over: true)
 
@@ -149,6 +153,7 @@ struct CanvasView: View {
             .onChange(of: store.exportRequest) { _, _ in exportPackage() }
             .onChange(of: store.fitRequest) { _, _ in fitAll(size: geo.size, animated: true) }
             .task { await store.pull(); refreshIndex() }
+            .task(id: maybeKey) { await refreshMaybes() }
         }
         .background(isPanel ? theme.backgroundSubtle : theme.background)
         .clipShape(RoundedRectangle(cornerRadius: isPanel ? StelloLayout.panelCornerRadius : 0, style: .continuous))
@@ -234,6 +239,16 @@ struct CanvasView: View {
         return links.isEmpty ? nil : Set(links + [s])
     }
 
+    /// Web: a dimmed card 0.22, a faded (not revisited) card 0.5, both 0.18.
+    static func cardOpacity(dim: Bool, fade: Bool) -> Double {
+        switch (dim, fade) {
+        case (true, true): 0.18
+        case (true, false): 0.22
+        case (false, true): 0.5
+        case (false, false): 1
+        }
+    }
+
     private func world(size: CGSize) -> some View {
         let cam = store.camera
         let linked = linked
@@ -249,14 +264,16 @@ struct CanvasView: View {
                 if let item = index[c.slug] {
                     let moving = dragSlug == c.slug
                     let open = openDetails.contains(c.slug)
+                    let visit = layers.glow ? CanvasVisit.of(lastOpened: item.lastOpenedAt, count: item.openCount) : nil
                     CanvasCardView(item: item, height: height(item),
                                    isSelected: store.selected == c.slug,
                                    counterScale: 1 / cam.k,
                                    detailsOpen: open,
                                    onDetails: { toggleDetails(c.slug, size: size) },
                                    mark: layers.marks ? c.state.flatMap(CanvasMark.init(rawValue:)) : nil,
-                                   reason: layers.marks ? c.note : nil)
-                        .opacity((linked?.contains(c.slug) ?? true) ? 1 : 0.22)
+                                   reason: layers.marks ? c.note : nil,
+                                   visit: visit)
+                        .opacity(Self.cardOpacity(dim: !(linked?.contains(c.slug) ?? true), fade: visit != nil && visit?.isGlow == false))
                         .shadow(color: .black.opacity(moving ? 0.28 : 0), radius: 12, y: 6)
                         .offset(x: c.x + (moving ? dragDelta.width : 0),
                                 y: c.y + (moving ? dragDelta.height : 0))
@@ -395,13 +412,7 @@ struct CanvasView: View {
                 let shape = Path(roundedRect: box, cornerRadius: max(6, 20 * cam.k))
                 ctx.fill(shape, with: .color(color.opacity(0.07)))
                 ctx.stroke(shape, with: .color(color.opacity(0.25)), style: StrokeStyle(lineWidth: 1, dash: fam.groupID != nil ? [] : [4, 4]))
-                guard box.width >= 90 else { continue }
-                var x = box.minX
-                for (i, p) in fam.pills.enumerated() {
-                    let r = pill(p, at: CGPoint(x: x, y: box.minY - 6), color: color, anchor: .bottomLeading, filled: i == 0)
-                    x = r.maxX + 4
-                    if x > box.maxX - 40 { break }
-                }
+                // The pills above the box are views (`familyPills`), so "+ Maybe" can be tapped.
             }
 
             // Layer 1 lines: right-angle runs, a dot at each end, the shared trait midway.
@@ -498,6 +509,128 @@ struct CanvasView: View {
             }
         }
         .allowsHitTesting(false)
+    }
+
+    // MARK: - Family pills and Gaps
+
+    /// A family's box on screen (members' union, 18 out), the dragged card left out.
+    private func familyBox(_ fam: CanvasFamily, rects live: [String: CGRect], cam: CanvasCamera) -> CGRect? {
+        let members = fam.slugs.filter { $0 != dragSlug || fam.slugs.count == 1 }.compactMap { live[$0] }
+        guard let first = members.first else { return nil }
+        let r = members.dropFirst().reduce(first) { $0.union($1) }.insetBy(dx: -18, dy: -18)
+        return CGRect(x: r.minX * cam.k + cam.x, y: r.minY * cam.k + cam.y, width: r.width * cam.k, height: r.height * cam.k)
+    }
+
+    /// Pills on the top-left of each family: its name, the traits every member shares,
+    /// and (Gaps on) a dashed "+ Maybe: …" save from the library with a ✕ for "Not
+    /// related" (web `.lc-fam`). Screen sized; only the maybe pills take taps.
+    private func familyPills(size: CGSize) -> some View {
+        let cam = store.camera
+        let live = rects()
+        let view = CGRect(origin: .zero, size: size).insetBy(dx: -200, dy: -200)
+        let text = theme.textPrimary
+        let accent = theme.accentColor
+        return ZStack(alignment: .topLeading) {
+            ForEach(families) { fam in
+                if let box = familyBox(fam, rects: live, cam: cam), box.intersects(view), box.width >= 90 {
+                    let color = fam.groupID != nil ? accent : (fam.kind?.color(text: text) ?? text)
+                    HStack(spacing: 4) {
+                        ForEach(Array(fam.pills.enumerated()), id: \.offset) { i, p in
+                            familyPill(p, color: color, filled: i == 0)
+                        }
+                        if layers.gaps, let m = maybes[fam.id], dragSlug == nil {
+                            Button { acceptMaybe(m, in: fam) } label: {
+                                maybePill { Text("+ Maybe: \(CanvasSimilarity.shortTitle(m.title))") }
+                            }
+                            .help("Maybe related: shares \(m.shared.joined(separator: ", ")). Click to add.")
+                            Button { store.dismissMaybe(m.slug) } label: {
+                                maybePill { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
+                            }
+                            .help("Not related")
+                            .accessibilityLabel("Not related")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .fixedSize()
+                    // Bottom-left of the row sits 6pt above the box's top-left corner.
+                    .frame(width: 0, height: 0, alignment: .bottomLeading)
+                    .offset(x: box.minX, y: box.minY - 6)
+                }
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    private func familyPill(_ label: String, color: Color, filled: Bool) -> some View {
+        Text(label)
+            .font(.karst(size: 11, weight: .medium))
+            .lineLimit(1)
+            .foregroundStyle(filled ? .white : color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(filled ? color : theme.surfaceRaised, in: Capsule())
+            .overlay { if !filled { Capsule().stroke(color.opacity(0.35), lineWidth: 1) } }
+            .allowsHitTesting(false)
+    }
+
+    /// Web `.lc-pill.is-maybe`: dashed outline, dim text, no fill.
+    private func maybePill<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .font(.karst(size: 11, weight: .medium))
+            .lineLimit(1)
+            .foregroundStyle(theme.textDim)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .frame(minWidth: 20)
+            .background(theme.background.opacity(0.001), in: Capsule())
+            .overlay(Capsule().stroke(theme.border, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+            .contentShape(Capsule())
+    }
+
+    /// "+ Maybe": keep the pair as an Accepted link and drop the save beside the group's
+    /// last card (web `data-maybe`).
+    private func acceptMaybe(_ m: MaybePick, in fam: CanvasFamily) {
+        guard let anchor = fam.slugs.last, let an = store.doc.card(anchor) else { return }
+        for item in fetch([m.slug]) { index[item.slug] = item }
+        store.addLink(anchor, m.slug, kind: .maybe, label: m.shared.first ?? "", source: "maybe")
+        let at = CGPoint(x: an.x + CanvasMetrics.cardWidth + 10, y: an.y + 10)
+        store.add([m.slug], at: at, height: { height(slug: $0) })
+    }
+
+    /// Changes whenever a group's maybe could change: its members, what's on the
+    /// canvas, what you dismissed, the Gaps toggle, or a rebuilt library scan.
+    private var maybeKey: String {
+        guard layers.gaps else { return "off" }
+        return families.filter { $0.slugs.count >= 2 }.map { $0.id + "=" + $0.slugs.joined(separator: ",") }
+            .joined(separator: ";") + "|\(store.doc.cards.count)|\(store.doc.dismissed.count)|\(CanvasMaybeLibrary.shared.version)"
+    }
+
+    /// One library scan per change, off the main actor (web scans with a per-frame
+    /// budget). The library's features are read once and kept (`CanvasMaybeLibrary`).
+    private func refreshMaybes() async {
+        guard layers.gaps else { maybes = [:]; return }
+        let fams = families.filter { $0.slugs.count >= 2 }.map { (id: $0.id, slugs: $0.slugs) }
+        guard !fams.isEmpty else { maybes = [:]; return }
+        try? await Task.sleep(for: .milliseconds(200))
+        guard !Task.isCancelled else { return }
+        let library = CanvasMaybeLibrary.shared
+        await library.refresh(context: context)
+        guard !Task.isCancelled else { return }
+        let entries = library.entries
+        let exclude = Set(store.doc.cards.map(\.slug)).union(store.doc.dismissed)
+        let next = await Task.detached(priority: .utility) { () -> [String: MaybePick] in
+            var bySlug: [String: [SimFeature]] = [:]
+            for e in entries { bySlug[e.slug] = e.features }
+            var out: [String: MaybePick] = [:]
+            for f in fams {
+                let members = f.slugs.compactMap { bySlug[$0] }
+                if let m = CanvasSimilarity.maybe(members: members, memberCount: f.slugs.count,
+                                                  library: entries, exclude: exclude) { out[f.id] = m }
+            }
+            return out
+        }.value
+        guard !Task.isCancelled else { return }
+        maybes = next
     }
 
     private var emptyState: some View {
@@ -1182,6 +1315,8 @@ struct CanvasLayerMenus: View {
             Menu {
                 Toggle("Use / rejected", isOn: $store.layers.marks)
                 Toggle("Questions, notes and sets", isOn: $store.layers.notes)
+                Toggle("Gaps: maybe related, empty spots", isOn: $store.layers.gaps)
+                Toggle("Revisits: glow and fade", isOn: $store.layers.glow)
             } label: {
                 pill { Text("Intent, time & gaps") }
             }
@@ -1214,5 +1349,38 @@ struct CanvasLayerMenus: View {
         .overlay(Capsule().stroke(theme.border, lineWidth: 1))
         .glassEffect(.regular.interactive(), in: .capsule)
         .contentShape(Capsule())
+    }
+}
+
+
+/// The library, reduced to the features the Gaps "+ Maybe" scan reads. Built once off
+/// the main actor and rebuilt when the library's size changes (or after 5 minutes), so
+/// the canvas never decodes the whole library while you pan or drag.
+@Observable
+final class CanvasMaybeLibrary {
+    static let shared = CanvasMaybeLibrary()
+    private(set) var entries: [MaybeEntry] = []
+    private(set) var version = 0
+    @ObservationIgnored private var builtCount = -1
+    @ObservationIgnored private var builtAt: Date = .distantPast
+    @ObservationIgnored private var building = false
+
+    func refresh(context: ModelContext) async {
+        guard !building else { return }
+        let count = (try? context.fetchCount(FetchDescriptor<Item>())) ?? 0
+        if count == builtCount, Date.now.timeIntervalSince(builtAt) < 300 { return }
+        building = true
+        defer { building = false }
+        var d = FetchDescriptor<Item>()
+        d.propertiesToFetch = [\.slug, \.title, \.domain, \.tagsJSON, \.kind, \.metadataJSON, \.sourceURL]
+        let raws = ((try? context.fetch(d)) ?? []).map {
+            MaybeRaw(slug: $0.slug, title: $0.title, domain: $0.domain, tagsJSON: $0.tagsJSON, kind: $0.kind,
+                     metadataJSON: $0.metadataJSON, hasURL: !($0.sourceURL ?? "").isEmpty)
+        }
+        let built = await Task.detached(priority: .utility) { CanvasSimilarity.maybeEntries(raws) }.value
+        entries = built
+        builtCount = count
+        builtAt = .now
+        version += 1
     }
 }

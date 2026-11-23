@@ -327,3 +327,114 @@ nonisolated enum CanvasSimilarity {
 extension SimKind {
     func color(text: Color) -> Color { hex.map { Color(hex: $0) } ?? text }
 }
+
+// MARK: - Gaps: one maybe-related save per group
+
+/// One library item, reduced to what the "+ Maybe" scan reads (web `featuresLoose`).
+nonisolated struct MaybeEntry: Sendable {
+    let slug: String
+    let title: String
+    let features: [SimFeature]
+}
+
+/// The save a group's dashed "+ Maybe" pill offers (web `famMeta` ghost).
+nonisolated struct MaybePick: Equatable, Sendable {
+    let slug: String
+    let title: String
+    let shared: [String]
+}
+
+/// What the snapshot reads from an item on the main actor; features are built off it.
+nonisolated struct MaybeRaw: Sendable {
+    let slug: String
+    let title: String
+    let domain: String?
+    let tagsJSON: String?
+    let kind: String
+    let metadataJSON: String?
+    let hasURL: Bool
+}
+
+extension CanvasSimilarity {
+    /// Loose features for the library scan (web `featuresLoose`): top two colours, top
+    /// three styles, the place, up to four ideas, and the kind unless Website / Note.
+    static func looseFeatures(tags: [ItemTag], kindName: String) -> [SimFeature] {
+        func top(_ cat: String, _ min: Double) -> [ItemTag] {
+            tags.filter { $0.category == cat && $0.weight >= min }.sorted { $0.weight > $1.weight }
+        }
+        var out: [SimFeature] = []
+        top("color", 0.3).prefix(2).forEach { out.append(.init(key: "c:" + $0.name, kind: .colour, tag: $0.name)) }
+        top("style", 0.5).prefix(3).forEach { out.append(.init(key: "s:" + $0.name, kind: .style, tag: $0.name)) }
+        if let place = top("location", 0.3).first {
+            let p = cap(place.name)
+            out.append(.init(key: "p:" + p.lowercased(), kind: .place, tag: p))
+        }
+        top("subject", 0.6).filter { !skipSubject.contains($0.name) }.prefix(4)
+            .forEach { out.append(.init(key: "i:" + $0.name, kind: .idea, tag: $0.name)) }
+        if kindName != "Website" && kindName != "Note" {
+            out.append(.init(key: "k:" + kindName, kind: .kind, tag: kindName.lowercased()))
+        }
+        return out
+    }
+
+    /// Builds the scan entries off the main actor (tag JSON decode, kind line).
+    static func maybeEntries(_ raws: [MaybeRaw]) -> [MaybeEntry] {
+        raws.map { r in
+            let line = kindLine(kind: r.kind, metadataJSON: r.metadataJSON)
+            let k = kindName(kindLine: line, kind: r.kind, hasURL: r.hasURL)
+            return MaybeEntry(slug: r.slug, title: r.title.isEmpty ? (r.domain ?? "Untitled") : r.title,
+                              features: looseFeatures(tags: ItemTag.decode(r.tagsJSON), kindName: k))
+        }
+    }
+
+    /// `Item.cardKindLine` from the stored fields, so it can run off the main actor.
+    static func kindLine(kind: String, metadataJSON: String?) -> String? {
+        guard let data = metadataJSON?.data(using: .utf8) else { return nil }
+        let d = JSONDecoder()
+        switch kind {
+        case "product": return (try? d.decode(ProductMeta.self, from: data))?.cardKindLine
+        case "post": return (try? d.decode(PostMeta.self, from: data))?.cardKindLine
+        case "tool": return (try? d.decode(ToolMeta.self, from: data))?.cardKindLine
+        case "resource": return (try? d.decode(ResourceMeta.self, from: data))?.cardKindLine
+        case "book": return (try? d.decode(BookMeta.self, from: data))?.cardKindLine
+        case "course": return (try? d.decode(CourseMeta.self, from: data))?.cardKindLine
+        case "article": return (try? d.decode(ArticleMeta.self, from: data))?.cardKindLine
+        default: return nil
+        }
+    }
+
+    /// The one save from the rest of the library that best fits a group (web `famMeta`):
+    /// members' features weighted by kind, the best scorer not on the canvas and not
+    /// dismissed, kept only when it shares two traits and scores at least
+    /// max(3, members × 0.35).
+    static func maybe(members: [[SimFeature]], memberCount: Int, library: [MaybeEntry],
+                      exclude: Set<String>) -> MaybePick? {
+        guard memberCount >= 2 else { return nil }
+        var want: [String: Double] = [:]
+        for fs in members.prefix(24) { for f in fs { want[f.key, default: 0] += f.kind.weight } }
+        guard !want.isEmpty else { return nil }
+        var best: (e: MaybeEntry, s: Double, shared: [String])?
+        for e in library where !exclude.contains(e.slug) {
+            var s = 0.0
+            var shared: [String] = []
+            for f in e.features { if let w = want[f.key] { s += w; shared.append(f.tag) } }
+            if best == nil || s > best!.s { best = (e, s, shared) }
+        }
+        guard let best, best.shared.count >= 2, best.s >= max(3, Double(memberCount) * 0.35) else { return nil }
+        var seen = Set<String>()
+        let shared = best.shared.filter { seen.insert($0).inserted }.prefix(3)
+        return MaybePick(slug: best.e.slug, title: best.e.title, shared: Array(shared))
+    }
+
+    /// Web `shortTitle`: the part before " | " / " – " etc., cut to about 24 characters.
+    static func shortTitle(_ t: String) -> String {
+        let base = (t.range(of: #"\s[|•·–—-]\s"#, options: .regularExpression).map { String(t[..<$0.lowerBound]) } ?? t)
+            .trimmingCharacters(in: .whitespaces)
+        guard base.count > 24 else { return base }
+        let cut = String(base.prefix(24))
+        if let sp = cut.lastIndex(of: " "), cut.distance(from: cut.startIndex, to: sp) > 10 {
+            return String(cut[..<sp]) + "…"
+        }
+        return cut + "…"
+    }
+}

@@ -240,13 +240,6 @@ struct ItemCardView: View {
                 postBadges.padding(10)
             }
         }
-        .overlay(alignment: .topLeading) {
-            #if os(macOS)
-            if showCardOverlays {
-                macTitleBadge
-            }
-            #endif
-        }
     }
 
     private var videoCard: some View {
@@ -273,13 +266,6 @@ struct ItemCardView: View {
                 reviewBadge.padding(10)
             }
         }
-        .overlay(alignment: .topLeading) {
-            #if os(macOS)
-            if showCardOverlays {
-                macTitleBadge
-            }
-            #endif
-        }
     }
 
     /// Imageless card: the neutral card surface with one type glyph centred in a 32pt
@@ -296,13 +282,6 @@ struct ItemCardView: View {
             if showCardOverlays {
                 reviewBadge.padding(10)
             }
-        }
-        .overlay(alignment: .topLeading) {
-            #if os(macOS)
-            if showCardOverlays {
-                macTitleBadge
-            }
-            #endif
         }
     }
 
@@ -458,7 +437,11 @@ struct ItemCardView: View {
                         .lineLimit(1)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            // Web `.card-title-badge`: top 12, sides 12, bottom 40, overflow hidden. On a
+            // short or narrow card the title stops above the pill row instead of
+            // running into the domain pill.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .clipped()
             .padding(.top, 12)
             .padding(.horizontal, 12)
             .padding(.bottom, 40)
@@ -480,6 +463,9 @@ struct ItemCardView: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(tint.opacity(0.22))
+                // Web `backdrop-filter: blur(6px)`: the image's own text blurs behind the
+                // label instead of reading through it.
+                .background { Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark) }
                 .foregroundStyle(.white)
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 0.5))
@@ -592,9 +578,14 @@ struct ItemCardView: View {
     @ViewBuilder
     private func hoverDim<Content: View>(_ content: Content) -> some View {
         #if os(macOS)
+        // The hover title sits under the domain pill and review badge (web z-order:
+        // title 2, pill 3), so the pill never has text drawn over it.
         content
             .colorMultiply(isHovered ? Color(white: 0.175) : .white)
             .animation(.easeOut(duration: 0.18), value: isHovered)
+            .overlay(alignment: .topLeading) {
+                if showCardOverlays { macTitleBadge }
+            }
         #else
         content
         #endif

@@ -84,4 +84,68 @@ struct CanvasLayer2Tests {
         #expect(items.first?["file"] as? String == "items/001-a.md")
         #expect((root["canvas"] as? [String: Any])?["name"] as? String == "Trip")
     }
+
+    // MARK: - Revisits and Gaps (web canvas.js `visit`, `famMeta`)
+
+    @Test func revisitsGlowWithinTwoWeeksAndFadeAfterFourMonths() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let day: TimeInterval = 86_400
+        #expect(CanvasVisit.of(lastOpened: nil, count: 0, now: now) == nil)
+        #expect(CanvasVisit.of(lastOpened: now.addingTimeInterval(-3 * day), count: 3, now: now) == .glow(count: 3))
+        #expect(CanvasVisit.of(lastOpened: now.addingTimeInterval(-60 * day), count: 1, now: now) == nil)
+        let old = now.addingTimeInterval(-200 * day)
+        #expect(CanvasVisit.of(lastOpened: old, count: 1, now: now) == .fade(since: old))
+        #expect(CanvasVisit.glow(count: 3).text == "Opened 3× recently")
+        #expect(CanvasVisit.glow(count: 1).text == "Opened recently")
+        let mar = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 3, day: 15)))
+        #expect(CanvasVisit.fade(since: mar).text == "Not opened since Mar 2026")
+    }
+
+    @Test func fadedCardsDimFurther() {
+        #expect(CanvasView.cardOpacity(dim: false, fade: false) == 1)
+        #expect(CanvasView.cardOpacity(dim: true, fade: false) == 0.22)
+        #expect(CanvasView.cardOpacity(dim: false, fade: true) == 0.5)
+        #expect(CanvasView.cardOpacity(dim: true, fade: true) == 0.18)
+    }
+
+    @Test func layerSettingsSavedBeforeGapsStillLoad() throws {
+        let old = #"{"simOn":false,"alwaysLines":true,"kinds":["place"],"marks":false,"notes":true}"#
+        let l = try JSONDecoder().decode(CanvasLayers.self, from: Data(old.utf8))
+        #expect(!l.simOn && l.alwaysLines && !l.marks && l.notes)
+        #expect(l.gaps && l.glow)
+    }
+
+    private func f(_ key: String, _ kind: SimKind) -> SimFeature {
+        SimFeature(key: key, kind: kind, tag: String(key.dropFirst(2)))
+    }
+
+    @Test func maybePicksTheBestFitOffTheCanvas() {
+        let members = [[f("c:blue", .colour), f("s:minimal", .style)], [f("c:blue", .colour), f("i:type", .idea)]]
+        let library = [
+            MaybeEntry(slug: "a", title: "On canvas", features: [f("c:blue", .colour), f("s:minimal", .style)]),
+            MaybeEntry(slug: "b", title: "Blue type | Studio", features: [f("c:blue", .colour), f("i:type", .idea)]),
+            MaybeEntry(slug: "c", title: "One trait", features: [f("c:blue", .colour)]),
+        ]
+        let pick = CanvasSimilarity.maybe(members: members, memberCount: 2, library: library, exclude: ["a"])
+        #expect(pick == MaybePick(slug: "b", title: "Blue type | Studio", shared: ["blue", "type"]))
+        // Dismissed or too weak: nothing.
+        #expect(CanvasSimilarity.maybe(members: members, memberCount: 2, library: library, exclude: ["a", "b"]) == nil)
+        #expect(CanvasSimilarity.maybe(members: [members[0]], memberCount: 1, library: library, exclude: []) == nil)
+    }
+
+    @Test func maybeTitlesAreShort() {
+        #expect(CanvasSimilarity.shortTitle("Blue type | Studio") == "Blue type")
+        #expect(CanvasSimilarity.shortTitle("Short") == "Short")
+        #expect(CanvasSimilarity.shortTitle("A very long title that keeps going on") == "A very long title that…")
+    }
+
+    @Test func looseFeaturesSkipWebsitesAndCommonWords() {
+        let tags = [ItemTag(name: "blue", category: "color", weight: 0.5),
+                    ItemTag(name: "website", category: "subject", weight: 0.9),
+                    ItemTag(name: "type", category: "subject", weight: 0.9)]
+        let keys = CanvasSimilarity.looseFeatures(tags: tags, kindName: "Website").map(\.key)
+        #expect(keys == ["c:blue", "i:type"])
+        #expect(CanvasSimilarity.looseFeatures(tags: [], kindName: "Tool").map(\.key) == ["k:Tool"])
+    }
 }
+
