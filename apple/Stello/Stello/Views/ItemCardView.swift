@@ -426,29 +426,34 @@ struct ItemCardView: View {
     #if os(macOS)
     @ViewBuilder private var macTitleBadge: some View {
         if !item.title.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(.karst(size: scaledTitleSize, weight: .medium))
-                    .foregroundStyle(theme.textPrimary)
-                    .lineLimit(4)
-                // Per-kind one-liner (product: "₹2,699 · Stuffcool" / "via @handle";
-                // book: "Thomas H. Cormen +3 · 2009"; course: "Maven · Cohort"; article:
-                // "simonwillison.net · 6 min").
-                if let kindLine = item.cardKindLine {
-                    Text(kindLine)
-                        .font(.karst(size: scaledPillSize + 1, weight: .medium))
-                        .foregroundStyle(theme.textSecondary)
-                        .lineLimit(1)
+            // Web `.card-title-badge`: top 12, sides 12, bottom 40, overflow hidden, so the
+            // title only uses the space above the pill row. Lines that don't fit are
+            // dropped; on a card too short for one line the title doesn't show at all,
+            // and never sits behind the domain pill.
+            GeometryReader { geo in
+                let room = geo.size.height - 52
+                let line = scaledTitleSize * 1.3
+                if room >= line {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.title)
+                            .font(.karst(size: scaledTitleSize, weight: .medium))
+                            .foregroundStyle(theme.textPrimary)
+                            .lineLimit(max(1, min(4, Int(room / line))))
+                        // Per-kind one-liner (product: "₹2,699 · Stuffcool" / "via @handle";
+                        // book: "Thomas H. Cormen +3 · 2009"; course: "Maven · Cohort"; article:
+                        // "simonwillison.net · 6 min").
+                        if let kindLine = item.cardKindLine, room >= line * 2 {
+                            Text(kindLine)
+                                .font(.karst(size: scaledPillSize + 1, weight: .medium))
+                                .foregroundStyle(theme.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(width: max(0, geo.size.width - 24), height: room, alignment: .topLeading)
+                    .clipped()
+                    .offset(x: 12, y: 12)
                 }
             }
-            // Web `.card-title-badge`: top 12, sides 12, bottom 40, overflow hidden. On a
-            // short or narrow card the title stops above the pill row instead of
-            // running into the domain pill.
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .clipped()
-            .padding(.top, 12)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 40)
             .opacity(isHovered ? 1 : 0)
             .offset(y: isHovered ? 0 : -4)
             .animation(.easeOut(duration: 0.18), value: isHovered)
