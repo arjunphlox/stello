@@ -155,6 +155,10 @@ struct ItemCardView: View {
             .onAppear {
                 WebLibraryImporter.prioritize(item)
                 item.refreshCoverAspect()
+                #if os(macOS) && DEBUG
+                // Screenshot runs: `-screenshotHoverSlug <slug>` shows that card hovered.
+                if let s = UserDefaults.standard.string(forKey: "screenshotHoverSlug"), s == item.slug { isHovered = true }
+                #endif
             }
             .task(id: coverCacheKey) { await decodeCover() }
             .clipShape(RoundedRectangle(cornerRadius: Self.visualCornerRadius, style: .continuous))
@@ -227,7 +231,7 @@ struct ItemCardView: View {
         )
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {
-                domainPill.padding(10)
+                domainPill.padding(10).padding(.leading, isAwaitingReview ? 24 : 0)
             }
         }
         .overlay(alignment: .bottomLeading) {
@@ -239,13 +243,6 @@ struct ItemCardView: View {
             if showCardOverlays {
                 postBadges.padding(10)
             }
-        }
-        .overlay(alignment: .topLeading) {
-            #if os(macOS)
-            if showCardOverlays {
-                macTitleBadge
-            }
-            #endif
         }
     }
 
@@ -265,20 +262,13 @@ struct ItemCardView: View {
         )
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {
-                domainPill.padding(10)
+                domainPill.padding(10).padding(.leading, isAwaitingReview ? 24 : 0)
             }
         }
         .overlay(alignment: .bottomLeading) {
             if showCardOverlays {
                 reviewBadge.padding(10)
             }
-        }
-        .overlay(alignment: .topLeading) {
-            #if os(macOS)
-            if showCardOverlays {
-                macTitleBadge
-            }
-            #endif
         }
     }
 
@@ -289,20 +279,13 @@ struct ItemCardView: View {
         hoverDim(glyphSurface(glyph: glyph))
         .overlay(alignment: .bottomTrailing) {
             if showCardOverlays {
-                domainPill.padding(10)
+                domainPill.padding(10).padding(.leading, isAwaitingReview ? 24 : 0)
             }
         }
         .overlay(alignment: .bottomLeading) {
             if showCardOverlays {
                 reviewBadge.padding(10)
             }
-        }
-        .overlay(alignment: .topLeading) {
-            #if os(macOS)
-            if showCardOverlays {
-                macTitleBadge
-            }
-            #endif
         }
     }
 
@@ -443,25 +426,34 @@ struct ItemCardView: View {
     #if os(macOS)
     @ViewBuilder private var macTitleBadge: some View {
         if !item.title.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(.karst(size: scaledTitleSize, weight: .medium))
-                    .foregroundStyle(theme.textPrimary)
-                    .lineLimit(4)
-                // Per-kind one-liner (product: "₹2,699 · Stuffcool" / "via @handle";
-                // book: "Thomas H. Cormen +3 · 2009"; course: "Maven · Cohort"; article:
-                // "simonwillison.net · 6 min").
-                if let kindLine = item.cardKindLine {
-                    Text(kindLine)
-                        .font(.karst(size: scaledPillSize + 1, weight: .medium))
-                        .foregroundStyle(theme.textSecondary)
-                        .lineLimit(1)
+            // Web `.card-title-badge`: top 12, sides 12, bottom 40, overflow hidden, so the
+            // title only uses the space above the pill row. Lines that don't fit are
+            // dropped; on a card too short for one line the title doesn't show at all,
+            // and never sits behind the domain pill.
+            GeometryReader { geo in
+                let room = geo.size.height - 52
+                let line = scaledTitleSize * 1.3
+                if room >= line {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.title)
+                            .font(.karst(size: scaledTitleSize, weight: .medium))
+                            .foregroundStyle(theme.textPrimary)
+                            .lineLimit(max(1, min(4, Int(room / line))))
+                        // Per-kind one-liner (product: "₹2,699 · Stuffcool" / "via @handle";
+                        // book: "Thomas H. Cormen +3 · 2009"; course: "Maven · Cohort"; article:
+                        // "simonwillison.net · 6 min").
+                        if let kindLine = item.cardKindLine, room >= line * 2 {
+                            Text(kindLine)
+                                .font(.karst(size: scaledPillSize + 1, weight: .medium))
+                                .foregroundStyle(theme.textSecondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(width: max(0, geo.size.width - 24), height: room, alignment: .topLeading)
+                    .clipped()
+                    .offset(x: 12, y: 12)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .padding(.top, 12)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 40)
             .opacity(isHovered ? 1 : 0)
             .offset(y: isHovered ? 0 : -4)
             .animation(.easeOut(duration: 0.18), value: isHovered)
@@ -480,6 +472,9 @@ struct ItemCardView: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
                 .background(tint.opacity(0.22))
+                // Web `backdrop-filter: blur(6px)`: the image's own text blurs behind the
+                // label instead of reading through it.
+                .background { Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark) }
                 .foregroundStyle(.white)
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 0.5))
@@ -592,9 +587,14 @@ struct ItemCardView: View {
     @ViewBuilder
     private func hoverDim<Content: View>(_ content: Content) -> some View {
         #if os(macOS)
+        // The hover title sits under the domain pill and review badge (web z-order:
+        // title 2, pill 3), so the pill never has text drawn over it.
         content
             .colorMultiply(isHovered ? Color(white: 0.175) : .white)
             .animation(.easeOut(duration: 0.18), value: isHovered)
+            .overlay(alignment: .topLeading) {
+                if showCardOverlays { macTitleBadge }
+            }
         #else
         content
         #endif

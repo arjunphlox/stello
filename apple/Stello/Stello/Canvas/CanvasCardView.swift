@@ -30,6 +30,8 @@ struct CanvasCardView: View {
     /// Use / Rejected (Layer 2) and its reason.
     var mark: CanvasMark? = nil
     var reason: String? = nil
+    /// Revisit glow or fade (Layer 2 "Revisits"); nil when off or neither.
+    var visit: CanvasVisit? = nil
 
     @Environment(\.appTheme) private var theme
     @State private var decodedKey: String?
@@ -57,8 +59,19 @@ struct CanvasCardView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(alignment: .top) {
+            // Web `.is-glow .lc-cover`: 0 0 40px accent at 45% around the cover.
+            if visit?.isGlow == true {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(theme.accentColor.opacity(0.45))
+                    .frame(width: CanvasMetrics.cardWidth, height: height)
+                    .blur(radius: 20)
+            }
+        }
         .overlay {
-            if let mark {
+            // A glowing card shows the glow ring in place of the Use / Rejected ring,
+            // as the web's later `.is-glow` rule wins; the mark badge stays.
+            if let mark, visit?.isGlow != true {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(mark.color, lineWidth: 3 * counterScale)
             } else if detailsOpen {
@@ -67,7 +80,17 @@ struct CanvasCardView: View {
             }
         }
         .shadow(color: .black.opacity(detailsOpen ? 0.28 : 0), radius: 16, y: 6)
+        .overlay(alignment: .top) {
+            // Web: 0 0 0 4px accent at 70%, just outside the cover.
+            if visit?.isGlow == true {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(theme.accentColor.opacity(0.7), lineWidth: 4)
+                    .frame(width: CanvasMetrics.cardWidth + 8, height: height + 8)
+                    .frame(width: CanvasMetrics.cardWidth, height: height)
+            }
+        }
         .overlay(alignment: .topLeading) { markBadge }
+        .overlay(alignment: .bottom) { visitPill }
         .overlay {
             if isSelected {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -121,6 +144,29 @@ struct CanvasCardView: View {
                 .background(mark.color, in: RoundedRectangle(cornerRadius: 7 * s, style: .continuous))
                 .frame(maxWidth: CanvasMetrics.cardWidth, alignment: .leading)
                 .offset(y: -26 * s)
+        }
+    }
+
+    /// "Opened 3× recently" / "Not opened since Mar 2026", centred 6pt under the card
+    /// (web `.lc-visit`), screen sized like the source pill.
+    @ViewBuilder private var visitPill: some View {
+        if let visit, CanvasMetrics.cardWidth / counterScale >= 110 {
+            let s = counterScale
+            let glow = visit.isGlow
+            Text(visit.text)
+                .font(.karst(size: 11 * s))
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 10 * s)
+                .padding(.vertical, 3 * s)
+                .foregroundStyle(glow ? theme.accentContrast : theme.textSecondary)
+                .background(glow ? theme.accentColor : theme.borderSubtle,
+                            in: RoundedRectangle(cornerRadius: 10 * s, style: .continuous))
+                // A zero-height strip on the card's bottom edge, the pill hanging
+                // below it, so the pill sits under the card and never over its pills.
+                .frame(width: CanvasMetrics.cardWidth, height: 0, alignment: .top)
+                .offset(y: 6 * s)
+                .allowsHitTesting(false)
         }
     }
 

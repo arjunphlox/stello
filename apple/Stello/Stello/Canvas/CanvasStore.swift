@@ -344,14 +344,20 @@ final class CanvasStore {
 
     /// A link between two cards or notes; an existing one of the same kind is reused.
     @discardableResult
-    func addLink(_ a: String, _ b: String, kind: L2Kind, label: String? = nil) -> String? {
+    func addLink(_ a: String, _ b: String, kind: L2Kind, label: String? = nil, source: String = "mac") -> String? {
         guard a != b else { return nil }
         if let dup = doc.links.first(where: {
             $0.kind == kind.rawValue && (($0.a == a && $0.b == b) || ($0.a == b && $0.b == a))
         }) { return dup.id }
         let id = CanvasDoc.newID()
-        change { $0.links.append(.init(id: id, a: a, b: b, kind: kind.rawValue, label: label, source: "mac")) }
+        change { $0.links.append(.init(id: id, a: a, b: b, kind: kind.rawValue, label: label, source: source)) }
         return id
+    }
+
+    /// "Not related" on a group's "+ Maybe" pill: never offer that save again here.
+    func dismissMaybe(_ slug: String) {
+        guard !doc.dismissed.contains(slug) else { return }
+        change { $0.dismissed.append(slug) }
     }
 
     func setLinkLabel(_ id: String, _ label: String) {
@@ -566,6 +572,26 @@ nonisolated struct CanvasLayers: Codable, Equatable, Sendable {
     var kinds: Set<String> = Set(SimKind.allCases.map(\.rawValue))
     var marks = true
     var notes = true
+    /// "Gaps: maybe related, empty spots": the dashed "+ Maybe" pill on a group.
+    var gaps = true
+    /// "Revisits: glow and fade": cards opened in the last 14 days glow, cards not
+    /// opened for 120 days fade.
+    var glow = true
+
+    init() {}
+
+    /// Missing keys keep their defaults, so settings saved before a part existed load.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = CanvasLayers()
+        simOn = try c.decodeIfPresent(Bool.self, forKey: .simOn) ?? d.simOn
+        alwaysLines = try c.decodeIfPresent(Bool.self, forKey: .alwaysLines) ?? d.alwaysLines
+        kinds = try c.decodeIfPresent(Set<String>.self, forKey: .kinds) ?? d.kinds
+        marks = try c.decodeIfPresent(Bool.self, forKey: .marks) ?? d.marks
+        notes = try c.decodeIfPresent(Bool.self, forKey: .notes) ?? d.notes
+        gaps = try c.decodeIfPresent(Bool.self, forKey: .gaps) ?? d.gaps
+        glow = try c.decodeIfPresent(Bool.self, forKey: .glow) ?? d.glow
+    }
 
     func shows(_ kind: SimKind) -> Bool { simOn && kinds.contains(kind.rawValue) }
 

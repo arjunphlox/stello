@@ -123,7 +123,26 @@ struct ContentView: View {
                     let y = CGFloat(row) * 420 + h / 2
                     canvasStore.add([item.slug], at: CGPoint(x: x, y: y), height: { _ in h })
                 }
-                if layer1 { canvasStore.selected = sortedItems.first?.slug }
+                let revisits = args.contains("-screenshotRevisits") && args.contains("-screenshotCleanStore")
+                // Revisit shots keep nothing selected, so no card is dimmed.
+                if layer1 && !revisits { canvasStore.selected = sortedItems.first?.slug }
+                // -screenshotRevisits: card 2 opened 3× this week (glow), card 4 last
+                // opened seven months ago (fade), and the first item off the canvas gets
+                // card 9's tags so a group shows a "+ Maybe" pill. Throwaway store only.
+                if revisits {
+                    let shown = Array(sortedItems.prefix(count))
+                    // Card 9 (row 3, first) starts the seed's Typography group.
+                    if layer1, sortedItems.count > count, shown.count > 8 {
+                        sortedItems[count].tagsJSON = shown[8].tagsJSON
+                    }
+                    if shown.count > 3 {
+                        shown[1].lastOpenedAt = .now.addingTimeInterval(-86_400)
+                        shown[1].openCount = 3
+                        shown[3].lastOpenedAt = .now.addingTimeInterval(-210 * 86_400)
+                        shown[3].openCount = 1
+                    }
+                    try? context.save()
+                }
                 canvasStore.cameraPlaced = false
             }
         }
