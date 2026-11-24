@@ -155,6 +155,10 @@ struct ItemCardView: View {
             .onAppear {
                 WebLibraryImporter.prioritize(item)
                 item.refreshCoverAspect()
+                #if os(macOS) && DEBUG
+                // Screenshot runs: `-screenshotHoverSlug <slug>` shows that card hovered.
+                if let s = UserDefaults.standard.string(forKey: "screenshotHoverSlug"), s == item.slug { isHovered = true }
+                #endif
             }
             .task(id: coverCacheKey) { await decodeCover() }
             .clipShape(RoundedRectangle(cornerRadius: Self.visualCornerRadius, style: .continuous))
