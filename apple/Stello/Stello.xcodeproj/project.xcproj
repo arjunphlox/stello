@@ -207,6 +207,7 @@
           "path": "Sync",
           "children": [
             { "path": "ProfileSync.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "Sharing.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "SyncAPI.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "SyncBridge.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "SyncWire.swift", "target-membership": [ "Stello/compile-sources" ] },
@@ -276,6 +277,7 @@
         { "path": "RevisitTrackingTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "SearchBlobTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ProfileSyncTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "SharingTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "CanvasDocTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "CanvasLayer2Tests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "CanvasSimilarityTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },

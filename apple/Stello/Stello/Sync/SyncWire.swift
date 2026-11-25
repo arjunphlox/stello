@@ -9,7 +9,7 @@ enum SyncWire {
     static let allFields: [String] = [
         "slug", "title", "source_url", "domain", "author", "summary", "body_markdown", "status",
         "needs_review", "kind", "enrichment_status", "added_at", "analyzed_at", "cover_aspect",
-        "last_opened_at", "open_count", "metadata", "tags", "images", "snippets",
+        "last_opened_at", "open_count", "metadata", "tags", "images", "snippets", "audiences",
     ]
 
     /// Item attribute → wire field, for reading SwiftData change history.
@@ -22,6 +22,7 @@ enum SyncWire {
         \Item.lastOpenedAt: "last_opened_at", \Item.openCount: "open_count",
         \Item.metadataJSON: "metadata", \Item.tagsJSON: "tags",
         \Item.imagesChangedAt: "images", \Item.snippetsChangedAt: "snippets",
+        \Item.audiencesJSON: "audiences",
     ]
 
     /// One row from `/api/sync/pull`. Values stay as parsed JSON (`NSNull` for null).
@@ -86,6 +87,7 @@ enum SyncWire {
                 ["tag": $0.name, "category": $0.category, "weight": $0.weight, "source": $0.source] as [String: Any]
             }
         }
+        if want("audiences") { out["audiences"] = item.audiences }
         if want("images") {
             out["images"] = (item.images ?? []).compactMap { image -> [String: Any]? in
                 guard let path = webPath(of: image) else { return nil }
@@ -159,6 +161,10 @@ enum SyncWire {
                 return ItemTag(name: name, category: category, weight: t["weight"] as? Double ?? 0.5, source: t["source"] as? String ?? "web")
             }
             if tags != item.tags { item.tags = tags }
+        }
+        // A Worker older than audience sharing sends no `audiences`: leave the item as is.
+        if !skip.contains("audiences"), let list = v["audiences"] as? [String], list.sorted() != item.audiences {
+            item.audiences = list
         }
         if !skip.contains("snippets"), let list = v["snippets"] as? [[String: Any]], let context = item.modelContext {
             let incoming = list.compactMap { s -> (String, String, Date)? in
