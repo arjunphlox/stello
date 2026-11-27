@@ -27,3 +27,15 @@ node scripts/export-folder.mjs --out "$HOME/Library/Mobile Documents/com~apple~C
 ```
 
 Every exported item is parsed back from its file and compared with the API copy; mismatches land in `export-report.json`. The 2026-11-05 JSON export (3,605 items) round-trips with zero mismatches.
+
+## Format v2 (decided 2026-11-27, before phase 1)
+
+Nothing is stored twice; shared things exist once and are referenced by id.
+
+- **Entity files:** `people/<slug>.md`, `places/<slug>.md`, `collections/<slug>.md`, each with an `id`, name, aliases and kind facts. Items list them by id (`people: [...]`, `places: [...]`). Only the item records the link; each app's index builds the reverse view.
+- **Your files are referenced, not copied:** an item made from a dropped-in image or PDF has `file:` pointing at the original. `media/` holds only what Stello downloaded.
+- **One item per thing:** links matched on the normalised URL, files on a content hash, people and places on name + aliases (+ coordinates). A repeat sighting adds to `sources:` on the existing item.
+- **Month folders:** `items/<year>/<month>/` by the real first-saved date; imports keep dates from the CSV, bookmark file or file.
+- **Ids, not paths:** renaming or moving files never breaks links.
+
+The v1 export from 2026-11-26 is converted once by a script at the start of phase 1.
