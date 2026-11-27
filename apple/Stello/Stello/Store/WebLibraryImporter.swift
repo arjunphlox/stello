@@ -453,16 +453,29 @@ final class WebLibraryImporter {
             predicate: #Predicate<Item> { $0.enrichmentStatus == status },
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
         )
-        // Count before limiting the fetch to one item, or the total reads "1".
+        // Count before limiting the fetch, or the total reads "1".
         let total = (try? context.fetchCount(descriptor)) ?? 0
-        descriptor.fetchLimit = 1
 
         shared.setStage("Writing summaries", total: total)
+        // Saves go out in batches: every save makes the grid re-read the whole
+        // library on the main thread (~0.8 s at 8k items), so one save per item
+        // kept the app busy for hours after a big import.
+        var unsaved = Set<PersistentIdentifier>()
+        var lastSave = ContinuousClock.now
         func next() -> Item? {
             while let id = priorityItems.popLast() {
-                if let item = context.model(for: id) as? Item, item.enrichmentStatus == status { return item }
+                if !unsaved.contains(id), let item = context.model(for: id) as? Item,
+                   item.enrichmentStatus == status { return item }
             }
-            return try? context.fetch(descriptor).first
+            // Items handled since the last save may still match in the store.
+            descriptor.fetchLimit = unsaved.count + 1
+            return (try? context.fetch(descriptor))?.first { !unsaved.contains($0.persistentModelID) }
+        }
+        func flush() {
+            guard !unsaved.isEmpty else { return }
+            try? context.save()
+            unsaved.removeAll()
+            lastSave = .now
         }
 
         var finished = 0
@@ -470,13 +483,19 @@ final class WebLibraryImporter {
             await enrich(item)
             if Task.isCancelled { break }
             if item.enrichmentStatus == status { item.enrichmentStatus = awaitingOpenStatus }
-            try? context.save()
+            unsaved.insert(item.persistentModelID)
+            if unsaved.count >= saveBatchSize || ContinuousClock.now - lastSave >= saveBatchInterval { flush() }
             finished += 1
             shared.stageDone = finished
             NSLog("Web import enrich: %d finished this run", finished)
             try? await Task.sleep(for: pause())
         }
+        flush()
     }
+
+    /// Background summaries save at most this often (see `enrichAwaitingAI`).
+    static let saveBatchSize = 25
+    static let saveBatchInterval: Duration = .seconds(120)
 
     // MARK: - Mapping
 
