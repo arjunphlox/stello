@@ -92,6 +92,7 @@ struct MasonryGridView: View {
 
     @Query(sort: \Item.addedAt, order: .reverse) private var queriedItems: [Item]
     @Environment(\.modelContext) private var context
+    @Environment(LibraryWindow.self) private var libraryWindow: LibraryWindow?
     @Environment(\.appTheme) private var theme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -220,7 +221,20 @@ struct MasonryGridView: View {
 
     private func updateVisibleWindow(scrollOffset: CGFloat) {
         let window = Int(max(0, scrollOffset) / Self.visibleWindowStep)
-        if window != visibleWindowIndex { visibleWindowIndex = window }
+        guard window != visibleWindowIndex else { return }
+        visibleWindowIndex = window
+        reportScrollDepth()
+    }
+
+    /// Lets the launch window load more as the built cards near the end of what's
+    /// loaded (search and filters load the whole library on their own).
+    private func reportScrollDepth() {
+        guard let libraryWindow, libraryWindow.limit != nil else { return }
+        let windowTop = CGFloat(visibleWindowIndex) * Self.visibleWindowStep
+        let lookahead: CGFloat = 4_000
+        let deepest = gridModel.visibleIndices(minY: windowTop, maxY: windowTop + lookahead).max() ?? 0
+        let reachedEnd = windowTop + lookahead >= gridModel.contentHeight
+        libraryWindow.gridReached(index: reachedEnd ? allItems.count : deepest, loaded: allItems.count)
     }
 
     /// The built cards: one viewport of overscan either side of the visible window.
@@ -318,9 +332,22 @@ struct MasonryGridView: View {
             refreshFilterCaches()
             openScreenshotDetailIfNeeded()
         }
-        .onChange(of: searchText) { _, _ in refreshFilterCaches() }
+        .onChange(of: searchText) { _, text in
+            if !text.isEmpty { libraryWindow?.loadAll() }
+            refreshFilterCaches()
+        }
         .onChange(of: selectedTagNames) { _, _ in refreshFilterCaches() }
-        .onChange(of: selectedWeekKey) { _, _ in refreshFilterCaches() }
+        .onChange(of: selectedWeekKey) { _, key in
+            if key != nil { libraryWindow?.loadAll() }
+            refreshFilterCaches()
+        }
+        // Search, filters and the timeline work on the whole library.
+        .onChange(of: showFilterSheet) { _, open in
+            if open { libraryWindow?.loadAll() }
+        }
+        .onChange(of: interactionWeekKey) { _, key in
+            if key != nil { libraryWindow?.loadAll() }
+        }
         .onChange(of: needsReviewOnly) { _, _ in refreshFilterCaches() }
         // Reviewing an item flips needsReview at the store layer; the cached filter results
         // must follow so a just-reviewed card leaves the "Needs review"-filtered grid live.
@@ -438,6 +465,7 @@ struct MasonryGridView: View {
                 }
                 #endif
                 scrollForScreenshotIfNeeded(using: scrollProxy)
+                LaunchClock.gridAppeared(loaded: allItems.count)
                 updateActiveWeekKey()
                 applyScreenshotTimelineHoverIfNeeded()
                 applyScreenshotWeekFilterIfNeeded()
@@ -447,7 +475,7 @@ struct MasonryGridView: View {
 
     private func compactHeaderOverlay(safeTop: CGFloat) -> some View {
         StelloHeaderView(
-            itemCount: allItems.count,
+            itemCount: libraryWindow?.count(loaded: allItems.count) ?? allItems.count,
             scrollProgress: headerScrollProgress,
             isDropTargeted: isDropTargeted
         )

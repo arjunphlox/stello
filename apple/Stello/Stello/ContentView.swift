@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import os
 #if os(macOS)
 import AppKit
 #endif
@@ -11,6 +12,18 @@ struct ContentView: View {
     @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
 
     @Query(sort: \Item.addedAt, order: .reverse) private var allItems: [Item]
+    /// Newest-first launch window (nil in previews: the whole library).
+    @Environment(LibraryWindow.self) private var libraryWindow: LibraryWindow?
+
+    /// `libraryLimit`: load only the newest this-many items (nil = the whole library).
+    init(libraryLimit: Int? = nil) {
+        var descriptor = FetchDescriptor<Item>(sortBy: [SortDescriptor(\Item.addedAt, order: .reverse)])
+        descriptor.fetchLimit = libraryLimit
+        _allItems = Query(descriptor)
+    }
+
+    /// The header count is the whole library, even while only the newest weeks are loaded.
+    private var libraryCount: Int { libraryWindow?.count(loaded: allItems.count) ?? allItems.count }
 
     @AppStorage("panel.widthFraction") private var panelWidthFraction: Double = 0.25
     @State private var selectedItem: Item?
@@ -80,6 +93,17 @@ struct ContentView: View {
         }
         .onChange(of: allItems.count) { _, _ in
             applyScreenshotLaunchState()
+            libraryWindow?.refreshTotal(in: context)
+        }
+        // Filters count tags across the whole library: load the rest first.
+        .onChange(of: panelContent) { _, content in
+            if content == .filters { libraryWindow?.loadAll() }
+        }
+        .onChange(of: selectedTagNames) { _, names in
+            if !names.isEmpty { libraryWindow?.loadAll() }
+        }
+        .onChange(of: needsReviewOnly) { _, on in
+            if on { libraryWindow?.loadAll() }
         }
         .onChange(of: selectedItem) { oldValue, _ in
             // Viewing an item counts as reviewing it. This fires on every path that stops
@@ -292,7 +316,7 @@ struct ContentView: View {
                     .frame(maxHeight: .infinity)
 
                     headerOverlay(
-                        itemCount: allItems.count,
+                        itemCount: libraryCount,
                         headerScrollProgress: headerScrollProgress
                     )
                     .frame(width: shownGridWidth)
@@ -324,7 +348,7 @@ struct ContentView: View {
                         }
                         // Canvas mode keeps the header as a small chip (web view-canvas).
                         .overlay(alignment: .topLeading) {
-                            StelloHeaderView(itemCount: allItems.count, integratesMacTitleBar: isMac, chip: true)
+                            StelloHeaderView(itemCount: libraryCount, integratesMacTitleBar: isMac, chip: true)
                                 .padding(.leading, StelloLayout.windowInset)
                                 .padding(.top, StelloLayout.windowInset)
                         }
@@ -399,7 +423,7 @@ struct ContentView: View {
                 CanvasView(showsZoom: false, topInset: compactSafeTop, onOpen: openFromCanvas)
                     .ignoresSafeArea(edges: [.top, .bottom])
                     .overlay(alignment: .topLeading) {
-                        StelloHeaderView(itemCount: allItems.count, chip: true)
+                        StelloHeaderView(itemCount: libraryCount, chip: true)
                             .padding(.leading, StelloLayout.windowInset)
                             .padding(.top, compactSafeTop + StelloLayout.windowInset)
                             .ignoresSafeArea(edges: .top)
@@ -586,4 +610,76 @@ private struct PanelResizeHandle: View {
         .environment(\.appTheme, AppTheme(mode: .dark, accent: .amber))
         .preferredColorScheme(.dark)
         .frame(width: 1280, height: 900)
+}
+
+// MARK: - Newest weeks first
+
+/// Launch loads only the newest weeks, so the grid shows at once; the rest loads as
+/// you scroll toward the end, or all at once when search, filters or the timeline
+/// need the whole library. Every load of the library runs on the main thread
+/// (SwiftData `@Query`), so a smaller first load is a faster first frame.
+@MainActor @Observable
+final class LibraryWindow {
+    /// Items loaded; nil = the whole library.
+    private(set) var limit: Int?
+    /// Items in the whole library (for the header count while partly loaded).
+    private(set) var total = 0
+
+    static let launchWeeks = 4
+    /// Never start with fewer than this many (a quiet month still fills the screen).
+    static let minimumLaunch = 300
+    /// Each step as you scroll near the end of what's loaded.
+    static let growStep = 1_500
+    /// Load the rest in one go when this little is left.
+    static let finishSlack = 300
+
+    init(limit: Int?, total: Int = 0) {
+        self.limit = limit
+        self.total = total
+    }
+
+    /// The launch window for this store: the last few weeks of saves, or everything
+    /// when the library is small.
+    static func atLaunch(in context: ModelContext) -> LibraryWindow {
+        let total = (try? context.fetchCount(FetchDescriptor<Item>())) ?? 0
+        let since = Calendar.current.date(byAdding: .day, value: -7 * launchWeeks, to: .now) ?? .distantPast
+        let recent = (try? context.fetchCount(FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.addedAt >= since }))) ?? 0
+        let first = max(recent, minimumLaunch)
+        return LibraryWindow(limit: first + finishSlack >= total ? nil : first, total: total)
+    }
+
+    func count(loaded: Int) -> Int { limit == nil ? loaded : max(total, loaded) }
+
+    /// Called as the grid scrolls; grows the window when the built cards near its end.
+    func gridReached(index: Int, loaded: Int) {
+        guard let limit, loaded >= limit, index >= loaded - 200 else { return }
+        let next = limit + Self.growStep
+        self.limit = next + Self.finishSlack >= total ? nil : next
+    }
+
+    func loadAll() {
+        if limit != nil { limit = nil }
+    }
+
+    func refreshTotal(in context: ModelContext) {
+        guard limit != nil else { return }
+        total = (try? context.fetchCount(FetchDescriptor<Item>())) ?? total
+    }
+}
+
+/// Time from app start to the grid's first appearance, in the unified log
+/// (`log show --predicate 'subsystem == "com.arjunphlox.Stello"'`), so launch speed
+/// can be measured on a real library.
+enum LaunchClock {
+    static let start = ContinuousClock.now
+    private static var reported = false
+    private static let log = Logger(subsystem: "com.arjunphlox.Stello", category: "perf")
+
+    static func gridAppeared(loaded: Int) {
+        guard !reported else { return }
+        reported = true
+        let ms = (ContinuousClock.now - start).components
+        let elapsed = Double(ms.seconds) * 1_000 + Double(ms.attoseconds) / 1e15
+        log.notice("grid first appeared after \(elapsed, format: .fixed(precision: 0), privacy: .public) ms with \(loaded, privacy: .public) items loaded")
+    }
 }
