@@ -18,6 +18,7 @@ struct StelloApp: App {
     let container: ModelContainer
 
     init() {
+        _ = LaunchClock.start
         StelloFont.registerBundledKarstFonts()
         Self.applyScreenshotLaunchFixtures()
 
@@ -90,6 +91,12 @@ private struct RootView: View {
 
     let container: ModelContainer
     private let enrichmentCoordinator = EnrichmentCoordinator()
+    @State private var libraryWindow: LibraryWindow
+
+    init(container: ModelContainer) {
+        self.container = container
+        _libraryWindow = State(initialValue: LibraryWindow.atLaunch(in: container.mainContext))
+    }
 
     private var theme: AppTheme {
         let mode = ThemeAppearancePreference.resolvedColorMode(rawMode: rawMode, systemScheme: systemScheme)
@@ -98,7 +105,8 @@ private struct RootView: View {
     }
 
     var body: some View {
-        ContentView()
+        ContentView(libraryLimit: libraryWindow.limit)
+            .environment(libraryWindow)
             .modelContainer(container)
             .environment(\.appTheme, theme)
             .environment(\.enrichmentCoordinator, enrichmentCoordinator)

@@ -720,6 +720,56 @@ struct WebImportClassifyTests {
     }
 }
 
+@Suite("Newest weeks first at launch")
+@MainActor
+struct LibraryWindowTests {
+    private func store(recent: Int, older: Int) throws -> ModelContext {
+        let context = ModelContext(try StelloStore.makeInMemoryContainer())
+        for i in 0..<recent {
+            context.insert(Item(slug: "new-\(i)", title: "New", addedAt: .now.addingTimeInterval(-Double(i) * 3_600)))
+        }
+        for i in 0..<older {
+            context.insert(Item(slug: "old-\(i)", title: "Old", addedAt: .now.addingTimeInterval(-Double(60 + i) * 86_400)))
+        }
+        try context.save()
+        return context
+    }
+
+    @Test("A small library loads whole")
+    func smallLibraryLoadsWhole() throws {
+        let window = LibraryWindow.atLaunch(in: try store(recent: 50, older: 400))
+        #expect(window.limit == nil)
+    }
+
+    @Test("A big library starts with the last four weeks, never under the minimum")
+    func bigLibraryStartsWithRecentWeeks() throws {
+        let busy = LibraryWindow.atLaunch(in: try store(recent: 500, older: 3_000))
+        #expect(busy.limit == 500)
+        #expect(busy.count(loaded: 500) == 3_500)
+        let quiet = LibraryWindow.atLaunch(in: try store(recent: 20, older: 3_000))
+        #expect(quiet.limit == LibraryWindow.minimumLaunch)
+    }
+
+    @Test("Scrolling near the end grows the window until everything is loaded")
+    func scrollingGrowsWindow() {
+        let window = LibraryWindow(limit: 400, total: 3_000)
+        window.gridReached(index: 100, loaded: 400)
+        #expect(window.limit == 400)
+        window.gridReached(index: 250, loaded: 400)
+        #expect(window.limit == 1_900)
+        window.gridReached(index: 1_800, loaded: 1_900)
+        #expect(window.limit == nil)
+    }
+
+    @Test("Search and filters load the whole library")
+    func loadAll() {
+        let window = LibraryWindow(limit: 400, total: 3_000)
+        window.loadAll()
+        #expect(window.limit == nil)
+        #expect(window.count(loaded: 3_000) == 3_000)
+    }
+}
+
 /// Counts calls from `@Sendable` fakes.
 private actor Counter {
     var value = 0

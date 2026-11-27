@@ -819,6 +819,7 @@ enum OptacosImporter {
                     let imgs = item.images ?? []
                     if let img = imgs.first(where: { $0.label == pendingItem.label && $0.role == pendingItem.role }) {
                         img.data = data
+                        img.forgetRenderableBytes()
                         img.width = w
                         img.height = h
                         img.isPrimary = pendingItem.isPrimary

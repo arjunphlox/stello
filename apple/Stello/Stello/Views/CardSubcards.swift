@@ -121,7 +121,8 @@ struct CardSubcards: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.modelContext) private var context
     @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
-    @State private var storeItems: [Item] = []
+    /// Items that ref chips open, looked up one slug at a time and remembered.
+    @State private var refItems = RefItemCache()
     @State private var gridWidth: CGFloat = 300
 
     private static let twoColumnThreshold: CGFloat = 520
@@ -216,14 +217,17 @@ struct CardSubcards: View {
         } action: { _, newWidth in
             gridWidth = newWidth
         }
-        .task { await loadStoreItemsIfNeeded() }
     }
 
-    @MainActor
-    private func loadStoreItemsIfNeeded() async {
-        guard storeItems.isEmpty else { return }
-        let descriptor = FetchDescriptor<Item>(sortBy: [SortDescriptor(\.slug)])
-        storeItems = (try? context.fetch(descriptor)) ?? []
+    /// The library item a ref chip opens. Only the few slugs a panel shows are looked up;
+    /// the panel used to fetch the whole library, sorted, on the main thread at every open.
+    private func storeItem(slug: String) -> Item? {
+        if let known = refItems.items[slug] { return known }
+        var descriptor = FetchDescriptor<Item>(predicate: #Predicate<Item> { $0.slug == slug })
+        descriptor.fetchLimit = 1
+        let found = (try? context.fetch(descriptor))?.first
+        refItems.items[slug] = .some(found)
+        return found
     }
 
     // MARK: - Layout (de-duplication)
@@ -422,7 +426,7 @@ struct CardSubcards: View {
     private func refsResolve(_ refs: [EntityRef]) -> Bool {
         refs.contains { ref in
             guard let slug = ref.slug else { return false }
-            return storeItems.contains { $0.slug == slug }
+            return storeItem(slug: slug) != nil
         }
     }
 
@@ -1565,7 +1569,7 @@ struct CardSubcards: View {
         let values = refs.filter { !$0.name.isEmpty }
         if !values.isEmpty {
             SubCard(title: title) {
-                RefsSubCardBody(refs: values, storeItems: storeItems)
+                RefsSubCardBody(refs: values, resolve: storeItem(slug:))
             }
         }
     }
@@ -1794,9 +1798,15 @@ struct ChipsSubCardBody: View {
 
 // MARK: - Entity refs
 
+/// Per-panel memo of ref slug → item (nil = not in the library). A plain class, so
+/// filling it while the panel renders doesn't trigger another render.
+final class RefItemCache {
+    var items: [String: Item?] = [:]
+}
+
 struct RefsSubCardBody: View {
     let refs: [EntityRef]
-    let storeItems: [Item]
+    let resolve: (String) -> Item?
 
     @Environment(\.appTheme) private var theme
     @Environment(\.detailOpenItem) private var openItem
@@ -1811,9 +1821,7 @@ struct RefsSubCardBody: View {
 
     @ViewBuilder
     private func refChip(_ ref: EntityRef) -> some View {
-        let matched = ref.slug.flatMap { slug in
-            storeItems.first { $0.slug == slug }
-        }
+        let matched = ref.slug.flatMap(resolve)
         if let matched, let openItem {
             Button {
                 openItem(matched)
@@ -1860,10 +1868,8 @@ struct ImageGallerySubCardBody: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let img = displayed, let data = img.data, let platform = platformImage(from: data) {
-                platform
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+            if let img = displayed, img.hasRenderableCoverData {
+                DecodedStoredImage(image: img, maxPixels: DecodedStoredImage<Color>.panelPixels) { theme.borderSubtle }
                     .frame(maxWidth: .infinity)
                     .frame(height: mainHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1887,8 +1893,8 @@ struct ImageGallerySubCardBody: View {
             previewID = image.persistentModelID
         } label: {
             Group {
-                if let data = image.data, let img = platformImage(from: data) {
-                    img.resizable().aspectRatio(contentMode: .fill)
+                if image.hasRenderableCoverData {
+                    DecodedStoredImage(image: image, maxPixels: DecodedStoredImage<Color>.thumbnailPixels) { theme.borderSubtle }
                 } else {
                     theme.borderSubtle
                 }
@@ -1903,14 +1909,53 @@ struct ImageGallerySubCardBody: View {
         .buttonStyle(.plain)
     }
 
-    private func platformImage(from data: Data) -> Image? {
-        #if os(macOS)
-        guard let ns = NSImage(data: data) else { return nil }
-        return Image(nsImage: ns)
-        #else
-        guard let ui = UIImage(data: data) else { return nil }
-        return Image(uiImage: ui)
-        #endif
+}
+
+// MARK: - Stored images, decoded off the main thread
+
+/// An item image drawn from a bitmap decoded off the main thread at the size it's
+/// shown, and cached. Building an `NSImage`/`UIImage` from the bytes inside a view body
+/// re-read and re-drew the full-size file on every pass, which made the detail panel
+/// slow to open.
+struct DecodedStoredImage<Placeholder: View>: View {
+    static var panelPixels: Int { 1600 }
+    static var thumbnailPixels: Int { 200 }
+
+    let image: ItemImage
+    let maxPixels: Int
+    var contentMode: ContentMode = .fill
+    @ViewBuilder var placeholder: () -> Placeholder
+
+    @State private var decodedKey: String?
+
+    private var baseKey: String {
+        "stored-\(image.persistentModelID.hashValue)-\(image.renderableByteCount ?? 0)"
+    }
+    private var key: String { "\(baseKey)-\(maxPixels)" }
+
+    var body: some View {
+        // Reading this redraws the view when its bitmap lands in the cache.
+        let _ = decodedKey
+        Group {
+            if let bitmap = CoverImageCache.decodedImage(forKey: key)
+                ?? CoverImageCache.anyDecodedImage(forCover: baseKey) {
+                Image(decorative: bitmap, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+            } else {
+                placeholder()
+            }
+        }
+        .task(id: key) {
+            if CoverImageCache.reusable(key: key, maxPixels: maxPixels, cover: baseKey) != nil {
+                decodedKey = key
+                return
+            }
+            guard let data = image.data else { return }
+            if await CoverImageCache.decode(data, key: key, maxPixels: maxPixels, cover: baseKey) != nil {
+                decodedKey = key
+            }
+        }
     }
 }
 

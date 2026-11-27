@@ -177,7 +177,7 @@ final class SyncBridge {
     // MARK: - Push
 
     private func pushHistory(api: SyncAPI, container: ModelContainer) async throws {
-        let read = try readHistory(context: makeContext(container), after: loadToken())
+        let read = try await readHistory(container: container, after: loadToken())
         guard !read.changes.isEmpty else { saveToken(read.lastToken); return }
 
         let ids = Array(read.changes.keys)
@@ -185,12 +185,21 @@ final class SyncBridge {
             let slice = Array(ids[start..<min(start + Self.batch, ids.count)])
             let context = makeContext(container)
             var changes: [SyncWire.Change] = []
-            var live: [Item] = []
+            var wanted: [UUID] = []
             for id in slice {
                 guard let pending = read.changes[id] else { continue }
-                if pending.deletedAt != nil {
-                    changes.append(.init(id: id, fields: ["deleted_at": pending.deletedAt!], clock: ["deleted_at": pending.deletedAt!], full: false))
-                } else if let item = fetchItem(id, context) {
+                if let deletedAt = pending.deletedAt {
+                    changes.append(.init(id: id, fields: ["deleted_at": deletedAt], clock: ["deleted_at": deletedAt], full: false))
+                } else {
+                    wanted.append(id)
+                }
+            }
+            // One fetch per batch, not one per item.
+            var live: [Item] = []
+            if !wanted.isEmpty {
+                let descriptor = FetchDescriptor<Item>(predicate: #Predicate { wanted.contains($0.id) })
+                var seen = Set<UUID>()
+                for item in (try? context.fetch(descriptor)) ?? [] where seen.insert(item.id).inserted {
                     live.append(item)
                 }
             }
@@ -265,7 +274,7 @@ final class SyncBridge {
         var queued = 0
         // Edits made since the push (here, or arriving from another Apple device) are
         // newer than anything the server sent before them.
-        let pendingIDs = Set(try readHistory(context: makeContext(container), after: loadToken()).changes.keys)
+        let pendingIDs = Set(try await readHistory(container: container, after: loadToken()).changes.keys)
 
         while true {
             let page = try await api.pull(since: cursor)
@@ -405,45 +414,90 @@ final class SyncBridge {
         var lastToken: DefaultHistoryToken?
     }
 
+    /// One item change read from history, made off the main thread.
+    nonisolated private struct HistoryEntry: Sendable {
+        enum Kind: Sendable { case insert, update, delete }
+        let id: UUID
+        let fields: [String]
+        let time: Int
+        let isImport: Bool
+        let kind: Kind
+    }
+
     /// Own transactions become pending pushes; CloudKit imports only update
-    /// `localFieldTimes`. The bridge's own transactions are skipped.
-    private func readHistory(context: ModelContext, after token: DefaultHistoryToken?) throws -> HistoryRead {
-        var descriptor = HistoryDescriptor<DefaultHistoryTransaction>()
-        if let token {
-            descriptor.predicate = #Predicate { $0.token > token }
-        } else {
-            let since = Date(timeIntervalSince1970: UserDefaults.standard.double(forKey: Self.linkedAtKey))
-            descriptor.predicate = #Predicate { $0.timestamp > since }
-        }
-        let transactions = try context.fetchHistory(descriptor)
-        var read = HistoryRead(lastToken: token)
-        for transaction in transactions {
-            read.lastToken = transaction.token
-            if transaction.author == Self.author { continue }
-            let isImport = transaction.author?.hasPrefix("NSCloudKitMirroringDelegate") == true
-            let time = SyncWire.ms(transaction.timestamp)
-            for change in transaction.changes {
-                switch change {
-                case .insert(let insert as DefaultHistoryInsert<Item>):
-                    guard let id = fetchItem(insert.changedPersistentIdentifier, context)?.id else { continue }
-                    insertedIDs.insert(id)
-                    note(id, fields: SyncWire.allFields, time: time, isImport: isImport, into: &read) { $0.inserted = true }
-                case .update(let update as DefaultHistoryUpdate<Item>):
-                    guard let id = fetchItem(update.changedPersistentIdentifier, context)?.id else { continue }
-                    let fields = update.updatedAttributes.compactMap { SyncWire.fieldForKeyPath[$0] }
-                    if fields.isEmpty { continue }
-                    note(id, fields: fields, time: time, isImport: isImport, into: &read) { _ in }
-                case .delete(let delete as DefaultHistoryDelete<Item>):
-                    guard let id = delete.tombstone[\.id] as? UUID else { continue }
-                    note(id, fields: [], time: time, isImport: isImport, into: &read) { $0.deletedAt = time }
-                default:
-                    continue // images/snippets show up through Item.imagesChangedAt/snippetsChangedAt
-                }
+    /// `localFieldTimes`. The bridge's own transactions are skipped. The history scan
+    /// and its per-change item lookups run off the main thread; only the bookkeeping
+    /// runs here.
+    private func readHistory(container: ModelContainer, after token: DefaultHistoryToken?) async throws -> HistoryRead {
+        let tokenData = token.flatMap { try? JSONEncoder().encode($0) }
+        let since = Date(timeIntervalSince1970: UserDefaults.standard.double(forKey: Self.linkedAtKey))
+        let (entries, lastData) = try await Task.detached(priority: .utility) {
+            try Self.scanHistory(container: container, after: tokenData, since: since)
+        }.value
+        var read = HistoryRead(lastToken: lastData.flatMap { try? JSONDecoder().decode(DefaultHistoryToken.self, from: $0) } ?? token)
+        for e in entries {
+            switch e.kind {
+            case .insert:
+                insertedIDs.insert(e.id)
+                note(e.id, fields: e.fields, time: e.time, isImport: e.isImport, into: &read) { $0.inserted = true }
+            case .update:
+                note(e.id, fields: e.fields, time: e.time, isImport: e.isImport, into: &read) { _ in }
+            case .delete:
+                note(e.id, fields: [], time: e.time, isImport: e.isImport, into: &read) { $0.deletedAt = e.time }
             }
         }
         // Imports never push; drop items whose only changes came from CloudKit.
         read.changes = read.changes.filter { !$0.value.fromImport }
         return read
+    }
+
+    nonisolated private static func scanHistory(container: ModelContainer, after tokenData: Data?, since: Date) throws -> ([HistoryEntry], Data?) {
+        let context = ModelContext(container)
+        context.author = author
+        context.autosaveEnabled = false
+        var descriptor = HistoryDescriptor<DefaultHistoryTransaction>()
+        if let tokenData, let token = try? JSONDecoder().decode(DefaultHistoryToken.self, from: tokenData) {
+            descriptor.predicate = #Predicate { $0.token > token }
+        } else {
+            descriptor.predicate = #Predicate { $0.timestamp > since }
+        }
+        let transactions = try context.fetchHistory(descriptor)
+        var entries: [HistoryEntry] = []
+        var last: DefaultHistoryToken?
+        // One lookup per item, not per change.
+        var idFor: [PersistentIdentifier: UUID?] = [:]
+        func itemID(_ pid: PersistentIdentifier) -> UUID? {
+            if let known = idFor[pid] { return known }
+            var d = FetchDescriptor<Item>(predicate: #Predicate { $0.persistentModelID == pid })
+            d.fetchLimit = 1
+            let id = (try? context.fetch(d))?.first?.id
+            idFor[pid] = .some(id)
+            return id
+        }
+        for transaction in transactions {
+            last = transaction.token
+            if transaction.author == author { continue }
+            let isImport = transaction.author?.hasPrefix("NSCloudKitMirroringDelegate") == true
+            let time = SyncWire.ms(transaction.timestamp)
+            for change in transaction.changes {
+                switch change {
+                case .insert(let insert as DefaultHistoryInsert<Item>):
+                    guard let id = itemID(insert.changedPersistentIdentifier) else { continue }
+                    entries.append(.init(id: id, fields: SyncWire.allFields, time: time, isImport: isImport, kind: .insert))
+                case .update(let update as DefaultHistoryUpdate<Item>):
+                    guard let id = itemID(update.changedPersistentIdentifier) else { continue }
+                    let fields = update.updatedAttributes.compactMap { SyncWire.fieldForKeyPath[$0] }
+                    if fields.isEmpty { continue }
+                    entries.append(.init(id: id, fields: fields, time: time, isImport: isImport, kind: .update))
+                case .delete(let delete as DefaultHistoryDelete<Item>):
+                    guard let id = delete.tombstone[\.id] as? UUID else { continue }
+                    entries.append(.init(id: id, fields: [], time: time, isImport: isImport, kind: .delete))
+                default:
+                    continue // images/snippets show up through Item.imagesChangedAt/snippetsChangedAt
+                }
+            }
+        }
+        return (entries, last.flatMap { try? JSONEncoder().encode($0) })
     }
 
     private func note(_ id: UUID, fields: [String], time: Int, isImport: Bool, into read: inout HistoryRead, _ edit: (inout Pending) -> Void) {
@@ -469,14 +523,6 @@ final class SyncBridge {
 
     private func fetchItem(_ id: UUID, _ context: ModelContext) -> Item? {
         var d = FetchDescriptor<Item>(predicate: #Predicate { $0.id == id })
-        d.fetchLimit = 1
-        return try? context.fetch(d).first
-    }
-
-    /// nil for an item deleted since (a fetch, unlike `model(for:)`, never hands back a
-    /// fault for a row that's gone).
-    private func fetchItem(_ pid: PersistentIdentifier, _ context: ModelContext) -> Item? {
-        var d = FetchDescriptor<Item>(predicate: #Predicate { $0.persistentModelID == pid })
         d.fetchLimit = 1
         return try? context.fetch(d).first
     }

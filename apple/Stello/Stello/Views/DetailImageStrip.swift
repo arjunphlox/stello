@@ -63,10 +63,12 @@ struct DetailImageStrip: View {
     @ViewBuilder
     private var mainImage: some View {
         ZStack(alignment: .bottomTrailing) {
-            if let data = displayedImage?.data, let img = platformImage(from: data) {
-                img
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+            if let displayed = displayedImage, displayed.hasRenderableCoverData {
+                DecodedStoredImage(image: displayed, maxPixels: DecodedStoredImage<Color>.panelPixels) {
+                    Color(hue: placeholderHue,
+                          saturation: 0.4,
+                          brightness: theme.mode == .dark ? 0.26 : 0.88)
+                }
                     .frame(maxWidth: .infinity)
                     .frame(height: 220)
                     .clipped()
@@ -118,10 +120,8 @@ struct DetailImageStrip: View {
             previewImageID = image.persistentModelID
         } label: {
             ZStack(alignment: .bottomTrailing) {
-                if let data = image.data, let img = platformImage(from: data) {
-                    img
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+                if image.hasRenderableCoverData {
+                    DecodedStoredImage(image: image, maxPixels: DecodedStoredImage<Color>.thumbnailPixels) { theme.borderSubtle }
                         .frame(width: 52, height: 52)
                         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 } else {
@@ -199,13 +199,4 @@ struct DetailImageStrip: View {
         await MainActor.run { addImage(data: data) }
     }
 
-    private func platformImage(from data: Data) -> Image? {
-        #if os(macOS)
-        guard let ns = NSImage(data: data) else { return nil }
-        return Image(nsImage: ns)
-        #else
-        guard let ui = UIImage(data: data) else { return nil }
-        return Image(uiImage: ui)
-        #endif
-    }
 }
