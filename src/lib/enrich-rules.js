@@ -1,9 +1,9 @@
 /**
  * Rule-based text enrichment for Stello.
  *
- * Ports the keyword dictionaries and platform maps from the archived
- * scripts/archive/enrich.py + scripts/archive/analyze.py so capture-time
- * enrichment in api/capture.js matches what the Python pipeline produced.
+ * Keyword dictionaries and platform maps (first ported from the old Python
+ * enrich/analyze scripts, now removed) used by capture-time enrichment in
+ * src/routes/capture.js.
  *
  * Pure string matching — no network calls, safe to run synchronously
  * inside the capture handler.

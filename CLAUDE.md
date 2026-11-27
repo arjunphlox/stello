@@ -35,7 +35,7 @@ Two layers:
 
 ## Architecture
 
-Vanilla HTML/CSS/JS frontend, a single Cloudflare Worker (Hono) for accounts, data API, capture/enrichment + image serving, Cloudflare D1 for data + accounts, and R2 for image bytes. Supabase was removed on 2026-11-07 (`docs/plans/cloudflare-storage.md`); the Apple apps keep their own SwiftData + CloudKit copy, synced with D1. Minimal build step (asset allowlist copy only, no framework).
+Vanilla HTML/CSS/JS frontend, a single Cloudflare Worker (Hono) for accounts, data API, capture/enrichment + image serving, Cloudflare D1 for data + accounts, and R2 for image bytes. Supabase was removed on 2026-11-07; the Apple apps keep their own SwiftData + CloudKit copy, synced with D1. Minimal build step (asset allowlist copy only, no framework).
 
 - **Frontend**: `index.html` (masonry grid), `detail.html` (item detail view), `app.js` (client logic), `style.css`, `auth-client.js` (auth + session helpers).
 - **Worker**: one Hono Worker (`src/index.js`) serves the static frontend (`dist/`) + all `/api/*` routes (`src/routes/*`) + `/img/*` R2 image serving + a daily Cron Trigger. Endpoints ported from the old Vercel fns via `src/lib/adapter.js`. Image bytes live in R2 (`src/lib/storage.js`), served back at `/img/<key>` (zero egress); WebP conversion via the CF Images binding (`src/lib/images.js`). All auth-gated via `src/lib/common.js` → `src/lib/auth.js`.
@@ -72,17 +72,16 @@ Items have weighted tags across categories: `format`, `domain`, `style`, `subjec
 
 ## Content Structure
 
-Items stored as markdown files in `_items/` directory with YAML frontmatter metadata. Indexed in `index.json`. Topic collections live under `cosmos/` as `.md` files and themed sub-directories (e.g., `cosmos/Figma.md`, `cosmos/Typography/`) — content only, not consumed by the app.
+Items live in D1 (web) and SwiftData + CloudKit (Apple). Moving to a user-owned folder of Markdown files: `docs/plans/folder-engine.md`, format in `src/lib/folder-format.js`, export via `scripts/export-folder.mjs`. The old `cosmos/` topic notes moved out of the repo into iCloud Drive/Stello on 2026-11-27.
 
 ## Maintenance Scripts
 
-- `python3 scripts/link_check.py run` / `scripts/refetch.py run` — read a local `_items/` mirror, which nothing writes since Supabase was removed (see BACKLOG)
-- Archived: `scripts/archive/analyze.py`, `scripts/archive/enrich.py`, `scripts/archive/vision_enrich.py` — superseded by `src/routes/capture.js` + `src/routes/enrich.js`; enrichment now happens at capture time in the Worker flow
+- `node scripts/export-folder.mjs --out <folder>` — read-only export of the library into the folder format (pairs through /pair.html)
 
 ## Active Work
 - [ ] **Desktop-context follow-ups** — e2e smoke (BACKLOG), cards UI scoping (BACKLOG). V1 pipeline shipped 2026-06-17.
 - [~] **Native Apple app** (`apple/Stello`) — foundations shipped (Sprints 0-2 + refinement): local-first SwiftData+CloudKit, on-device Foundation Models enrichment, capture + Share Extension, masonry/weeks/search/filters/detail/themes, web-faithful macOS chrome. Refinement ongoing; data migration (Sprint 3) + real-device AI verification pending.
-- [x] **Native quick-wins sprint** — SHIPPED (PR #30, 2026-07-06): revisit tracking, why-saved→intent facet, awaiting-review strip, search-over-everything, deterministic PageClassifier at capture. Built by Cursor/Composer, review-fixed by Claude Code (Opus orchestrator + Sonnet 5 sub-agents, `docs/plans/pr30-fix-round.md`) — 8/9 review findings closed, 1 acceptable partial; residual minors in BACKLOG. Next from the possibilities analysis: kind-dispatched AI enrichment + typed Highlights (BACKLOG, gated on real-device AFM verification).
+- [x] **Native quick-wins sprint** — SHIPPED (PR #30, 2026-07-06): revisit tracking, why-saved→intent facet, awaiting-review strip, search-over-everything, deterministic PageClassifier at capture. Built by Cursor/Composer, review-fixed by Claude Code — 8/9 review findings closed, 1 acceptable partial; residual minors in BACKLOG. Next: kind-dispatched AI enrichment + typed Highlights (BACKLOG, gated on real-device AFM verification).
 
 ## Decisions Log
 
