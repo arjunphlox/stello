@@ -10,13 +10,15 @@
  *   --token <t>       device token (or STELLO_TOKEN); default: pair now
  *   --no-covers       skip fetching og:image covers for new links
  *   --concurrency <n> parallel cover fetches and uploads (default 20)
+ *   --collections <m> new (default): new items get their note name as a collection tag;
+ *                     none: no collection tags; all: existing items gain missing ones too
  *
  * What it does:
  *   - Reads every note: table notes ("| Item | Source URL |"), card notes ("## 1. Title"
  *     with image, caption, tags, source) and "[View Image](images/x)" rows.
  *   - Each note's name becomes a `collection` tag (same slug style as the library's).
- *   - A link already in the library (normalised URL) only gains the collection tag.
- *     A new link becomes a plain link item (the Mac app gives it a kind, from its own
+ *   - A link already in the library (normalised URL) is left alone (with --collections all
+ *     it gains the collection tag). A new link becomes a plain link item (the Mac app gives it a kind, from its own
  *     IP, as for any web save). A note image with no link becomes an image item; the
  *     same image file in two notes is one item.
  *   - New items get their note image as cover, or else the page's og:image, fetched in
@@ -40,6 +42,7 @@ if (!args.dir) die('Pass --dir "<Cosmos folder>".');
 const DIR = resolve(String(args.dir).replace(/^~(?=$|\/)/, homedir()));
 const BASE = (args.base || 'https://stello.arjunphlox.workers.dev').replace(/\/$/, '');
 const APPLY = !!args.apply;
+const COLLECTIONS = ['new', 'none', 'all'].includes(args.collections) ? args.collections : 'new';
 const CONC = Math.max(1, Math.min(48, parseInt(args.concurrency || '20', 10) || 20));
 const t0 = Date.now();
 
@@ -113,11 +116,11 @@ async function main() {
       const tags = Array.isArray(hit.tags) ? hit.tags : [];
       const have = new Set(tags.filter((t) => t.category === 'collection').map((t) => t.tag));
       const add = [...r.collections].filter((c) => !have.has(c));
-      if (add.length) updates.push({ item: hit, tags: [...tags, ...add.map((tag) => ({ tag, category: 'collection', weight: 0.9 }))] });
+      if (add.length && COLLECTIONS === 'all') updates.push({ item: hit, tags: [...tags, ...add.map((tag) => ({ tag, category: 'collection', weight: 0.9 }))] });
     }
     const summary = {
       notes: notes.length, entries: entries.length, distinct: records.length,
-      already_in_library: records.length - fresh.length, gain_collection_tag: updates.length,
+      collections: COLLECTIONS, already_in_library: records.length - fresh.length, gain_collection_tag: updates.length,
       new_items: fresh.length, new_links: fresh.filter((r) => r.url).length, new_images: fresh.filter((r) => !r.url).length,
     };
     log(JSON.stringify(summary));
@@ -165,7 +168,7 @@ function newItem(r, iso, now) {
   const title = (r.title || domain || 'Cosmos image').slice(0, 300);
   const summary = r.caption ? r.caption.slice(0, 200) : null;
   const tags = [
-    ...[...r.collections].map((tag) => ({ tag, category: 'collection', weight: 0.9 })),
+    ...(COLLECTIONS === 'none' ? [] : [...r.collections].map((tag) => ({ tag, category: 'collection', weight: 0.9 }))),
     ...[...r.tags].slice(0, 8).map((tag) => ({ tag: tag.toLowerCase(), category: 'subject', weight: 0.6 })),
   ];
   if (!r.url) tags.push({ tag: 'image-upload', category: 'format', weight: 0.4 });
