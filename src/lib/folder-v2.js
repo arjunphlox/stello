@@ -73,6 +73,14 @@ export function normaliseUrl(url) {
   return s;
 }
 
+/** Looser key for organisations: "Colophon Foundry" and "Colophon" match. */
+const ORG_WORDS = /\b(type foundry|typefoundry|foundry|type|studio|design co|design|co|inc|ltd|llc)\b/g;
+export function coreKey(name) {
+  const k = nameKey(name).replace(ORG_WORDS, ' ').replace(/\s+/g, ' ').trim();
+  return k.length >= 3 ? k : nameKey(name);
+}
+const fileName = (name, fallback) => safeName(nameKey(name).replace(/ /g, '-'), fallback);
+
 const entityId = (type, name) => `${type}-${safeName(nameKey(name).replace(/ /g, '-'), 'x')}`;
 
 /** items/<YYYY>/<MM>/<name>.md from the item's added date. */
@@ -170,7 +178,11 @@ export function convertV1(files) {
   const places = new Map();
   const collections = new Map();
   const aliasIndex = new Map(); // nameKey → people entity
-  const addPersonKey = (e, name) => { const k = nameKey(name); if (k && !aliasIndex.has(k)) aliasIndex.set(k, e); };
+  const coreIndex = new Map(); // coreKey → people entity (organisations)
+  const addPersonKey = (e, name) => {
+    const k = nameKey(name); if (k && !aliasIndex.has(k)) aliasIndex.set(k, e);
+    const c = coreKey(name); if (c && !coreIndex.has(c)) coreIndex.set(c, e);
+  };
 
   for (const f of parsed) {
     const h = f.header;
@@ -189,6 +201,14 @@ export function convertV1(files) {
     // "shakthiharinv / shaktype" → try each part as an alias of a known person.
     const parts = clean.split(/\s+\/\s+|\s*\(([^)]*)\)\s*/).filter(Boolean);
     for (const p of [clean, ...parts]) { const hit = aliasIndex.get(nameKey(p)); if (hit) return hit; }
+    for (const p of [clean, ...parts]) {
+      const hit = coreIndex.get(coreKey(p));
+      if (hit && hit.kind !== 'individual') {
+        if (nameKey(p) !== nameKey(hit.name) && !hit.aliases.some((a) => nameKey(a) === nameKey(p))) hit.aliases.push(p);
+        aliasIndex.set(nameKey(p), hit);
+        return hit;
+      }
+    }
     const kind = (raw && typeof raw === 'object' && raw.kind) || fallbackKind || 'individual';
     const e = { id: entityId('person', parts[0] || clean), name: parts[0] || clean, kind, aliases: parts.slice(1).filter((a) => nameKey(a) !== nameKey(parts[0])) };
     people.set(nameKey(e.name), e);
@@ -251,7 +271,7 @@ export function convertV1(files) {
         const v = meta[key];
         if (v && (typeof v === 'string' || v.name)) { addPerson(personRef(v, key === 'brand' ? 'brand' : 'individual'), role); delete meta[key]; }
       }
-      for (const [key, role, kind] of [['typeDesigner', 'designer', 'individual'], ['typeFoundry', 'foundry', 'foundry']]) {
+      for (const [key, role, kind] of [['typeDesigner', 'designer', 'individual'], ['typeFoundry', 'foundry', 'foundry'], ['distributedOn', 'distributor', 'foundry']]) {
         const v = meta[key];
         const list = (Array.isArray(v) ? v : [v]).filter((x) => typeof x === 'string' ? x.trim() : x && x.name);
         if (v && list.length && list.length === (Array.isArray(v) ? v.length : 1)) {
@@ -273,6 +293,7 @@ export function convertV1(files) {
     const first = key && byUrl.get(key);
     if (!first) { if (key) byUrl.set(key, r); kept.push(r); continue; }
     report.merged_urls++;
+    (report.merges ||= []).push({ url: key, items: [first.h.id, r.h.id], titles: [first.h.title, r.h.title], urls: [first.h.url, r.h.url] });
     const [older, newer] = String(first.h.added || '') <= String(r.h.added || '') ? [first, r] : [r, first];
     for (const [cat, tags] of Object.entries(newer.tags)) {
       older.tags[cat] = older.tags[cat] || {};
@@ -310,7 +331,7 @@ export function convertV1(files) {
   const peopleOut = [];
   for (const r of kept) {
     const oldName = r.f.path.split('/').pop().replace(/\.md$/, '');
-    const path = r.isPerson ? unique(`people/${oldName}.md`) : unique(itemPathV2(r.h.added, oldName));
+    const path = r.isPerson ? unique(`people/${fileName(r.h.title || oldName, oldName)}.md`) : unique(itemPathV2(r.h.added, oldName));
     moves[r.f.path] = path;
     for (const p of r.mergedFrom || []) moves[p] = path;
     const from = depthOf(r.f.path);
@@ -348,12 +369,12 @@ export function convertV1(files) {
   const fromItems = new Set(peopleOut.map((p) => p.id));
   for (const e of people.values()) {
     if (fromItems.has(e.id)) continue;
-    const path = unique(`people/${safeName(nameKey(e.name).replace(/ /g, '-'), e.id)}.md`);
+    const path = unique(`people/${fileName(e.name, e.id)}.md`);
     const h = { id: e.id, name: e.name, kind: e.kind, aliases: e.aliases };
     peopleOut.push({ id: e.id, path, header: h, body: '', text: headerToText(h, '', ENTITY_FIELDS) });
   }
   const simple = (map, dir) => [...map.values()].map((e) => {
-    const path = unique(`${dir}/${safeName(nameKey(e.name).replace(/ /g, '-'), e.id)}.md`);
+    const path = unique(`${dir}/${fileName(e.name, e.id)}.md`);
     const h = { id: e.id, name: e.name, kind: e.kind, aliases: e.aliases, ...(e.tag ? { tag: e.tag } : {}) };
     return { id: e.id, path, header: h, body: '', text: headerToText(h, '', ENTITY_FIELDS) };
   });

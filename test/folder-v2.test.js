@@ -90,6 +90,23 @@ test('v1 library converts to v2 with entities, references and no duplicates', ()
   assert.equal(out.moves['items/2026/some-face-dup.md'], 'items/2026/03/some-face.md');
 });
 
+test('organisations match by core name, people files are named from the name', () => {
+  const files = [
+    { id: 'c1', slug: 'colophon', title: 'Colophon', kind: 'foundry', added_at: '2026-07-01T00:00:00Z', tags: [], images: [] },
+    { id: 'd1', slug: 'danie-l-van-der-winden', title: 'Daniël van der Winden', kind: 'individual', added_at: '2026-07-01T00:00:00Z', tags: [], images: [] },
+    { id: 'x1', slug: 'apercu', title: 'Apercu', kind: 'typeface', source_url: 'https://myfonts.com/apercu', added_at: '2026-07-06T00:00:00Z',
+      metadata: { typeFoundry: 'Colophon Foundry', distributedOn: [{ kind: 'foundry', name: 'MyFonts', slug: 'myfonts' }] }, tags: [], images: [] },
+  ].map(v1);
+  const out = convertV1(files);
+  assert.deepEqual(verifyConversion(files, out), []);
+  assert.ok(out.people.find((p) => p.path === 'people/daniel-van-der-winden.md'));
+  const colophon = out.people.find((p) => p.id === 'c1');
+  assert.deepEqual(colophon.header.aliases, ['Colophon Foundry']);
+  const apercu = out.items.find((i) => i.id === 'x1');
+  assert.deepEqual(apercu.header.people, [{ id: 'c1', role: 'foundry' }, { id: 'person-myfonts', role: 'distributor' }]);
+  assert.equal(out.people.length, 3);
+});
+
 test('canvases follow the moves', () => {
   const c = remapCanvas({ nodes: [{ id: 'a', type: 'file', file: 'items/2026/x.md' }, { id: 'b', type: 'text', text: 'hi' }], edges: [] }, { 'items/2026/x.md': 'items/2026/03/x.md' });
   assert.equal(c.nodes[0].file, 'items/2026/03/x.md');
