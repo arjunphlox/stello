@@ -12,16 +12,17 @@ const page = `<html><head>
 </head><body><p>Hello</p></body></html>`;
 
 test('read turns a page into a folder-v2 header without fetching when html is given', async () => {
-  const r = await read({ url: 'https://www.example.com/apercu', html: page, status: 200, collectionLabels: ['type-foundries'], net: noNet });
+  const r = await read({ url: 'https://www.example.com/apercu', html: page, status: 200, collectionLabels: ['figma', 'vancouver'], net: noNet });
   assert.equal(r.title, 'Apercu by Colophon');
   assert.equal(r.site, 'example.com');
   assert.equal(r.kind, 'link');
   assert.equal(r.tags.format.website, 0.4);
   assert.equal(r.tags.style.minimalist, 0.65);
-  assert.equal(r.tags.collection, undefined, 'collections are references, not tags');
+  assert.equal(r.tags.collection, undefined, 'collections are retired');
+  assert.equal(r.tags.tool.figma, 0.6, 'an old collection label folds into a tag');
   assert.equal(r.tags.location, undefined, 'places are references, not tags');
-  assert.deepEqual(r.collections, ['Type Foundries']);
-  assert.ok(r.places.some((p) => p.kind === 'country'));
+  assert.equal(r.collections, undefined);
+  assert.ok(r.places.some((p) => p.name === 'Vancouver' && p.kind === 'country'));
   assert.deepEqual(r.images, [{ url: 'https://www.example.com/og.png', source: 'og', is_primary: true }]);
   assert.equal(r.engine, 1);
 });

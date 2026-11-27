@@ -15,6 +15,7 @@
  * user-run Enrich (never on capture or import). Pure except for the injected `callModel`.
  */
 import * as Tool from './tool.js';
+import { classifierHints } from '../collection-map.js';
 import * as Book from './book.js';
 import * as Course from './course.js';
 import * as Article from './article.js';
@@ -121,11 +122,11 @@ const clip = (s, n) => String(s).slice(0, n);
 const blank = (s) => s == null || !String(s).trim();
 const cleanStr = (s) => (typeof s === 'string' && s.trim() ? s.trim() : null);
 
-/** Collection labels (wishlist, digital-tools, …) and the other tag names of an item. */
+/** Classifier hint labels (wishlist, education, …) and the other tag names of an item. */
 function tagNames(tags) {
   const list = Array.isArray(tags) ? tags : [];
   return {
-    labels: list.filter((t) => t && t.category === 'collection').map((t) => t.tag),
+    labels: classifierHints(list),
     others: list.filter((t) => t && t.category !== 'collection').map((t) => t.tag),
   };
 }

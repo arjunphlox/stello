@@ -53,3 +53,8 @@ test('helpers', () => {
   assert.equal(collectionSlug('Digital Tools'), 'digital-tools');
   assert.equal(collectionSlug('Apple OS 26'), 'apple-os-26');
 });
+
+test('"| Item | Source |" tables and escaped pipes in titles', () => {
+  const out = parseNote('# Typography\n| Item | Source |\n|---|---|\n| CMYK Halftone \\| Figma | https://figma.com/x |\n| Plain | [link](https://a.com/b) |', 'Typography');
+  assert.deepEqual(out.map((e) => [e.title, e.url]), [['CMYK Halftone | Figma', 'https://figma.com/x'], ['Plain', 'https://a.com/b']]);
+});

@@ -22,13 +22,13 @@ const TOOLS = [
   {
     name: 'search_library',
     title: 'Search my Stello library',
-    description: 'Search the saves in Stello by words, kind, tag/collection or colour. Returns slim items with title, kind, source, tags, colours and image URL.',
+    description: 'Search the saves in Stello by words, kind, tag or colour. Returns slim items with title, kind, source, tags, colours and image URL.',
     inputSchema: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Words to match in title, source, tags and summary' },
         kind: { type: 'string', description: `One of: ${KINDS.join(', ')}` },
-        tag: { type: 'string', description: 'A tag or collection name' },
+        tag: { type: 'string', description: 'A tag name' },
         colour: { type: 'string', description: 'A colour name (e.g. "cobalt blue") or #hex' },
         limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
       },
@@ -167,7 +167,7 @@ async function callTool(env, userId, origin, name, args = {}) {
     }
     case 'get_item': {
       const it = (await lib()).find((i) => i.slug === args.slug);
-      return it ? text({ ...brief(it), author: it.author, added_at: it.added_at, collections: it.collections, all_tags: it.tags }) : toolError(`No save with slug "${args.slug}".`);
+      return it ? text({ ...brief(it), author: it.author, added_at: it.added_at, all_tags: it.tags }) : toolError(`No save with slug "${args.slug}".`);
     }
     case 'related_items': {
       const all = await lib();

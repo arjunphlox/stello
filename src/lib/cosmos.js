@@ -3,7 +3,7 @@
  * iCloud Drive/Stello/Cosmos). Pure: text in, entries out.
  *
  * Three shapes appear:
- *   tables  "| Item | Source URL |" (or "| # | Title | URL |"), bare or [md](links),
+ *   tables  "| Item | Source URL |", "| Item | Source |" or "| # | Title | URL |", bare or [md](links),
  *           sometimes scheme-less, sometimes "[View Image](images/x.webp)" instead of a URL
  *   cards   "## 1. Title" / "### 1. Title" with an image embed, "> caption",
  *           **Type:**, **Tags:** `a`, `b`, and **Source:** [url](url) or [Source](url)
@@ -32,9 +32,12 @@ const imageIn = (s) => {
   return m && !/^https?:/i.test(m[1]) ? m[1].trim() : null;
 };
 
+/** Cells of a table row; an escaped "\\|" inside a cell is text, not a divider. */
 function splitRow(line) {
-  return line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+  return line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '')
+    .split(/(?<!\\)\|/).map((c) => c.replace(/\\\|/g, '|').trim());
 }
+const URL_HEADS = ['source url', 'url', 'source', 'link'];
 
 export function parseNote(text, collection) {
   const out = [];
@@ -47,8 +50,8 @@ export function parseNote(text, collection) {
     const cells = splitRow(line);
     if (cells.every((c) => /^:?-{2,}:?$/.test(c) || c === '')) continue; // separator
     const lower = cells.map((c) => c.toLowerCase());
-    if (!cols && (lower.includes('source url') || lower.includes('url'))) {
-      cols = { title: lower.findIndex((c) => c === 'item' || c === 'title'), url: lower.findIndex((c) => c === 'source url' || c === 'url') };
+    if (!cols && lower.some((c) => URL_HEADS.includes(c))) {
+      cols = { title: lower.findIndex((c) => c === 'item' || c === 'title' || c === 'name'), url: lower.findIndex((c) => URL_HEADS.includes(c)) };
       continue;
     }
     if (!cols) continue;

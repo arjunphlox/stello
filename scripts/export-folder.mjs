@@ -104,7 +104,7 @@ async function main() {
     }
 
     // 3. Item files: v1 text in memory (round-trip checked), then the v2 conversion
-    //    (people, places, collections by id; month folders), then write.
+    //    (people and places by id; collections folded into kinds/tags; month folders), then write.
     log('Building item files…');
     const report = { written: 0, unchanged: 0, roundTripErrors: [] };
     const v1 = [];
@@ -117,13 +117,14 @@ async function main() {
     const out = convertV1(v1);
     const problems = verifyConversion(v1, out);
     if (problems.length) die(`v2 checks failed, nothing written:\n  ${problems.slice(0, 40).join('\n  ')}`);
-    const v2files = [...out.items, ...out.people, ...out.places, ...out.collections];
-    log(`Writing ${v2files.length} files (${out.items.length} items, ${out.people.length} people, ${out.places.length} places, ${out.collections.length} collections)…`);
+    const v2files = [...out.items, ...out.people, ...out.places];
+    log(`Writing ${v2files.length} files (${out.items.length} items, ${out.people.length} people, ${out.places.length} places; ${out.report.collections_folded} items had collections folded)…`);
     for (const e of v2files) (await writeIfChanged(join(OUT, e.path), e.text)) ? report.written++ : report.unchanged++;
     // Files from an earlier export that this run didn't produce (a deleted save, a renamed
     // person) are listed, never deleted.
     const produced = new Set(v2files.map((e) => e.path));
     const stale = [];
+    // collections/ is listed too: collections were retired, so any file there is stale.
     for (const dir of ['items', 'people', 'places', 'collections']) {
       for (const abs of await walkMd(join(OUT, dir))) { const rel = abs.slice(OUT.length + 1); if (!produced.has(rel)) stale.push(rel); }
     }
@@ -155,7 +156,7 @@ async function main() {
       version: FORMAT_VERSION_2,
       exported_at: new Date().toISOString(),
       exported_from: BASE,
-      counts: { items: out.items.length, people: out.people.length, places: out.places.length, collections: out.collections.length, images: img.total - img.failed.length, canvases },
+      counts: { items: out.items.length, people: out.people.length, places: out.places.length, images: img.total - img.failed.length, canvases },
       layout: LAYOUT_V2,
     };
     await writeIfChanged(join(OUT, 'stello.json'), JSON.stringify(info, null, 2) + '\n');
@@ -168,7 +169,7 @@ async function main() {
       images: { total: img.total, downloaded: img.done, already_there: img.skipped, failed: img.failed.length },
       canvases,
       round_trip_errors: report.roundTripErrors.length,
-      v2: { items: out.items.length, people: out.people.length, places: out.places.length, collections: out.collections.length, merged_urls: out.report.merged_urls },
+      v2: { items: out.items.length, people: out.people.length, places: out.places.length, collections_folded: out.report.collections_folded, merged_urls: out.report.merged_urls },
       stale_files: stale.length,
     };
     await writeFile(join(OUT, 'export-report.json'), JSON.stringify({ ...summary, failed_images: img.failed, round_trip: report.roundTripErrors, stale, merges: out.report.merges || [] }, null, 2) + '\n');

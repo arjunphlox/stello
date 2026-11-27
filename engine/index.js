@@ -3,7 +3,7 @@
  * item, with no storage of its own. Plan: docs/plans/folder-engine.md (phase 1).
  *
  *   read(input)        page → item header in folder-v2 shape (kind, typed meta, rule tags,
- *                      people/places/collections as names for the caller to resolve)
+ *                      people/places as names for the caller to resolve)
  *   ruleTags(...)      the capture-time tag rules (format, domain, subjects, tools, styles…)
  *   related(...)       Layer 1 "related" rules (same colour/style/idea/place/kind/source)
  *   normaliseUrl, nameKey, splitRefs, cleanBody   dedupe and reference helpers
@@ -17,6 +17,7 @@ import rules from '../src/lib/enrich-rules.js';
 import { readPage, makeNet, MAX_HTML_BYTES } from '../src/lib/readers/pipeline.js';
 import { groupTags } from '../src/lib/folder-format.js';
 import { splitRefs, normaliseUrl, nameKey, cleanBody, titleFromTag } from '../src/lib/folder-v2.js';
+import { foldCollections } from '../src/lib/collection-map.js';
 
 export { readPage, makeNet, MAX_HTML_BYTES };
 export { related, layer1, search, slimItem, colourHex, COLOR_MAP } from '../src/lib/library.js';
@@ -41,18 +42,23 @@ export const MIN_CONFIDENCE = 0.7;
  *   url, kind, title, site, summary, status,
  *   tags: { category: { tag: weight } }, meta,
  *   images: [{ url, source, is_primary }], image_fallbacks: [url],
- *   people: [{ name, role, kind }], places: [{ name, kind }], collections: [name],
+ *   people: [{ name, role, kind }], places: [{ name, kind }],
  *   text, confidence, signal, engine
  * }
- * people/places/collections are names: the caller matches them to its own entity
+ * collectionLabels (old collection names, e.g. from an import) are classifier hints and
+ * fold into a kind, place or tag (src/lib/collection-map.js); there are no collections.
+ * people/places are names: the caller matches them to its own entity
  * files (nameKey + aliases) and stores ids.
  */
 export async function read({ url, html = null, status = null, finalURL = null, collectionLabels = [], fetchPage = true, net = makeNet(), now = new Date() } = {}) {
   const page = await readPage({ url, html, status, finalURL, collectionLabels, fetchPage, net, now });
   const trusted = page.kind !== 'link' && (page.confidence ?? 0) >= MIN_CONFIDENCE;
-  const kind = trusted ? page.kind : 'link';
-  const tags = groupTags(ruleTags({ title: page.title, domain: page.domain, description: page.summary || '', url: page.sourceURL || url }));
-  for (const label of collectionLabels) (tags.collection ||= {})[label] = 0.9;
+  const folded = foldCollections({
+    kind: trusted ? page.kind : 'link',
+    tags: ruleTags({ title: page.title, domain: page.domain, description: page.summary || '', url: page.sourceURL || url }),
+  }, collectionLabels);
+  const kind = folded.kind;
+  const tags = groupTags(folded.tags);
   const meta = trusted && page.metadata && typeof page.metadata === 'object' ? JSON.parse(JSON.stringify(page.metadata)) : null;
   const refs = splitRefs({ tags, meta });
   const people = refs.people.map((p) => ({ name: typeof p.raw === 'string' ? p.raw.trim() : p.raw.name.trim(), role: p.role, kind: p.kind }));
@@ -71,7 +77,6 @@ export async function read({ url, html = null, status = null, finalURL = null, c
     image_fallbacks: imgs.fallbacks || [],
     people,
     places,
-    collections: refs.collections.map(titleFromTag),
     text: page.extractedText || null,
     confidence: page.confidence ?? 0,
     signal: page.signal || null,

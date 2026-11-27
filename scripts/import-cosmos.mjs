@@ -10,24 +10,30 @@
  *   --token <t>       device token (or STELLO_TOKEN); default: pair now
  *   --no-covers       skip fetching og:image covers for new links
  *   --concurrency <n> parallel cover fetches and uploads (default 20)
- *   --collections <m> new (default): new items get their note name as a collection tag;
- *                     none: no collection tags; all: existing items gain missing ones too
+ *   --work-notes <m>  canvas (default, Arjun's pick) | tag | drop: the notes named after
+ *                     Arjun's own work (Aampe, Huegrid, Huegrid Gifts, Scapia, SOTS, Small
+ *                     Wins). canvas: each becomes a named canvas project holding all its
+ *                     items, old and new (skipped if a project of that name exists).
  *
  * What it does:
  *   - Reads every note: table notes ("| Item | Source URL |"), card notes ("## 1. Title"
  *     with image, caption, tags, source) and "[View Image](images/x)" rows.
- *   - Each note's name becomes a `collection` tag (same slug style as the library's).
- *   - A link already in the library (normalised URL) is left alone (with --collections all
- *     it gains the collection tag). A new link becomes a plain link item (the Mac app gives it a kind, from its own
- *     IP, as for any web save). A note image with no link becomes an image item; the
+ *   - Collections are retired: each note's name folds into a kind, place or tag
+ *     (src/lib/collection-map.js, the list Arjun approved). No collection tags are written.
+ *   - A link already in the library (normalised URL) is left alone. A new link takes the
+ *     kind its note names (Websites → website, …) or else stays a plain link for the Mac
+ *     app to sort, from its own IP, as for any web save. A note image with no link becomes an image item; the
  *     same image file in two notes is one item.
  *   - New items get their note image as cover, or else the page's og:image, fetched in
  *     parallel from this machine. No AI and no serial page reads (import speed rule).
  *   - Writes go through /api/sync/push (100 per request), so every app pulls them as
  *     normal edits. Images go to /api/sync/image (content-addressed).
+ *   - Before the import, every library item's collection tags fold the same way (a kind
+ *     only on plain links). The items' before-state is saved to
+ *     ~/Documents/Stello-backups/collections-before-<date>.json first. --no-fold skips it.
  * Re-running is safe: items it made are found by URL or image hash and left alone.
  */
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve, dirname, extname, basename } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
@@ -36,13 +42,15 @@ import { createHash, randomUUID } from 'node:crypto';
 import { normaliseUrl } from '../src/lib/folder-v2.js';
 import { parseNote, collectionSlug } from '../src/lib/cosmos.js';
 import { ruleTags } from '../engine/index.js';
+import { foldCollections } from '../src/lib/collection-map.js';
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.dir) die('Pass --dir "<Cosmos folder>".');
 const DIR = resolve(String(args.dir).replace(/^~(?=$|\/)/, homedir()));
 const BASE = (args.base || 'https://stello.arjunphlox.workers.dev').replace(/\/$/, '');
 const APPLY = !!args.apply;
-const COLLECTIONS = ['new', 'none', 'all'].includes(args.collections) ? args.collections : 'new';
+const WORK_NOTES = new Set(['aampe', 'huegrid', 'huegrid-gifts', 'scapia', 'sots', 'small-wins']);
+const WORK = ['tag', 'drop'].includes(args['work-notes']) ? args['work-notes'] : 'canvas';
 const CONC = Math.max(1, Math.min(48, parseInt(args.concurrency || '20', 10) || 20));
 const t0 = Date.now();
 
@@ -86,6 +94,7 @@ async function main() {
     r.title ||= e.title; r.caption ||= e.caption; r.imageAbs ||= e.imageAbs && existsSync(e.imageAbs) ? e.imageAbs : null;
     e.tags.forEach((t) => r.tags.add(t));
     r.collections.add(collectionSlug(e.collection));
+    (r.noteNames ||= new Map()).set(collectionSlug(e.collection), e.collection);
     byKey.set(key, r);
   }
   const records = [...byKey.values()];
@@ -108,23 +117,59 @@ async function main() {
     const byImage = new Map();
     for (const i of live) for (const img of i.images || []) { const m = /\/sync\/([0-9a-f]{64})\./.exec(img.path || ''); if (m) byImage.set(m[1], i); }
 
-    const updates = [];
+    // Existing items: fold their collection tags (collections are retired).
+    const folds = [];
+    const foldKinds = {};
+    if (!args['no-fold']) {
+      for (const i of live) {
+        const tags = Array.isArray(i.tags) ? i.tags : [];
+        if (!tags.some((t) => t && t.category === 'collection')) continue;
+        const f = foldCollections({ kind: i.kind, tags });
+        const fields = { tags: f.tags };
+        if (f.kind !== i.kind) { fields.kind = f.kind; foldKinds[`${i.kind || 'none'}→${f.kind}`] = (foldKinds[`${i.kind || 'none'}→${f.kind}`] || 0) + 1; }
+        folds.push({ item: i, fields, unknown: f.unknown });
+      }
+    }
     const fresh = [];
     for (const r of records) {
       const hit = r.key.startsWith('u:') ? byUrl.get(r.key.slice(2)) : byImage.get(r.key.slice(2));
-      if (!hit) { fresh.push(r); continue; }
-      const tags = Array.isArray(hit.tags) ? hit.tags : [];
-      const have = new Set(tags.filter((t) => t.category === 'collection').map((t) => t.tag));
-      const add = [...r.collections].filter((c) => !have.has(c));
-      if (add.length && COLLECTIONS === 'all') updates.push({ item: hit, tags: [...tags, ...add.map((tag) => ({ tag, category: 'collection', weight: 0.9 }))] });
+      if (hit) { r.slug = hit.slug; continue; }
+      r.id = randomUUID();
+      fresh.push(r);
     }
+    // Work notes → one canvas project each, holding every item in the note.
+    const projects = new Map(); // note slug → { name, slugs: [] }
+    if (WORK === 'canvas') {
+      for (const r of records) for (const c of r.collections) {
+        if (!WORK_NOTES.has(c)) continue;
+        if (!projects.has(c)) projects.set(c, { name: r.noteNames.get(c), slugs: [] });
+        projects.get(c).slugs.push(r);
+      }
+    }
+    const iso = new Date().toISOString();
+    const built = fresh.map((r) => newItem(r, iso, Date.now()));
+    const kinds = {};
+    for (const c of built) kinds[c.fields.kind || 'image'] = (kinds[c.fields.kind || 'image'] || 0) + 1;
+    const unknown = [...new Set(built.flatMap((c) => c.unknown))];
     const summary = {
       notes: notes.length, entries: entries.length, distinct: records.length,
-      collections: COLLECTIONS, already_in_library: records.length - fresh.length, gain_collection_tag: updates.length,
+      already_in_library: records.length - fresh.length,
       new_items: fresh.length, new_links: fresh.filter((r) => r.url).length, new_images: fresh.filter((r) => !r.url).length,
+      new_by_kind: kinds, work_notes: WORK, notes_not_in_list: unknown,
+      work_canvases: Object.fromEntries([...projects.values()].map((p) => [p.name, p.slugs.length])),
+      library_items_folded: folds.length, library_kind_changes: foldKinds,
+      library_collections_not_in_list: [...new Set(folds.flatMap((f) => f.unknown))],
     };
     log(JSON.stringify(summary));
     if (!APPLY) { log('Plan only. Re-run with --apply to import.'); return; }
+
+    if (folds.length) {
+      const dir = join(homedir(), 'Documents', 'Stello-backups');
+      await mkdir(dir, { recursive: true });
+      const file = join(dir, `collections-before-${new Date().toISOString().slice(0, 10)}.json`);
+      await writeFile(file, JSON.stringify(folds.map((f) => ({ id: f.item.id, slug: f.item.slug, kind: f.item.kind, tags: f.item.tags })), null, 1));
+      log(`Saved the before-state of ${folds.length} items to ${file}`);
+    }
 
     // 4. Covers: the note's image, else the page's og:image (parallel, short timeout).
     let covers = 0, coverMiss = 0;
@@ -141,12 +186,11 @@ async function main() {
     }, (n) => n % 250 === 0 && log(`  covers ${n}/${fresh.length}`));
     log(`Covers: ${covers} stored, ${coverMiss} without one.`);
 
-    // 5. Push.
+    // 5. Push (built again so covers are in).
     const now = Date.now();
-    const iso = new Date(now).toISOString();
     const changes = [
-      ...updates.map((u) => ({ id: u.item.id, fields: { tags: u.tags }, clock: now })),
-      ...fresh.map((r) => newItem(r, iso, now)),
+      ...folds.map((f) => ({ id: f.item.id, fields: f.fields, clock: now })),
+      ...fresh.map((r) => newItem(r, new Date(now).toISOString(), now)).map(({ unknown: _u, ...c }) => c),
     ];
     let applied = 0;
     for (let i = 0; i < changes.length; i += 100) {
@@ -155,31 +199,49 @@ async function main() {
       if ((i / 100) % 10 === 0) log(`  pushed ${Math.min(i + 100, changes.length)}/${changes.length}`);
     }
     log(`Done in ${Math.round((Date.now() - t0) / 1000)}s: ${applied} of ${changes.length} changes applied.`);
-    console.log(JSON.stringify({ ...summary, covers, applied, seconds: Math.round((Date.now() - t0) / 1000) }, null, 2));
+
+    // 6. Work-note canvases (a grid of cards; rearrange freely in the app).
+    let canvasesMade = 0;
+    if (projects.size) {
+      const { projects: have = [] } = await api('/api/projects');
+      const names = new Set(have.map((p) => String(p.name).toLowerCase()));
+      for (const p of projects.values()) {
+        if (names.has(p.name.toLowerCase())) { log(`  canvas "${p.name}" already exists, left alone`); continue; }
+        const cards = p.slugs.map((r, i) => ({ slug: r.slug, x: (i % 8) * 280, y: Math.floor(i / 8) * 340 }));
+        await api('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc: { name: p.name, cards } }) });
+        canvasesMade++;
+      }
+      log(`Canvases: ${canvasesMade} made.`);
+    }
+    console.log(JSON.stringify({ ...summary, covers, applied, canvases: canvasesMade, seconds: Math.round((Date.now() - t0) / 1000) }, null, 2));
   } finally {
     if (paired) await fetch(`${BASE}/api/auth/logout`, { method: 'POST', headers: { authorization: `Bearer ${token}` } }).catch(() => {});
   }
 }
 
 function newItem(r, iso, now) {
-  const id = randomUUID();
+  const id = r.id;
   let domain = null;
   try { domain = r.url ? new URL(r.url).hostname.replace(/^www\./, '') : null; } catch { /* keep null */ }
   const title = (r.title || domain || 'Cosmos image').slice(0, 300);
   const summary = r.caption ? r.caption.slice(0, 200) : null;
-  const tags = [
-    ...(COLLECTIONS === 'none' ? [] : [...r.collections].map((tag) => ({ tag, category: 'collection', weight: 0.9 }))),
-    ...[...r.tags].slice(0, 8).map((tag) => ({ tag: tag.toLowerCase(), category: 'subject', weight: 0.6 })),
-  ];
-  if (!r.url) tags.push({ tag: 'image-upload', category: 'format', weight: 0.4 });
+  const base = [...r.tags].slice(0, 8).map((tag) => ({ tag: tag.toLowerCase(), category: 'subject', weight: 0.6 }));
+  if (!r.url) base.push({ tag: 'image-upload', category: 'format', weight: 0.4 });
+  const labels = [...r.collections].filter((c) => !(WORK !== 'tag' && WORK_NOTES.has(c)));
+  const folded = foldCollections({ kind: r.url ? 'link' : null, tags: base }, labels);
+  const tags = folded.tags;
   const seen = new Set(tags.map((t) => t.tag));
   for (const t of ruleTags({ title, domain, description: summary || '', url: r.url })) if (!seen.has(t.tag)) { seen.add(t.tag); tags.push(t); }
+  // A kind the note names is Arjun's own sorting: kept, and the page sort is skipped.
+  const kind = folded.kind;
+  r.slug = `${slugify(title)}-${id.slice(0, 6)}`;
+  const status = !r.url ? 'candidates_done' : kind === 'link' ? 'awaiting_classify' : 'awaiting_ai';
   return {
     id,
     full: true,
     clock: now,
     fields: {
-      slug: `${slugify(title)}-${id.slice(0, 6)}`,
+      slug: r.slug,
       title,
       source_url: r.url || null,
       domain,
@@ -187,16 +249,17 @@ function newItem(r, iso, now) {
       body_markdown: null,
       status: 'active',
       needs_review: false,
-      kind: r.url ? 'link' : null,
-      // No AI on the import path: links wait for the Mac's rules (as any web save),
-      // images are done.
-      enrichment_status: r.url ? 'awaiting_classify' : 'candidates_done',
+      kind,
+      // No AI on the import path: plain links wait for the Mac's rules (as any web
+      // save), links with a kind from their note wait for Enrich, images are done.
+      enrichment_status: status,
       added_at: iso,
       tags,
       images: r.image ? [r.image] : [],
       snippets: [],
       metadata: null,
     },
+    unknown: folded.unknown,
   };
 }
 

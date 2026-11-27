@@ -1,7 +1,7 @@
 /* Stello canvas: the library as nodes on a zoomable canvas.
    ----------------------------------------------------------------------------
    The same items the grid shows (after search and filters), placed in broad
-   groups you can switch (collection, topic, kind, colour, style, place,
+   groups you can switch (topic, kind, colour, style, place,
    source, month). Lines say why two items belong together:
 
    Layer 1 (computed, rules only): same colour, looks alike, same idea,
@@ -70,7 +70,7 @@
     glow: 'Revisits: glow and fade',
   };
   const GROUPS = {
-    collection: 'Collection', topic: 'Topic', kind: 'Kind', colour: 'Colour', style: 'Style',
+    topic: 'Topic', kind: 'Kind', colour: 'Colour', style: 'Style',
     place: 'Place', source: 'Source', month: 'Month saved',
   };
   const PALETTE = ['#2b8a3e', '#3b5bdb', '#7048e8', '#e8590c', '#1098ad', '#c2255c', '#5c940d', '#9c36b5', '#e67700', '#0b7285', '#a61e4d', '#364fc7'];
@@ -138,7 +138,7 @@
   // (v1, auto-filled with the whole library) are cleared once: their cards,
   // groups and free notes go; links stay but show only between dropped items.
   const DOC_V = 2;
-  function blankDoc() { return { v: DOC_V, name: 'Library canvas', groupBy: 'collection', cards: [], links: [], groups: [], notes: [], dismissed: [], layers: null }; }
+  function blankDoc() { return { v: DOC_V, name: 'Library canvas', groupBy: 'kind', cards: [], links: [], groups: [], notes: [], dismissed: [], layers: null }; }
   function upgrade(d) {
     if (d.v === DOC_V) return false;
     if (curId !== 'library') { d.v = DOC_V; return false; }   // named canvases were never auto-filled
@@ -288,12 +288,10 @@
     const rows = [];
     const style = tagsOf(it, 'style', 0.4).slice(0, 4).map(t => t.tag).join(', ');
     const tags = tagsOf(it, 'subject', 0.5).filter(t => !SKIP_SUBJECT.has(t.tag)).slice(0, 5).map(t => t.tag).join(', ');
-    const coll = tagsOf(it, 'collection').slice(0, 2).map(t => t.tag).join(', ');
     const place = placeOf(it);
     const why = tagsOf(it, 'intent').slice(0, 3).map(t => cap(t.tag).toLowerCase()).join(', ');
     if (style) rows.push(['Style', style]);
     if (tags) rows.push(['Tags', tags]);
-    if (coll) rows.push(['Collection', coll]);
     if (place) rows.push(['Place', place]);
     if (why) rows.push(['Why saved', why]);
     const meta = [it.domain || App.displayLink(it) || '', kindName(it), savedLabel(it)].filter(Boolean).join(' · ');
@@ -329,7 +327,6 @@
   }
   function groupKey(it, by, topics) {
     switch (by) {
-      case 'collection': { const c = tagsOf(it, 'collection')[0]; return c ? c.tag : 'No collection'; }
       case 'topic': return topics.get(it.slug) || 'Other';
       case 'kind': return kindName(it);
       case 'colour': { const c = tagsOf(it, 'color', 0.15)[0]; return c ? c.tag : 'No colour'; }
@@ -430,7 +427,7 @@
     computeSet();
     buildIndex();
     nodes = new Map();
-    const by = doc.groupBy in GROUPS ? doc.groupBy : 'collection';
+    const by = doc.groupBy in GROUPS ? doc.groupBy : 'kind';
     const topics = by === 'topic' ? topicMap(set) : null;
     const groups = new Map();
     // Your groups stay together: every member goes where the first one goes.
@@ -1486,7 +1483,7 @@
     let said = '';
     if (!at) { const r = stageRect(); at = screenToWorld(r.left + r.width / 2, r.top + r.height / 2); }
     const near = nearestAt(at, SNAP_GAP);
-    const by = doc.groupBy in GROUPS ? doc.groupBy : 'collection';
+    const by = doc.groupBy in GROUPS ? doc.groupBy : 'kind';
     change(() => {
       let y = null;
       slugs.forEach((s, i) => {

@@ -64,7 +64,7 @@ nonisolated struct CanvasDoc: Codable, Equatable, Sendable {
 
     var v: Int? = CanvasDoc.version
     var name: String = "Library canvas"
-    var groupBy: String? = "collection"
+    var groupBy: String? = "kind"
     var cards: [Card] = []
     var links: [Link] = []
     var groups: [Group] = []

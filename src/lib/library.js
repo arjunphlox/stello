@@ -97,7 +97,6 @@ export function slimItem(row, origin = '') {
     aspect: row.cover_aspect || null,
     tags: tags.filter((t) => !['color', 'intent', 'collection'].includes(t.category)).slice(0, 12)
       .map((t) => ({ tag: t.tag, category: t.category || null })),
-    collections: tags.filter((t) => t.category === 'collection').map((t) => t.tag),
     colours,
     image: img ? origin + img : null,
     figma_image: img && img.startsWith('/img/') ? `${origin}${img}?format=figma` : null,
@@ -126,13 +125,12 @@ export function search(items, { query = '', kind = null, tag = null, colour = nu
   const out = [];
   for (const it of items) {
     if (kind && it.kind !== kind) continue;
-    if (tag && !it.tags.some((t) => t.tag.toLowerCase() === tag.toLowerCase())
-        && !it.collections.some((c) => c.toLowerCase() === tag.toLowerCase())) continue;
+    if (tag && !it.tags.some((t) => t.tag.toLowerCase() === tag.toLowerCase())) continue;
     if (hex && !it.colours.some((c) => sameColour(c.hex, hex))) continue;
     let score = 0;
     if (q.length) {
       const title = it.title.toLowerCase();
-      const hay = [it.domain, it.author, it.place, it.summary, ...it.tags.map((t) => t.tag), ...it.collections]
+      const hay = [it.domain, it.author, it.place, it.summary, ...it.tags.map((t) => t.tag)]
         .filter(Boolean).join(' ').toLowerCase();
       let all = true;
       for (const w of q) {
@@ -206,6 +204,6 @@ export function pseudoItem({ text = '', colours = [] } = {}) {
   return {
     slug: '\u0000selection', title: '', kind: null, domain: null, place: null,
     tags: [...new Set(words(text))].slice(0, 30).map((w) => ({ tag: w, category: null })),
-    collections: [], colours: named,
+    colours: named,
   };
 }

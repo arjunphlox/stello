@@ -7,7 +7,7 @@
  *   node scripts/convert-folder-v2.mjs --dir "<folder>" --apply    convert the folder in place
  *
  * --apply moves the v1 item files and canvases into <folder>/.stello-v1/ (a backup,
- * nothing is deleted), writes items/<YYYY>/<MM>/, people/, places/, collections/,
+ * nothing is deleted), writes items/<YYYY>/<MM>/, people/, places/,
  * rewrites canvases to the new paths and sets stello.json to version 2.
  * media/ is not touched: image paths are rewritten, the files stay where they are.
  * It refuses to run if any check fails, or if the folder is already v2.
@@ -67,7 +67,7 @@ async function main() {
   }
 
   // 2. Write v2 files.
-  const all = [...out.items, ...out.people, ...out.places, ...out.collections];
+  const all = [...out.items, ...out.people, ...out.places];
   for (const e of all) await put(join(OUT, e.path), e.text);
   const src = APPLY ? join(DIR, '.stello-v1', 'projects') : join(DIR, 'projects');
   for (const n of canvases) {
@@ -80,7 +80,7 @@ async function main() {
     version: FORMAT_VERSION_2,
     converted_from_v1_at: new Date().toISOString(),
     layout: LAYOUT_V2,
-    counts: { items: out.items.length, people: out.people.length, places: out.places.length, collections: out.collections.length, canvases: canvases.length },
+    counts: { items: out.items.length, people: out.people.length, places: out.places.length, canvases: canvases.length },
   };
   await put(join(OUT, 'stello.json'), JSON.stringify(next, null, 2) + '\n');
   await put(join(OUT, 'conversion-report.json'), JSON.stringify({ ...out.report, missing_media: missingMedia, moves: out.moves }, null, 2) + '\n');
