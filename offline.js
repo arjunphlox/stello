@@ -262,8 +262,7 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
-    // The desktop-context bridge and local dev serve from localhost; a cached
-    // shell there would hide edits.
+    // Local dev serves from localhost; a cached shell there would hide edits.
     const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     let devOptIn = false;
     try { devOptIn = localStorage.getItem('stello.sw.dev') === '1'; } catch {}
