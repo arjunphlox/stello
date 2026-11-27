@@ -422,7 +422,43 @@ function formatTagFor({ sourceUrl, domain }) {
   return { tag: 'website', category: 'format', weight: 0.4 };
 }
 
+/** Build the capture-time tag set (format + domain + mined subjects + rules). */
+function generateTagsFromMetadata({ title, domain, description, sourceUrl }) {
+  const tags = [];
+  const existingNames = new Set();
+  const push = (t) => {
+    if (!t || !t.tag || existingNames.has(t.tag)) return;
+    existingNames.add(t.tag);
+    tags.push(t);
+  };
+
+  push(formatTagFor({ sourceUrl, domain }));
+  if (domain) {
+    push({ tag: domain.replace(/^www\./, ''), category: 'domain', weight: 0.6 });
+  }
+
+  for (const kw of mineSubjectKeywords(title, {
+    minLen: 3, limit: 5,
+    weightStart: 0.8, weightStep: 0.1, weightFloor: 0.5,
+    extraStops: new Set(existingNames),
+  })) push(kw);
+
+  for (const kw of mineSubjectKeywords(description, {
+    minLen: 4, limit: 3,
+    weightStart: 0.5, weightStep: 0, weightFloor: 0.5,
+    extraStops: new Set([...existingNames, ...STOP_WORDS_EXT, ...PLATFORM_NOISE]),
+  })) push(kw);
+
+  const ruleText = [title, description].filter(Boolean).join(' ');
+  for (const t of runRuleEnrichment(ruleText, existingNames, { domain })) push(t);
+
+  return tags
+    .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+    .slice(0, 12);
+}
+
 module.exports = {
+  generateTagsFromMetadata,
   FORMAT_MAP,
   TOOL_RULES,
   STYLE_RULES,

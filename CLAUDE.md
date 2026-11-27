@@ -64,6 +64,7 @@ Vanilla HTML/CSS/JS frontend, a single Cloudflare Worker (Hono) for accounts, da
 | `src/lib/projects.js` + `src/routes/projects.js` | Canvas docs on D1 (`projects` table, migration 0002): the library canvas (id `library`) and named projects; whole-doc saves with a rev check; `mergeBoard` for FigJam sync |
 | `src/lib/library.js` + `src/routes/library.js` | Slim library reads, search and Layer 1 "related" rules (same colour/style/idea/place/kind/source) for the plugin and MCP |
 | `src/routes/mcp.js` | Stello MCP server at `POST /api/mcp` (bearer device token): search, related, projects, add/link/note |
+| `engine/index.js` + `src/routes/read.js` | The engine with no storage: `read()` a link into a folder-v2 item header, rule tags, related, dedupe, folder formats. Worker: stateless `POST /api/read`, `GET /api/fetch-image` |
 | `src/routes/pair.js` + `pair.html` | Pair a plugin or MCP client: code → approve in Stello → device token |
 
 ## Tag System
@@ -76,7 +77,7 @@ Items live in D1 (web) and SwiftData + CloudKit (Apple). Moving to a user-owned 
 
 ## Maintenance Scripts
 
-- `node scripts/export-folder.mjs --out <folder>` — read-only export of the library into the folder format (pairs through /pair.html)
+- `node scripts/export-folder.mjs --out <folder>` — read-only export of the library into the folder format v2 (pairs through /pair.html; a v1 folder must be converted first)
 - `node scripts/convert-folder-v2.mjs --dir <folder> [--apply]` — one-time v1 → v2 folder conversion (trial by default; `--apply` keeps v1 in `.stello-v1/`)
 
 ## Active Work
