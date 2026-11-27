@@ -79,6 +79,10 @@ async function main() {
     format: info.format || 'stello-folder',
     version: FORMAT_VERSION_2,
     converted_from_v1_at: new Date().toISOString(),
+    layout: {
+      items: 'items/<year>/<month>/<name>.md', people: 'people/<name>.md', places: 'places/<name>.md',
+      collections: 'collections/<name>.md', media: 'media/<name>/', projects: 'projects/*.canvas',
+    },
     counts: { items: out.items.length, people: out.people.length, places: out.places.length, collections: out.collections.length, canvases: canvases.length },
   };
   await put(join(OUT, 'stello.json'), JSON.stringify(next, null, 2) + '\n');
