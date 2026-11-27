@@ -41,7 +41,6 @@ Vanilla HTML/CSS/JS frontend, a single Cloudflare Worker (Hono) for accounts, da
 - **Worker**: one Hono Worker (`src/index.js`) serves the static frontend (`dist/`) + all `/api/*` routes (`src/routes/*`) + `/img/*` R2 image serving + a daily Cron Trigger. Endpoints ported from the old Vercel fns via `src/lib/adapter.js`. Image bytes live in R2 (`src/lib/storage.js`), served back at `/img/<key>` (zero egress); WebP conversion via the CF Images binding (`src/lib/images.js`). All auth-gated via `src/lib/common.js` → `src/lib/auth.js`.
 - **Data**: Items in D1 `items` table (`env.DB`), per-user; `src/lib/db.js` scopes every query to the signed-in user, soft-deletes, and bumps the sync counters. Schema in `migrations/0001_init.sql`, applied by the Worker itself. Accounts: `src/lib/auth.js` (email + password, Sign in with Apple, cookie sessions, device tokens). Backups: D1 Time Travel (30 days) plus the daily R2 snapshots from the sync code.
 - **Config**: Per-user Anthropic keys in `user_settings`. `config.json` is legacy and gitignored.
-- **Desktop context (local Mac only)**: `desktop-context/` is a Python LaunchAgent (`com.stello.context`) on `127.0.0.1:8766` — watches `~/Downloads/Stello Watcher`, introspects Sketch + Safari, indexes into local SQLite, and serves `/related`. The frontend stub `desktop-context.js` calls it only when the page is loaded from `localhost` or `127.0.0.1` (`window.stelloDesktop.fetchRelated(k)`); production deploys never contact the daemon.
 
 ## Key Files
 
@@ -51,7 +50,6 @@ Vanilla HTML/CSS/JS frontend, a single Cloudflare Worker (Hono) for accounts, da
 | `detail.html` | Item detail page |
 | `app.js` | All frontend logic — filtering, masonry layout, tag system, related items index |
 | `panel-layout.js` | Item detail panel layout: web port of the Mac `CardSubcards.swift` + `PanelDedupe.swift` (all kinds); `app.js` renders its cards. Keep in step with the Mac panel |
-| `desktop-context.js` | Localhost-only bridge to the desktop-context daemon (`window.stelloDesktop.fetchRelated`) |
 | `style.css` | All styles |
 | `auth-client.js` | Client-side auth + session helpers (`window.Stello`) |
 | `src/index.js` | Hono Worker entry — `/api/*` routes, `/img/*` R2 serving, daily cron |
@@ -81,7 +79,6 @@ Items live in D1 (web) and SwiftData + CloudKit (Apple). Moving to a user-owned 
 - `node scripts/convert-folder-v2.mjs --dir <folder> [--apply]` — one-time v1 → v2 folder conversion (trial by default; `--apply` keeps v1 in `.stello-v1/`)
 
 ## Active Work
-- [ ] **Desktop-context follow-ups** — e2e smoke (BACKLOG), cards UI scoping (BACKLOG). V1 pipeline shipped 2026-06-17.
 - [~] **Native Apple app** (`apple/Stello`) — foundations shipped (Sprints 0-2 + refinement): local-first SwiftData+CloudKit, on-device Foundation Models enrichment, capture + Share Extension, masonry/weeks/search/filters/detail/themes, web-faithful macOS chrome. Refinement ongoing; data migration (Sprint 3) + real-device AI verification pending.
 - [x] **Native quick-wins sprint** — SHIPPED (PR #30, 2026-07-06): revisit tracking, why-saved→intent facet, awaiting-review strip, search-over-everything, deterministic PageClassifier at capture. Built by Cursor/Composer, review-fixed by Claude Code — 8/9 review findings closed, 1 acceptable partial; residual minors in BACKLOG. Next: kind-dispatched AI enrichment + typed Highlights (BACKLOG, gated on real-device AFM verification).
 

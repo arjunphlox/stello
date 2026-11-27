@@ -24,7 +24,6 @@ const FILES = [
   'save.html',
   'pair.html',
   'app.js',
-  'desktop-context.js',
   'panel-layout.js',
   'auth-client.js',
   'style.css',
