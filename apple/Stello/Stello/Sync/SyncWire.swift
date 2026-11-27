@@ -6,14 +6,14 @@ import SwiftData
 /// reads them unchanged.
 enum SyncWire {
     /// Every synced field, in wire names.
-    static let allFields: [String] = [
+    nonisolated static let allFields: [String] = [
         "slug", "title", "source_url", "domain", "author", "summary", "body_markdown", "status",
         "needs_review", "kind", "enrichment_status", "added_at", "analyzed_at", "cover_aspect",
         "last_opened_at", "open_count", "metadata", "tags", "images", "snippets",
     ]
 
     /// Item attribute → wire field, for reading SwiftData change history.
-    static let fieldForKeyPath: [PartialKeyPath<Item>: String] = [
+    nonisolated(unsafe) static let fieldForKeyPath: [PartialKeyPath<Item>: String] = [
         \Item.slug: "slug", \Item.title: "title", \Item.sourceURL: "source_url", \Item.domain: "domain",
         \Item.author: "author", \Item.summary: "summary", \Item.bodyMarkdown: "body_markdown",
         \Item.status: "status", \Item.needsReview: "needs_review", \Item.kind: "kind",
@@ -54,7 +54,7 @@ enum SyncWire {
         }
     }
 
-    static func ms(_ date: Date) -> Int { Int((date.timeIntervalSince1970 * 1000).rounded()) }
+    nonisolated static func ms(_ date: Date) -> Int { Int((date.timeIntervalSince1970 * 1000).rounded()) }
 
     // MARK: Item → wire
 
