@@ -40,6 +40,11 @@ const t0 = Date.now();
 main().catch((e) => die(e && e.stack || String(e)));
 
 async function main() {
+  // A converted (v2) folder must not get v1 files written back into it.
+  try {
+    const info = JSON.parse(await readFile(join(OUT, 'stello.json'), 'utf8'));
+    if (Number(info.version) > FORMAT_VERSION) die(`${OUT} is folder format v${info.version}; this export writes v${FORMAT_VERSION}. Use another --out.`);
+  } catch (e) { if (e && e.code !== 'ENOENT' && !(e instanceof SyntaxError)) throw e; }
   let token = args.token || process.env.STELLO_TOKEN || '';
   let paired = false;
   if (!token) { token = await pair(); paired = true; }
