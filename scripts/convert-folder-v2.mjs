@@ -38,7 +38,8 @@ async function main() {
 
   const out = convertV1(files);
   const problems = verifyConversion(files, out);
-  log(JSON.stringify({ ...out.report, challenge_titles: out.report.challenge_titles.length }));
+  log(JSON.stringify({ ...out.report, challenge_titles: out.report.challenge_titles.length, merges: (out.report.merges || []).length }));
+  for (const m of out.report.merges || []) log(`merge: ${m.urls.join("  +  ")}`);
   if (problems.length) {
     log(`${problems.length} problems:\n  ` + problems.slice(0, 40).join('\n  '));
     die('Stopped: fix the problems first. Nothing was changed.');
