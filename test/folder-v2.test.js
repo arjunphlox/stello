@@ -107,6 +107,15 @@ test('organisations match by core name, people files are named from the name', (
   assert.equal(out.people.length, 3);
 });
 
+test('place kind does not depend on item order', () => {
+  const a = { id: 'a', slug: 'a', title: 'A', kind: 'link', source_url: 'https://a.com', added_at: '2026-01-01T00:00:00Z', metadata: { geography: { kind: 'place', name: 'switzerland' } }, tags: [], images: [] };
+  const b = { id: 'b', slug: 'b', title: 'B', kind: 'link', source_url: 'https://b.com', added_at: '2026-01-02T00:00:00Z', tags: [{ tag: 'switzerland', category: 'location', weight: 0.6 }], images: [] };
+  for (const order of [[a, b], [b, a]]) {
+    const out = convertV1(order.map(v1));
+    assert.equal(out.places.find((p) => p.id === 'place-switzerland').header.kind, 'country');
+  }
+});
+
 test('canvases follow the moves', () => {
   const c = remapCanvas({ nodes: [{ id: 'a', type: 'file', file: 'items/2026/x.md' }, { id: 'b', type: 'text', text: 'hi' }], edges: [] }, { 'items/2026/x.md': 'items/2026/03/x.md' });
   assert.equal(c.nodes[0].file, 'items/2026/03/x.md');
