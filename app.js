@@ -51,7 +51,6 @@
   const CAT_CLASS = {
     format: 'tag-format',
     intent: 'tag-subject',
-    collection: 'tag-domain',
     domain: 'tag-domain',
     style: 'tag-style',
     subject: 'tag-subject',
@@ -748,6 +747,7 @@
     const map = {};
     allItems.forEach(i => {
       i.tags.forEach(t => {
+        if (t.category === 'collection') return; // Collections retired (Nov 27 2026): kinds, places and tags cover them
         if (!map[t.category]) map[t.category] = {};
         map[t.category][t.tag] = (map[t.category][t.tag] || 0) + 1;
       });
@@ -761,7 +761,7 @@
 
   const CATEGORY_LABELS = {
     // Singular, as in the Apple apps' TagFilterSheet (parity pass, Nov 22 2026).
-    intent: 'Why saved', collection: 'Collection', domain: 'Domain', subject: 'Subject', format: 'Format',
+    intent: 'Why saved', domain: 'Domain', subject: 'Subject', format: 'Format',
     tool: 'Tool', style: 'Style', mood: 'Mood',
     location: 'Location', color: 'Color',
   };
@@ -770,8 +770,8 @@
     const el = $drawer();
     if (!el) return;
     const map = collectTags();
-    // Same order as the Mac's TagFilterSheet (Arjun, 11 Nov 2026: Why saved, then Collections).
-    const order = ['intent', 'collection', 'format', 'domain', 'style', 'subject', 'tool', 'location', 'mood', 'color'];
+    // Same order as the Mac's TagFilterSheet (Why saved first; Collections retired Nov 27 2026).
+    const order = ['intent', 'format', 'domain', 'style', 'subject', 'tool', 'location', 'mood', 'color'];
     const categories = order.filter(c => map[c]);
     Object.keys(map).forEach(c => { if (!categories.includes(c)) categories.push(c); });
     if (!expandedCategories) expandedCategories = new Set(categories.slice(0, 1));

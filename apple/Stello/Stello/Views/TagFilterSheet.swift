@@ -10,13 +10,13 @@ struct TagFilterContent: View {
     @State private var searchText = ""
     @State private var expandedCategories: Set<String> = ["intent"]
 
-    /// Same order as the web drawer (Arjun, 11 Nov 2026: Why saved, then Collections).
-    private let categories = ["intent", "collection", "format", "domain", "style", "subject", "tool", "location", "mood", "color"]
+    /// Same order as the web drawer (Why saved first; Collections retired Nov 27 2026).
+    private let categories = ["intent", "format", "domain", "style", "subject", "tool", "location", "mood", "color"]
 
     private func categoryLabel(_ category: String) -> String {
         switch category {
         case "intent": "Why saved"
-        default: category.capitalized   // singular, as on the web ("Collection", "Format")
+        default: category.capitalized   // singular, as on the web ("Format")
         }
     }
 

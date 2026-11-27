@@ -244,7 +244,7 @@ function matches() {
   for (const it of state.library) {
     if (state.kind && it.kind !== state.kind) continue;
     if (q.length) {
-      const hay = [it.title, it.domain, it.author, it.place, it.summary, ...it.tags.map((t) => t.tag), ...it.collections, ...it.colours.map((c) => c.name)].join(' ').toLowerCase();
+      const hay = [it.title, it.domain, it.author, it.place, it.summary, ...it.tags.map((t) => t.tag), ...(it.collections || []), ...it.colours.map((c) => c.name)].join(' ').toLowerCase();
       if (!q.every((w) => hay.includes(w))) continue;
     }
     out.push(it);

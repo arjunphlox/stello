@@ -570,10 +570,22 @@ enum EnrichmentService {
 
     // MARK: - Product enrichment
 
-    /// Collection labels (`category == "collection"` tags: wishlist, digital-tools, …) —
-    /// hints that break classification ties; imported items carry them, fresh captures don't.
+    /// Classifier hint labels that break classification ties. Collections were retired on
+    /// Nov 27 2026 and folded into tags, so the hints now come from those tags (web
+    /// `classifierHints` in src/lib/collection-map.js); any leftover collection tag still counts.
     static func collectionLabels(for item: Item) -> [String] {
-        item.tags.filter { $0.category == "collection" }.map(\.name)
+        var out: [String] = []
+        for tag in item.tags {
+            let hint: String? = switch (tag.category, tag.name) {
+            case ("collection", _): tag.name
+            case ("intent", "wishlist"): "wishlist"
+            case ("subject", "education"): "education"
+            case ("tool", "midjourney"): "midjourney"
+            default: nil
+            }
+            if let hint, !out.contains(hint) { out.append(hint) }
+        }
+        return out
     }
 
     /// Instagram / bare-image products: guess name + brand from the caption or filename

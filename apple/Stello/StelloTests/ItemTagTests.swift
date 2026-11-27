@@ -189,6 +189,17 @@ struct ItemTagTests {
         #expect(tool.enrichmentStatus == WorkerSorter.unsortedStatus)
     }
 
+    @Test("Classifier hints also come from the tags collections folded into")
+    func foldedHints() {
+        let item = Item(title: "Bag", kind: ItemKind.link.rawValue)
+        item.tags = [
+            ItemTag(name: "wishlist", category: "intent", weight: 0.6),
+            ItemTag(name: "education", category: "subject", weight: 0.6),
+            ItemTag(name: "figma", category: "tool", weight: 0.6),
+        ]
+        #expect(EnrichmentService.collectionLabels(for: item) == ["wishlist", "education"])
+    }
+
     @Test("Filter and search find imported tags")
     func filterAndSearch() async throws {
         let context = try makeContext()

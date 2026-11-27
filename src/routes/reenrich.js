@@ -8,6 +8,7 @@ const { readPage, makeNet, READ_AS_KINDS } = require('../lib/readers/pipeline.js
 const { freshReadFields } = require('../lib/readers/enrich-read.js');
 const { fillIns, parseReply } = require('../lib/readers/fill-ins.js');
 const { GALLERY_CAP } = require('../lib/readers/product.js');
+const { classifierHints } = require('../lib/collection-map.js');
 
 /** The model that writes the per-kind fill-ins (one call per Enrich, user's own key). */
 const FILL_IN_MODEL = 'claude-opus-5-5';
@@ -65,7 +66,7 @@ module.exports = async function handler(req, res) {
         html: page ? page.text : '',
         status: page ? page.status : null,
         finalURL: page ? page.finalURL : null,
-        collectionLabels: tags.filter(t => t && t.category === 'collection').map(t => t.tag),
+        collectionLabels: classifierHints(tags),
         asKind: READ_AS_KINDS.has(item.kind) ? item.kind : null,
         net,
       });

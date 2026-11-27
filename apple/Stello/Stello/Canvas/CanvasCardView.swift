@@ -211,7 +211,7 @@ struct CanvasCardView: View {
 }
 
 /// The details inside an open card (web `details`): title, source · kind · saved
-/// date, colour swatches, style, tags, collection, place, why saved, and a summary
+/// date, colour swatches, style, tags, place, why saved, and a summary
 /// quote. World sized, so it scales with its card. No bold text.
 struct CanvasDetailsCard: View {
     let item: Item
@@ -226,12 +226,10 @@ struct CanvasDetailsCard: View {
         let style = top("style", 0.4).prefix(4).map(\.name).joined(separator: ", ")
         let tags = top("subject", 0.5).filter { !CanvasSimilarity.skipSubject.contains($0.name) }
             .prefix(5).map(\.name).joined(separator: ", ")
-        let coll = top("collection").prefix(2).map(\.name).joined(separator: ", ")
         let place = top("location", 0.3).first.map { CanvasSimilarity.cap($0.name) } ?? ""
         let why = top("intent").prefix(3).map { CanvasSimilarity.cap($0.name).lowercased() }.joined(separator: ", ")
         if !style.isEmpty { out.append(("Style", style)) }
         if !tags.isEmpty { out.append(("Tags", tags)) }
-        if !coll.isEmpty { out.append(("Collection", coll)) }
         if !place.isEmpty { out.append(("Place", place)) }
         if !why.isEmpty { out.append(("Why saved", why)) }
         return out

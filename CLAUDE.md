@@ -67,7 +67,7 @@ Vanilla HTML/CSS/JS frontend, a single Cloudflare Worker (Hono) for accounts, da
 
 ## Tag System
 
-Items have weighted tags across categories: `format`, `domain`, `style`, `subject`, `tool`, `location`, `mood`, `color`. The app builds a `relatedIndex` mapping each item to related items by shared tags.
+Items have weighted tags across categories: `intent` (why saved), `format`, `domain`, `style`, `subject`, `tool`, `location`, `mood`, `color`. There are no collections (retired 2026-11-27; see `src/lib/collection-map.js`). The app builds a `relatedIndex` mapping each item to related items by shared tags.
 
 ## Content Structure
 

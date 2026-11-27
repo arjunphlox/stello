@@ -4,26 +4,29 @@
  *   items/<YYYY>/<MM>/<name>.md     one file per saved thing (link, tool, post, typeface…)
  *   people/<name>.md                people and organisations (individual, studio, foundry, brand, maker)
  *   places/<name>.md                places (countries, cities)
- *   collections/<name>.md           collections
  *   media/<name>/<n>.<ext>          images Stello downloaded (unchanged from v1)
  *   projects/<id>.canvas            canvases (JSON Canvas)
  *   stello.json                     { format, version: 2, counts }
  *
- * Nothing is stored twice. Items point at people, places and collections by id
- * (`people:`, `places:`, `collections:`); only the item records the link, and the
+ * Nothing is stored twice. Items point at people and places by id (`people:`,
+ * `places:`); only the item records the link, and the
  * app's index builds the reverse view. Ids never change, so files can be renamed
  * or moved. The header layout is v1's (one JSON value per line), plus those lists.
+ *
+ * Collections were retired on Nov 27 2026: a v1 collection tag folds into a kind,
+ * place or tag (src/lib/collection-map.js), so v2 has no collections/ folder.
  *
  * Pure functions only (no I/O).
  */
 import { safeName, groupTags, ungroupTags, parseItemFile } from './folder-format.js';
+import { foldCollections } from './collection-map.js';
 
 export const FORMAT_VERSION_2 = 2;
 
 /** The v2 layout, as written into stello.json. */
 export const LAYOUT_V2 = {
   items: 'items/<year>/<month>/<name>.md', people: 'people/<name>.md', places: 'places/<name>.md',
-  collections: 'collections/<name>.md', media: 'media/<name>/', projects: 'projects/*.canvas',
+  media: 'media/<name>/', projects: 'projects/*.canvas',
 };
 
 /** Item kinds that are people or organisations, so they become people/ files. */
@@ -32,12 +35,12 @@ export const PEOPLE_KINDS = new Set(['individual', 'studio', 'foundry']);
 const ITEM_FIELDS = [
   'id', 'title', 'url', 'kind', 'site', 'summary', 'status',
   'added', 'analyzed', 'opened', 'open_count', 'cover', 'cover_aspect',
-  'review', 'enrichment', 'people', 'places', 'collections', 'sources',
+  'review', 'enrichment', 'people', 'places', 'sources',
   'tags', 'meta', 'snippets', 'images',
 ];
 const ENTITY_FIELDS = [
   'id', 'name', 'kind', 'aliases', 'url', 'summary', 'status', 'added', 'analyzed', 'opened',
-  'open_count', 'cover', 'cover_aspect', 'review', 'enrichment', 'places', 'collections',
+  'open_count', 'cover', 'cover_aspect', 'review', 'enrichment', 'places',
   'tags', 'meta', 'snippets', 'images',
 ];
 /** Header keys written one entry per line. */
@@ -171,14 +174,14 @@ const META_PEOPLE = [
 const named = (x) => (typeof x === 'string' ? x.trim() : x && typeof x === 'object' && typeof x.name === 'string' && x.name.trim());
 
 /**
- * Pull the people, places and collections out of an item's author, tags and meta.
+ * Pull the people and places out of an item's author, tags and meta.
  * Mutates `tags` and `meta` (removes what became a reference) and returns
- * { people: [{ raw, role, kind }], places: [{ name, kind }], collections: [tag] }.
+ * { people: [{ raw, role, kind }], places: [{ name, kind }] }. Collection tags must
+ * be folded first (foldCollections); any left over are dropped here.
  * A meta value is only taken when every entry in it is a name, so odd shapes stay as data.
  */
 export function splitRefs({ author = null, tags = {}, meta = null } = {}) {
-  const out = { people: [], places: [], collections: [] };
-  out.collections.push(...Object.keys(tags.collection || {}));
+  const out = { people: [], places: [] };
   delete tags.collection;
   for (const tag of Object.keys(tags.location || {})) out.places.push({ name: tag, kind: 'country' });
   delete tags.location;
@@ -206,23 +209,30 @@ export function splitRefs({ author = null, tags = {}, meta = null } = {}) {
 /**
  * Convert a v1 folder's item files to v2.
  *   files: [{ path: 'items/2026/x.md', text }]
- * Returns { items, people, places, collections, moves, report } where each of
- * items/people/places/collections is [{ id, path, text, header, body }] and
+ * Returns { items, people, places, moves, report } where each of
+ * items/people/places is [{ id, path, text, header, body }] and
  * moves maps old item path → new path (for canvases).
  */
 export function convertV1(files) {
   const report = {
-    items: 0, people: 0, places: 0, collections: 0,
+    items: 0, people: 0, places: 0, collections_folded: 0,
     merged_urls: 0, bodies_cleared: 0, bodies_trimmed: 0,
-    people_from_items: 0, refs: { people: 0, places: 0, collections: 0 },
+    people_from_items: 0, refs: { people: 0, places: 0 },
     challenge_titles: [],
   };
   const parsed = files.map(({ path, text }) => ({ path, ...parseFile(text) }));
+  // 0. Collections fold into a kind, place or tag before anything else reads the kind.
+  for (const f of parsed) {
+    const h = f.header;
+    if (!h.tags || !h.tags.collection) continue;
+    const folded = foldCollections({ kind: h.kind, tags: ungroupTags(h.tags) });
+    f.header = { ...h, kind: folded.kind, tags: groupTags(folded.tags) };
+    report.collections_folded++;
+  }
 
   // 1. Entities. People first from people-kind items (they keep their own ids).
   const people = new Map(); // nameKey → entity
   const places = new Map();
-  const collections = new Map();
   const aliasIndex = new Map(); // nameKey → people entity
   const coreIndex = new Map(); // coreKey → people entity (organisations)
   const addPersonKey = (e, name) => {
@@ -272,13 +282,6 @@ export function convertV1(files) {
     else if (kind === 'country') places.get(k).kind = 'country';
     return places.get(k);
   };
-  const collectionRef = (tag) => {
-    const name = titleFromTag(tag);
-    const k = nameKey(name);
-    if (!k) return null;
-    if (!collections.has(k)) collections.set(k, { id: entityId('collection', name), name, kind: 'collection', aliases: [], tag });
-    return collections.get(k);
-  };
 
   // 2. Items and people-kind records: move references out of tags/meta into id lists.
   const records = [];
@@ -289,7 +292,6 @@ export function convertV1(files) {
     const meta = h.meta && typeof h.meta === 'object' ? { ...h.meta } : null;
     const peopleRefs = [];
     const placeIds = [];
-    const collectionIds = [];
     const addPerson = (e, role) => {
       if (!e || e.id === h.id) return;
       if (!peopleRefs.some((r) => r.id === e.id && r.role === role)) peopleRefs.push(role ? { id: e.id, role } : { id: e.id });
@@ -298,12 +300,11 @@ export function convertV1(files) {
 
     const refs = splitRefs({ author: h.author, tags, meta });
     delete h.author;
-    for (const tag of refs.collections) { const c = collectionRef(tag); if (c && !collectionIds.includes(c.id)) collectionIds.push(c.id); }
     for (const p of refs.places) addPlace(placeRef(p.name, p.kind));
     for (const p of refs.people) addPerson(personRef(p.raw, p.kind), p.role);
 
     if (/^(just a moment|attention required|access denied)/i.test(String(h.title || ''))) report.challenge_titles.push(h.id);
-    records.push({ f, h, isPerson, tags, meta, peopleRefs, placeIds, collectionIds });
+    records.push({ f, h, isPerson, tags, meta, peopleRefs, placeIds });
   }
 
   // 3. One item per URL (none today, but the rule holds for later imports).
@@ -322,7 +323,6 @@ export function convertV1(files) {
     }
     for (const p of newer.peopleRefs) if (!older.peopleRefs.some((x) => x.id === p.id)) older.peopleRefs.push(p);
     for (const id of newer.placeIds) if (!older.placeIds.includes(id)) older.placeIds.push(id);
-    for (const id of newer.collectionIds) if (!older.collectionIds.includes(id)) older.collectionIds.push(id);
     // Keep everything the repeat brought: its own text goes into its sources entry,
     // its snippets, images and notes join the older item's.
     const src = { id: newer.h.id, url: newer.h.url, added: newer.h.added };
@@ -369,7 +369,6 @@ export function convertV1(files) {
       meta: r.meta,
       people: r.peopleRefs,
       places: r.placeIds,
-      collections: r.collectionIds,
       sources: r.sources,
     };
     if (r.isPerson) {
@@ -383,10 +382,9 @@ export function convertV1(files) {
     }
     report.refs.people += r.isPerson ? 0 : r.peopleRefs.length;
     report.refs.places += r.placeIds.length;
-    report.refs.collections += r.collectionIds.length;
   }
 
-  // People referenced by name only, plus places and collections.
+  // People referenced by name only, plus places.
   const fromItems = new Set(peopleOut.map((p) => p.id));
   for (const e of people.values()) {
     if (fromItems.has(e.id)) continue;
@@ -396,17 +394,15 @@ export function convertV1(files) {
   }
   const simple = (map, dir) => [...map.values()].map((e) => {
     const path = unique(`${dir}/${fileName(e.name, e.id)}.md`);
-    const h = { id: e.id, name: e.name, kind: e.kind, aliases: e.aliases, ...(e.tag ? { tag: e.tag } : {}) };
+    const h = { id: e.id, name: e.name, kind: e.kind, aliases: e.aliases };
     return { id: e.id, path, header: h, body: '', text: headerToText(h, '', ENTITY_FIELDS) };
   });
   const placesOut = simple(places, 'places');
-  const collectionsOut = simple(collections, 'collections');
 
   report.items = items.length;
   report.people = peopleOut.length;
   report.places = placesOut.length;
-  report.collections = collectionsOut.length;
-  return { items, people: peopleOut, places: placesOut, collections: collectionsOut, moves, report };
+  return { items, people: peopleOut, places: placesOut, moves, report };
 }
 
 /**
@@ -416,7 +412,7 @@ export function convertV1(files) {
  */
 export function verifyConversion(files, out) {
   const problems = [];
-  const all = [...out.items, ...out.people, ...out.places, ...out.collections];
+  const all = [...out.items, ...out.people, ...out.places];
   const ids = new Set(all.map((e) => e.id));
   if (ids.size !== all.length) problems.push('duplicate ids');
   for (const { path } of files) if (!out.moves[path]) problems.push(`not converted: ${path}`);
@@ -440,7 +436,6 @@ export function verifyConversion(files, out) {
   for (const e of all) {
     for (const r of e.header.people || []) if (!ids.has(r.id)) problems.push(`missing person ${r.id} in ${e.path}`);
     for (const id of e.header.places || []) if (!ids.has(id)) problems.push(`missing place ${id} in ${e.path}`);
-    for (const id of e.header.collections || []) if (!ids.has(id)) problems.push(`missing collection ${id} in ${e.path}`);
     let back;
     try { back = parseFile(e.text).header; } catch (err) { problems.push(`unreadable ${e.path}: ${err.message}`); continue; }
     if (back.id !== e.id) problems.push(`round trip id ${e.path}`);

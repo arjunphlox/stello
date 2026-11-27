@@ -45,7 +45,7 @@ test('month folders', () => {
   assert.equal(itemPathV2(null, 'x'), 'items/undated/x.md');
 });
 
-test('v1 library converts to v2 with entities, references and no duplicates', () => {
+test('v1 library converts to v2 with entities, references, no duplicates and no collections', () => {
   const files = library.map(v1);
   const out = convertV1(files);
   assert.deepEqual(verifyConversion(files, out), []);
@@ -57,12 +57,14 @@ test('v1 library converts to v2 with entities, references and no duplicates', ()
   assert.equal(robu.header.meta.location, undefined);
   assert.ok(out.people.find((p) => p.id === 'f1'));
 
-  // The typeface points at them by id; collection and location tags became references.
+  // The typeface points at them by id; location tags became references; the
+  // type-foundries collection only names a kind, and a typeface keeps its own.
   const face = out.items.find((i) => i.id === 't1');
   assert.equal(face.path, 'items/2026/03/some-face.md');
   assert.deepEqual(face.header.people.filter((r) => r.role !== 'author'), [{ id: 'p1', role: 'designer' }, { id: 'f1', role: 'foundry' }]);
   assert.deepEqual(face.header.places, ['place-usa']);
-  assert.deepEqual(face.header.collections, ['collection-type-foundries']);
+  assert.equal(face.header.collections, undefined);
+  assert.equal(face.header.kind, 'typeface');
   assert.equal(face.header.tags.collection, undefined);
   assert.equal(face.header.tags.location, undefined);
   assert.deepEqual(face.header.meta, { license: 'paid' });
@@ -86,6 +88,8 @@ test('v1 library converts to v2 with entities, references and no duplicates', ()
   assert.equal(parseFile(plain.text).header.summary, 'S.');
 
   assert.equal(out.places.length, 2);
+  assert.equal(out.collections, undefined);
+  assert.equal(out.report.collections_folded, 2);
   assert.equal(out.report.merged_urls, 1);
   assert.equal(out.moves['items/2026/some-face-dup.md'], 'items/2026/03/some-face.md');
 });
@@ -120,4 +124,25 @@ test('canvases follow the moves', () => {
   const c = remapCanvas({ nodes: [{ id: 'a', type: 'file', file: 'items/2026/x.md' }, { id: 'b', type: 'text', text: 'hi' }], edges: [] }, { 'items/2026/x.md': 'items/2026/03/x.md' });
   assert.equal(c.nodes[0].file, 'items/2026/03/x.md');
   assert.equal(c.nodes[1].text, 'hi');
+});
+
+test('collections fold into kinds, places and tags', async () => {
+  const { foldCollections, classifierHints } = await import('../src/lib/collection-map.js');
+  const tags = [
+    { tag: 'websites', category: 'collection', weight: 0.9 },
+    { tag: 'wishlist', category: 'collection', weight: 0.9 },
+    { tag: 'vancouver', category: 'collection', weight: 0.9 },
+    { tag: "women's-accessories", category: 'collection', weight: 0.9 },
+    { tag: 'serif', category: 'style', weight: 0.8 },
+  ];
+  const link = foldCollections({ kind: 'link', tags }, ['Isometric Graphics', 'Some New Note']);
+  assert.equal(link.kind, 'website');
+  assert.deepEqual(link.tags.map((t) => `${t.category}:${t.tag}`),
+    ['style:serif', 'intent:wishlist', 'location:vancouver', 'style:isometric', 'subject:some-new-note']);
+  assert.deepEqual(link.unknown, ['Some New Note']);
+  assert.equal(foldCollections({ kind: 'product', tags }).kind, 'product', 'a typed item keeps its kind');
+  assert.deepEqual(classifierHints(link.tags), ['wishlist']);
+  const firm = convertV1([{ id: 's1', slug: 'acme', title: 'Acme', kind: 'link', source_url: 'https://acme.studio', added_at: '2026-01-01T00:00:00Z',
+    tags: [{ tag: 'firms', category: 'collection', weight: 0.9 }], images: [] }].map(v1));
+  assert.equal(firm.people[0].header.kind, 'studio', 'a firms link becomes a studio');
 });
