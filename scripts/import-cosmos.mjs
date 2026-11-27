@@ -10,8 +10,10 @@
  *   --token <t>       device token (or STELLO_TOKEN); default: pair now
  *   --no-covers       skip fetching og:image covers for new links
  *   --concurrency <n> parallel cover fetches and uploads (default 20)
- *   --work-notes <m>  tag (default) | drop: what the notes named after Arjun's own work
- *                     (Aampe, Huegrid, Scapia, SOTS, Small Wins) give their new items
+ *   --work-notes <m>  canvas (default, Arjun's pick) | tag | drop: the notes named after
+ *                     Arjun's own work (Aampe, Huegrid, Huegrid Gifts, Scapia, SOTS, Small
+ *                     Wins). canvas: each becomes a named canvas project holding all its
+ *                     items, old and new (skipped if a project of that name exists).
  *
  * What it does:
  *   - Reads every note: table notes ("| Item | Source URL |"), card notes ("## 1. Title"
@@ -48,7 +50,7 @@ const DIR = resolve(String(args.dir).replace(/^~(?=$|\/)/, homedir()));
 const BASE = (args.base || 'https://stello.arjunphlox.workers.dev').replace(/\/$/, '');
 const APPLY = !!args.apply;
 const WORK_NOTES = new Set(['aampe', 'huegrid', 'huegrid-gifts', 'scapia', 'sots', 'small-wins']);
-const WORK = args['work-notes'] === 'drop' ? 'drop' : 'tag';
+const WORK = ['tag', 'drop'].includes(args['work-notes']) ? args['work-notes'] : 'canvas';
 const CONC = Math.max(1, Math.min(48, parseInt(args.concurrency || '20', 10) || 20));
 const t0 = Date.now();
 
@@ -92,6 +94,7 @@ async function main() {
     r.title ||= e.title; r.caption ||= e.caption; r.imageAbs ||= e.imageAbs && existsSync(e.imageAbs) ? e.imageAbs : null;
     e.tags.forEach((t) => r.tags.add(t));
     r.collections.add(collectionSlug(e.collection));
+    (r.noteNames ||= new Map()).set(collectionSlug(e.collection), e.collection);
     byKey.set(key, r);
   }
   const records = [...byKey.values()];
@@ -127,7 +130,22 @@ async function main() {
         folds.push({ item: i, fields, unknown: f.unknown });
       }
     }
-    const fresh = records.filter((r) => !(r.key.startsWith('u:') ? byUrl.get(r.key.slice(2)) : byImage.get(r.key.slice(2))));
+    const fresh = [];
+    for (const r of records) {
+      const hit = r.key.startsWith('u:') ? byUrl.get(r.key.slice(2)) : byImage.get(r.key.slice(2));
+      if (hit) { r.slug = hit.slug; continue; }
+      r.id = randomUUID();
+      fresh.push(r);
+    }
+    // Work notes → one canvas project each, holding every item in the note.
+    const projects = new Map(); // note slug → { name, slugs: [] }
+    if (WORK === 'canvas') {
+      for (const r of records) for (const c of r.collections) {
+        if (!WORK_NOTES.has(c)) continue;
+        if (!projects.has(c)) projects.set(c, { name: r.noteNames.get(c), slugs: [] });
+        projects.get(c).slugs.push(r);
+      }
+    }
     const iso = new Date().toISOString();
     const built = fresh.map((r) => newItem(r, iso, Date.now()));
     const kinds = {};
@@ -138,6 +156,7 @@ async function main() {
       already_in_library: records.length - fresh.length,
       new_items: fresh.length, new_links: fresh.filter((r) => r.url).length, new_images: fresh.filter((r) => !r.url).length,
       new_by_kind: kinds, work_notes: WORK, notes_not_in_list: unknown,
+      work_canvases: Object.fromEntries([...projects.values()].map((p) => [p.name, p.slugs.length])),
       library_items_folded: folds.length, library_kind_changes: foldKinds,
       library_collections_not_in_list: [...new Set(folds.flatMap((f) => f.unknown))],
     };
@@ -180,34 +199,49 @@ async function main() {
       if ((i / 100) % 10 === 0) log(`  pushed ${Math.min(i + 100, changes.length)}/${changes.length}`);
     }
     log(`Done in ${Math.round((Date.now() - t0) / 1000)}s: ${applied} of ${changes.length} changes applied.`);
-    console.log(JSON.stringify({ ...summary, covers, applied, seconds: Math.round((Date.now() - t0) / 1000) }, null, 2));
+
+    // 6. Work-note canvases (a grid of cards; rearrange freely in the app).
+    let canvasesMade = 0;
+    if (projects.size) {
+      const { projects: have = [] } = await api('/api/projects');
+      const names = new Set(have.map((p) => String(p.name).toLowerCase()));
+      for (const p of projects.values()) {
+        if (names.has(p.name.toLowerCase())) { log(`  canvas "${p.name}" already exists, left alone`); continue; }
+        const cards = p.slugs.map((r, i) => ({ slug: r.slug, x: (i % 8) * 280, y: Math.floor(i / 8) * 340 }));
+        await api('/api/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ doc: { name: p.name, cards } }) });
+        canvasesMade++;
+      }
+      log(`Canvases: ${canvasesMade} made.`);
+    }
+    console.log(JSON.stringify({ ...summary, covers, applied, canvases: canvasesMade, seconds: Math.round((Date.now() - t0) / 1000) }, null, 2));
   } finally {
     if (paired) await fetch(`${BASE}/api/auth/logout`, { method: 'POST', headers: { authorization: `Bearer ${token}` } }).catch(() => {});
   }
 }
 
 function newItem(r, iso, now) {
-  const id = randomUUID();
+  const id = r.id;
   let domain = null;
   try { domain = r.url ? new URL(r.url).hostname.replace(/^www\./, '') : null; } catch { /* keep null */ }
   const title = (r.title || domain || 'Cosmos image').slice(0, 300);
   const summary = r.caption ? r.caption.slice(0, 200) : null;
   const base = [...r.tags].slice(0, 8).map((tag) => ({ tag: tag.toLowerCase(), category: 'subject', weight: 0.6 }));
   if (!r.url) base.push({ tag: 'image-upload', category: 'format', weight: 0.4 });
-  const labels = [...r.collections].filter((c) => !(WORK === 'drop' && WORK_NOTES.has(c)));
+  const labels = [...r.collections].filter((c) => !(WORK !== 'tag' && WORK_NOTES.has(c)));
   const folded = foldCollections({ kind: r.url ? 'link' : null, tags: base }, labels);
   const tags = folded.tags;
   const seen = new Set(tags.map((t) => t.tag));
   for (const t of ruleTags({ title, domain, description: summary || '', url: r.url })) if (!seen.has(t.tag)) { seen.add(t.tag); tags.push(t); }
   // A kind the note names is Arjun's own sorting: kept, and the page sort is skipped.
   const kind = folded.kind;
+  r.slug = `${slugify(title)}-${id.slice(0, 6)}`;
   const status = !r.url ? 'candidates_done' : kind === 'link' ? 'awaiting_classify' : 'awaiting_ai';
   return {
     id,
     full: true,
     clock: now,
     fields: {
-      slug: `${slugify(title)}-${id.slice(0, 6)}`,
+      slug: r.slug,
       title,
       source_url: r.url || null,
       domain,
