@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Export the Stello library into the folder format (src/lib/folder-format.js).
+ * Export the Stello library into the folder format, version 2 (src/lib/folder-v2.js).
  * Read-only: it pulls from the live Worker and never writes to D1 or R2.
  *
  *   node scripts/export-folder.mjs --out "<folder>" [options]
@@ -19,7 +19,7 @@
  * are skipped. Deleted (trashed or purged) items are left out.
  * Plan: docs/plans/folder-engine.md.
  */
-import { mkdir, writeFile, readFile, stat, rename } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, readdir, stat, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
@@ -28,6 +28,7 @@ import {
   FORMAT, FORMAT_VERSION, itemPath, mediaFiles, imageExt, itemToMarkdown, markdownToItem, diffItem,
   canvasToJsonCanvas, safeName,
 } from '../src/lib/folder-format.js';
+import { FORMAT_VERSION_2, LAYOUT_V2, convertV1, verifyConversion, remapCanvas } from '../src/lib/folder-v2.js';
 
 const args = parseArgs(process.argv.slice(2));
 const BASE = (args.base || 'https://stello.arjunphlox.workers.dev').replace(/\/$/, '');
@@ -40,10 +41,13 @@ const t0 = Date.now();
 main().catch((e) => die(e && e.stack || String(e)));
 
 async function main() {
-  // A converted (v2) folder must not get v1 files written back into it.
+  // This writes format v2. A v1 folder is converted first (scripts/convert-folder-v2.mjs),
+  // so its v1 files are kept in .stello-v1/ instead of sitting beside the new ones.
+  let previous = {};
   try {
-    const info = JSON.parse(await readFile(join(OUT, 'stello.json'), 'utf8'));
-    if (Number(info.version) > FORMAT_VERSION) die(`${OUT} is folder format v${info.version}; this export writes v${FORMAT_VERSION}. Use another --out.`);
+    previous = JSON.parse(await readFile(join(OUT, 'stello.json'), 'utf8'));
+    if (Number(previous.version) < FORMAT_VERSION_2) die(`${OUT} is folder format v${previous.version}. Convert it first: node scripts/convert-folder-v2.mjs --dir "${OUT}" --apply`);
+    if (Number(previous.version) > FORMAT_VERSION_2) die(`${OUT} is folder format v${previous.version}; this export writes v${FORMAT_VERSION_2}.`);
   } catch (e) { if (e && e.code !== 'ENOENT' && !(e instanceof SyntaxError)) throw e; }
   let token = args.token || process.env.STELLO_TOKEN || '';
   let paired = false;
@@ -99,16 +103,29 @@ async function main() {
       });
     }
 
-    // 3. Item files + round-trip check
-    log('Writing item files…');
+    // 3. Item files: v1 text in memory (round-trip checked), then the v2 conversion
+    //    (people, places, collections by id; month folders), then write.
+    log('Building item files…');
     const report = { written: 0, unchanged: 0, roundTripErrors: [] };
+    const v1 = [];
     for (const it of items) {
-      const rel = paths.get(it.id);
       const text = itemToMarkdown(it, plans.get(it.id));
-      const back = markdownToItem(text, { slug: it.slug });
-      const diff = diffItem(it, back);
+      const diff = diffItem(it, markdownToItem(text, { slug: it.slug }));
       if (diff.length) report.roundTripErrors.push({ id: it.id, slug: it.slug, fields: diff });
-      (await writeIfChanged(join(OUT, rel), text)) ? report.written++ : report.unchanged++;
+      v1.push({ path: paths.get(it.id), text });
+    }
+    const out = convertV1(v1);
+    const problems = verifyConversion(v1, out);
+    if (problems.length) die(`v2 checks failed, nothing written:\n  ${problems.slice(0, 40).join('\n  ')}`);
+    const v2files = [...out.items, ...out.people, ...out.places, ...out.collections];
+    log(`Writing ${v2files.length} files (${out.items.length} items, ${out.people.length} people, ${out.places.length} places, ${out.collections.length} collections)…`);
+    for (const e of v2files) (await writeIfChanged(join(OUT, e.path), e.text)) ? report.written++ : report.unchanged++;
+    // Files from an earlier export that this run didn't produce (a deleted save, a renamed
+    // person) are listed, never deleted.
+    const produced = new Set(v2files.map((e) => e.path));
+    const stale = [];
+    for (const dir of ['items', 'people', 'places', 'collections']) {
+      for (const abs of await walkMd(join(OUT, dir))) { const rel = abs.slice(OUT.length + 1); if (!produced.has(rel)) stale.push(rel); }
     }
 
     // 4. Canvas docs
@@ -120,10 +137,7 @@ async function main() {
       for (const id of ids) {
         const { project } = await api(`/api/projects/${encodeURIComponent(id)}`);
         if (!project) continue;
-        const canvas = canvasToJsonCanvas(project, (slug) => {
-          const p = slugToPath.get(slug);
-          return p || null;
-        });
+        const canvas = remapCanvas(canvasToJsonCanvas(project, (slug) => slugToPath.get(slug) || null), out.moves);
         if (id === 'library' && !canvas.nodes.length) continue;
         const name = id === 'library' ? 'Library canvas' : (project.name || id);
         await writeIfChanged(join(OUT, 'projects', `${safeName(name, id)}.canvas`), JSON.stringify(canvas, null, 2) + '\n');
@@ -136,12 +150,13 @@ async function main() {
     // 5. stello.json + report
     const seconds = Math.round((Date.now() - t0) / 1000);
     const info = {
+      ...previous,
       format: FORMAT,
-      version: FORMAT_VERSION,
+      version: FORMAT_VERSION_2,
       exported_at: new Date().toISOString(),
       exported_from: BASE,
-      counts: { items: items.length, images: img.total - img.failed.length, canvases },
-      layout: { items: 'items/<year>/<slug>.md', media: 'media/<slug>/', projects: 'projects/*.canvas' },
+      counts: { items: out.items.length, people: out.people.length, places: out.places.length, collections: out.collections.length, images: img.total - img.failed.length, canvases },
+      layout: LAYOUT_V2,
     };
     await writeIfChanged(join(OUT, 'stello.json'), JSON.stringify(info, null, 2) + '\n');
     const summary = {
@@ -153,8 +168,10 @@ async function main() {
       images: { total: img.total, downloaded: img.done, already_there: img.skipped, failed: img.failed.length },
       canvases,
       round_trip_errors: report.roundTripErrors.length,
+      v2: { items: out.items.length, people: out.people.length, places: out.places.length, collections: out.collections.length, merged_urls: out.report.merged_urls },
+      stale_files: stale.length,
     };
-    await writeFile(join(OUT, 'export-report.json'), JSON.stringify({ ...summary, failed_images: img.failed, round_trip: report.roundTripErrors }, null, 2) + '\n');
+    await writeFile(join(OUT, 'export-report.json'), JSON.stringify({ ...summary, failed_images: img.failed, round_trip: report.roundTripErrors, stale, merges: out.report.merges || [] }, null, 2) + '\n');
     log(`Done in ${seconds}s.`);
     console.log(JSON.stringify(summary, null, 2));
   } finally {
@@ -210,6 +227,17 @@ async function pair() {
     if (out.token) { log('Approved.'); return out.token; }
   }
   die('No approval within 10 minutes. Run the export again.');
+}
+
+async function walkMd(dir) {
+  if (!existsSync(dir)) return [];
+  const found = [];
+  for (const ent of await readdir(dir, { withFileTypes: true })) {
+    const p = join(dir, ent.name);
+    if (ent.isDirectory()) found.push(...await walkMd(p));
+    else if (ent.name.endsWith('.md')) found.push(p);
+  }
+  return found;
 }
 
 async function writeIfChanged(path, text) {

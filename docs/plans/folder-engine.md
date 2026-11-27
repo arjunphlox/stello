@@ -50,3 +50,10 @@ The v1 export from 2026-11-26 is converted once by a script at the start of phas
 - One item per normalised URL; a repeat adds a `sources:` entry and its snippets, images, tags and notes.
 - Run: trial first (writes to a temp folder), then `--apply` (moves v1 files into `.stello-v1/`, deletes nothing). `export-folder.mjs` refuses a v2 folder.
 
+### Built (phase 1, part 2)
+
+- `engine/index.js`: one entry for the engine. `read()` turns a link (or HTML the app fetched) into a v2 item header: kind + typed meta from the readers, rule tags, images, and people/places/collections as names for the caller to match (`matchEntity`). Also re-exports `related`/`layer1`/`search`, `ruleTags`, the dedupe helpers and both folder formats. No D1, no R2.
+- Worker: `POST /api/read` and `GET /api/fetch-image?url=` (`src/routes/read.js`), stateless. Signed-in for now; phase 4 swaps auth for a per-install key + rate limit. The image proxy only fetches public http(s) images, 10 MB max, no SVG.
+- `scripts/export-folder.mjs` writes v2 (the same converter runs in memory), refuses a v1 folder, and lists files it didn't produce instead of deleting them. Re-running on an unchanged library writes nothing.
+- `meta.publishedAt` and similar dates are Apple reference-date seconds (since 2001-01-01), as the readers have always stored them, not a bug.
+

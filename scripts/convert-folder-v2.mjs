@@ -16,7 +16,7 @@ import { readFile, writeFile, mkdir, readdir, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
-import { convertV1, verifyConversion, remapCanvas, FORMAT_VERSION_2 } from '../src/lib/folder-v2.js';
+import { convertV1, verifyConversion, remapCanvas, FORMAT_VERSION_2, LAYOUT_V2 } from '../src/lib/folder-v2.js';
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.dir) die('Pass --dir "<folder>".');
@@ -79,10 +79,7 @@ async function main() {
     format: info.format || 'stello-folder',
     version: FORMAT_VERSION_2,
     converted_from_v1_at: new Date().toISOString(),
-    layout: {
-      items: 'items/<year>/<month>/<name>.md', people: 'people/<name>.md', places: 'places/<name>.md',
-      collections: 'collections/<name>.md', media: 'media/<name>/', projects: 'projects/*.canvas',
-    },
+    layout: LAYOUT_V2,
     counts: { items: out.items.length, people: out.people.length, places: out.places.length, collections: out.collections.length, canvases: canvases.length },
   };
   await put(join(OUT, 'stello.json'), JSON.stringify(next, null, 2) + '\n');

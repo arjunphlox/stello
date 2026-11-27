@@ -20,6 +20,12 @@ import { safeName, groupTags, ungroupTags, parseItemFile } from './folder-format
 
 export const FORMAT_VERSION_2 = 2;
 
+/** The v2 layout, as written into stello.json. */
+export const LAYOUT_V2 = {
+  items: 'items/<year>/<month>/<name>.md', people: 'people/<name>.md', places: 'places/<name>.md',
+  collections: 'collections/<name>.md', media: 'media/<name>/', projects: 'projects/*.canvas',
+};
+
 /** Item kinds that are people or organisations, so they become people/ files. */
 export const PEOPLE_KINDS = new Set(['individual', 'studio', 'foundry']);
 
@@ -155,6 +161,46 @@ function rebase(file, fromDepth, toDepth) {
 }
 const depthOf = (path) => String(path).split('/').length - 1;
 
+// ── References inside one item (shared by the converter and the engine) ─────
+
+const META_PLACES = ['location', 'geography'];
+const META_PEOPLE = [
+  ['author', 'author', 'individual'], ['maker', 'maker', 'individual'], ['brand', 'brand', 'brand'],
+  ['typeDesigner', 'designer', 'individual'], ['typeFoundry', 'foundry', 'foundry'], ['distributedOn', 'distributor', 'foundry'],
+];
+const named = (x) => (typeof x === 'string' ? x.trim() : x && typeof x === 'object' && typeof x.name === 'string' && x.name.trim());
+
+/**
+ * Pull the people, places and collections out of an item's author, tags and meta.
+ * Mutates `tags` and `meta` (removes what became a reference) and returns
+ * { people: [{ raw, role, kind }], places: [{ name, kind }], collections: [tag] }.
+ * A meta value is only taken when every entry in it is a name, so odd shapes stay as data.
+ */
+export function splitRefs({ author = null, tags = {}, meta = null } = {}) {
+  const out = { people: [], places: [], collections: [] };
+  out.collections.push(...Object.keys(tags.collection || {}));
+  delete tags.collection;
+  for (const tag of Object.keys(tags.location || {})) out.places.push({ name: tag, kind: 'country' });
+  delete tags.location;
+  if (named(author)) out.people.push({ raw: author, role: 'author', kind: 'individual' });
+  if (meta) {
+    for (const key of META_PLACES) {
+      const v = meta[key];
+      const list = Array.isArray(v) ? v : [v];
+      if (v && list.every(named)) { list.forEach((x) => out.places.push({ name: typeof x === 'string' ? x : x.name, kind: 'place' })); delete meta[key]; }
+    }
+    for (const [key, role, kind] of META_PEOPLE) {
+      const v = meta[key];
+      const list = Array.isArray(v) ? v : [v];
+      if (v && list.length && list.every(named)) {
+        list.forEach((x) => out.people.push({ raw: x, role, kind: (x && typeof x === 'object' && x.kind) || kind }));
+        delete meta[key];
+      }
+    }
+  }
+  return out;
+}
+
 // ── The one-time v1 → v2 conversion ─────────────────────────────────────────
 
 /**
@@ -247,39 +293,11 @@ export function convertV1(files) {
     };
     const addPlace = (e) => { if (e && !placeIds.includes(e.id)) placeIds.push(e.id); };
 
-    // Collections (Vancouver is a place used as a collection; it stays a collection).
-    for (const tag of Object.keys(tags.collection || {})) { const c = collectionRef(tag); if (c && !collectionIds.includes(c.id)) collectionIds.push(c.id); }
-    delete tags.collection;
-    // Country tags → places.
-    for (const tag of Object.keys(tags.location || {})) addPlace(placeRef(tag, 'country'));
-    delete tags.location;
-
-    // Header author → people.
-    if (h.author) addPerson(personRef(h.author), 'author');
+    const refs = splitRefs({ author: h.author, tags, meta });
     delete h.author;
-
-    if (meta) {
-      for (const key of ['location', 'geography']) {
-        const v = meta[key];
-        const list = Array.isArray(v) ? v : [v];
-        if (v && list.every((x) => typeof x === 'string' || (x && typeof x === 'object' && x.name))) {
-          list.forEach((x) => addPlace(placeRef(x)));
-          delete meta[key];
-        }
-      }
-      for (const [key, role] of [['author', 'author'], ['maker', 'maker'], ['brand', 'brand']]) {
-        const v = meta[key];
-        if (v && (typeof v === 'string' || v.name)) { addPerson(personRef(v, key === 'brand' ? 'brand' : 'individual'), role); delete meta[key]; }
-      }
-      for (const [key, role, kind] of [['typeDesigner', 'designer', 'individual'], ['typeFoundry', 'foundry', 'foundry'], ['distributedOn', 'distributor', 'foundry']]) {
-        const v = meta[key];
-        const list = (Array.isArray(v) ? v : [v]).filter((x) => typeof x === 'string' ? x.trim() : x && x.name);
-        if (v && list.length && list.length === (Array.isArray(v) ? v.length : 1)) {
-          list.forEach((x) => addPerson(personRef(x, kind), role));
-          delete meta[key];
-        }
-      }
-    }
+    for (const tag of refs.collections) { const c = collectionRef(tag); if (c && !collectionIds.includes(c.id)) collectionIds.push(c.id); }
+    for (const p of refs.places) addPlace(placeRef(p.name, p.kind));
+    for (const p of refs.people) addPerson(personRef(p.raw, p.kind), p.role);
 
     if (/^(just a moment|attention required|access denied)/i.test(String(h.title || ''))) report.challenge_titles.push(h.id);
     records.push({ f, h, isPerson, tags, meta, peopleRefs, placeIds, collectionIds });

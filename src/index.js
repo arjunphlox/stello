@@ -36,6 +36,7 @@ import { runDailySync } from './lib/sync-cron.js';
 import { mergeDuplicates } from './lib/dedupe.js';
 import processBatchesMod from './routes/process-batches.js';
 import classifyRoute from './routes/classify.js';
+import { mountRead } from './routes/read.js';
 import mountProjects from './routes/projects.js';
 import mountLibrary from './routes/library.js';
 import mountPair from './routes/pair.js';
@@ -82,6 +83,9 @@ app.route('/api/sync', syncRoutes({ requireUser: auth.requireUser }));
 // Page readers for the Apple apps: they send the HTML they fetched, the Worker
 // answers with the kind + typed metadata (src/lib/readers/).
 app.post('/api/classify', classifyRoute({ requireUser: auth.requireUser }));
+
+// The stateless engine (docs/plans/folder-engine.md): read a link, fetch an image.
+mountRead(app, { requireUser: auth.requireUser });
 
 // Merge items saved more than once (same link), for the signed-in user only.
 //   GET  /api/me/duplicates   → the plan (nothing changes)
