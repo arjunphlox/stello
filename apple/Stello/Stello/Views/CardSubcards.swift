@@ -1860,10 +1860,8 @@ struct ImageGallerySubCardBody: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let img = displayed, let data = img.data, let platform = platformImage(from: data) {
-                platform
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+            if let img = displayed, img.hasRenderableCoverData {
+                DecodedStoredImage(image: img, maxPixels: DecodedStoredImage<Color>.panelPixels) { theme.borderSubtle }
                     .frame(maxWidth: .infinity)
                     .frame(height: mainHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1887,8 +1885,8 @@ struct ImageGallerySubCardBody: View {
             previewID = image.persistentModelID
         } label: {
             Group {
-                if let data = image.data, let img = platformImage(from: data) {
-                    img.resizable().aspectRatio(contentMode: .fill)
+                if image.hasRenderableCoverData {
+                    DecodedStoredImage(image: image, maxPixels: DecodedStoredImage<Color>.thumbnailPixels) { theme.borderSubtle }
                 } else {
                     theme.borderSubtle
                 }
@@ -1903,14 +1901,53 @@ struct ImageGallerySubCardBody: View {
         .buttonStyle(.plain)
     }
 
-    private func platformImage(from data: Data) -> Image? {
-        #if os(macOS)
-        guard let ns = NSImage(data: data) else { return nil }
-        return Image(nsImage: ns)
-        #else
-        guard let ui = UIImage(data: data) else { return nil }
-        return Image(uiImage: ui)
-        #endif
+}
+
+// MARK: - Stored images, decoded off the main thread
+
+/// An item image drawn from a bitmap decoded off the main thread at the size it's
+/// shown, and cached. Building an `NSImage`/`UIImage` from the bytes inside a view body
+/// re-read and re-drew the full-size file on every pass, which made the detail panel
+/// slow to open.
+struct DecodedStoredImage<Placeholder: View>: View {
+    static var panelPixels: Int { 1600 }
+    static var thumbnailPixels: Int { 200 }
+
+    let image: ItemImage
+    let maxPixels: Int
+    var contentMode: ContentMode = .fill
+    @ViewBuilder var placeholder: () -> Placeholder
+
+    @State private var decodedKey: String?
+
+    private var baseKey: String {
+        "stored-\(image.persistentModelID.hashValue)-\(image.renderableByteCount ?? 0)"
+    }
+    private var key: String { "\(baseKey)-\(maxPixels)" }
+
+    var body: some View {
+        // Reading this redraws the view when its bitmap lands in the cache.
+        let _ = decodedKey
+        Group {
+            if let bitmap = CoverImageCache.decodedImage(forKey: key)
+                ?? CoverImageCache.anyDecodedImage(forCover: baseKey) {
+                Image(decorative: bitmap, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+            } else {
+                placeholder()
+            }
+        }
+        .task(id: key) {
+            if CoverImageCache.reusable(key: key, maxPixels: maxPixels, cover: baseKey) != nil {
+                decodedKey = key
+                return
+            }
+            guard let data = image.data else { return }
+            if await CoverImageCache.decode(data, key: key, maxPixels: maxPixels, cover: baseKey) != nil {
+                decodedKey = key
+            }
+        }
     }
 }
 

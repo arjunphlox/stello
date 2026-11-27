@@ -50,12 +50,26 @@ final class ItemImage {
 
 extension ItemImage {
     /// Non-empty bytes that decode to a platform bitmap (guards external-storage faulting + corrupt rows).
-    var hasRenderableCoverData: Bool {
-        guard let data, !data.isEmpty else { return false }
-        // Import thumbnails were decoded when written; this runs for every card render.
-        if sourceURL != nil { return true }
-        return CoverImageDecoder.canDecode(data)
+    var hasRenderableCoverData: Bool { renderableByteCount != nil }
+
+    /// Byte count of renderable cover bytes, or nil when there are none. Cards ask this
+    /// on every render: reading `data` loads the file from disk and the decode check
+    /// can decode the whole image, all on the main thread, so a yes is remembered.
+    /// (A no stays cheap to recompute: a missing image has no file to read.)
+    var renderableByteCount: Int? {
+        let id = persistentModelID
+        if let known = Self.renderableBytes[id] { return known }
+        guard let data, !data.isEmpty else { return nil }
+        // Import thumbnails were decoded when written.
+        guard sourceURL != nil || CoverImageDecoder.canDecode(data) else { return nil }
+        Self.renderableBytes[id] = data.count
+        return data.count
     }
+
+    /// Forget the remembered answer after this image's bytes change in place.
+    func forgetRenderableBytes() { Self.renderableBytes[persistentModelID] = nil }
+
+    private static var renderableBytes: [PersistentIdentifier: Int] = [:]
 }
 
 extension Item {
@@ -138,7 +152,27 @@ enum CoverImageCache {
 
     static func purge() {
         decoded.removeAllObjects()
+        largest.removeAllObjects()
         cache.removeAllObjects()
+    }
+
+    private final class SizedBox: NSObject, @unchecked Sendable {
+        let image: CGImage
+        let maxPixels: Int
+        init(_ image: CGImage, maxPixels: Int) { self.image = image; self.maxPixels = maxPixels }
+    }
+
+    /// The largest bitmap decoded for each cover (keyed without the size), so a card
+    /// that changes width (the detail panel opening, a pinch) keeps drawing its cover
+    /// instead of blanking while the new size decodes, and a narrower card reuses it.
+    nonisolated private static let largest: NSCache<NSString, SizedBox> = {
+        let cache = NSCache<NSString, SizedBox>()
+        cache.totalCostLimit = 64 * 1024 * 1024
+        return cache
+    }()
+
+    nonisolated static func anyDecodedImage(forCover base: String) -> CGImage? {
+        largest.object(forKey: base as NSString)?.image
     }
 
     /// Long side in pixels for a cover shown `columnWidth` points wide: enough to fill
@@ -167,8 +201,17 @@ enum CoverImageCache {
         return (w, h)
     }
 
-    nonisolated static func decode(_ data: Data, key: String, maxPixels: Int = 1200) async -> CGImage? {
+    /// A bitmap already in memory for this size (or a bigger one of the same cover),
+    /// without touching the cover's bytes.
+    nonisolated static func reusable(key: String, maxPixels: Int, cover base: String?) -> CGImage? {
         if let cached = decodedImage(forKey: key) { return cached }
+        guard let base, let big = largest.object(forKey: base as NSString), big.maxPixels >= maxPixels else { return nil }
+        decoded.setObject(DecodedBox(big.image), forKey: key as NSString, cost: big.image.bytesPerRow * big.image.height)
+        return big.image
+    }
+
+    nonisolated static func decode(_ data: Data, key: String, maxPixels: Int = 1200, cover base: String? = nil) async -> CGImage? {
+        if let reused = reusable(key: key, maxPixels: maxPixels, cover: base) { return reused }
         let image = await Task.detached(priority: .userInitiated) { () -> CGImage? in
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -180,7 +223,11 @@ enum CoverImageCache {
             return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
         }.value
         if let image {
-            decoded.setObject(DecodedBox(image), forKey: key as NSString, cost: image.bytesPerRow * image.height)
+            let cost = image.bytesPerRow * image.height
+            decoded.setObject(DecodedBox(image), forKey: key as NSString, cost: cost)
+            if let base, (largest.object(forKey: base as NSString)?.maxPixels ?? 0) < maxPixels {
+                largest.setObject(SizedBox(image, maxPixels: maxPixels), forKey: base as NSString, cost: cost)
+            }
         }
         return image
     }

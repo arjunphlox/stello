@@ -59,15 +59,16 @@ struct ItemCardView: View {
     private static let selectionOutlineOffset: CGFloat = 4
     private var primaryImage: ItemImage? { item.coverImage }
 
-    private var hasImage: Bool {
-        guard let data = primaryImage?.data, !data.isEmpty else { return false }
-        return true
+    // Byte count is remembered per image (ItemImage.renderableByteCount), so these
+    // don't read the cover file from disk on every render.
+    private var hasImage: Bool { (primaryImage?.renderableByteCount ?? 0) > 0 }
+
+    /// The cover, whatever size it's drawn at.
+    private var coverBaseKey: String {
+        "\(item.id.uuidString)-\(primaryImage?.renderableByteCount ?? 0)"
     }
 
-    private var coverCacheKey: String {
-        let count = primaryImage?.data?.count ?? 0
-        return "\(item.id.uuidString)-\(count)-\(coverDecodePixels)"
-    }
+    private var coverCacheKey: String { "\(coverBaseKey)-\(coverDecodePixels)" }
 
     /// Long side, in pixels, that fills the card at this screen's scale. Rounded up to
     /// steps of 200 so a small window resize reuses the bitmap already decoded.
@@ -76,9 +77,16 @@ struct ItemCardView: View {
     }
 
     private func decodeCover() async {
-        guard hasImage, let data = primaryImage?.data else { return }
+        guard hasImage else { return }
         let key = coverCacheKey
-        if await CoverImageCache.decode(data, key: key, maxPixels: coverDecodePixels) != nil {
+        // Reuse a bitmap already in memory before loading the cover file (a narrower
+        // card after the panel opens needs no new decode).
+        if CoverImageCache.reusable(key: key, maxPixels: coverDecodePixels, cover: coverBaseKey) != nil {
+            decodedCoverKey = key
+            return
+        }
+        guard let data = primaryImage?.data else { return }
+        if await CoverImageCache.decode(data, key: key, maxPixels: coverDecodePixels, cover: coverBaseKey) != nil {
             await recordCoverSizeIfMissing(data)
             decodedCoverKey = key
         } else {
@@ -208,7 +216,9 @@ struct ItemCardView: View {
     @ViewBuilder private var cardContent: some View {
         // Reading this makes the card redraw when its bitmap lands in the cache.
         let _ = decodedCoverKey
-        if hasImage, let cover = CoverImageCache.decodedImage(forKey: coverCacheKey) {
+        // A width change keeps the last bitmap on screen while the new size decodes.
+        if hasImage, let cover = CoverImageCache.decodedImage(forKey: coverCacheKey)
+            ?? CoverImageCache.anyDecodedImage(forCover: coverBaseKey) {
             imageCard(Image(decorative: cover, scale: 1))
         } else if hasImage, undecodableCoverKey != coverCacheKey {
             // Same size as the cover, so nothing shifts when the bitmap arrives.
