@@ -58,7 +58,7 @@ export async function fetchImage(raw, { fetchImpl = globalThis.fetch } = {}) {
     return json({ error: 'fetch failed' }, 502);
   }
   if (r.url && blockedImageURL(r.url)) return json({ error: 'redirected to a blocked host' }, 400);
-  if (!r.ok) return json({ error: `upstream ${r.status}` }, 502);
+  if (!r.ok) return json({ error: `upstream ${r.status}` }, r.status === 404 || r.status === 410 ? 404 : 502);
   const type = (r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
   if (!type.startsWith('image/') || type === 'image/svg+xml') return json({ error: 'not an image' }, 415);
   const len = Number(r.headers.get('content-length') || 0);

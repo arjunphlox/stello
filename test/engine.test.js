@@ -61,5 +61,7 @@ test('image proxy passes images and refuses other types', async () => {
   assert.equal(ok.status, 200);
   assert.equal(ok.headers.get('content-type'), 'image/png');
   assert.equal((await fetchImage('https://cdn.example.com/a', { fetchImpl: fake('text/html') })).status, 415);
+  const gone = async () => new Response('', { status: 404 });
+  assert.equal((await fetchImage('https://cdn.example.com/missing.png', { fetchImpl: gone })).status, 404);
   assert.equal((await fetchImage('https://cdn.example.com/a.svg', { fetchImpl: fake('image/svg+xml') })).status, 415);
 });

@@ -267,6 +267,9 @@ export function convertV1(files) {
     if (!name) return null;
     const k = nameKey(name);
     if (!places.has(k)) places.set(k, { id: entityId('place', name), name, kind, aliases: [] });
+    // The most specific kind wins, whatever order the items come in (a country tag
+    // and a generic meta place for the same name → country).
+    else if (kind === 'country') places.get(k).kind = 'country';
     return places.get(k);
   };
   const collectionRef = (tag) => {
