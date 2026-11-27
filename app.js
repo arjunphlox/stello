@@ -293,17 +293,20 @@
     Stello.initAuthListener();
 
     // Load items from the Worker (/api/items), paging through results.
-    // First-page-first: render with the most recent 1000 items immediately,
+    // First-page-first: render with the newest 250 items immediately,
     // then stream older history in the background. Subsequent pages cover
     // older weeks that are collapsed by default, so their headers can be
     // appended without disturbing the already-rendered first weeks.
     const PAGE = 1000;
+    // The grid shows after a small first page (the newest saves fill several
+    // screens); the rest streams in behind it.
+    const FIRST_PAGE = 250;
 
     // Returns null when the network or server fails (offline), so the
     // caller can fall back to the copy on this device.
-    async function fetchItemsPage(from) {
+    async function fetchItemsPage(from, limit = PAGE) {
       try {
-        const body = await Stello.apiGet(`/api/items?offset=${from}&limit=${PAGE}`);
+        const body = await Stello.apiGet(`/api/items?offset=${from}&limit=${limit}`);
         if (!body) { console.error('Failed to load items'); return null; }
         return body.items || [];
       } catch {
@@ -313,7 +316,7 @@
 
     const userId = Stello.getUserId();
     const Offline = window.StelloOffline || null;
-    let firstPage = Stello.isSessionFromCache && Stello.isSessionFromCache() ? null : await fetchItemsPage(0);
+    let firstPage = Stello.isSessionFromCache && Stello.isSessionFromCache() ? null : await fetchItemsPage(0, FIRST_PAGE);
     if (firstPage === null && Offline) {
       const saved = await Offline.loadLibrary(userId);
       if (saved) {
@@ -388,10 +391,10 @@
 
     // Background-stream remaining pages. Only runs if the first page hit the
     // limit — small libraries are done in a single round trip.
-    if (firstPage && firstPage.length === PAGE) {
+    if (firstPage && firstPage.length === FIRST_PAGE) {
       (async () => {
         let complete = true;
-        for (let from = PAGE; ; from += PAGE) {
+        for (let from = FIRST_PAGE; ; from += PAGE) {
           const page = await fetchItemsPage(from);
           if (page === null) { complete = false; break; }
           if (page.length === 0) break;
