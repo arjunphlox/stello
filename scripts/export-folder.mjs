@@ -65,7 +65,9 @@ async function main() {
       since = page.cursor;
       if (!page.more) break;
     }
-    const live = all.filter((i) => !i.purged && (i.deleted_at === null || i.deleted_at === undefined));
+    // A pull can return an item twice (it changed mid-pull, or a cursor tie): keep its last row.
+    const rows = [...new Map(all.map((i) => [i.id, i])).values()];
+    const live = rows.filter((i) => !i.purged && (i.deleted_at === null || i.deleted_at === undefined));
     live.sort((a, b) => String(b.added_at || '').localeCompare(String(a.added_at || '')));
     const items = LIMIT ? live.slice(0, LIMIT) : live;
     log(`${all.length} rows, ${live.length} live, exporting ${items.length}.`);

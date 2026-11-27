@@ -49,10 +49,13 @@ async function main() {
     let since = 0;
     for (;;) {
       const page = await api(`/api/sync/pull?since=${since}&limit=500`);
-      live.push(...page.items.filter((i) => !i.purged && i.deleted_at == null));
+      live.push(...page.items);
       since = page.cursor;
       if (!page.more) break;
     }
+    // A pull can return an item twice (it changed mid-pull, or a cursor tie): keep its last row.
+    const uniq = [...new Map(live.map((i) => [i.id, i])).values()];
+    live.length = 0; live.push(...uniq.filter((i) => !i.purged && i.deleted_at == null));
     const groups = new Map();
     for (const i of live) groups.set(i.added_at, (groups.get(i.added_at) || 0) + 1);
     const top = [...groups].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).slice(0, 5);
