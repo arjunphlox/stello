@@ -39,3 +39,14 @@ Nothing is stored twice; shared things exist once and are referenced by id.
 - **Ids, not paths:** renaming or moving files never breaks links.
 
 The v1 export from 2026-11-26 is converted once by a script at the start of phase 1.
+
+### Built (phase 1, part 1)
+
+`src/lib/folder-v2.js` + `scripts/convert-folder-v2.mjs` (tests: `test/folder-v2.test.js`).
+
+- Items of kind individual, studio and foundry become `people/` files (same id). Header `author`, `meta.author/maker/brand`, `meta.typeDesigner`, `meta.typeFoundry` become `people: [{id, role}]`, matched by name and aliases.
+- `location` tags and `meta.location/geography` become `places: [ids]`; `collection` tags become `collections: [ids]`. They leave `tags`/`meta`, so nothing is held twice.
+- Bodies drop a `## Summary` section equal to the summary and a `## Key Snippets` section whose quotes are all header snippets. Other text stays.
+- One item per normalised URL; a repeat adds a `sources:` entry and its snippets, images, tags and notes.
+- Run: trial first (writes to a temp folder), then `--apply` (moves v1 files into `.stello-v1/`, deletes nothing). `export-folder.mjs` refuses a v2 folder.
+

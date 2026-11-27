@@ -77,6 +77,7 @@ Items live in D1 (web) and SwiftData + CloudKit (Apple). Moving to a user-owned 
 ## Maintenance Scripts
 
 - `node scripts/export-folder.mjs --out <folder>` — read-only export of the library into the folder format (pairs through /pair.html)
+- `node scripts/convert-folder-v2.mjs --dir <folder> [--apply]` — one-time v1 → v2 folder conversion (trial by default; `--apply` keeps v1 in `.stello-v1/`)
 
 ## Active Work
 - [ ] **Desktop-context follow-ups** — e2e smoke (BACKLOG), cards UI scoping (BACKLOG). V1 pipeline shipped 2026-06-17.
