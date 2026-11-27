@@ -45,7 +45,10 @@ final class EnrichmentCoordinator {
         guard !WebLibraryImporter.hasSummary(item),
               let raw = item.sourceURL, let url = URL(string: raw),
               let page = await ImportNetwork.live.page(url),
-              let text = CaptureService.extractText(html: page.html),
+              // HTML parsing is regex-heavy: keep it off the main thread.
+              let text = await Task.detached(priority: .utility, operation: { [html = page.html] in
+                  CaptureService.extractText(html: html)
+              }).value,
               let facts = try? await activeEnricher.summarizeArticle(text: text),
               let summary = facts.summary, !summary.isEmpty else { return }
         item.summary = summary

@@ -293,17 +293,20 @@
     Stello.initAuthListener();
 
     // Load items from the Worker (/api/items), paging through results.
-    // First-page-first: render with the most recent 1000 items immediately,
+    // First-page-first: render with the newest 250 items immediately,
     // then stream older history in the background. Subsequent pages cover
     // older weeks that are collapsed by default, so their headers can be
     // appended without disturbing the already-rendered first weeks.
     const PAGE = 1000;
+    // The grid shows after a small first page (the newest saves fill several
+    // screens); the rest streams in behind it.
+    const FIRST_PAGE = 250;
 
     // Returns null when the network or server fails (offline), so the
     // caller can fall back to the copy on this device.
-    async function fetchItemsPage(from) {
+    async function fetchItemsPage(from, limit = PAGE) {
       try {
-        const body = await Stello.apiGet(`/api/items?offset=${from}&limit=${PAGE}`);
+        const body = await Stello.apiGet(`/api/items?offset=${from}&limit=${limit}`);
         if (!body) { console.error('Failed to load items'); return null; }
         return body.items || [];
       } catch {
@@ -313,7 +316,7 @@
 
     const userId = Stello.getUserId();
     const Offline = window.StelloOffline || null;
-    let firstPage = Stello.isSessionFromCache && Stello.isSessionFromCache() ? null : await fetchItemsPage(0);
+    let firstPage = Stello.isSessionFromCache && Stello.isSessionFromCache() ? null : await fetchItemsPage(0, FIRST_PAGE);
     if (firstPage === null && Offline) {
       const saved = await Offline.loadLibrary(userId);
       if (saved) {
@@ -388,10 +391,10 @@
 
     // Background-stream remaining pages. Only runs if the first page hit the
     // limit — small libraries are done in a single round trip.
-    if (firstPage && firstPage.length === PAGE) {
+    if (firstPage && firstPage.length === FIRST_PAGE) {
       (async () => {
         let complete = true;
-        for (let from = PAGE; ; from += PAGE) {
+        for (let from = FIRST_PAGE; ; from += PAGE) {
           const page = await fetchItemsPage(from);
           if (page === null) { complete = false; break; }
           if (page.length === 0) break;
@@ -871,8 +874,17 @@
     return `Week ${week} — ${month}`;
   }
 
+  const weekKeyCache = new Map();
   function getWeekKey(dateStr) {
     if (!dateStr) return 'undated';
+    const hit = weekKeyCache.get(dateStr);
+    if (hit) return hit;
+    const key = computeWeekKey(dateStr);
+    if (weekKeyCache.size > 50000) weekKeyCache.clear();
+    weekKeyCache.set(dateStr, key);
+    return key;
+  }
+  function computeWeekKey(dateStr) {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return 'undated';
     const week = getISOWeek(d);
@@ -1234,7 +1246,7 @@
 
   // ---- Week timeline ----
   const BAR_GAP = 4, BAR_MIN = 6;
-  let timelineRaf = 0, spyRaf = 0;
+  let timelineRaf = 0, spyRaf = 0, lastTimelineAt = -Infinity, lastBarsHTML = '';
   let barLayouts = [];            // [{ key, label, top, bottom }] sorted by top, grid-container coords
   let hoverWeek = null;
   let spyWeek = null;
@@ -1245,8 +1257,12 @@
   }
 
   function scheduleTimeline() {
+    // At most one layout pass per ~150 ms: card heights settle on every
+    // frame while scrolling, and each pass reads layout.
     if (timelineRaf) return;
-    timelineRaf = requestAnimationFrame(() => { timelineRaf = 0; layoutTimeline(); });
+    const wait = Math.max(0, lastTimelineAt + 150 - performance.now());
+    const run = () => { timelineRaf = requestAnimationFrame(() => { timelineRaf = 0; lastTimelineAt = performance.now(); layoutTimeline(); }); };
+    if (wait > 0) { timelineRaf = -1; setTimeout(run, wait); } else run();
   }
 
   function layoutTimeline() {
@@ -1255,16 +1271,31 @@
     if (!container || !$bars) return;
     const base = container.getBoundingClientRect().top;
     const ranges = new Map();
-    for (const card of $grid.querySelectorAll('.card[data-slug]')) {
-      const item = itemsBySlug[card.dataset.slug];
-      if (!item) continue;
-      const key = getWeekKey(item.added_at);
-      const r = card.getBoundingClientRect();
-      if (r.height === 0) continue;
-      const top = r.top - base, bottom = r.bottom - base;
+    const extend = (key, top, bottom) => {
       const cur = ranges.get(key);
       if (!cur) ranges.set(key, { top, bottom });
       else { if (top < cur.top) cur.top = top; if (bottom > cur.bottom) cur.bottom = bottom; }
+    };
+    // Cards sit in each column in date order, so a week is one run of
+    // cards per column: measure only the first and last card of each run,
+    // not every card (that made each batch cost grow with cards rendered).
+    for (const col of $grid.querySelectorAll('.masonry-col')) {
+      let runKey = null, runFirst = null, runLast = null;
+      const flush = () => {
+        if (!runFirst) return;
+        const a = runFirst.getBoundingClientRect();
+        const b = runLast === runFirst ? a : runLast.getBoundingClientRect();
+        if (a.height || b.height) extend(runKey, a.top - base, b.bottom - base);
+      };
+      for (const card of col.children) {
+        const slug = card.dataset && card.dataset.slug;
+        const item = slug && itemsBySlug[slug];
+        if (!item) continue;
+        const key = getWeekKey(item.added_at);
+        if (key !== runKey) { flush(); runKey = key; runFirst = card; }
+        runLast = card;
+      }
+      flush();
     }
     const raw = [...ranges.entries()].map(([key, r]) => ({ key, top: r.top, bottom: r.bottom }))
       .sort((a, b) => a.top - b.top);
@@ -1278,11 +1309,15 @@
       prevBottom = bottom;
       return { key: b.key, top, bottom };
     });
-    $bars.innerHTML = barLayouts.map(b =>
+    // Read the scroll-spy line before writing, so the write doesn't force
+    // a second layout.
+    const spyLine = scrollSpyLine(container);
+    const html = barLayouts.map(b =>
       `<div class="timeline-bar" data-week="${b.key}" style="top:${b.top}px;height:${b.bottom - b.top}px"></div>`
     ).join('');
+    if (html !== lastBarsHTML) { $bars.innerHTML = html; lastBarsHTML = html; }
     applyTimelineStates();
-    updateScrollSpy();
+    updateScrollSpy(spyLine);
   }
 
   // Bands split at the middle of each inter-bar gap, so every point over
@@ -1322,11 +1357,15 @@
     $label.hidden = false;
   }
 
-  function updateScrollSpy() {
-    const container = document.querySelector('.grid-container');
+  function scrollSpyLine(container) {
     const header = document.querySelector('.header');
+    return (header ? header.getBoundingClientRect().bottom : 0) + 16 - container.getBoundingClientRect().top;
+  }
+
+  function updateScrollSpy(knownLine) {
+    const container = document.querySelector('.grid-container');
     if (!container || !barLayouts.length) { spyWeek = null; return; }
-    const line = (header ? header.getBoundingClientRect().bottom : 0) + 16 - container.getBoundingClientRect().top;
+    const line = typeof knownLine === 'number' ? knownLine : scrollSpyLine(container);
     const next = weekAtY(line);
     if (next !== spyWeek) { spyWeek = next; applyTimelineStates(); }
     else if (hoverWeek) applyTimelineStates();
@@ -1576,7 +1615,10 @@
 
     const cardClass = hasImage ? ' card-visual' : ' card-glyph-card';
 
-    return `<div class="card${cardClass}" data-slug="${item.slug}" data-render-sig="${cardRenderSig(item)}" tabindex="-1">
+    // Off-screen cards skip layout and paint (content-visibility in
+    // style.css); this is the size they hold until first drawn.
+    const estH = Math.round(estimateCardHeight(item));
+    return `<div class="card${cardClass}" data-slug="${item.slug}" data-render-sig="${cardRenderSig(item)}" tabindex="-1" style="contain-intrinsic-block-size:auto ${estH}px">
       <div class="card-visual-area">
         ${thumbHtml}
         <div class="card-title-badge">${escHtml(item.title || '')}${kindLine ? `<span class="card-kind-line">${escHtml(kindLine)}</span>` : ''}</div>
@@ -3381,17 +3423,17 @@
 
     // ---- Active card color line ----
     function updateActiveCards() {
-      document.querySelectorAll('.card').forEach(card => {
-        const slug = card.dataset.slug;
-        if (!slug) return;
-        const isActive = slug === state.slug;
-        card.classList.toggle('card-active', isActive);
-        if (isActive) {
-          const color = dominantColor(itemsBySlug[slug]);
-          card.style.setProperty('--card-active-color', color);
-        } else {
-          card.style.removeProperty('--card-active-color');
-        }
+      // Touch only the cards whose state changes, not every rendered card.
+      document.querySelectorAll('.card.card-active').forEach(card => {
+        if (card.dataset.slug === state.slug) return;
+        card.classList.remove('card-active');
+        card.style.removeProperty('--card-active-color');
+      });
+      if (!state.slug) return;
+      const color = dominantColor(itemsBySlug[state.slug]);
+      document.querySelectorAll(`.card[data-slug="${cssSelectorEscape(state.slug)}"]`).forEach(card => {
+        card.classList.add('card-active');
+        card.style.setProperty('--card-active-color', color);
       });
     }
 

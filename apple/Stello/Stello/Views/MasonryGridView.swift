@@ -81,9 +81,13 @@ struct MasonryGridView: View {
         self.onFilters = onFilters
         self.onImport = onImport
         self.onSettings = onSettings
-        self.onSettings = onSettings
         self.isDropTargeted = isDropTargeted
         self.catalogItems = catalogItems
+        // The library comes from ContentView's query: don't run (and keep
+        // re-running on every save) a second full fetch here.
+        if catalogItems != nil {
+            _queriedItems = Query(filter: #Predicate<Item> { _ in false })
+        }
     }
 
     @Query(sort: \Item.addedAt, order: .reverse) private var queriedItems: [Item]
@@ -933,9 +937,20 @@ private struct LibraryChangeWatcher: View, Equatable {
     }
 
     var body: some View {
+        let sig = signatures
         Color.clear
             .frame(width: 0, height: 0)
-            .onChange(of: items.map(\.needsReview)) { _, _ in onReviewChange() }
-            .onChange(of: items.map(\.coverAspect)) { _, _ in onCoverChange() }
+            .onChange(of: sig.review) { _, _ in onReviewChange() }
+            .onChange(of: sig.cover) { _, _ in onCoverChange() }
+    }
+
+    /// One pass, no arrays: two hashes standing in for the per-item lists.
+    private var signatures: (review: Int, cover: Int) {
+        var review = Hasher(), cover = Hasher()
+        for item in items {
+            review.combine(item.needsReview)
+            cover.combine(item.coverAspect)
+        }
+        return (review.finalize(), cover.finalize())
     }
 }

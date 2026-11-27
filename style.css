@@ -931,6 +931,13 @@ html.arriving-from-login .header {
   cursor: pointer;
   transition: opacity 0.3s ease;
 }
+/* Performance at library scale: grid cards far from the viewport skip
+   style, layout and paint. Size until first drawn comes from the inline
+   contain-intrinsic-block-size (app.js renderCard). The active and focused
+   cards draw outside their box (line above, focus ring), so they opt out. */
+.masonry-col > .card:not(.card-active):not(.card-focused) {
+  content-visibility: auto;
+}
 
 /* Visual area wraps image + overlay + badges */
 .card-visual-area {

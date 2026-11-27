@@ -295,7 +295,7 @@ enum CaptureService {
     /// and caps the result at ~4,000 characters — the on-device model's context is small, so
     /// this is what AI enrichment (and search) sees instead of just title+summary.
     /// `limit: nil` returns the whole text (article reading time counts every word).
-    static func extractText(html: String, limit: Int? = 4_000) -> String? {
+    nonisolated static func extractText(html: String, limit: Int? = 4_000) -> String? {
         guard !html.isEmpty else { return nil }
         // Prefer body content: everything before <body> is metadata/CSS/JS, never prose.
         var page = html
@@ -316,10 +316,10 @@ enum CaptureService {
     }
 
     /// A region under this many words isn't the page's prose.
-    static let minRegionWords = 60
+    nonisolated static let minRegionWords = 60
 
     /// From the first `<tag` to the last `</tag>` (spans nested and sibling elements).
-    private static func between(_ html: String, tag: String) -> String? {
+    nonisolated private static func between(_ html: String, tag: String) -> String? {
         guard let start = html.range(of: "<\(tag)[\\s>]", options: [.regularExpression, .caseInsensitive]),
               let end = html.range(of: "</\(tag)>", options: [.backwards, .caseInsensitive]),
               start.lowerBound < end.lowerBound else { return nil }
@@ -328,7 +328,7 @@ enum CaptureService {
 
     /// Tag-stripped prose: code blocks and page chrome (menus, headers and footers,
     /// sidebars, forms, buttons) dropped, entities decoded, code-like tokens filtered.
-    private static func proseText(_ html: String) -> String? {
+    nonisolated private static func proseText(_ html: String) -> String? {
         var text = html
         // The trailing `|$` variant also swallows unterminated blocks (a truncated page
         // once leaked raw Tailwind CSS into snippets because its </style> was cut off).
