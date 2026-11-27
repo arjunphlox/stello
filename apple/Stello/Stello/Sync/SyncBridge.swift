@@ -185,12 +185,21 @@ final class SyncBridge {
             let slice = Array(ids[start..<min(start + Self.batch, ids.count)])
             let context = makeContext(container)
             var changes: [SyncWire.Change] = []
-            var live: [Item] = []
+            var wanted: [UUID] = []
             for id in slice {
                 guard let pending = read.changes[id] else { continue }
-                if pending.deletedAt != nil {
-                    changes.append(.init(id: id, fields: ["deleted_at": pending.deletedAt!], clock: ["deleted_at": pending.deletedAt!], full: false))
-                } else if let item = fetchItem(id, context) {
+                if let deletedAt = pending.deletedAt {
+                    changes.append(.init(id: id, fields: ["deleted_at": deletedAt], clock: ["deleted_at": deletedAt], full: false))
+                } else {
+                    wanted.append(id)
+                }
+            }
+            // One fetch per batch, not one per item.
+            var live: [Item] = []
+            if !wanted.isEmpty {
+                let descriptor = FetchDescriptor<Item>(predicate: #Predicate { wanted.contains($0.id) })
+                var seen = Set<UUID>()
+                for item in (try? context.fetch(descriptor)) ?? [] where seen.insert(item.id).inserted {
                     live.append(item)
                 }
             }
