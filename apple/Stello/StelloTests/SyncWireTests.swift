@@ -23,6 +23,28 @@ struct SyncWireTests {
         return SyncWire.Row(try! JSONSerialization.jsonObject(with: data) as! [String: Any])!
     }
 
+    @Test func duplicateIDRowsCollapseToTheRichestCopy() throws {
+        let context = try makeContext()
+        let id = UUID()
+        let plain = Item(id: id, title: "Nimvo")
+        let rich = Item(id: id, title: "Nimvo")
+        let other = Item(title: "Other")
+        context.insert(plain); context.insert(rich); context.insert(other)
+        let snippet = Snippet(text: "a quote", source: "web")
+        context.insert(snippet)
+        snippet.item = rich
+        try context.save()
+
+        #expect(SyncBridge.collapseDuplicateIDs(nil, in: context) == 1)
+        try context.save()
+        let left = try context.fetch(FetchDescriptor<Item>())
+        #expect(left.count == 2)
+        #expect(left.filter { $0.id == id }.count == 1)
+        #expect(left.first { $0.id == id }?.snippets?.count == 1)
+        // A scoped check with nothing duplicated deletes nothing.
+        #expect(SyncBridge.collapseDuplicateIDs([other.id], in: context) == 0)
+    }
+
     @Test func roundTripChangesNothing() throws {
         let context = try makeContext()
         let item = Item(title: "Karst", sourceURL: "https://example.com", summary: "A typeface", status: "gone", kind: "typeface")

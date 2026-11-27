@@ -51,6 +51,10 @@ final class SyncBridge {
     /// CloudKit imports), so a pull never overwrites a newer local value.
     private var localFieldTimes: [UUID: [String: Int]] = [:]
 
+    /// Items inserted since the last duplicate check (pulled here or arriving through CloudKit).
+    private var insertedIDs: Set<UUID> = []
+    private var scannedAllForDuplicates = false
+
     private(set) var lastSyncAt: Date?
     private(set) var lastError: String?
 
@@ -112,6 +116,7 @@ final class SyncBridge {
                     try await pushHistory(api: api, container: container)
                 }
                 try await pull(api: api, container: container)
+                collapseDuplicates(container)
                 // The profile header rides along; its failures don't hold up the library.
                 do { try await ProfileSync.sync(api: api) }
                 catch SyncAPI.Failure.unauthorized { throw SyncAPI.Failure.unauthorized }
@@ -296,6 +301,7 @@ final class SyncBridge {
             return []
         }
         guard let item = existing else {
+            insertedIDs.insert(row.id)
             let (item, downloads) = SyncWire.makeItem(from: row, in: context, queueClassify: queueClassify)
             if item.enrichmentStatus == WebLibraryImporter.awaitingClassifyStatus { queued += 1 }
             return downloads
@@ -325,6 +331,62 @@ final class SyncBridge {
             for (i, data) in results { slice[i].0.data = data }
             try context.save()
         }
+    }
+
+    // MARK: - Duplicate rows
+
+    /// CloudKit has no unique constraint, so a pull can create an item at the moment
+    /// CloudKit delivers another device's copy of it: two rows with one id. Only the Mac
+    /// collapses them; its deletes reach the other devices through CloudKit. Two devices
+    /// each picking a keeper could delete both copies, so iPhone and iPad never do.
+    /// The deletes run on the bridge's context, so they're never pushed as web deletes.
+    /// The first cycle after launch checks every id; later cycles only new inserts.
+    private func collapseDuplicates(_ container: ModelContainer) {
+        #if os(macOS)
+        let ids: Set<UUID>? = scannedAllForDuplicates ? insertedIDs : nil
+        insertedIDs.removeAll()
+        if let ids, ids.isEmpty { return }
+        let context = makeContext(container)
+        let removed = Self.collapseDuplicateIDs(ids, in: context)
+        scannedAllForDuplicates = true
+        if removed > 0 {
+            do { try context.save() } catch { print("⚠️ Duplicate cleanup failed: \(error)") }
+            print("Sync: removed \(removed) duplicate item rows")
+        }
+        #else
+        insertedIDs.removeAll()
+        #endif
+    }
+
+    /// Deletes extra rows that share an item id (`ids` nil: check every item), keeping the
+    /// richest copy: most stored images, then most snippets, then the latest edit.
+    /// Doesn't save. Returns how many rows it deleted.
+    nonisolated static func collapseDuplicateIDs(_ ids: Set<UUID>?, in context: ModelContext) -> Int {
+        var check: [UUID] = []
+        if let ids {
+            check = Array(ids)
+        } else {
+            var d = FetchDescriptor<Item>()
+            d.propertiesToFetch = [\.id]
+            var seen = Set<UUID>()
+            var dup = Set<UUID>()
+            for item in (try? context.fetch(d)) ?? [] where !seen.insert(item.id).inserted { dup.insert(item.id) }
+            check = Array(dup)
+        }
+        var removed = 0
+        for id in check {
+            let rows = (try? context.fetch(FetchDescriptor<Item>(predicate: #Predicate { $0.id == id }))) ?? []
+            guard rows.count > 1 else { continue }
+            func rank(_ i: Item) -> (Int, Int, Date) {
+                ((i.images ?? []).filter { $0.data != nil }.count, (i.snippets ?? []).count, i.updatedAt)
+            }
+            let keep = rows.max { rank($0) < rank($1) }!
+            for row in rows where row.persistentModelID != keep.persistentModelID {
+                context.delete(row)
+                removed += 1
+            }
+        }
+        return removed
     }
 
     // MARK: - History
@@ -364,6 +426,7 @@ final class SyncBridge {
                 switch change {
                 case .insert(let insert as DefaultHistoryInsert<Item>):
                     guard let id = fetchItem(insert.changedPersistentIdentifier, context)?.id else { continue }
+                    insertedIDs.insert(id)
                     note(id, fields: SyncWire.allFields, time: time, isImport: isImport, into: &read) { $0.inserted = true }
                 case .update(let update as DefaultHistoryUpdate<Item>):
                     guard let id = fetchItem(update.changedPersistentIdentifier, context)?.id else { continue }
