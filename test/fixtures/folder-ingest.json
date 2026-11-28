@@ -304,7 +304,12 @@
        }
       }
      }
-    ]
+    ],
+    "note": {
+     "words": 21,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -351,7 +356,12 @@
        }
       }
      }
-    ]
+    ],
+    "note": {
+     "words": 4,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -458,7 +468,12 @@
        }
       }
      }
-    ]
+    ],
+    "note": {
+     "words": 21,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -519,7 +534,12 @@
        }
       }
      }
-    ]
+    ],
+    "note": {
+     "words": 9,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -600,7 +620,12 @@
        }
       }
      }
-    ]
+    ],
+    "note": {
+     "words": 4,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -701,7 +726,12 @@
        }
       }
      }
-    ]
+    ],
+    "note": {
+     "words": 56,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -712,7 +742,12 @@
    "expect": {
     "type": "bookmarks",
     "links": [],
-    "items": []
+    "items": [],
+    "note": {
+     "words": 8,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -759,7 +794,12 @@
        }
       }
      }
-    ]
+    ],
+    "note": {
+     "words": 13,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -806,7 +846,12 @@
        }
       }
      }
-    ]
+    ],
+    "note": {
+     "words": 2,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -853,7 +898,12 @@
        }
       }
      }
-    ]
+    ],
+    "note": {
+     "words": 2,
+     "written": false,
+     "item": null
+    }
    }
   },
   {
@@ -864,7 +914,257 @@
    "expect": {
     "type": null,
     "links": [],
-    "items": []
+    "items": [],
+    "note": {
+     "words": 0,
+     "written": false,
+     "item": null
+    }
+   }
+  },
+  {
+   "path": "Journal/Trip to Kyoto.md",
+   "text": "---\ntitle: \"Kyoto, spring\"\ntags: [travel, Japan, \"#temples\"]\naliases:\n  - Kyoto trip\ncreated: '2024-03-02'\ncssclass: wide\n---\n# Day one\n\nWe walked from the station to the old wooden houses near the river. The light at dusk was soft and orange,\nand every lane seemed to end in a small shrine. I want to come back in autumn when the maples turn red,\nand stay longer near Arashiyama so the mornings are quiet before the crowds arrive. Café notes: try the\nmatcha place by the bridge — it was the best of the trip.\n\nMap: https://maps.example/kyoto\n```\nnot counted words here inside code\n```",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "markdown",
+    "links": [
+     {
+      "url": "https://maps.example/kyoto",
+      "key": "https://maps.example/kyoto",
+      "title": null,
+      "note": "Map",
+      "summary": null,
+      "tags": [
+       "day-one"
+      ],
+      "added": "2025-11-28T08:00:00.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "2e50faa7-7d2d-84a5-bedb-35b51ef7226b",
+      "change": {
+       "id": "2e50faa7-7d2d-84a5-bedb-35b51ef7226b",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "maps-example-2e50fa",
+        "title": "maps.example",
+        "source_url": "https://maps.example/kyoto",
+        "domain": "maps.example",
+        "summary": null,
+        "body_markdown": "Map",
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [
+         {
+          "tag": "day-one",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ],
+    "note": {
+     "words": 74,
+     "written": true,
+     "item": {
+      "id": "573ea3bf-aef7-878f-98b6-f8551431c1ef",
+      "extra": {
+       "aliases": [
+        "Kyoto trip"
+       ],
+       "created": "2024-03-02",
+       "cssclass": "wide"
+      },
+      "body": "# Day one\n\nWe walked from the station to the old wooden houses near the river. The light at dusk was soft and orange,\nand every lane seemed to end in a small shrine. I want to come back in autumn when the maples turn red,\nand stay longer near Arashiyama so the mornings are quiet before the crowds arrive. Café notes: try the\nmatcha place by the bridge — it was the best of the trip.\n\nMap: https://maps.example/kyoto\n```\nnot counted words here inside code\n```",
+      "change": {
+       "id": "573ea3bf-aef7-878f-98b6-f8551431c1ef",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "kyoto-spring-573ea3",
+        "title": "Kyoto, spring",
+        "source_url": null,
+        "domain": null,
+        "summary": null,
+        "body_markdown": "# Day one\n\nWe walked from the station to the old wooden houses near the river. The light at dusk was soft and orange,\nand every lane seemed to end in a small shrine. I want to come back in autumn when the maples turn red,\nand stay longer near Arashiyama so the mornings are quiet before the crowds arrive. Café notes: try the\nmatcha place by the bridge — it was the best of the trip.\n\nMap: https://maps.example/kyoto\n```\nnot counted words here inside code\n```",
+        "status": "active",
+        "needs_review": false,
+        "kind": null,
+        "enrichment_status": "text_done",
+        "added_at": "2024-03-02T00:00:00.000Z",
+        "tags": [
+         {
+          "tag": "note",
+          "category": "format",
+          "weight": 0.9
+         },
+         {
+          "tag": "travel",
+          "category": "subject",
+          "weight": 0.9
+         },
+         {
+          "tag": "japan",
+          "category": "subject",
+          "weight": 0.9
+         },
+         {
+          "tag": "temples",
+          "category": "subject",
+          "weight": 0.9
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "path": "Ideas/short.md",
+   "text": "Just a few words here.\n- https://short.example\n",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "markdown",
+    "links": [
+     {
+      "url": "https://short.example",
+      "key": "https://short.example",
+      "title": null,
+      "note": null,
+      "summary": null,
+      "tags": [],
+      "added": "2025-11-28T08:00:00.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "761a0b4c-65bc-8bd6-9b81-065244ba0635",
+      "change": {
+       "id": "761a0b4c-65bc-8bd6-9b81-065244ba0635",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "short-example-761a0b",
+        "title": "short.example",
+        "source_url": "https://short.example",
+        "domain": "short.example",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ],
+    "note": {
+     "words": 5,
+     "written": false,
+     "item": null
+    }
+   }
+  },
+  {
+   "path": "Ideas/nested.md",
+   "text": "---\nmeta:\n  deep: 1\n---\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.\nWriting words five here.",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "markdown",
+    "links": [],
+    "items": [],
+    "note": {
+     "words": 52,
+     "written": true,
+     "item": null
+    }
+   }
+  },
+  {
+   "path": "Ideas/plain note.md",
+   "text": "Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all.\n",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "markdown",
+    "links": [],
+    "items": [],
+    "note": {
+     "words": 98,
+     "written": true,
+     "item": {
+      "id": "3c13d16e-cbb6-8779-a0fa-9eb19756c2a9",
+      "extra": {},
+      "body": "Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all.\n",
+      "change": {
+       "id": "3c13d16e-cbb6-8779-a0fa-9eb19756c2a9",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "plain-note-3c13d1",
+        "title": "plain note",
+        "source_url": null,
+        "domain": null,
+        "summary": null,
+        "body_markdown": "Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all. Plain writing with no header at all.",
+        "status": "active",
+        "needs_review": false,
+        "kind": null,
+        "enrichment_status": "text_done",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [
+         {
+          "tag": "note",
+          "category": "format",
+          "weight": 0.9
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "path": "Ideas/long.txt",
+   "text": "A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item. A text file is never a note item.",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "markdown",
+    "links": [],
+    "items": [],
+    "note": {
+     "words": 112,
+     "written": false,
+     "item": null
+    }
    }
   }
  ]

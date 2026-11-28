@@ -152,6 +152,39 @@ extension FolderSources {
         }
     }
 
+    /// Adds Stello's details at the top of a written note, keeping its text and its own
+    /// details (web twin: writeNote in folders.js). Skipped when the file changed since it
+    /// was read: the next read tries again.
+    func writeNote(_ item: Item, folderID: UUID, path: String, extra: FolderWriter.Obj, text: String,
+                   modified: Double, size: Int) -> Bool {
+        guard isWritable(folderID), let root = roots[folderID] else { return false }
+        let scoped = root.startAccessingSecurityScopedResource()
+        defer { if scoped { root.stopAccessingSecurityScopedResource() } }
+        let url = root.appendingPathComponent(path)
+        guard let now = FolderFiles.stat(url), now.modified == modified, now.size == size else { return false }
+        let itemID = item.id.uuidString.lowercased()
+        var (entities, paths) = context(folderID)
+        let (wire, localExts) = Self.wire(item)
+        let out = FolderWriter.itemFile(wire, entities: entities, paths: &paths,
+                                        existing: (path, FolderWriter.Copy(header: extra, body: text, modified: modified)), localExts: localExts)
+        do {
+            let stat = try FolderFiles.write(Data(out.text.utf8), to: url)
+            noteIndexed(folderID, path, id: itemID, stat)
+            written[itemID] = Written(folderID: folderID, path: path, modified: stat.modified, size: stat.size, extra: nil)
+            if var seen = found[folderID], seen[path] != nil {
+                seen[path]?.modified = stat.modified
+                seen[path]?.size = stat.size
+                found[folderID] = seen
+            }
+            finishWrites([folderID])
+            folderLog.info("added details to note \(path, privacy: .public)")
+            return true
+        } catch {
+            folderLog.error("could not add details to note \(path, privacy: .public): \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
     /// Copies an item's images into media/: bytes this device holds, else the web copy.
     private func copyMedia(_ item: Item, _ media: [FolderWriter.MediaCopy], root: URL) {
         guard !media.isEmpty else { return }

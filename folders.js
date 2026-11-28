@@ -324,6 +324,7 @@
       const old = prevFound[path];
       if (old && old.mtime === file.lastModified && old.size === file.size && !old.stale) { found[path] = old; return; }
       found[path] = { mtime: file.lastModified, size: file.size, links: (old && old.links) || [], stale: true };
+      if (old && old.self) found[path].self = old.self;
     };
     const flush = async () => {
       const batch = pending; pending = [];
@@ -333,7 +334,13 @@
           if (!path.endsWith('.md')) { maybeFound(path, file); return; }
           const old = prev[path];
           const isEntity = /^(people|places)\//.test(path);
-          if (old && old.mtime === file.lastModified && old.size === file.size && !(isEntity && !old.ent)) { files[path] = old; return; }
+          // A written note Stello made into an item: still read for the links it lists.
+          const self = ingest && prevFound[path] && prevFound[path].self;
+          if (old && old.mtime === file.lastModified && old.size === file.size && !(isEntity && !old.ent)) {
+            files[path] = old;
+            if (self && self === old.id) maybeFound(path, file);
+            return;
+          }
           const kept = prevFound[path];
           if (kept && kept.mtime === file.lastModified && kept.size === file.size && !kept.stale) { if (ingest) found[path] = kept; return; }
           const head = await file.slice(0, 4096).text();
@@ -343,6 +350,7 @@
           if (isEntity) entry.ent = headerEntity(head);
           files[path] = entry;
           changed.add(id);
+          if (self && self === id) maybeFound(path, file);
         } catch { /* unreadable file: skip */ }
       }));
     };
@@ -425,9 +433,19 @@
       const now = new Date().toISOString();
       const fresh = new Map();
       const undo = [];
+      const notes = [];
       for (const [path, rec] of stale) {
         const r = await readText(folder.handle, path);
         if (!r) continue;
+        // A note with real writing of its own is an item itself (its links still are too).
+        if (!rec.self && I.isWrittenNote(path, r.text)) {
+          const id = await I.noteItemId(path);
+          const note = I.noteItem(path, r.text, { id, modified: r.mtime, now });
+          if (note) {
+            notes.push({ path, note, read: r });
+            if (!ids.has(id)) fresh.set(id, note.change);
+          }
+        }
         const before = new Set((rec.links || []).map((l) => l.key));
         const links = I.readLinks(path, r.text, { modified: r.mtime });
         const out = [];
@@ -442,25 +460,34 @@
         }
         undo.push([path, rec]);
         ix.found[path] = { mtime: r.mtime, size: r.size, links: out };
+        if (rec.self) ix.found[path].self = rec.self;
       }
       // New items go up 100 at a time. Their clock is the oldest possible, so a link another
       // device already made into an item (and maybe sorted) is never overwritten.
       const changes = [...fresh.values()].map((c) => ({ ...c, clock: 1 }));
+      const rows = [];
       try {
         for (let i = 0; i < changes.length; i += 100) {
           const batch = changes.slice(i, i + 100);
           const res = await host.push(batch);
           if (!res || !Array.isArray(res.results)) throw new Error('push failed');
           const applied = new Set(res.results.filter((x) => x.status === 'applied').map((x) => x.id));
-          const rows = batch.filter((c) => applied.has(c.id)).map((c) => ({ id: c.id, ...c.fields }));
-          for (const r of rows) origin.set(r.id, folderId);
-          if (rows.length) { made += rows.length; host.added(rows); }
+          for (const c of batch) if (applied.has(c.id)) { origin.set(c.id, folderId); rows.push({ id: c.id, ...c.fields }); }
         }
       } catch (e) {
         // Offline or signed out: the files stay to read next time (a re-sent link is a no-op).
         for (const [path, rec] of undo) ix.found[path] = rec;
         throw e;
       }
+      // Written notes get Stello's details at their top, before the grid shows them.
+      for (const { path, note, read } of notes) {
+        const item = rows.find((x) => x.id === note.id) || host.items().find((x) => x && x.id === note.id);
+        if (!item) continue;
+        try {
+          if (await writeNote(folder, path, note, read, item)) ix.found[path].self = note.id;
+        } catch (e) { console.warn('[folders] could not add details to a note', path, e); }
+      }
+      if (rows.length) { made += rows.length; host.added(rows); }
       folder.count = countItems(ix.files);
       await put('indexes', ix);
       await saveFolder(folder);
@@ -470,6 +497,24 @@
     }
     if (ingestAgain.delete(folderId)) made += await ingestFolder(folderId);
     return made;
+  }
+
+  /**
+   * Adds Stello's details at the top of a written note, keeping its text and its own
+   * details. Skipped when the file changed since it was read (the next read tries again).
+   */
+  async function writeNote(folder, path, note, read, item) {
+    if (!writable(folder)) return false;
+    const now = await readText(folder.handle, path);
+    if (!now || now.text !== read.text) return false;
+    const W = await lib();
+    const out = W.itemFile(item, { ...folderContext(folder.id), existing: { path, header: note.extra, body: note.body } });
+    const stat = await writeFile(folder.handle, path, out.text);
+    noteIndexed(folder.id, path, item.id, stat);
+    origin.set(item.id, folder.id);
+    await put('written', { id: item.id, fp: W.fingerprint(item), folderId: folder.id, path, mtime: stat.mtime, size: stat.size, extra: null });
+    if (indexes[folder.id].found && indexes[folder.id].found[path]) Object.assign(indexes[folder.id].found[path], { mtime: stat.mtime, size: stat.size });
+    return true;
   }
 
   /** Turn reading the folder's other files on or off. Off keeps the items already made. */

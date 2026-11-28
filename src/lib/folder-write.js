@@ -95,6 +95,12 @@ export function entityIndex(entities = []) {
  * }
  * An existing file keeps its path, its `sources`, and any image already copied in.
  */
+/**
+ * Header keys Stello writes itself; any other key in an item's file belongs to someone else.
+ * `aliases` is Stello's only on people files (they set it themselves); a note's own is kept.
+ */
+const OWN_KEYS = new Set([...ITEM_FIELDS, ...ENTITY_FIELDS, 'author', 'slug', 'body_markdown'].filter((k) => k !== 'aliases'));
+
 export function itemFile(item, ctx = {}) {
   const ix = ctx.ix || entityIndex(ctx.entities || []);
   const used = ctx.paths || new Set();
@@ -181,6 +187,12 @@ export function itemFile(item, ctx = {}) {
     sources: existing && Array.isArray(existing.header.sources) ? existing.header.sources : undefined,
   };
   if (h.meta && !Object.keys(h.meta).length) header.meta = null;
+  // Details someone else keeps in the file (a note's own Obsidian keys, say) stay as they are.
+  if (existing && existing.header) {
+    for (const [k, v] of Object.entries(existing.header)) {
+      if (!OWN_KEYS.has(k) && !(k in header)) header[k] = v;
+    }
+  }
   const body = cleanBody(item.body_markdown, item.summary, h.snippets);
   let fields = ITEM_FIELDS;
   if (isPerson) {

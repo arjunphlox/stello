@@ -20,6 +20,8 @@ extension FolderSources {
         var modified: Double
         var size: Int
         var links: [FolderIngest.Link]
+        /// A Markdown note with writing of its own: it becomes an item itself.
+        var note: FolderIngest.NoteItem?
     }
 
     /// Reads the folder's changed files and adds items for links the library doesn't hold.
@@ -66,8 +68,11 @@ extension FolderSources {
                   let data = try? Data(contentsOf: url) else { continue }
             let modified = values.contentModificationDate ?? .now
             let text = String(decoding: data, as: UTF8.self)
+            let note = FolderIngest.isWrittenNote(path: path, text: text)
+                ? FolderIngest.noteItem(path: path, text: text, id: FolderIngest.noteItemID(path), modified: modified, now: FolderIngest.iso(.now))
+                : nil
             out.append(IngestRead(path: path, modified: modified.timeIntervalSince1970, size: size,
-                                  links: FolderIngest.readLinks(path: path, text: text, modified: modified)))
+                                  links: FolderIngest.readLinks(path: path, text: text, modified: modified), note: note))
         }
         return out
     }
@@ -91,7 +96,20 @@ extension FolderSources {
         let now = FolderIngest.iso(.now)
         var fresh = Set<String>()
         var made = 0
+        var notes: [(read: IngestRead, note: FolderIngest.NoteItem)] = []
         for read in reads {
+            let wasNote = seen[read.path]?.note
+            // A note with real writing of its own is an item itself (its links still are too).
+            if wasNote == nil, let note = read.note {
+                let key = note.id.uuidString.lowercased()
+                notes.append((read, note))
+                if !ids.contains(key), !fresh.contains(key) {
+                    fresh.insert(key)
+                    origin[key] = id
+                    insert(note, into: context)
+                    made += 1
+                }
+            }
             let before = Set((seen[read.path]?.links ?? []).map(\.key))
             var links: [FoundEntry.FoundLink] = []
             for link in read.links {
@@ -109,7 +127,7 @@ extension FolderSources {
                 }
                 links.append(.init(key: link.key, id: itemID!))
             }
-            seen[read.path] = FoundEntry(modified: read.modified, size: read.size, links: links, stale: nil)
+            seen[read.path] = FoundEntry(modified: read.modified, size: read.size, links: links, stale: nil, note: wasNote)
         }
         if made > 0 {
             do { try context.save() } catch {
@@ -117,6 +135,18 @@ extension FolderSources {
                 return // the files stay stale and are read again next time
             }
             folderLog.info("folder files: \(made) new items")
+        }
+        // Written notes get Stello's details at their top, in the same file.
+        for (read, note) in notes {
+            let noteID = note.id
+            var one = FetchDescriptor<Item>(predicate: #Predicate { $0.id == noteID })
+            one.fetchLimit = 1
+            guard let item = try? context.fetch(one).first else { continue }
+            if writeNote(item, folderID: id, path: read.path, extra: note.extra, text: note.text, modified: read.modified, size: read.size) {
+                seen[read.path]?.note = noteID.uuidString.lowercased()
+            }
+        }
+        if made > 0 {
             // Plain links: let the background pass sort them now, as for new web saves.
             NotificationCenter.default.post(name: SyncBridge.webSavesQueued, object: nil)
         }
@@ -125,6 +155,18 @@ extension FolderSources {
         if let i = folders.firstIndex(where: { $0.id == id }) { folders[i].count = Self.countItems(indexes[id] ?? [:], seen) }
         persist()
         rebuildLookup()
+    }
+
+    private func insert(_ n: FolderIngest.NoteItem, into context: ModelContext) {
+        let parse = ISO8601DateFormatter()
+        parse.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let item = Item(id: n.id, slug: n.slug, title: n.title, sourceURL: nil, domain: nil,
+                        summary: nil, bodyMarkdown: n.body, status: "active", needsReview: false,
+                        addedAt: parse.date(from: n.addedAt) ?? .now,
+                        enrichmentStatus: "text_done", kind: "")
+        context.insert(item)
+        item.tags = [ItemTag(name: "note", category: "format", weight: FolderIngest.noteTagWeight)]
+            + n.subjects.map { ItemTag(name: $0, category: "subject", weight: FolderIngest.noteTagWeight) }
     }
 
     private func insert(_ n: FolderIngest.NewItem, into context: ModelContext) {

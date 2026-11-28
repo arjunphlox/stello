@@ -20,6 +20,24 @@ test('every sample file gives the expected links, ids and new items', async () =
   }
 });
 
+test('written notes: about 50 words of own writing make the note an item, details kept', async () => {
+  const I = await lib;
+  for (const c of fixtures.cases) {
+    const want = c.expect.note;
+    assert.strictEqual(I.ownWords(c.text), want.words, c.path);
+    assert.strictEqual(I.isWrittenNote(c.path, c.text), want.written, c.path);
+    if (!want.written) continue;
+    const id = await I.noteItemId(c.path);
+    const n = I.noteItem(c.path, c.text, { id, modified: c.modified, now: c.now });
+    assert.deepStrictEqual(n && { id: n.id, extra: n.extra, body: n.body, change: n.change }, want.item, c.path);
+  }
+  const kyoto = fixtures.cases.find((c) => c.path.includes('Kyoto')).expect.note.item;
+  assert.deepStrictEqual(kyoto.change.fields.tags.map((t) => t.tag), ['note', 'travel', 'japan', 'temples']);
+  assert.strictEqual(kyoto.change.fields.added_at, '2024-03-02T00:00:00.000Z');
+  // Front matter Stello can't keep safely (nested details) leaves the file alone.
+  assert.strictEqual(fixtures.cases.find((c) => c.path === 'Ideas/nested.md').expect.note.item, null);
+});
+
 test('reading files never calls AI or the network: new links wait for the Mac to sort them', async () => {
   const I = await lib;
   const [l] = I.readLinks('a.md', '- https://example.com/page');

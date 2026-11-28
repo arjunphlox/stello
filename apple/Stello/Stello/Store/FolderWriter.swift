@@ -225,6 +225,9 @@ nonisolated enum FolderWriter {
         "added", "analyzed", "opened", "open_count", "cover", "cover_aspect",
         "review", "enrichment", "people", "places", "sources",
         "tags", "meta", "snippets", "images"]
+    /// Header keys Stello writes itself; any other key in an item's file belongs to someone else.
+    /// `aliases` is Stello's only on people files (they set it themselves); a note's own is kept.
+    static let ownKeys: Set<String> = Set(itemFields + entityFields + ["author", "slug", "body_markdown"]).subtracting(["aliases"])
     static let entityFields = ["id", "name", "kind", "aliases", "url", "summary", "status", "added", "analyzed", "opened",
         "open_count", "cover", "cover_aspect", "review", "enrichment", "places",
         "tags", "meta", "snippets", "images"]
@@ -634,6 +637,8 @@ nonisolated enum FolderWriter {
         header["people"] = .array(people)
         header["places"] = .array(places)
         if let s = existing?.copy.header["sources"], s.array != nil { header["sources"] = s }
+        // Details someone else keeps in the file (a note's own Obsidian keys, say) stay as they are.
+        for (k, v) in existing?.copy.header.pairs ?? [] where !ownKeys.contains(k) && header[k] == nil { header[k] = v }
         let body = cleanBody(item["body_markdown"]?.string, summary: item["summary"]?.string, snippets: snippets)
         var fields = itemFields
         if isPerson {

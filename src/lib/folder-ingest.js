@@ -20,6 +20,8 @@
  *   readLinks(path, text, { modified })  [{ url, key, title, note, summary, tags, added }]
  *   linkItemId(key)                  the same UUID on every device for one link (async, SHA-256)
  *   linkChange(link, { id, now })    a /api/sync/push change for a new item
+ *   isWrittenNote(path, text)        a Markdown note with NOTE_WORDS+ words of its own writing
+ *   noteItem(path, text, { id, ... }) that note as an item, or null when its file is left alone
  */
 import { normaliseUrl } from './folder-v2.js';
 
@@ -387,11 +389,18 @@ export function idFromDigest(bytes) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-export async function linkItemId(key) {
-  const data = new TextEncoder().encode(`stello-link\n${key}`);
-  const subtle = globalThis.crypto && globalThis.crypto.subtle;
-  const digest = await subtle.digest('SHA-256', data);
+async function digestId(text) {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return idFromDigest(new Uint8Array(digest));
+}
+
+export function linkItemId(key) {
+  return digestId(`stello-link\n${key}`);
+}
+
+/** A written note's item id, from its place in the folder (the same on every device). */
+export function noteItemId(path) {
+  return digestId(`stello-note\n${path}`);
 }
 
 /** "Future-facing fonts" → "future-facing-fonts-4c9f18". */
@@ -431,6 +440,169 @@ export function linkChange(link, { id, now }) {
       images: [],
       snippets: [],
       metadata: null,
+    },
+  };
+}
+
+// ── Written notes ───────────────────────────────────────────────────────────
+// A Markdown note with about 50 words or more of the person's own writing (links, headings
+// and code not counted) is an item itself (Arjun, Nov 28 2026). Stello adds its details at
+// the top of that same file; the text and any details already there are kept. Its links
+// still become their own items. A note that is mostly a list of links stays hidden.
+
+export const NOTE_WORDS = 50;
+const NOTE_TAG_WEIGHT = 0.9;
+
+/** A Markdown file → { front: [lines] | null, body }. */
+export function splitFront(text) {
+  const src = String(text).replace(/^\uFEFF/, '');
+  const m = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(src);
+  if (!m) return { front: null, body: src };
+  return { front: m[1].split(/\r?\n/), body: src.slice(m[0].length) };
+}
+
+/** Words of the person's own writing in a Markdown file. */
+export function ownWords(text) {
+  const { body } = splitFront(text);
+  let n = 0;
+  let fence = null;
+  for (const line of body.split(/\r?\n/)) {
+    const f = /^\s*(```|~~~)/.exec(line);
+    if (f) { fence = fence === f[1] ? null : fence || f[1]; continue; }
+    if (fence || /^\s*#{1,6}\s/.test(line)) continue;
+    const rest = line.replace(MD_IMAGE, ' ').replace(MD_LINK, ' ').replace(AUTO_LINK, ' ').replace(BARE_URL, ' ');
+    n += (rest.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length;
+  }
+  return n;
+}
+
+/** Only Markdown notes: a .txt file can't hold Stello's details at its top. */
+export function isWrittenNote(path, text) {
+  return /\.(md|markdown)$/i.test(String(path || '')) && ownWords(text) >= NOTE_WORDS;
+}
+
+function yamlScalar(raw) {
+  const s = String(raw).trim();
+  if (/^"(?:[^"\\]|\\.)*"$/.test(s)) { try { return JSON.parse(s); } catch { return s.slice(1, -1); } }
+  if (/^'.*'$/.test(s)) return s.slice(1, -1).replace(/''/g, "'");
+  if (/^(true|yes)$/i.test(s)) return true;
+  if (/^(false|no)$/i.test(s)) return false;
+  if (/^(null|~)$/i.test(s)) return null;
+  if (/^-?\d+(\.\d+)?$/.test(s) && s.length < 16) return Number(s);
+  return s;
+}
+
+function splitFlow(s) {
+  const out = [];
+  let cur = '';
+  let q = null;
+  for (const ch of s) {
+    if (q) { cur += ch; if (ch === q) q = null; continue; }
+    if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+    if (ch === ',') { out.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  if (cur.trim() || out.length) out.push(cur);
+  return out.map((x) => x.trim()).filter((x) => x !== '');
+}
+
+/**
+ * Simple YAML front matter (key: value, [a, b] lists, "- a" lists) → an object, or null
+ * when it holds anything more (nested maps, multi-line text): then the file is left alone.
+ */
+export function readFront(lines) {
+  const out = {};
+  let list = null;
+  for (const raw of lines || []) {
+    const line = raw.replace(/\s+$/, '');
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    const item = /^\s*-\s+(.*)$/.exec(line);
+    if (item) {
+      if (!list || /^[\[{]/.test(item[1].trim()) || /^[\w .-]+:\s/.test(item[1])) return null;
+      out[list].push(yamlScalar(item[1]));
+      continue;
+    }
+    const kv = /^([A-Za-z0-9_][\w.-]*(?: [\w.-]+)*)\s*:(?:\s+(.*))?$/.exec(line);
+    if (!kv || Object.prototype.hasOwnProperty.call(out, kv[1])) return null;
+    const key = kv[1];
+    const v = kv[2] == null ? '' : kv[2].trim();
+    list = null;
+    if (!v) { out[key] = []; list = key; continue; }
+    if (/^[|>{&*!]/.test(v)) return null;
+    if (/^\[.*\]$/.test(v)) {
+      const inner = v.slice(1, -1);
+      if (/[\[\]{}]/.test(inner)) return null;
+      out[key] = splitFlow(inner).map(yamlScalar);
+      continue;
+    }
+    if (/^\[/.test(v)) return null;
+    out[key] = yamlScalar(v);
+  }
+  for (const [k, v] of Object.entries(out)) if (Array.isArray(v) && !v.length) out[k] = null;
+  return out;
+}
+
+// Stello's own header keys: a note already using one of them for something else is left alone.
+const STELLO_KEYS = new Set(['id', 'url', 'kind', 'site', 'summary', 'status', 'added', 'analyzed',
+  'opened', 'open_count', 'cover', 'cover_aspect', 'review', 'enrichment', 'people', 'places',
+  'sources', 'meta', 'snippets', 'images', 'name']);
+const NOTE_TAG_KEYS = new Set(['tags', 'tag', 'keywords']);
+const NOTE_DATE_KEYS = new Set(['created', 'date', 'created_at', 'creation date']);
+
+/**
+ * A written note → { id, change, extra, body }: `change` is the /api/sync/push change for
+ * its item, `extra` the note's own details kept in its header (Obsidian keys and the like),
+ * `body` its text exactly as written. Null when its details can't be kept safely, so the
+ * file is never touched (its links still become items).
+ */
+export function noteItem(path, text, { id, modified = null, now }) {
+  const { front, body } = splitFront(text);
+  const fm = front ? readFront(front) : {};
+  if (!fm) return null;
+  const extra = {};
+  const tags = [];
+  let title = null;
+  let added = null;
+  for (const [k, v] of Object.entries(fm)) {
+    const low = k.toLowerCase();
+    if (low === 'title' && !title && v != null && typeof v !== 'object') { title = squash(String(v)); continue; }
+    if (NOTE_TAG_KEYS.has(low)) {
+      const names = Array.isArray(v) ? v : String(v == null ? '' : v).split(/[,\s]+/);
+      addTags(tags, names.map((x) => String(x == null ? '' : x).replace(/^#/, '')));
+      continue;
+    }
+    if (STELLO_KEYS.has(low)) return null;
+    if (NOTE_DATE_KEYS.has(low) && !added) added = toISO(v);
+    extra[k] = v;
+  }
+  title = (title || fileTitle(path) || 'Note').slice(0, 300);
+  const iso = added || (modified ? new Date(modified).toISOString() : now);
+  return {
+    id,
+    extra,
+    body,
+    change: {
+      id,
+      full: true,
+      clock: Date.parse(now),
+      fields: {
+        slug: linkSlug(title, id),
+        title,
+        source_url: null,
+        domain: null,
+        summary: null,
+        body_markdown: body.replace(/\s+$/, '') || null,
+        status: 'active',
+        needs_review: false,
+        kind: null,
+        enrichment_status: 'text_done',
+        added_at: iso,
+        tags: [{ tag: 'note', category: 'format', weight: NOTE_TAG_WEIGHT },
+          ...tags.filter((t) => t !== 'note').slice(0, MAX_TAGS).map((tag) => ({ tag, category: 'subject', weight: NOTE_TAG_WEIGHT }))],
+        images: [],
+        snippets: [],
+        metadata: null,
+      },
     },
   };
 }

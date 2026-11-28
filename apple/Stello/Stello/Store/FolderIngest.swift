@@ -537,3 +537,211 @@ nonisolated enum FolderIngest {
                        addedAt: link.added ?? now, tags: link.tags)
     }
 }
+
+// MARK: - Written notes (folder-ingest.js "Written notes")
+// A Markdown note with about 50 words or more of the person's own writing (links, headings
+// and code not counted) is an item itself (Arjun, Nov 28 2026). Stello adds its details at
+// the top of that same file; the text and any details already there are kept. Its links
+// still become their own items. A note that is mostly a list of links stays hidden.
+
+extension FolderIngest {
+    typealias JSON = FolderWriter.JSON
+    static let noteWords = 50
+    static let noteTagWeight = 0.9
+
+    private static let frontRE: NSRegularExpression = try! NSRegularExpression(
+        pattern: "^---\\r?\\n([\\s\\S]*?)\\r?\\n---[ \\t]*(?:\\r?\\n|$)", options: [])
+    private static let headingLine = re("^\\s*#{1,6}\\s")
+    private static let wordRE = re("[\\p{L}\\p{N}][\\p{L}\\p{N}'’-]*")
+    private static let noteExt = re("\\.(md|markdown)$", ci: true)
+
+    /// A Markdown file → its front-matter lines (nil when it has none) and the text after them.
+    static func splitFront(_ text: String) -> (front: [String]?, body: String) {
+        var src = text
+        if src.hasPrefix("\u{FEFF}") { src.removeFirst() }
+        let ns = src as NSString
+        guard let m = frontRE.firstMatch(in: src, range: NSRange(location: 0, length: ns.length)) else { return (nil, src) }
+        let inner = ns.substring(with: m.range(at: 1))
+        let body = ns.substring(from: m.range.location + m.range.length)
+        return (lines(inner), body)
+    }
+
+    /// Words of the person's own writing in a Markdown file.
+    static func ownWords(_ text: String) -> Int {
+        let body = splitFront(text).body
+        var n = 0
+        var fence: String?
+        for line in lines(body) {
+            if let f = first(fenceRE, line), let mark = group(f, 1, line) {
+                fence = fence == mark ? nil : (fence ?? mark)
+                continue
+            }
+            if fence != nil || first(headingLine, line) != nil { continue }
+            var rest = sub(line, mdImage, " ")
+            rest = sub(rest, mdLink, " ")
+            rest = sub(rest, autoLink, " ")
+            rest = sub(rest, bareURL, " ")
+            n += all(wordRE, rest).count
+        }
+        return n
+    }
+
+    /// Only Markdown notes: a .txt file can't hold Stello's details at its top.
+    static func isWrittenNote(path: String, text: String) -> Bool {
+        first(noteExt, path) != nil && ownWords(text) >= noteWords
+    }
+
+    static func noteItemID(_ path: String) -> UUID {
+        var b = Array(SHA256.hash(data: Data("stello-note\n\(path)".utf8)).prefix(16))
+        b[6] = (b[6] & 0x0f) | 0x80
+        b[8] = (b[8] & 0x3f) | 0x80
+        return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
+    }
+
+    private static let dq = re("^\"(?:[^\"\\\\]|\\\\.)*\"$")
+    private static let yes = re("^(true|yes)$", ci: true)
+    private static let no = re("^(false|no)$", ci: true)
+    private static let nul = re("^(null|~)$", ci: true)
+    private static let num = re("^-?\\d+(\\.\\d+)?$")
+
+    static func yamlScalar(_ raw: String) -> JSON {
+        let s = raw.trimmingCharacters(in: space)
+        if first(dq, s) != nil { return FolderWriter.parse(s) ?? .string(String(s.dropFirst().dropLast())) }
+        if s.count >= 2, s.hasPrefix("'"), s.hasSuffix("'") {
+            return .string(String(s.dropFirst().dropLast()).replacingOccurrences(of: "''", with: "'"))
+        }
+        if first(yes, s) != nil { return .bool(true) }
+        if first(no, s) != nil { return .bool(false) }
+        if first(nul, s) != nil { return .null }
+        if first(num, s) != nil, s.count < 16, let d = Double(s) { return .number(d) }
+        return .string(s)
+    }
+
+    private static func splitFlow(_ s: String) -> [String] {
+        var out: [String] = []
+        var cur = ""
+        var q: Character?
+        for ch in s {
+            if let open = q { cur.append(ch); if ch == open { q = nil }; continue }
+            if ch == "\"" || ch == "'" { q = ch; cur.append(ch); continue }
+            if ch == "," { out.append(cur); cur = ""; continue }
+            cur.append(ch)
+        }
+        if !cur.trimmingCharacters(in: space).isEmpty || !out.isEmpty { out.append(cur) }
+        return out.map { $0.trimmingCharacters(in: space) }.filter { !$0.isEmpty }
+    }
+
+    private static let listItem = re("^\\s*-\\s+(.*)$")
+    private static let mapInList = re("^[A-Za-z0-9_ .-]+:\\s")
+    private static let keyValue = re("^([A-Za-z0-9_][A-Za-z0-9_.-]*(?: [A-Za-z0-9_.-]+)*)\\s*:(?:\\s+(.*))?$")
+    private static let blockStart = re("^[|>{&*!]")
+    private static let flowList = re("^\\[.*\\]$")
+    private static let bracket = re("[\\[\\]{}]")
+    private static let trailingSpace = re("\\s+$")
+
+    /// Simple YAML front matter (key: value, [a, b] lists, "- a" lists) → ordered details, or
+    /// nil when it holds anything more (nested maps, multi-line text): then the file is left alone.
+    static func readFront(_ lines: [String]) -> FolderWriter.Obj? {
+        var out = FolderWriter.Obj()
+        var list: String?
+        var items: [String: [JSON]] = [:]
+        for raw in lines {
+            let line = sub(raw, trailingSpace, "")
+            if line.trimmingCharacters(in: space).isEmpty || line.trimmingCharacters(in: .whitespaces).hasPrefix("#") { continue }
+            if let m = first(listItem, line), let v = group(m, 1, line) {
+                let t = v.trimmingCharacters(in: space)
+                guard let key = list, !(t.hasPrefix("[") || t.hasPrefix("{")), first(mapInList, v) == nil else { return nil }
+                items[key, default: []].append(yamlScalar(v))
+                out[key] = .array(items[key]!)
+                continue
+            }
+            guard let kv = first(keyValue, line), let key = group(kv, 1, line), out[key] == nil else { return nil }
+            let v = (group(kv, 2, line) ?? "").trimmingCharacters(in: space)
+            list = nil
+            if v.isEmpty { out[key] = .array([]); items[key] = []; list = key; continue }
+            if first(blockStart, v) != nil { return nil }
+            if first(flowList, v) != nil {
+                let inner = String(v.dropFirst().dropLast())
+                if first(bracket, inner) != nil { return nil }
+                out[key] = .array(splitFlow(inner).map(yamlScalar))
+                continue
+            }
+            if v.hasPrefix("[") { return nil }
+            out[key] = yamlScalar(v)
+        }
+        for (k, v) in out.pairs { if case .array(let a) = v, a.isEmpty { out[k] = .null } }
+        return out
+    }
+
+    private static let stelloKeys: Set<String> = ["id", "url", "kind", "site", "summary", "status", "added", "analyzed",
+        "opened", "open_count", "cover", "cover_aspect", "review", "enrichment", "people", "places",
+        "sources", "meta", "snippets", "images", "name"]
+    private static let noteTagKeys: Set<String> = ["tags", "tag", "keywords"]
+    private static let noteDateKeys: Set<String> = ["created", "date", "created_at", "creation date"]
+    private static let tagSplit = re("[,\\s]+")
+
+    /// A written note's item: `extra` is the note's own details kept in its header,
+    /// `text` its text exactly as written (`body` the item's notes, trailing space trimmed).
+    struct NoteItem: Equatable, Sendable {
+        var id: UUID
+        var slug: String
+        var title: String
+        var body: String?
+        var addedAt: String
+        var subjects: [String]
+        var text: String
+        var extra: FolderWriter.Obj
+    }
+
+    /// JS `String(v)` for a front-matter value.
+    private static func plain(_ v: JSON) -> String {
+        switch v {
+        case .string(let s): return s
+        case .null: return "null"
+        case .array(let a): return a.map { $0 == .null ? "" : plain($0) }.joined(separator: ",")
+        default: return FolderWriter.stringify(v)
+        }
+    }
+
+    /// A written note → its item, or nil when its details can't be kept safely (the file is
+    /// then never touched; its links still become items).
+    static func noteItem(path: String, text: String, id: UUID, modified: Date?, now: String) -> NoteItem? {
+        let (front, body) = splitFront(text)
+        guard let fm = front.map(readFront) ?? FolderWriter.Obj() else { return nil }
+        var extra = FolderWriter.Obj()
+        var tags: [String] = []
+        var title: String?
+        var added: String?
+        for (k, v) in fm.pairs {
+            let low = k.lowercased()
+            if low == "title", title == nil, v != .null, v.array == nil, v.object == nil { title = squash(plain(v)); continue }
+            if noteTagKeys.contains(low) {
+                let names: [String]
+                if case .array(let a) = v { names = a.map { $0 == .null ? "" : plain($0) } }
+                else { names = splitOn(v == .null ? "" : plain(v), tagSplit) }
+                addTags(&tags, names.map { $0.hasPrefix("#") ? String($0.dropFirst()) : $0 })
+                continue
+            }
+            if stelloKeys.contains(low) { return nil }
+            if noteDateKeys.contains(low), added == nil { added = toISO(v == .null ? "" : plain(v)) }
+            extra[k] = v
+        }
+        let name = String((title.flatMap { $0.isEmpty ? nil : $0 } ?? fileTitle(path) ?? "Note").prefix(300))
+        let trimmed = sub(body, trailingSpace, "")
+        return NoteItem(id: id, slug: linkSlug(name, id: id), title: name, body: trimmed.isEmpty ? nil : trimmed,
+                        addedAt: added ?? modified.map(iso) ?? now,
+                        subjects: Array(tags.filter { $0 != "note" }.prefix(maxTags)), text: body, extra: extra)
+    }
+
+    private static func splitOn(_ s: String, _ r: NSRegularExpression) -> [String] {
+        let ns = s as NSString
+        var out: [String] = []
+        var last = 0
+        for m in r.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+            out.append(ns.substring(with: NSRange(location: last, length: m.range.location - last)))
+            last = m.range.location + m.range.length
+        }
+        out.append(ns.substring(from: last))
+        return out
+    }
+}

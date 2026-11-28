@@ -47,6 +47,33 @@ final class FolderIngestTests: XCTestCase {
         }
     }
 
+    func testWrittenNotesMatchTheWeb() throws {
+        for c in cases {
+            let path = c["path"]!.string!
+            let text = c["text"]?.string ?? ""
+            let want = c["expect"]!["note"]!
+            XCTAssertEqual(Double(I.ownWords(text)), want["words"]?.number, path)
+            let written = I.isWrittenNote(path: path, text: text)
+            XCTAssertEqual(written, want["written"] == .bool(true), path)
+            guard written else { continue }
+            let id = I.noteItemID(path)
+            let modified = Date(timeIntervalSince1970: (c["modified"]?.number ?? 0) / 1000)
+            let n = I.noteItem(path: path, text: text, id: id, modified: modified, now: c["now"]!.string!)
+            guard let item = want["item"], item != .null else { XCTAssertNil(n, path); continue }
+            let note = try XCTUnwrap(n, path)
+            XCTAssertEqual(id.uuidString.lowercased(), item["id"]?.string, path)
+            XCTAssertEqual(W.JSON.object(note.extra), item["extra"], path)
+            XCTAssertEqual(note.text, item["body"]?.string, path)
+            let f = item["change"]!["fields"]!
+            XCTAssertEqual(note.slug, f["slug"]?.string, path)
+            XCTAssertEqual(note.title, f["title"]?.string, path)
+            XCTAssertEqual(note.body, f["body_markdown"]?.string, path)
+            XCTAssertEqual(note.addedAt, f["added_at"]?.string, path)
+            XCTAssertEqual(f["enrichment_status"]?.string, "text_done", path)
+            XCTAssertEqual(["note"] + note.subjects, (f["tags"]?.array ?? []).compactMap { $0["tag"]?.string }, path)
+        }
+    }
+
     func testOneLinkOneIDWhateverItsTrackingBits() {
         let a = I.readLinks(path: "a.md", text: "https://www.Example.com/x/?utm_source=a#top", modified: nil)
         let b = I.readLinks(path: "b.csv", text: "url\nhttp://example.com/x\n", modified: nil)

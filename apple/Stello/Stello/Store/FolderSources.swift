@@ -404,6 +404,8 @@ nonisolated struct FoundEntry: Codable, Equatable, Sendable {
     var size: Int
     var links: [FoundLink]
     var stale: Bool?
+    /// The item id of a written note Stello made into an item (its links are still read).
+    var note: String?
 
     struct FoundLink: Codable, Equatable, Sendable {
         var key: String
@@ -500,7 +502,8 @@ nonisolated enum FolderScanner {
         func maybeFound(_ path: String, _ modified: Double, _ size: Int) {
             guard ingest, size <= FolderIngest.maxFileBytes else { return }
             if let old = previousFound[path], old.modified == modified, old.size == size, old.stale != true { found[path] = old; return }
-            found[path] = FoundEntry(modified: modified, size: size, links: previousFound[path]?.links ?? [], stale: true)
+            found[path] = FoundEntry(modified: modified, size: size, links: previousFound[path]?.links ?? [], stale: true,
+                                     note: previousFound[path]?.note)
         }
         for case let url as URL in walker {
             let name = url.lastPathComponent
@@ -518,8 +521,11 @@ nonisolated enum FolderScanner {
             let size = values?.fileSize ?? 0
             guard isMD else { maybeFound(path, modified, size); continue }
             let isEntity = path.hasPrefix("people/") || path.hasPrefix("places/")
+            // A written note Stello made into an item: still read for the links it lists.
+            let note = ingest ? previousFound[path]?.note : nil
             if let old = previous[path], old.modified == modified, old.size == size, !(isEntity && old.ent == nil) {
                 out[path] = old
+                if let note, note == old.id { maybeFound(path, modified, size) }
                 continue
             }
             if ingest, let kept = previousFound[path], kept.modified == modified, kept.size == size, kept.stale != true {
@@ -535,6 +541,7 @@ nonisolated enum FolderScanner {
                 if isEntity { entry.ent = headerEntity(text) }
                 out[path] = entry
                 changed.insert(id)
+                if let note, note == id { maybeFound(path, modified, size) }
             } else {
                 maybeFound(path, modified, size)
             }

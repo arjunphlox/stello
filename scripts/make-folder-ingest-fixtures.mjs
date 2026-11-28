@@ -8,7 +8,7 @@
  * Review the diff of the JSON before committing: it is the expected output.
  */
 import { writeFileSync } from 'node:fs';
-import { readLinks, linkItemId, linkChange, ingestType } from '../src/lib/folder-ingest.js';
+import { readLinks, linkItemId, linkChange, ingestType, ownWords, isWrittenNote, noteItemId, noteItem } from '../src/lib/folder-ingest.js';
 
 const NOW = '2026-11-28T09:00:00.000Z';
 const MODIFIED = Date.parse('2025-11-28T08:00:00.000Z');
@@ -42,6 +42,20 @@ const files = [
   { path: 'Binary.webloc', text: 'bplist00Ñ\u0001\u0002SURL_\u0010\u0018https://binary.example/p\u0008\u000b' },
   { path: 'Shortcut.url', text: '[InternetShortcut]\r\nURL=https://foo.com/bar\r\n' },
   { path: 'image.png', text: '' },
+  // Written notes: about 50 words or more of the person's own writing make the note an item.
+  { path: 'Journal/Trip to Kyoto.md', text: [
+    '---', 'title: "Kyoto, spring"', 'tags: [travel, Japan, "#temples"]', 'aliases:', '  - Kyoto trip', "created: '2024-03-02'", 'cssclass: wide', '---',
+    '# Day one', '',
+    'We walked from the station to the old wooden houses near the river. The light at dusk was soft and orange,',
+    'and every lane seemed to end in a small shrine. I want to come back in autumn when the maples turn red,',
+    'and stay longer near Arashiyama so the mornings are quiet before the crowds arrive. Café notes: try the',
+    'matcha place by the bridge — it was the best of the trip.', '',
+    'Map: https://maps.example/kyoto', '```', 'not counted words here inside code', '```',
+  ].join('\n') },
+  { path: 'Ideas/short.md', text: 'Just a few words here.\n- https://short.example\n' },
+  { path: 'Ideas/nested.md', text: ['---', 'meta:', '  deep: 1', '---', ...Array(13).fill('Writing words five here.')].join('\n') },
+  { path: 'Ideas/plain note.md', text: Array(14).fill('Plain writing with no header at all.').join(' ') + '\n' },
+  { path: 'Ideas/long.txt', text: Array(14).fill('A text file is never a note item.').join(' ') },
 ];
 
 const cases = [];
@@ -52,7 +66,11 @@ for (const f of files) {
     const id = await linkItemId(l.key);
     items.push({ id, change: linkChange(l, { id, now: NOW }) });
   }
-  cases.push({ ...f, modified: MODIFIED, now: NOW, expect: { type: ingestType(f.path), links, items } });
+  const written = isWrittenNote(f.path, f.text);
+  const noteId = await noteItemId(f.path);
+  const n = written ? noteItem(f.path, f.text, { id: noteId, modified: MODIFIED, now: NOW }) : null;
+  const note = { words: ownWords(f.text), written, item: n && { id: n.id, extra: n.extra, body: n.body, change: n.change } };
+  cases.push({ ...f, modified: MODIFIED, now: NOW, expect: { type: ingestType(f.path), links, items, note } });
 }
 
 const json = JSON.stringify({ cases });
