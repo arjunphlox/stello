@@ -2669,7 +2669,7 @@
     setMode(start, { quiet: true });
     pullDoc();
     window.addEventListener('focus', () => { if (!dirty && !pushing) pullDoc(); });
-    window.StelloCanvas = { setMode, addAuto, has: (s) => !!cardRec(s), setReturn: (v) => localStorage.setItem(RETURN_KEY, v), focusOn, centerOn: (sx, sy, k) => { const w = screenToWorld(sx, sy); const r = stageRect(); view.k = k; view.x = r.width / 2 - w.x * k; view.y = r.height / 2 - w.y * k; schedule(); }, fit: () => fit(true), get view() { return view; }, zoomAt, stepZoom, flyTo, select: (s) => { sel = s; schedule(true); } };
+    window.StelloCanvas = { setMode, addAuto, addAt: (slugs, sx, sy) => addToCanvas(slugs, screenToWorld(sx, sy)), has: (s) => !!cardRec(s), setReturn: (v) => localStorage.setItem(RETURN_KEY, v), focusOn, centerOn: (sx, sy, k) => { const w = screenToWorld(sx, sy); const r = stageRect(); view.k = k; view.x = r.width / 2 - w.x * k; view.y = r.height / 2 - w.y * k; schedule(); }, fit: () => fit(true), get view() { return view; }, zoomAt, stepZoom, flyTo, select: (s) => { sel = s; schedule(true); } };
   }
   if (window.StelloApp) init();
   else document.addEventListener('stello:ready', init, { once: true });

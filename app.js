@@ -2751,8 +2751,9 @@
     renderStats();
   }
 
-  async function captureURL(urlStr) {
-    const id = 'ph-' + Date.now();
+  // Returns the saved item (or the one you already had), or null. `quiet`: no toast.
+  async function captureURL(urlStr, quiet) {
+    const id = 'ph-' + Date.now() + Math.random();
     insertPlaceholder(id);
     try {
       const res = await apiFetch('/api/capture', {
@@ -2763,24 +2764,25 @@
       const item = await res.json();
       if (res.status === 409) {
         removePlaceholder(id);
-        showToast('Item already exists: ' + (item.existing?.title || urlStr));
-        return;
+        if (!quiet) showToast('Item already exists: ' + (item.existing?.title || urlStr));
+        return item.existing || null;
       }
       if (!res.ok) {
         removePlaceholder(id);
         showToast('Capture failed');
-        return;
+        return null;
       }
       replacePlaceholder(id, item);
-      showToast('Added: ' + item.title);
-      enqueueForCuration(item.slug);
+      if (!quiet) { showToast('Added: ' + item.title); enqueueForCuration(item.slug); }
+      return item;
     } catch (err) {
       removePlaceholder(id);
       showToast('Error: ' + err.message);
+      return null;
     }
   }
 
-  async function captureImage(file, title) {
+  async function captureImage(file, title, quiet) {
     const id = 'ph-' + Date.now() + Math.random();
     insertPlaceholder(id);
     try {
@@ -2792,13 +2794,14 @@
         body: buf,
       });
       const item = await res.json();
-      if (!res.ok) { removePlaceholder(id); showToast('Image capture failed'); return; }
+      if (!res.ok) { removePlaceholder(id); showToast('Image capture failed'); return null; }
       replacePlaceholder(id, item);
-      showToast('Added image');
-      enqueueForCuration(item.slug);
+      if (!quiet) { showToast('Added image'); enqueueForCuration(item.slug); }
+      return item;
     } catch (err) {
       removePlaceholder(id);
       showToast('Error: ' + err.message);
+      return null;
     }
   }
 
@@ -3895,6 +3898,9 @@
     function targetFor(el) {
       if (!el || !el.closest) return { kind: 'window' };
       if (el.closest('.import-drop-zone')) return null; // its own handler
+      // Links and pictures from Safari or another app land on the canvas where dropped.
+      const stage = el.closest('.lc-stage');
+      if (stage && window.StelloCanvas && window.StelloCanvas.addAt) return { kind: 'canvas', el: stage };
       const strip = el.closest('.panel-item .sub-strip');
       if (strip) return { kind: 'item', slug: PanelManager.getOpenSlug(), el: strip };
       const card = el.closest('.card[data-slug]');
@@ -3938,6 +3944,24 @@
       } else if (!tooLong(t)) {
         captureText(t);
       }
+    }
+
+    // Dropped on the canvas: save each link or picture (three at a time), then place them
+    // together at the drop point. Links you already have are placed, not saved again.
+    async function toCanvas(files, text, x, y) {
+      const urls = [...new Set((text.match(/https?:\/\/[^\s<>"']+/g) || []))].slice(0, 200);
+      const images = files.filter(f => kindOf(f) === 'image');
+      const jobs = [...images.map(f => () => captureImage(f, fileTitle(f), true)), ...urls.map(u => () => captureURL(u, true))];
+      if (!jobs.length) { if (text.trim() && !tooLong(text.trim())) importText(text); return; }
+      showToast(jobs.length > 1 ? `Saving ${jobs.length} to the canvas…` : 'Saving to the canvas…');
+      const out = new Array(jobs.length).fill(null);
+      let next = 0;
+      await Promise.all([0, 1, 2].map(async () => {
+        while (next < jobs.length) { const i = next++; out[i] = await jobs[i](); }
+      }));
+      const slugs = [...new Set(out.filter(Boolean).map(i => i.slug))].filter(s => itemsBySlug[s]);
+      if (!slugs.length) { showToast('Couldn’t save that'); return; }
+      window.StelloCanvas.addAt(slugs, x, y);
     }
 
     // Attach to an existing item (card or panel strip).
@@ -3997,7 +4021,8 @@
         e.preventDefault();
         const files = [...(e.dataTransfer.files || [])];
         const text = files.length ? '' : droppedText(e.dataTransfer);
-        if (t.kind === 'item') attach(t.slug, files, text);
+        if (t.kind === 'canvas') toCanvas(files, text, e.clientX, e.clientY);
+        else if (t.kind === 'item') attach(t.slug, files, text);
         else if (files.length) importFiles(files);
         else importText(text);
       });

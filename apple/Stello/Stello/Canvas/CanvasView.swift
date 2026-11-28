@@ -34,6 +34,7 @@ struct CanvasView: View {
     @State private var panStart: CanvasCamera?
     @State private var pinchStart: CanvasCamera?
     @State private var dropTargeted = false
+    @State private var linkTargeted = false
     // Layer 1 (stage 3): features of the canvas items, families, and what the
     // lines follow (dragged ?? selected ?? hovered card).
     @State private var features: [String: [SimFeature]] = [:]
@@ -117,7 +118,7 @@ struct CanvasView: View {
                 }
             }
             .overlay {
-                if dropTargeted {
+                if dropTargeted || linkTargeted {
                     RoundedRectangle(cornerRadius: isPanel ? StelloLayout.panelCornerRadius : 0)
                         .stroke(theme.accentColor.opacity(0.8), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
                         .allowsHitTesting(false)
@@ -126,6 +127,10 @@ struct CanvasView: View {
             .dropDestination(for: CanvasDragItem.self) { dropped, location in
                 drop(dropped.map(\.slug), at: location)
             } isTargeted: { dropTargeted = $0 }
+            // Web links and pictures from Safari or another app: saved, then placed here.
+            .onDrop(of: [.url], isTargeted: $linkTargeted) { providers, location in
+                dropLinks(providers, at: location)
+            }
             #if os(macOS)
             .background(CanvasScrollMonitor(onScroll: handleScroll))
             #endif
@@ -1145,6 +1150,39 @@ struct CanvasView: View {
         let added = store.add(slugs, at: world, height: { height(slug: $0) })
         if let last = added.last { store.selected = last }
         return !added.isEmpty
+    }
+
+    /// Links dragged in from outside Stello (Safari, Notes, another app). Files are left
+    /// to the window's own import.
+    private func dropLinks(_ providers: [NSItemProvider], at location: CGPoint) -> Bool {
+        let web = providers.filter {
+            $0.canLoadObject(ofClass: URL.self)
+                && !$0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+                && !$0.hasItemConformingToTypeIdentifier(UTType.stelloItem.identifier)
+        }
+        guard !web.isEmpty else { return false }
+        Task {
+            var entries: [SafariSaveInbox.Entry] = []
+            for provider in web {
+                guard let url = await Self.loadURL(provider), let scheme = url.scheme?.lowercased(),
+                      scheme == "http" || scheme == "https" else { continue }
+                let isImage = SafariInbox.imageExtensions.contains(url.pathExtension.lowercased())
+                entries.append(.init(kind: isImage ? "image" : "link", url: url.absoluteString))
+            }
+            guard !entries.isEmpty else { return }
+            store.notice = entries.count == 1 ? "Saving…" : "Saving \(entries.count)…"
+            let items = await SafariInbox.shared.saveDropped(entries, context: context)
+            for item in items { index[item.slug] = item }
+            _ = drop(items.map(\.slug), at: location)
+            store.notice = items.isEmpty ? "Couldn't save that link" : nil
+        }
+        return true
+    }
+
+    private static func loadURL(_ provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { done in
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in done.resume(returning: url) }
+        }
     }
 
     private func placeCamera(size: CGSize) {

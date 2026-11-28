@@ -123,12 +123,18 @@ private struct RootView: View {
             .task { SyncBridge.shared.start(container: container) }
             // Write saves, edits and deletes to the folders in Settings › Folders.
             .task { FolderWriteObserver.shared.start(container: container) }
+            // Safari extension test: let Stello in Safari read the folders through this app.
+            .task { SafariBridge.start() }
+            // Saves from Safari (menu, drop shelf, popup) and the share sheet's canvas row.
+            .task { SafariInbox.shared.start(context: container.mainContext, coordinator: enrichmentCoordinator) }
             // Re-read the folders in Settings › Folders (changed files only).
             .task { FolderSources.shared.refreshAll() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     FolderSources.shared.refreshAll()
+                    SafariBridge.publishBookmarks()
                     FolderWriteObserver.shared.poke()
+                    SafariInbox.shared.processSoon()
                     Task { await WebInboxProcessor.shared.processPending() }
                     Task { await SyncBridge.shared.sync() }
                 }
