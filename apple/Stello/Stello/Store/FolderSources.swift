@@ -332,7 +332,7 @@ final class FolderSources {
 }
 
 /// One indexed file: its item id and what it looked like when read.
-struct FolderIndexEntry: Codable, Equatable, Sendable {
+nonisolated struct FolderIndexEntry: Codable, Equatable, Sendable {
     var id: String
     var modified: Double
     var size: Int
