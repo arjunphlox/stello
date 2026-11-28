@@ -57,3 +57,21 @@ The v1 export from 2026-11-26 is converted once by a script at the start of phas
 - `scripts/export-folder.mjs` writes v2 (the same converter runs in memory), refuses a v1 folder, and lists files it didn't produce instead of deleting them. Re-running on an unchanged library writes nothing.
 - `meta.publishedAt` and similar dates are Apple reference-date seconds (since 2001-01-01), as the readers have always stored them, not a bug.
 
+
+## Multiple folders (decided 2026-11-28, plan doc section 4b)
+
+The library is every folder the person adds, merged into one grid. Settings lists the folders (add, replace, remove; one takes new saves) and each item's Summary shows a Folder row per folder holding its file.
+
+- An item's folder comes from where its file sits (each app's index), never from the file. Item ids are global, so canvases and the plugin keep working.
+- Remove only forgets the folder; its files are untouched. Replace points an entry at a moved or renamed copy.
+- The same item in two folders is one card listing both folders. Copies that differ merge like sync conflict copies (tags and links combine, newer field wins, both notes kept), written to the main (first-added) copy. Deleting moves every copy to its own folder's `.trash/`.
+- On Add, the person chooses per folder: Stello items only, or also turn its Markdown, CSV, PDF, bookmarks and images into items.
+- The folder list is shared across Mac, iPad and iPhone through iCloud; each browser keeps its own.
+- The Folder row opens the file where the platform allows: Finder on Mac, Files on iPad and iPhone, Drive and Dropbox on their sites; a local or iCloud folder on the web copies its path.
+- Edge cases (unreachable, nested folders, read-only copies, v1 folders): plan doc section 4b.
+
+### Built (phase 2, part 1: read-only)
+
+- Web: `folders.js` (File System Access, Chromium desktop) keeps folder handles + an id → path index in IndexedDB and re-reads only changed files; Settings › Folders and the Summary Folder row (`panel-layout.js` `opts.folders`). Tests: `test/folders.test.js`.
+- Apple: `Store/FolderSources.swift` (security-scoped bookmarks, index in Application Support, re-read on launch/activate), Settings › Folders in `UserPreferencesContent.swift`, Folder row in `CardSubcards.swift`. Tests: `StelloTests/FolderSourcesTests.swift`.
+- Not yet: writes (saves, delete to `.trash/`, merge), the per-folder ingest choice, the shared Apple folder list, Drive/Dropbox on web.
