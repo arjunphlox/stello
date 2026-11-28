@@ -190,6 +190,7 @@
             { "path": "FolderSourcesWrites.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "FolderWriteObserver.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "FolderWriter.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "SafariBridge.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "ItemFilter.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "ItemSearchBlob.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "OptacosImporter.swift", "target-membership": [ "Stello/compile-sources" ] },
@@ -260,6 +261,31 @@
       ],
     }, {
       "kind": "group",
+      "path": "StelloSafari",
+      "children": [
+        { "path": "SafariWebExtensionHandler.swift", "target-membership": [ "StelloSafari/compile-sources" ] },
+        {
+          "path": "SafariBridgeFiles.swift",
+          "target-membership": [
+            "Stello/compile-sources",
+            "StelloSafari/compile-sources",
+          ],
+        },
+        { "path": "StelloSafari.entitlements" },
+        {
+          "kind": "group",
+          "path": "Resources",
+          "children": [
+            { "path": "manifest.json", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "background.js", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "content.js", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "test.html", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "test.js", "target-membership": [ "StelloSafari/resources" ] },
+          ],
+        },
+      ],
+    }, {
+      "kind": "group",
       "path": "StelloTests",
       "children": [
         { "path": "ArticleKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
@@ -298,6 +324,7 @@
       "children": [
         { "path": "<PRODUCTS>/Stello.app", "id": "6A03DCB58661EF2272162E31", "index": false },
         { "path": "<PRODUCTS>/StelloShare.appex", "id": "73F3E5B16B30645B3B36E3DE", "index": false, "target-membership": [ { "build-phase": "Stello/copy/Embed Foundation Extensions", "platforms": [ "ios" ], "header-preservation": "remove-on-copy" } ] },
+        { "path": "<PRODUCTS>/StelloSafari.appex", "id": "5AF1A2B3C4D5E6F708192A3B", "index": false, "target-membership": [ { "build-phase": "Stello/copy/Embed Foundation Extensions", "platforms": [ "macos" ], "header-preservation": "remove-on-copy" } ] },
         { "path": "<PRODUCTS>/StelloTests.xctest", "id": "29BD97A5FB5A9BFF62E2F76A", "index": false },
       ],
     },
@@ -311,6 +338,7 @@
       "legacy-team-id": "69E4GPJ74B",
       "dependencies": [
         { "target": "StelloShare", "platforms": [ "ios" ] },
+        { "target": "StelloSafari", "platforms": [ "macos" ] },
       ],
       "build-phases": [
         "compile-sources",
@@ -399,6 +427,39 @@
         "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": "YES",
         "TARGETED_DEVICE_FAMILY": "1,2",
         "VALIDATE_PRODUCT[config=Release]": "YES",
+      },
+    }, {
+      "name": "StelloSafari",
+      "id": "6B02B3C4D5E6F708192A3B4C",
+      "product": "Products/StelloSafari.appex",
+      "product-type": "app-extension",
+      "legacy-team-id": "69E4GPJ74B",
+      "build-phases": [
+        "compile-sources",
+        "resources",
+      ],
+      "build-settings": {
+        "CODE_SIGN_ENTITLEMENTS": "StelloSafari/StelloSafari.entitlements",
+        "CURRENT_PROJECT_VERSION": "1",
+        "ENABLE_APP_SANDBOX": "YES",
+        "GENERATE_INFOPLIST_FILE": "YES",
+        "INFOPLIST_FILE": "StelloSafari/Info.plist",
+        "INFOPLIST_KEY_CFBundleDisplayName": "Stello",
+        "INFOPLIST_KEY_NSHumanReadableCopyright": "",
+        "LD_RUNPATH_SEARCH_PATHS": [
+          "$(inherited)",
+          "@executable_path/../Frameworks",
+          "@executable_path/../../../../Frameworks",
+        ],
+        "MARKETING_VERSION": "1.0",
+        "PRODUCT_BUNDLE_IDENTIFIER": "com.arjunphlox.Stello.StelloSafari",
+        "REGISTER_APP_GROUPS": "YES",
+        "SDKROOT": "macosx",
+        "SKIP_INSTALL": "YES",
+        "SUPPORTED_PLATFORMS": "macosx",
+        "SWIFT_APPROACHABLE_CONCURRENCY": "YES",
+        "SWIFT_EMIT_LOC_STRINGS": "YES",
+        "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": "YES",
       },
     }, {
       "name": "StelloTests",

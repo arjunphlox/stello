@@ -125,6 +125,10 @@ private struct RootView: View {
             .task { FolderWriteObserver.shared.start(container: container) }
             // Re-read the folders in Settings › Folders (changed files only).
             .task { FolderSources.shared.refreshAll() }
+            #if os(macOS)
+            // Safari extension test: let Stello in Safari read the folders through this app.
+            .task { SafariBridge.start() }
+            #endif
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     FolderSources.shared.refreshAll()

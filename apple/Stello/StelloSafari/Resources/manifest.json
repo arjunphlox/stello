@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Stello",
+  "description": "Test build: lets Stello in Safari read your Stello folders through the Stello app.",
+  "version": "0.1",
+  "background": { "scripts": ["background.js"], "persistent": false },
+  "permissions": ["nativeMessaging"],
+  "host_permissions": ["https://stello.arjunphlox.workers.dev/*", "http://localhost:8787/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://stello.arjunphlox.workers.dev/*", "http://localhost:8787/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": { "default_title": "Stello folder test" }
+}
