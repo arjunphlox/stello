@@ -22,6 +22,7 @@ async function tryRoute(route) {
   if (!list.folders.length) { line(pre, false, "No folders came back"); return; }
   for (const f of list.folders) {
     line(pre, !f.error && f.itemCount > 0, `${f.name}: ${f.itemCount} items listed in ${ms} ms${f.error ? ` (${f.error})` : ""}`);
+    line(pre, true, `${f.notDownloaded} files are in iCloud but not on this Mac; ${f.firstImages.length ? "picture test uses " + f.firstImages[0] : "no pictures found"}`);
     if (f.firstItems.length) {
       const r0 = performance.now();
       const read = await ask({ route, cmd: "read", folder: f.id, path: f.firstItems[0] });
