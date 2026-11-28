@@ -8,10 +8,16 @@ import UIKit
 
 /// Folder sources (folder engine plan, section 4b; web twin: `folders.js`).
 ///
-/// Phase 2, part 1: read-only. The person adds one or more Stello folders; each is
-/// indexed (item id → file) so Settings can list the folders and every item panel can
-/// show which folder holds it. Nothing here writes to a folder, and the library still
-/// comes from SwiftData.
+/// The person adds one or more Stello folders; each is indexed (item id → file) so
+/// Settings can list the folders and every item panel can show which folder holds it.
+/// The library still comes from SwiftData; the folders are kept beside it (part 2):
+/// - One folder takes new saves ("New saves go here"; the first added by default).
+/// - A save or edit writes the item's v2 file (`FolderWriter`, the twin of the web's
+///   src/lib/folder-write.js) to its main copy (oldest-added folder holding it), else to
+///   the new-saves folder. `FolderWriteObserver` finds the changes in SwiftData history.
+/// - A file changed outside Stello since Stello last wrote it is merged, never
+///   overwritten; copies of one item in two folders merge the same way into the main copy.
+/// - Delete moves every copy to its own folder's .trash/<day>/ (cleared after 30 days).
 ///
 /// An item's folder comes from where its file sits; it is never written into the file.
 /// The same item in two folders shows once and lists both (Arjun, Nov 28 2026).
@@ -33,6 +39,11 @@ final class FolderSources {
         var scannedAt: Date?
         /// Last resolved location, for display (e.g. "iCloud Drive/Stello").
         var displayPath: String = ""
+        /// Marked "New saves go here" (nil/false: not marked; the oldest-added then takes them).
+        var takesSaves: Bool?
+        /// The bookmark allows writing. Folders added in part 1 have read-only bookmarks
+        /// and need picking once more ("Allow writing").
+        var writable: Bool?
     }
 
     enum Status: Equatable { case ready, reading, unreachable(String) }
@@ -50,8 +61,8 @@ final class FolderSources {
     private(set) var lookup: [String: [Location]] = [:]
 
     /// Per folder: relative path → (id, modified, size). Persisted in Application Support.
-    private var indexes: [UUID: [String: FolderIndexEntry]] = [:]
-    private var roots: [UUID: URL] = [:]
+    var indexes: [UUID: [String: FolderIndexEntry]] = [:]
+    private(set) var roots: [UUID: URL] = [:]
     private static let defaultsKey = "stello.folderSources"
 
     private init() {
@@ -73,6 +84,24 @@ final class FolderSources {
         lookup[itemID.uuidString.lowercased()] ?? []
     }
 
+    /// The folder that takes new saves: the one marked, else the oldest-added.
+    var savesFolderID: UUID? {
+        let ordered = folders.sorted { $0.addedAt < $1.addedAt }
+        return (ordered.first { $0.takesSaves == true } ?? ordered.first)?.id
+    }
+
+    func isWritable(_ id: UUID) -> Bool {
+        guard let f = folders.first(where: { $0.id == id }) else { return false }
+        guard f.writable == true, roots[id] != nil else { return false }
+        if case .unreachable = status[id] { return false }
+        return true
+    }
+
+    func setSavesFolder(_ id: UUID) {
+        for i in folders.indices { folders[i].takesSaves = folders[i].id == id }
+        persist()
+    }
+
     /// Re-reads every reachable folder (changed files only). Call on launch.
     func refreshAll() {
         for folder in folders { rescan(folder.id) }
@@ -88,7 +117,8 @@ final class FolderSources {
         if let clash = clash(with: url, except: nil) { return clash }
         guard let bookmark = Self.makeBookmark(url) else { return .failed }
         let folder = Folder(id: UUID(), name: url.lastPathComponent, bookmark: bookmark,
-                            addedAt: Date(), displayPath: Self.displayPath(url))
+                            addedAt: Date(), displayPath: Self.displayPath(url),
+                            takesSaves: folders.isEmpty ? true : nil, writable: true)
         folders.append(folder)
         roots[folder.id] = resolve(folder) ?? url
         persist()
@@ -105,6 +135,7 @@ final class FolderSources {
         folders[i].bookmark = bookmark
         folders[i].name = url.lastPathComponent
         folders[i].displayPath = Self.displayPath(url)
+        folders[i].writable = true
         roots[id] = resolve(folders[i]) ?? url
         persist()
         rescan(id)
@@ -113,7 +144,12 @@ final class FolderSources {
 
     /// Forgets a folder. Its files stay exactly as they are.
     func remove(_ id: UUID) {
+        let wasSaves = savesFolderID == id
         folders.removeAll { $0.id == id }
+        // The next folder in the list takes new saves.
+        if wasSaves, let next = folders.sorted(by: { $0.addedAt < $1.addedAt }).first?.id {
+            for i in folders.indices { folders[i].takesSaves = folders[i].id == next }
+        }
         indexes[id] = nil
         roots[id] = nil
         status[id] = nil
@@ -160,18 +196,29 @@ final class FolderSources {
         switch result {
         case .failure(let message):
             status[id] = .unreachable(message)
-        case .success(let files):
+        case .success(let files, let changed):
             indexes[id] = files
-            folders[i].count = Set(files.values.map(\.id)).count
+            folders[i].count = Self.countItems(files)
             folders[i].scannedAt = Date()
             status[id] = .ready
             Self.saveIndex(id, files)
             persist()
+            rebuildLookup()
+            if isWritable(id) {
+                if !changed.isEmpty { mergeCopies(changed, changedIn: id) }
+                if let root = roots[id] { Task.detached(priority: .utility) { FolderFiles.clearTrash(root: root) } }
+            }
+            return
         }
         rebuildLookup()
     }
 
-    private func rebuildLookup() {
+    /// Library items a folder holds: people and places that are only files don't count.
+    nonisolated static func countItems(_ files: [String: FolderIndexEntry]) -> Int {
+        Set(files.values.map(\.id).filter(FolderWriter.isLibraryID)).count
+    }
+
+    func rebuildLookup() {
         var out: [String: [Location]] = [:]
         for folder in folders.sorted(by: { $0.addedAt < $1.addedAt }) {
             guard let root = roots[folder.id], let files = indexes[folder.id] else { continue }
@@ -221,7 +268,7 @@ final class FolderSources {
         return url
     }
 
-    private func persist() {
+    func persist() {
         if let data = try? JSONEncoder().encode(folders) {
             UserDefaults.standard.set(data, forKey: Self.defaultsKey)
         }
@@ -231,7 +278,8 @@ final class FolderSources {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         #if os(macOS)
-        let options: URL.BookmarkCreationOptions = [.withSecurityScope, .securityScopeAllowOnlyReadAccess]
+        // Read and write (part 2): Stello writes saves, edits and .trash moves.
+        let options: URL.BookmarkCreationOptions = [.withSecurityScope]
         #else
         let options: URL.BookmarkCreationOptions = []
         #endif
@@ -278,7 +326,7 @@ final class FolderSources {
         return index
     }
 
-    private static func saveIndex(_ id: UUID, _ index: [String: FolderIndexEntry]) {
+    static func saveIndex(_ id: UUID, _ index: [String: FolderIndexEntry]) {
         if let data = try? JSONEncoder().encode(index) { try? data.write(to: indexURL(id), options: .atomic) }
     }
 }
@@ -288,12 +336,21 @@ struct FolderIndexEntry: Codable, Equatable, Sendable {
     var id: String
     var modified: Double
     var size: Int
+    /// people/ and places/ files: what matching a name needs.
+    var ent: EntityInfo?
+
+    struct EntityInfo: Codable, Equatable, Sendable {
+        var name: String
+        var kind: String?
+        var aliases: [String]
+    }
 }
 
 /// Walks a folder for Stello .md files off the main thread, reading only the start of
 /// files that changed since the last read. Pure apart from file reads (tests use a temp dir).
 enum FolderScanner {
-    enum Result: Sendable { case success([String: FolderIndexEntry]), failure(String) }
+    /// success: the index, plus the ids whose files changed since the previous read.
+    enum Result: Sendable { case success([String: FolderIndexEntry], Set<String>), failure(String) }
 
     /// Folders that hold no items (media/, projects/) and private dot-folders.
     static func skipsDirectory(_ name: String) -> Bool {
@@ -319,6 +376,23 @@ enum FolderScanner {
         return nil
     }
 
+    /// name / kind / aliases of a people/ or places/ header (one JSON value per line).
+    static func headerEntity(_ text: String) -> FolderIndexEntry.EntityInfo {
+        var name = "", kind: String?, aliases: [String] = []
+        for raw in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).dropFirst() {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line == "---" { break }
+            func value(_ key: String) -> FolderWriter.JSON? {
+                guard line.hasPrefix(key + ":") else { return nil }
+                return FolderWriter.parse(String(line.dropFirst(key.count + 1)).trimmingCharacters(in: .whitespaces))
+            }
+            if let v = value("name")?.string { name = v }
+            if let v = value("kind")?.string { kind = v }
+            if let v = value("aliases")?.array { aliases = v.compactMap(\.string) }
+        }
+        return .init(name: name, kind: kind, aliases: aliases)
+    }
+
     static func scan(root: URL, previous: [String: FolderIndexEntry]) -> Result {
         let scoped = root.startAccessingSecurityScopedResource()
         defer { if scoped { root.stopAccessingSecurityScopedResource() } }
@@ -333,6 +407,7 @@ enum FolderScanner {
         }
         let base = root.standardizedFileURL.path
         var out: [String: FolderIndexEntry] = [:]
+        var changed = Set<String>()
         for case let url as URL in walker {
             let name = url.lastPathComponent
             let values = try? url.resourceValues(forKeys: Set(keys))
@@ -346,17 +421,22 @@ enum FolderScanner {
             let path = String(full.dropFirst(base.count + 1))
             let modified = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
             let size = values?.fileSize ?? 0
-            if let old = previous[path], old.modified == modified, old.size == size {
+            let isEntity = path.hasPrefix("people/") || path.hasPrefix("places/")
+            if let old = previous[path], old.modified == modified, old.size == size, !(isEntity && old.ent == nil) {
                 out[path] = old
                 continue
             }
             guard let handle = try? FileHandle(forReadingFrom: url) else { continue }
             let head = (try? handle.read(upToCount: 4096)) ?? Data()
             try? handle.close()
-            if let id = headerID(String(decoding: head, as: UTF8.self)) {
-                out[path] = FolderIndexEntry(id: id, modified: modified, size: size)
+            let text = String(decoding: head, as: UTF8.self)
+            if let id = headerID(text) {
+                var entry = FolderIndexEntry(id: id, modified: modified, size: size)
+                if isEntity { entry.ent = headerEntity(text) }
+                out[path] = entry
+                changed.insert(id)
             }
         }
-        return .success(out)
+        return .success(out, changed)
     }
 }
