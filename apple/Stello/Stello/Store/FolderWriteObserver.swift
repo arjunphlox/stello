@@ -29,6 +29,8 @@ final class FolderWriteObserver {
         // Part 3: items made from a folder's own files are saved here; read any waiting now.
         FolderSources.shared.modelContainer = container
         FolderSources.shared.ingestAll()
+        // Grid part 1: changed Stello files waiting to be read (edits made outside Stello).
+        for folder in FolderSources.shared.folders { FolderSources.shared.readChanged(folder.id) }
         NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { FolderWriteObserver.shared.scheduleSoon() }
         }

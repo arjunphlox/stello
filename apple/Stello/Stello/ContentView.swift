@@ -23,7 +23,35 @@ struct ContentView: View {
     }
 
     /// The header count is the whole library, even while only the newest weeks are loaded.
-    private var libraryCount: Int { libraryWindow?.count(loaded: allItems.count) ?? allItems.count }
+    /// On the Mac it counts the items in the added folders (grid part 1).
+    private var libraryCount: Int {
+        if FolderSources.showsOnlyFolders { return folderSources.held.count }
+        return libraryWindow?.count(loaded: allItems.count) ?? allItems.count
+    }
+
+    /// Stello shows only what's in the added folders (grid part 1, Mac). SwiftData stays as
+    /// the safety copy for now; Settings › Folders lists anything in it no folder holds.
+    @State private var folderSources = FolderSources.shared
+    private var shownItems: [Item] {
+        guard FolderSources.showsOnlyFolders else { return allItems }
+        let held = folderSources.held
+        return allItems.filter { held.contains($0.id.uuidString.lowercased()) }
+    }
+
+    /// Why the grid is empty when the folders hold nothing (Mac).
+    @ViewBuilder private var folderEmptyNote: some View {
+        if FolderSources.showsOnlyFolders, shownItems.isEmpty {
+            Text(folderSources.folders.isEmpty
+                 ? "Stello shows the items in your folders. Add a folder in Settings › Folders."
+                 : "Your folders hold no Stello items yet.")
+                .font(.karst(.body))
+                .foregroundStyle(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(40)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+        }
+    }
 
     @AppStorage("panel.widthFraction") private var panelWidthFraction: Double = 0.25
     @State private var selectedItem: Item?
@@ -301,7 +329,7 @@ struct ContentView: View {
                         embedInPanelLayout: true,
                         scrollTopInset: scrollTopInset,
                         scrollOffset: $scrollOffset,
-                        catalogItems: allItems,
+                        catalogItems: shownItems,
                         selectedTagNames: $selectedTagNames,
                         needsReviewOnly: $needsReviewOnly,
                         selectedItem: selectedItem,
@@ -314,6 +342,7 @@ struct ContentView: View {
                     )
                     .frame(width: shownGridWidth + StelloLayout.windowInset)
                     .frame(maxHeight: .infinity)
+                    .overlay { folderEmptyNote }
 
                     headerOverlay(
                         itemCount: libraryCount,
@@ -360,7 +389,7 @@ struct ContentView: View {
                     SidePanelView(
                         content: panelContent,
                         selectedItem: selectedItem,
-                        allItems: allItems,
+                        allItems: shownItems,
                         selectedTagNames: $selectedTagNames,
                         needsReviewOnly: $needsReviewOnly,
                         onClose: closePanel,
@@ -411,7 +440,7 @@ struct ContentView: View {
             // Phones: Grid or Canvas (Split falls back to Canvas, web #97).
             if canvasStore.viewMode == .grid {
                 MasonryGridView(
-                    catalogItems: allItems,
+                    catalogItems: shownItems,
                     selectedTagNames: $selectedTagNames,
                     needsReviewOnly: $needsReviewOnly,
                     onCardTap: { selectedItem = $0 },

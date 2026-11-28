@@ -65,6 +65,11 @@ final class FolderSources {
     private(set) var status: [UUID: Status] = [:]
     /// Item id (lowercased UUID string) → locations, oldest-added folder first.
     private(set) var lookup: [String: [Location]] = [:]
+    /// Item ids (lowercased) with a Stello file in an added folder: only these show (grid part 1).
+    private(set) var held: Set<String> = []
+    /// Per folder: Stello files that changed since the last read, still to read in full
+    /// (`readChanged`). true: take edits; false (a folder's first read): only new items.
+    var unread: [UUID: [String: Bool]] = [:]
 
     /// Per folder: relative path → (id, modified, size). Persisted in Application Support.
     var indexes: [UUID: [String: FolderIndexEntry]] = [:]
@@ -75,6 +80,9 @@ final class FolderSources {
     /// Folders whose files are being turned into items right now, and ones to read again after.
     var ingesting = Set<UUID>()
     var ingestAgain = Set<UUID>()
+    /// Folders whose changed Stello files are being read now, and ones to read again after.
+    var reading = Set<UUID>()
+    var readAgain = Set<UUID>()
     /// Item id (lowercased) → the folder whose spreadsheet or export it came from: its
     /// Markdown file is written there.
     var origin: [String: UUID] = [:]
@@ -91,6 +99,7 @@ final class FolderSources {
         for folder in folders {
             indexes[folder.id] = Self.loadIndex(folder.id)
             if folder.ingest == true { found[folder.id] = Self.loadFound(folder.id) }
+            unread[folder.id] = Self.loadUnread(folder.id)
             if let url = resolve(folder) { roots[folder.id] = url; status[folder.id] = .ready }
             else { status[folder.id] = .unreachable("Not reachable. It may have moved: use Replace.") }
         }
@@ -184,6 +193,8 @@ final class FolderSources {
         status[id] = nil
         try? FileManager.default.removeItem(at: Self.indexURL(id))
         try? FileManager.default.removeItem(at: Self.foundURL(id))
+        unread[id] = nil
+        try? FileManager.default.removeItem(at: Self.unreadURL(id))
         persist()
         rebuildLookup()
     }
@@ -230,8 +241,20 @@ final class FolderSources {
         case .failure(let message):
             status[id] = .unreachable(message)
         case .success(var files, let changed):
+            // Stello files that changed since the last read (not by Stello's own writes):
+            // read in full by readChanged. A folder's first read takes only new items.
+            let previous = indexes[id] ?? [:]
+            let ownWrites = changedDuringScan[id] ?? [:]
+            var toRead = unread[id] ?? [:]
+            for (path, entry) in files where FolderWriter.isLibraryID(entry.id) && ownWrites[path] == nil {
+                if let old = previous[path], old.modified == entry.modified, old.size == entry.size { continue }
+                toRead[path] = (toRead[path] ?? false) || !previous.isEmpty
+            }
             // Writes and .trash moves Stello made while the read ran win over what it saw.
             for (path, entry) in changedDuringScan[id] ?? [:] { files[path] = entry }
+            for path in toRead.keys where files[path] == nil { toRead[path] = nil }
+            unread[id] = toRead
+            Self.saveUnread(id, toRead)
             changedDuringScan[id] = nil
             indexes[id] = files
             if folders[i].ingest == true { found[id] = seen; Self.saveFound(id, seen) }
@@ -246,6 +269,7 @@ final class FolderSources {
                 if let root = roots[id] { Task.detached(priority: .utility) { FolderFiles.clearTrash(root: root) } }
             }
             if folders[i].ingest == true { ingest(id) }
+            readChanged(id)
             return
         }
         rebuildLookup()
@@ -284,6 +308,20 @@ final class FolderSources {
             }
         }
         lookup = out
+        held = Set(out.compactMap { id, locs in locs.contains { !$0.found } ? id.lowercased() : nil })
+    }
+
+    /// True when an added folder holds a Stello file for the item: only those show (grid part 1).
+    func holds(_ itemID: UUID) -> Bool { held.contains(itemID.uuidString.lowercased()) }
+
+    /// Stello shows only what's in the added folders. On the Mac for now (part 1); iPad and
+    /// iPhone follow in part 2 and still show the whole library.
+    static var showsOnlyFolders: Bool {
+        #if os(macOS)
+        true
+        #else
+        false
+        #endif
     }
 
     // MARK: - Helpers
@@ -390,6 +428,21 @@ final class FolderSources {
         guard let data = try? Data(contentsOf: foundURL(id)),
               let found = try? JSONDecoder().decode([String: FoundEntry].self, from: data) else { return [:] }
         return found
+    }
+
+    static func unreadURL(_ id: UUID) -> URL {
+        indexURL(id).deletingLastPathComponent().appendingPathComponent("\(id.uuidString).unread.json")
+    }
+
+    static func loadUnread(_ id: UUID) -> [String: Bool] {
+        guard let data = try? Data(contentsOf: unreadURL(id)),
+              let list = try? JSONDecoder().decode([String: Bool].self, from: data) else { return [:] }
+        return list
+    }
+
+    static func saveUnread(_ id: UUID, _ list: [String: Bool]) {
+        if list.isEmpty { try? FileManager.default.removeItem(at: unreadURL(id)); return }
+        if let data = try? JSONEncoder().encode(list) { try? data.write(to: unreadURL(id), options: .atomic) }
     }
 
     static func saveFound(_ id: UUID, _ found: [String: FoundEntry]) {

@@ -220,10 +220,13 @@ private struct FolderSourcesSection: View {
                 Text(message).font(.karst(.caption)).foregroundStyle(theme.textSecondary)
             }
             Text(sources.folders.isEmpty
-                 ? "Add the folders your Stello items live in, such as iCloud Drive/Stello."
+                 ? (FolderSources.showsOnlyFolders
+                    ? "Stello shows only the items in the folders you add here, such as iCloud Drive/Stello."
+                    : "Add the folders your Stello items live in, such as iCloud Drive/Stello.")
                  : "\(Self.tidy) Removing a folder only hides it here; its files stay as they are.")
                 .font(.karst(.caption))
                 .foregroundStyle(theme.textSecondary)
+            if FolderSources.showsOnlyFolders, !sources.folders.isEmpty { FolderMissingRows() }
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.folder]) { result in
             guard case .success(let url) = result else { return }
@@ -276,6 +279,60 @@ private struct FolderSourcesSection: View {
 
 /// Links this device to the Stello web account, so the web app gets its own copy of
 /// the library (see `SyncBridge`).
+/// The check (grid part 1): items saved in Stello that none of the folders holds. They
+/// don't show in the grid; they can be written back into the new-saves folder.
+private struct FolderMissingRows: View {
+    @Environment(\.appTheme) private var theme
+    @Environment(\.modelContext) private var context
+    @State private var sources = FolderSources.shared
+    @State private var missing: [Item] = []
+    @State private var showList = false
+    @State private var note: String?
+
+    var body: some View {
+        Group {
+            if !missing.isEmpty {
+                let n = missing.count
+                Text("\(n.formatted()) item\(n == 1 ? " is" : "s are") saved in Stello but not in any of these folders, so \(n == 1 ? "it doesn’t" : "they don’t") show.")
+                    .font(.karst(.caption))
+                    .foregroundStyle(theme.textSecondary)
+                HStack(spacing: 16) {
+                    Button(showList ? "Hide the list" : "Show them") { showList.toggle() }
+                    if let saves = sources.savesFolderID, sources.isWritable(saves),
+                       let name = sources.folders.first(where: { $0.id == saves })?.name {
+                        Button("Add them to \(name)") {
+                            let wrote = sources.putBack(missing)
+                            note = wrote > 0 ? "Added \(wrote.formatted()) item\(wrote == 1 ? "" : "s") to the folder" : "Couldn’t write to the folder"
+                            refresh()
+                        }
+                    }
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(theme.accentColor)
+                if showList {
+                    ForEach(missing.prefix(200)) { item in
+                        Text(item.title.isEmpty ? (item.sourceURL ?? item.slug) : item.title)
+                            .font(.karst(.caption))
+                            .foregroundStyle(theme.textSecondary)
+                    }
+                    if n > 200 { Text("and \((n - 200).formatted()) more").font(.karst(.caption)).foregroundStyle(theme.textSecondary) }
+                }
+            }
+            if let note { Text(note).font(.karst(.caption)).foregroundStyle(theme.textSecondary) }
+        }
+        .onAppear(perform: refresh)
+        .onChange(of: sources.held) { _, _ in refresh() }
+    }
+
+    private func refresh() {
+        // Folders still being read would list items that are only waiting.
+        if sources.status.values.contains(.reading) { missing = []; return }
+        let held = sources.held
+        let all = (try? context.fetch(FetchDescriptor<Item>(sortBy: [SortDescriptor(\.addedAt, order: .reverse)]))) ?? []
+        missing = all.filter { !held.contains($0.id.uuidString.lowercased()) }
+    }
+}
+
 private struct WebSyncSection: View {
     @Environment(\.appTheme) private var theme
     @State private var account = SyncAccount.shared

@@ -27,7 +27,7 @@ extension FolderSources {
             .appendingPathComponent("written.json")
     }
     private static var writtenCache: [String: Written]?
-    private var written: [String: Written] {
+    var written: [String: Written] {
         get {
             if let c = Self.writtenCache { return c }
             let loaded = (try? Data(contentsOf: Self.writtenURL)).flatMap { try? JSONDecoder().decode([String: Written].self, from: $0) } ?? [:]
@@ -44,7 +44,7 @@ extension FolderSources {
     var canWrite: Bool { folders.contains { isWritable($0.id) } }
 
     /// Entities (people/places files) and used paths of one folder, from its index.
-    private func context(_ folderID: UUID) -> (entities: [FolderWriter.Entity], paths: Set<String>) {
+    func context(_ folderID: UUID) -> (entities: [FolderWriter.Entity], paths: Set<String>) {
         var entities: [FolderWriter.Entity] = []
         var paths = Set<String>()
         for (path, e) in indexes[folderID] ?? [:] {
@@ -262,13 +262,18 @@ extension FolderSources {
             guard !results.isEmpty else { return }
             let done = results
             await MainActor.run {
-                for (folder, rel, id, stat) in done { self.noteIndexed(folder, rel, id: id, stat) }
+                for (folder, rel, id, stat) in done {
+                    self.noteIndexed(folder, rel, id: id, stat)
+                    // The main copy now holds the other copy's edits: Stello takes them in too.
+                    self.unread[folder, default: [:]][rel] = true
+                }
                 self.finishWrites(Set(done.map(\.0)))
+                for folder in Set(done.map(\.0)) { Self.saveUnread(folder, self.unread[folder] ?? [:]); self.readChanged(folder) }
             }
         }
     }
 
-    private func relativePath(_ loc: Location, root: URL) -> String? {
+    func relativePath(_ loc: Location, root: URL) -> String? {
         let base = root.standardizedFileURL.path
         let full = loc.fileURL.standardizedFileURL.path
         return full.hasPrefix(base + "/") ? String(full.dropFirst(base.count + 1)) : nil
