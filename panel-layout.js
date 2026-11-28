@@ -748,6 +748,7 @@
   /**
    * The de-duplicated panel for `item`.
    * `opts.resolveSlug(slug)` → true when a ref's slug opens an item in the library.
+   * `opts.folders` → [{ folderId, name, path }] folders holding the item's file (Summary "Folder" rows).
    * Returns { kind, header, cards: [...], tagShown, snippetTexts, topRoles, isTyped }.
    * Card shapes: facts {rows}, chips {chips, caption}, refs {refs}, text {text},
    * gallery {roles}, faqs {items}, chipsFacts {chips, rows}, tracklist {tracks},
@@ -922,7 +923,14 @@
     const linksCard = () => { const rows = factRows(links); if (rows.length) cards.push({ type: 'facts', title: 'Links', rows }); };
     const chipsCard = (title, list) => { if (list && list.length) cards.push({ type: 'chips', title, chips: list, caption: null }); };
 
-    cards.push({ type: 'facts', title: 'Summary', rows: factRows(facts, factLinks) });
+    // Folder: which of the person's folders hold this item's file (folder engine
+    // plan 4b). One row per folder, oldest-added first, just above Added.
+    const summary = factRows(facts, factLinks);
+    const folderRows = arr(opts && opts.folders)
+      .filter((f) => f && nb(f.name))
+      .map((f) => ({ label: 'Folder', value: nb(f.name), url: null, folder: { folderId: f.folderId || null, path: nb(f.path) } }));
+    if (folderRows.length) summary.splice(Math.max(0, summary.length - 1), 0, ...folderRows);
+    cards.push({ type: 'facts', title: 'Summary', rows: summary });
 
     switch (kind) {
       case 'typeface': case 'website': case 'individual': case 'studio': case 'foundry': case 'place':

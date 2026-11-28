@@ -25,6 +25,7 @@ const FILES = [
   'pair.html',
   'app.js',
   'panel-layout.js',
+  'folders.js',
   'auth-client.js',
   'style.css',
   'theme.css',
