@@ -612,10 +612,24 @@ struct ItemCardView: View {
 
     // MARK: - Context menu
 
+    /// A selected card's menu acts on the whole grid selection (`GridSelection`).
     @ViewBuilder private var cardContextMenu: some View {
+        if onOpen != nil, GridSelection.shared.contains(item) {
+            BulkMenuItems(selection: GridSelection.shared)
+        } else {
+            singleItemMenu
+        }
+    }
+
+    @ViewBuilder private var singleItemMenu: some View {
         if let onOpen {
             Button(action: onOpen) {
                 Label("Open", systemImage: "arrow.up.right")
+            }
+            Button {
+                withAnimation(.smooth(duration: 0.2)) { GridSelection.shared.toggle(item) }
+            } label: {
+                Label("Select", systemImage: "checkmark.circle")
             }
         }
 
@@ -727,7 +741,10 @@ struct ItemCardView: View {
         }
     }
 
-    private func markdownExport() -> String {
+    private func markdownExport() -> String { Self.markdown(for: item) }
+
+    /// Title, summary, URL / domain / saved / tags, notes (also the grid selection's Copy Details).
+    static func markdown(for item: Item) -> String {
         var lines: [String] = []
 
         if !item.title.isEmpty {
