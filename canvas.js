@@ -1917,6 +1917,41 @@
     if (mode === 'grid') actionToast(`Added to ${doc.name || 'canvas'}`, [{ label: 'Undo', run: () => { undo(); markGrid(); } }, { label: 'Open canvas', run: () => { setMode(isPhone() ? 'canvas' : 'split'); requestAnimationFrame(() => { focusOn(slug); }); } }]);
   }
 
+  // Several items at once (grid selection → Add to Canvas): a small block of
+  // up to four columns, right of what's already there. One undo step.
+  function addMany(list) {
+    const slugs = (list || []).filter(s => App.item(s) && !cardRec(s));
+    if (!slugs.length) { App.toast('Already on the canvas'); return 0; }
+    if (mode === 'grid') layout();
+    const by = doc.groupBy in GROUPS ? doc.groupBy : 'kind';
+    const x0 = nodes.size ? Math.round(worldBox.x + worldBox.w + 120) : 0;
+    const y0 = nodes.size ? Math.round(worldBox.y + TITLE_H) : 80;
+    const cols = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(slugs.length))));
+    const colY = new Array(cols).fill(y0);
+    change(() => {
+      slugs.forEach((s) => {
+        const it = App.item(s);
+        const h = Math.round(W * coverRatio(it));
+        let c = 0;
+        for (let i = 1; i < cols; i++) if (colY[i] < colY[c]) c = i;
+        const p = freeSpot(x0 + c * (W + F_COL), colY[c], h);
+        doc.cards.push({ slug: s, x: p.x, y: p.y, by });
+        nodes.set(s, { slug: s, item: it, x: p.x, y: p.y, h, ch: h, fam: -1, cl: 0 });
+        rebuildHash();
+        colY[c] = p.y + h + F_ROW;
+      });
+    }, { layout: true });
+    layout(); schedule(true);
+    camSet = true;
+    markGrid(); emptyState();
+    const where = doc.name || 'canvas';
+    actionToast(`Added ${slugs.length === 1 ? '1 item' : slugs.length + ' items'} to ${where}`, [
+      { label: 'Undo', run: () => { undo(); markGrid(); } },
+      ...(mode !== 'grid' ? [] : [{ label: 'Open canvas', run: () => { setMode(isPhone() ? 'canvas' : 'split'); requestAnimationFrame(() => focusOn(slugs[0])); } }]),
+    ]);
+    return slugs.length;
+  }
+
   function bindGridDrag() {
     const mc = mainEl(); if (!mc) return;
     const active = () => mode === 'split' || (mode === 'grid' && isPhone());
@@ -2669,7 +2704,7 @@
     setMode(start, { quiet: true });
     pullDoc();
     window.addEventListener('focus', () => { if (!dirty && !pushing) pullDoc(); });
-    window.StelloCanvas = { setMode, addAuto, has: (s) => !!cardRec(s), setReturn: (v) => localStorage.setItem(RETURN_KEY, v), focusOn, centerOn: (sx, sy, k) => { const w = screenToWorld(sx, sy); const r = stageRect(); view.k = k; view.x = r.width / 2 - w.x * k; view.y = r.height / 2 - w.y * k; schedule(); }, fit: () => fit(true), get view() { return view; }, zoomAt, stepZoom, flyTo, select: (s) => { sel = s; schedule(true); } };
+    window.StelloCanvas = { setMode, addAuto, addMany, ownsTouchHold: () => mode === 'split' || (mode === 'grid' && isPhone()), has: (s) => !!cardRec(s), setReturn: (v) => localStorage.setItem(RETURN_KEY, v), focusOn, centerOn: (sx, sy, k) => { const w = screenToWorld(sx, sy); const r = stageRect(); view.k = k; view.x = r.width / 2 - w.x * k; view.y = r.height / 2 - w.y * k; schedule(); }, fit: () => fit(true), get view() { return view; }, zoomAt, stepZoom, flyTo, select: (s) => { sel = s; schedule(true); } };
   }
   if (window.StelloApp) init();
   else document.addEventListener('stello:ready', init, { once: true });

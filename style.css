@@ -3530,3 +3530,187 @@ html.is-carrying .header { visibility: hidden; }
 }
 .settings-folder-action:hover { text-decoration: underline; }
 .settings-folder-action[data-act="remove"] { color: var(--text-dim); }
+
+/* === GRID SELECTION + BULK ACTIONS ===
+   Drag a box across the grid, or ⌘/Ctrl-click, Shift-click, ⌘A. Touch:
+   press and hold a card. The bottom bar turns into the selection bar. */
+.select-marquee {
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 40;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  pointer-events: none;
+}
+
+/* Selected: accent ring inside the card (no outside drawing, so off-screen
+   cards keep content-visibility) and a filled check at the top left. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 0 var(--accent);
+  transition: box-shadow 0.14s ease-out, background-color 0.14s ease-out;
+  z-index: 4;
+}
+.card.is-selected::before {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.card::after {
+  content: "";
+  position: absolute;
+  top: 8px; left: 8px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.14s ease-out, transform 0.18s cubic-bezier(0.3, 1.5, 0.5, 1);
+  box-sizing: border-box;
+  border: 1.5px solid var(--accent);
+  background: var(--accent) center / 14px 14px no-repeat;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.card.is-selected::after {
+  opacity: 1; transform: scale(1);
+  border-color: var(--accent);
+  background-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+}
+/* Dark-on-light accents (amber, lime, yellow…) read better with a dark check. */
+html[data-theme="dark"] .card.is-selected::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231a1a17' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+}
+
+/* The selection bar takes the bottom bar's place, same sizes. */
+.select-bar { display: none; }
+.bottom-bar.is-selecting > :not(.select-bar) { display: none; }
+.bottom-bar.is-selecting > .select-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  animation: select-bar-in 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes select-bar-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+html.is-selecting .toast { bottom: calc(var(--gap-bottom, 16px) + 60px); }
+.tag-editor-label { margin: 2px 0 -4px; font-size: 0.72rem; color: var(--text-secondary); }
+.tag-editor-more { align-self: flex-start; border: 0; background: transparent; padding: 0; font: inherit; font-size: 0.8rem; color: var(--accent); cursor: pointer; }
+.select-pill { cursor: default; justify-content: space-between; }
+.select-count { font-size: 0.9rem; font-weight: 500; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.select-all {
+  border: 0; background: transparent; padding: 6px 0 6px 12px;
+  font: inherit; font-size: 0.85rem; color: var(--accent); cursor: pointer; white-space: nowrap;
+}
+.select-all:hover { text-decoration: underline; }
+.select-delete:hover { background: #e5484d; border-color: #e5484d; color: #fff; }
+
+.card-menu-head {
+  padding: 5px 10px 6px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Edit Tags: a small sheet over the selection bar. */
+.tag-editor {
+  position: fixed;
+  z-index: 1001;
+  left: 50%;
+  bottom: calc(var(--gap-bottom, 16px) + 60px);
+  transform: translateX(-50%);
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(60vh, 480px);
+  overflow: auto;
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  animation: select-bar-in 0.2s ease-out;
+}
+.tag-editor.is-busy { opacity: 0.7; pointer-events: none; }
+.tag-editor-head { display: flex; align-items: center; justify-content: space-between; }
+.tag-editor-title { font-size: 0.8rem; color: var(--text-secondary); }
+.tag-editor-close { border: 0; background: transparent; color: var(--text-secondary); width: 24px; height: 24px; padding: 4px; border-radius: 50%; cursor: pointer; }
+.tag-editor-close:hover { background: var(--card-hover); color: var(--text); }
+.tag-editor-close svg { width: 100%; height: 100%; display: block; }
+.tag-editor-input {
+  width: 100%; box-sizing: border-box;
+  height: 38px; padding: 0 12px;
+  border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text);
+  font: inherit; font-size: 0.9rem;
+}
+.tag-editor-input:focus { outline: none; border-color: var(--accent); }
+.tag-editor-sug { display: flex; flex-direction: column; gap: 1px; }
+.tag-editor-sug:empty { display: none; }
+.tag-editor-opt {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text); font: inherit; font-size: 0.85rem; text-align: left; cursor: pointer;
+}
+.tag-editor-opt:first-child, .tag-editor-opt:hover { background: var(--card-hover); }
+.tag-editor-cat { color: var(--text-secondary); font-size: 0.75rem; }
+.tag-editor-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-editor-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px; border: 1px solid var(--border);
+  font-size: 0.8rem; color: var(--text);
+}
+.tag-editor-n { font-size: 0.7rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.tag-editor-chip button { border: 0; background: transparent; color: var(--text-secondary); width: 18px; height: 18px; padding: 3px; border-radius: 50%; cursor: pointer; display: flex; }
+.tag-editor-chip button:hover { background: #e5484d; color: #fff; }
+.tag-editor-chip button svg { width: 100%; height: 100%; }
+.tag-editor-empty { margin: 0; font-size: 0.8rem; color: var(--text-secondary); }
+
+/* In-app confirm (Delete, many links). */
+.bulk-confirm-overlay {
+  position: fixed; inset: 0; z-index: 1100;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  animation: bulk-fade 0.15s ease-out;
+}
+@keyframes bulk-fade { from { opacity: 0; } }
+.bulk-confirm {
+  width: min(340px, calc(100vw - 32px));
+  padding: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+  animation: select-bar-in 0.18s ease-out;
+}
+.bulk-confirm h2 { margin: 0 0 6px; font-size: 1rem; font-weight: 500; color: var(--text); }
+.bulk-confirm p { margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; }
+.bulk-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.bulk-confirm-actions button {
+  height: 34px; padding: 0 16px; border-radius: 999px;
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+  font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.bulk-confirm-actions button:hover { background: var(--card-hover); }
+.bulk-confirm-actions .bulk-confirm-ok { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+.bulk-confirm-actions .bulk-confirm-ok.is-danger { background: #e5484d; border-color: #e5484d; color: #fff; }
+@media (prefers-reduced-motion: reduce) {
+  .bottom-bar.is-selecting > .select-bar, .tag-editor, .bulk-confirm, .bulk-confirm-overlay { animation: none; }
+  .card::after, .card::before { transition: none; }
+}
+@media (pointer: coarse) {
+  .card-menu-item { padding: 10px 12px; font-size: 0.9rem; }
+  .tag-editor-opt { padding: 10px 12px; }
+  .tag-editor-chip button { width: 24px; height: 24px; padding: 5px; }
+}

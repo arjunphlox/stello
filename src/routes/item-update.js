@@ -181,6 +181,17 @@ module.exports = async function handler(req, res) {
       dropReason(name);
     }
   }
+  // Grid selection → Edit Tags: any category; a name the item already has is left alone.
+  if (Array.isArray(body.add_tags)) {
+    for (const raw of body.add_tags) {
+      const name = String((raw && raw.tag) || '').trim().slice(0, 80);
+      const category = String((raw && raw.category) || 'subject').trim().toLowerCase() || 'subject';
+      if (!name) continue;
+      if (!tags.some(t => String(t.tag).toLowerCase() === name.toLowerCase())) {
+        tags.push({ tag: name, category, weight: 0.9, source: 'manual' });
+      }
+    }
+  }
   if (Array.isArray(body.dismiss_reasons)) body.dismiss_reasons.forEach(dropReason);
   if (Array.isArray(body.removed_tags) && body.removed_tags.length) {
     const drop = new Set(body.removed_tags.map(t => `${t && t.category}:${t && t.tag}`));
