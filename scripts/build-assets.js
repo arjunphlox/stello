@@ -38,7 +38,7 @@ const FILES = [
 ];
 const DIRS = ['fonts', 'icons'];
 // Pure folder-format modules the browser imports (folders.js → /lib/folder-write.js).
-const LIB = ['folder-write.js', 'folder-ingest.js', 'folder-v2.js', 'folder-format.js', 'collection-map.js', 'cosmos.js'];
+const LIB = ['folder-write.js', 'folder-read.js', 'folder-ingest.js', 'folder-v2.js', 'folder-format.js', 'collection-map.js', 'cosmos.js'];
 
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(DIST, { recursive: true });

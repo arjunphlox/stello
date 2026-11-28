@@ -3533,3 +3533,9 @@ html.is-carrying .header { visibility: hidden; }
 /* Part 3: asked once per folder on Add (Stello items only, or also its other files). */
 .settings-folder-ask { display: flex; flex-direction: column; gap: 8px; }
 .settings-folder-ask .settings-hint { margin: 0; }
+/* Grid part 1: items saved in Stello that no folder holds, with a way to put them back. */
+.settings-folders-missing { display: flex; flex-direction: column; gap: 6px; }
+.settings-folders-missing[hidden] { display: none; }
+.settings-folders-missing-text { font-size: 0.7rem; color: var(--text-dim); margin: 0; }
+.settings-folders-missing-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+.settings-folders-missing-list { margin: 0; padding-left: 16px; max-height: 180px; overflow: auto; font-size: 0.7rem; color: var(--text-dim); }

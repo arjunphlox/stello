@@ -332,6 +332,11 @@
     itemsBySlug = {};
     allItems.forEach(item => { itemsBySlug[item.slug] = item; });
 
+    // Stello shows only what's in the added folders: know which items they hold before the
+    // first grid (the folder list and index are on this browser, so this is quick).
+    if (window.StelloFolders && window.StelloFolders.supported) {
+      try { await window.StelloFolders.load(); } catch (err) { console.warn('[folders] load failed', err); }
+    }
     buildRelatedIndex();
     renderStats();
     injectHeaderIcons();
@@ -340,10 +345,18 @@
     PanelManager.init();
     // Folder sources: load the saved list + index, then keep the open panel's Folder rows current.
     if (window.StelloFolders && window.StelloFolders.supported) {
-      window.StelloFolders.load();
+      let shownVersion = window.StelloFolders.heldVersion();
+      let shownState = window.StelloFolders.state();
       document.addEventListener('stello:folderschange', () => {
         const slug = PanelManager.getOpenSlug();
         if (slug) PanelManager.refreshItem(slug);
+        // A file added, moved away or renamed in a folder: the grid follows.
+        const v = window.StelloFolders.heldVersion(), st = window.StelloFolders.state();
+        if (v === shownVersion && st === shownState) return;
+        shownVersion = v; shownState = st;
+        buildRelatedIndex();
+        renderStats();
+        renderGrid({ stagger: false, keepScroll: true });
       });
     }
     CardMenu.init();
@@ -353,7 +366,7 @@
 
     // The canvas view (canvas.js) reads the library through this small hook.
     window.StelloApp = {
-      items: () => allItems,
+      items: () => allItems.filter(inFolders),
       filtered: () => filteredCache,
       colorHex: (name) => COLOR_MAP[name] || COLOR_MAP[String(name).replace(/[-_\s]/g, '_')] || '#888888',
       item: (slug) => itemsBySlug[slug] || null,
@@ -386,7 +399,10 @@
         window.StelloFolders.load().then(() => window.StelloFolders.syncLibrary(allItems))
           .catch(err => console.warn('[folders] library write failed', err));
         // Part 3: folders that turn their other files into items read them now.
-        window.StelloFolders.setLibrary({ items: () => allItems, push: pushNewItems, added: addFolderItems });
+        window.StelloFolders.setLibrary({
+          items: () => allItems, push: pushNewItems, added: addFolderItems,
+          update: applyFolderEdits, addFiles: addItemsFromFiles,
+        });
       }
       if (!Offline) return;
       const run = () => {
@@ -717,6 +733,72 @@
     showToast(`Added ${fresh.length.toLocaleString()} item${fresh.length === 1 ? '' : 's'} from folder files`);
   }
 
+  /**
+   * Stello shows only what's in the added folders (grid part 1, Nov 28 2026): an item shows
+   * when a folder holds its file. Stello's own copy (D1) stays as a safety net for now;
+   * Settings › Folders lists anything in it that no folder holds.
+   */
+  function inFolders(item) {
+    const F = window.StelloFolders;
+    return !!(F && F.supported && item && F.holds(item.id));
+  }
+
+  /** Sends changes read from folder files on, like an Apple sync push (100 at a time). */
+  async function pushChanges(changes) {
+    for (let i = 0; i < changes.length; i += 100) {
+      try { await pushNewItems(changes.slice(i, i + 100)); }
+      catch (err) { console.warn('[folders] could not send folder changes', err); }
+    }
+  }
+
+  /** Files edited outside Stello: their items take the changed fields. Returns id → item. */
+  async function applyFolderEdits(changes) {
+    const out = new Map();
+    const byId = new Map(allItems.map(i => [String(i.id).toLowerCase(), i]));
+    for (const c of changes) {
+      const old = byId.get(c.id);
+      if (!old) continue;
+      const next = normalizeItem({ ...old, ...c.fields, updated_at: new Date(c.clock).toISOString() });
+      const i = allItems.indexOf(old);
+      if (i >= 0) allItems[i] = next;
+      itemsBySlug[next.slug] = next;
+      out.set(c.id, next);
+    }
+    if (!out.size) return out;
+    if (changes.some(c => c.fields.added_at)) sortItemsByAddedAt(allItems);
+    buildRelatedIndex();
+    renderGrid({ stagger: false, keepScroll: true });
+    const slug = PanelManager.getOpenSlug();
+    if (slug) PanelManager.refreshItem(slug);
+    showToast(`Updated ${out.size.toLocaleString()} item${out.size === 1 ? '' : 's'} from folder files`);
+    pushChanges(changes.filter(c => out.has(c.id)));
+    return out;
+  }
+
+  /** Stello files in a folder whose items Stello didn't have: into the grid at their dates. */
+  async function addItemsFromFiles(changes) {
+    const out = new Map();
+    for (const c of changes) {
+      let slug = c.fields.slug;
+      const taken = itemsBySlug[slug];
+      if (taken && String(taken.id).toLowerCase() !== c.id) slug = `${slug}-${c.id.slice(0, 6)}`;
+      if (itemsBySlug[slug]) continue;
+      c.fields.slug = slug;
+      const item = normalizeItem({ id: c.id, ...c.fields, updated_at: new Date(c.clock).toISOString() });
+      allItems.push(item);
+      itemsBySlug[slug] = item;
+      out.set(c.id, item);
+    }
+    if (!out.size) return out;
+    sortItemsByAddedAt(allItems);
+    buildRelatedIndex();
+    renderStats();
+    renderGrid({ stagger: false, keepScroll: true });
+    showToast(`Added ${out.size.toLocaleString()} item${out.size === 1 ? '' : 's'} from folder files`);
+    pushChanges(changes.filter(c => out.has(c.id)));
+    return out;
+  }
+
   /** A save or edit: write the item's file in its folder (folders.js decides if anything changed). */
   function folderWrite(item) {
     if (!item || !window.StelloFolders || !window.StelloFolders.supported) return;
@@ -752,14 +834,15 @@
   function relMapsGet() {
     if (relMaps) return relMaps;
     const fmt = {}, dom = {}, heavy = {};
-    allItems.forEach(item => {
+    const shown = allItems.filter(inFolders);
+    shown.forEach(item => {
       item.tags.forEach(t => {
         if (t.category === 'format') (fmt[t.tag] || (fmt[t.tag] = [])).push(item.slug);
         if (t.category === 'domain') (dom[t.tag] || (dom[t.tag] = [])).push(item.slug);
         if (t.weight >= 0.5) { const k = t.category + ':' + t.tag; (heavy[k] || (heavy[k] = [])).push(item.slug); }
       });
     });
-    relMaps = { fmt, dom, heavy, bySlug: new Map(allItems.map(i => [i.slug, i])) };
+    relMaps = { fmt, dom, heavy, bySlug: new Map(shown.map(i => [i.slug, i])) };
     return relMaps;
   }
   function relatedOf(slug) {
@@ -788,7 +871,9 @@
 
   // --- Stats (inline count) ---
   function renderStats() {
-    $headerCount.textContent = allItems.length.toLocaleString();
+    let n = 0;
+    for (const i of allItems) if (inFolders(i)) n++;
+    $headerCount.textContent = n.toLocaleString();
   }
 
 
@@ -796,6 +881,7 @@
   function collectTags() {
     const map = {};
     allItems.forEach(i => {
+      if (!inFolders(i)) return;
       i.tags.forEach(t => {
         if (t.category === 'collection') return; // Collections retired (Nov 27 2026): kinds, places and tags cover them
         if (!map[t.category]) map[t.category] = {};
@@ -893,6 +979,7 @@
   // --- Grid ---
   function getFilteredItems() {
     return allItems.filter(item => {
+      if (!inFolders(item)) return false;
       if (searchQuery && !searchBlob(item).includes(searchQuery.toLowerCase())) return false;
       if (needsReviewOnly && !isAwaitingReview(item)) return false;
       if (offlineOnly && !(window.StelloOffline && StelloOffline.isOffline(item.slug))) return false;
@@ -1068,9 +1155,18 @@
   // that many cards rendered — used to hold scroll position on reflow.
   function renderGrid(opts) {
     opts = opts || {};
+    // A re-render the person didn't ask for (a folder changed) keeps their place.
+    const mcKeep = opts.keepScroll ? document.querySelector('.main-content') : null;
+    if (mcKeep) {
+      const top = mcKeep.scrollTop;
+      opts = { ...opts, keepScroll: false, minCount: Math.max(opts.minCount || 0, renderedCount) };
+      renderGrid(opts);
+      mcKeep.scrollTop = top;
+      return;
+    }
     filteredCache = getFilteredItems();
     if (filteredCache.length === 0) {
-      $grid.innerHTML = '<div class="no-results">No items match your filters.</div>';
+      $grid.innerHTML = `<div class="no-results">${escHtml(emptyGridText())}</div>`;
       renderedCount = 0;
       scheduleTimeline();
       PanelManager.refreshAfterGridRender();
@@ -1094,6 +1190,17 @@
     updateFilterButtonState();
     requestAnimationFrame(fillViewport);
     document.dispatchEvent(new CustomEvent('stello:results'));
+  }
+
+  /** Why the grid is empty: no folder yet, a browser that can't open folders, or filters. */
+  function emptyGridText() {
+    const F = window.StelloFolders;
+    const st = F ? F.state() : 'unsupported';
+    if (st === 'unsupported') return 'Stello shows the items in your folders. Open it in Chrome, Edge or Arc on a computer, or in the Mac app.';
+    if (st === 'none') return 'Stello shows the items in your folders. Add a folder in Settings › Folders.';
+    if (st === 'reading') return 'Reading your folders…';
+    if (isSearchActive() || needsReviewOnly || offlineOnly) return 'No items match your filters.';
+    return 'Your folders hold no Stello items yet.';
   }
 
   // Keep rendering until the sentinel is past the viewport bottom.
@@ -3408,8 +3515,37 @@
         }).join('');
         $hint.textContent = rows.length
           ? `${TIDY} Removing a folder only hides it here; its files stay as they are.`
-          : 'Add the folders your Stello items live in, such as iCloud Drive/Stello.';
+          : 'Stello shows only the items in the folders you add here, such as iCloud Drive/Stello.';
+        paintMissing(rows);
       };
+      // The check (grid part 1): items saved in Stello that none of the folders holds.
+      // They don't show in the grid; they can be written back into the new-saves folder.
+      const $missing = $folders.querySelector('.settings-folders-missing');
+      let missingOpen = false;
+      const missingItems = () => allItems.filter(i => !F.holds(i.id));
+      const paintMissing = (rows) => {
+        if (!$missing) return;
+        const busy = rows.some(f => f.reading);
+        const saves = rows.find(f => f.takesSaves && f.status === 'granted');
+        const list = rows.length && libraryComplete && !busy ? missingItems() : [];
+        $missing.hidden = !list.length;
+        if (!list.length) { $missing.innerHTML = ''; return; }
+        const n = list.length.toLocaleString();
+        $missing.innerHTML = `<p class="settings-folders-missing-text">${n} item${list.length === 1 ? ' is' : 's are'} saved in Stello but not in any of these folders, so ${list.length === 1 ? 'it doesn’t' : 'they don’t'} show.</p>
+          <div class="settings-folders-missing-buttons">
+            <button type="button" class="settings-folder-action" data-missing="show">${missingOpen ? 'Hide the list' : 'Show them'}</button>
+            ${saves ? `<button type="button" class="settings-folder-action" data-missing="put">Add them to ${escHtml(saves.name)}</button>` : ''}
+          </div>
+          ${missingOpen ? `<ul class="settings-folders-missing-list">${list.slice(0, 200).map(i => `<li>${escHtml(i.title || i.source_url || i.slug)}</li>`).join('')}${list.length > 200 ? `<li>and ${(list.length - 200).toLocaleString()} more</li>` : ''}</ul>` : ''}`;
+      };
+      if ($missing) $missing.addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-missing]');
+        if (!b) return;
+        if (b.dataset.missing === 'show') { missingOpen = !missingOpen; paint(); return; }
+        b.disabled = true;
+        const n = await F.putBack(missingItems());
+        showToast(n ? `Added ${n.toLocaleString()} item${n === 1 ? '' : 's'} to the folder` : 'Couldn’t write to the folder');
+      });
       const folderClashToast = (r) => {
         if (r.duplicate) showToast(`${r.duplicate.name} is already added`);
         else if (r.covered) showToast(`Already covered by ${r.covered.name}`);

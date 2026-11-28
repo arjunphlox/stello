@@ -198,8 +198,14 @@
   // While a folder is being read: paths Stello wrote (entry) or moved away (null) meanwhile.
   const duringScan = new Map();
 
+  let held = new Set();
+  let heldVersion = 0;   // goes up whenever the set of items the folders hold changes
   function emit() {
     lookup = buildLookup(folders, indexes);
+    const next = new Set();
+    for (const [id, locs] of lookup) if (locs.some((l) => !l.found)) next.add(String(id).toLowerCase());
+    if (next.size !== held.size || [...next].some((id) => !held.has(id))) heldVersion++;
+    held = next;
     document.dispatchEvent(new CustomEvent('stello:folderschange'));
   }
 
@@ -292,6 +298,12 @@
     if (!writer) writer = import(new URL('lib/folder-write.js', document.baseURI).href);
     return writer;
   }
+  let reader = null;
+  /** The shared reader of Stello files changed outside Stello (src/lib/folder-read.js). */
+  function readLib() {
+    if (!reader) reader = import(new URL('lib/folder-read.js', document.baseURI).href);
+    return reader;
+  }
   let ingester = null;
   /** The shared reader of the person's own files (src/lib/folder-ingest.js). */
   function ingestLib() {
@@ -310,7 +322,12 @@
     folder.status = 'reading';
     folder.error = null;
     emit();
+    const firstRead = !indexes[folderId];
     const prev = (indexes[folderId] && indexes[folderId].files) || {};
+    // Stello files that changed since the last read: read in full once the library is in
+    // memory (readFiles), for edits made outside Stello and items Stello doesn't have yet.
+    // On a folder's first read only new items are taken, never edits.
+    const unread = { ...((indexes[folderId] && indexes[folderId].unread) || {}) };
     const prevFound = (indexes[folderId] && indexes[folderId].found) || {};
     const ingest = !!folder.ingest;
     const files = {};
@@ -350,6 +367,7 @@
           if (isEntity) entry.ent = headerEntity(head);
           files[path] = entry;
           changed.add(id);
+          if (isLibraryId(id)) unread[path] = unread[path] || (firstRead ? 0 : 1);
           if (self && self === id) maybeFound(path, file);
         } catch { /* unreadable file: skip */ }
       }));
@@ -369,7 +387,8 @@
       await flush();
       // Writes and .trash moves Stello made while the read ran win over what it saw.
       for (const [path, entry] of duringScan.get(folderId) || []) { if (entry) files[path] = entry; else delete files[path]; }
-      indexes[folderId] = { id: folderId, files, found };
+      for (const path of Object.keys(unread)) if (!files[path]) delete unread[path];
+      indexes[folderId] = { id: folderId, files, found, unread };
       folder.count = countItems(files);
       folder.scannedAt = Date.now();
       folder.status = 'granted';
@@ -388,7 +407,75 @@
       clearTrash(folder).catch((e) => console.warn('[folders] trash clear-out failed', e));
       if (changed.size) mergeCopies(changed, folderId).catch((e) => console.warn('[folders] merge failed', e));
       if (folder.ingest) ingestFolder(folderId).catch((e) => console.warn('[folders] reading files failed', e));
+      readFiles(folderId).catch((e) => console.warn('[folders] reading changed files failed', e));
     }
+  }
+
+  // ---------------------------------------------------------- changes made in the folder (grid part 1)
+
+  const reading = new Set();
+  const readAgain = new Set();
+
+  /**
+   * Reads the Stello files that changed in a folder since it was last read. A file edited
+   * outside Stello updates its item (only the fields the file changed); a file whose item
+   * Stello doesn't have yet adds it. A file Stello wrote itself changes nothing. Only an
+   * item's main copy is read: a copy in a later folder merges into it first (mergeCopies).
+   */
+  async function readFiles(folderId) {
+    const folder = folders.find((f) => f.id === folderId);
+    const ix = indexes[folderId];
+    if (!host || !host.update || !folder || !folder.handle || !ix || !ix.unread) return 0;
+    const paths = Object.keys(ix.unread);
+    if (!paths.length) return 0;
+    if (reading.has(folderId)) { readAgain.add(folderId); return 0; }
+    reading.add(folderId);
+    let done = 0;
+    try {
+      const [R, W] = await Promise.all([readLib(), lib()]);
+      const byId = new Map();
+      for (const it of host.items()) if (it && it.id) byId.set(String(it.id).toLowerCase(), it);
+      const ctx = folderContext(folderId);
+      const edits = [], fresh = [];
+      for (const path of paths) {
+        const takeEdits = ix.unread[path] === 1;
+        const entry = ix.files[path];
+        const id = entry && String(entry.id).toLowerCase();
+        const main = id && copiesOf(entry.id)[0];
+        if (!id || !isLibraryId(id) || !main || main.folderId !== folderId || main.path !== path) { delete ix.unread[path]; continue; }
+        const item = byId.get(id);
+        const last = await get('written', id);
+        if (item && last && last.folderId === folderId && last.path === path && last.mtime === entry.mtime && last.size === entry.size) { delete ix.unread[path]; continue; }
+        if (item && !takeEdits) { delete ix.unread[path]; continue; }
+        const r = await readText(folder.handle, path);
+        if (!r) { delete ix.unread[path]; continue; }
+        if (item) {
+          const e = R.fileEdits(item, r.text, { path, entities: ctx.entities, paths: [...ctx.paths] });
+          if (e) edits.push({ id, path, read: r, change: { id, fields: e.fields, clock: r.mtime } });
+          else await put('written', { id, fp: W.fingerprint(item), folderId, path, mtime: r.mtime, size: r.size, extra: last ? last.extra || null : null });
+        } else {
+          const c = R.itemFromFile(r.text, path, { entities: ctx.entities, modified: r.mtime });
+          if (c) fresh.push({ id, path, read: r, change: { ...c, clock: r.mtime } });
+        }
+        delete ix.unread[path];
+      }
+      // The app updates its copy and sends the changes on; then Stello records what each
+      // file holds, so these items aren't written back to the folder.
+      const record = async (list, items) => {
+        for (const x of list) {
+          const it = items.get(x.id);
+          if (it) await put('written', { id: x.id, fp: W.fingerprint(it), folderId, path: x.path, mtime: x.read.mtime, size: x.read.size, extra: null });
+        }
+      };
+      if (edits.length) { const items = await host.update(edits.map((x) => x.change)); await record(edits, items); done += edits.length; }
+      if (fresh.length) { const items = await host.addFiles(fresh.map((x) => x.change)); await record(fresh, items); done += fresh.length; }
+      await put('indexes', ix);
+      if (done) emit();
+    } finally {
+      reading.delete(folderId);
+    }
+    if (readAgain.delete(folderId)) done += await readFiles(folderId);
+    return done;
   }
 
   // ---------------------------------------------------------- the person's own files (part 3)
@@ -404,6 +491,7 @@
   function setLibrary(h) {
     host = h;
     for (const f of folders) if (f.ingest && indexes[f.id]) ingestFolder(f.id).catch((e) => console.warn('[folders] reading files failed', e));
+    for (const f of folders) if (indexes[f.id]) readFiles(f.id).catch((e) => console.warn('[folders] reading changed files failed', e));
   }
 
   /**
@@ -713,9 +801,15 @@
         if (text === first.text) continue;
         const stat = await writeFile(main.handle, locs[0].path, text);
         noteIndexed(main.id, locs[0].path, id, stat);
+        // The main copy now holds the other copy's edits: Stello takes them in too.
+        (indexes[main.id].unread || (indexes[main.id].unread = {}))[locs[0].path] = 1;
         merged++;
       }
-      if (merged) { for (const f of folders) if (indexes[f.id]) await put('indexes', indexes[f.id]); emit(); }
+      if (merged) {
+        for (const f of folders) if (indexes[f.id]) await put('indexes', indexes[f.id]);
+        emit();
+        for (const f of folders) if (indexes[f.id] && indexes[f.id].unread) readFiles(f.id).catch(() => {});
+      }
       return merged;
     });
   }
@@ -867,6 +961,45 @@
     return (itemId && lookup.get(itemId)) || [];
   }
 
+  /** True when an added folder holds a Stello file for the item: only those show (grid part 1). */
+  function holds(itemId) {
+    return !!itemId && held.has(String(itemId).toLowerCase());
+  }
+
+  /**
+   * Where the folders stand, for the grid: `none` (no folder added), `reading` (added but
+   * not read yet on this browser), `ready`. Unsupported browsers can't open folders.
+   */
+  function state() {
+    if (!supported) return 'unsupported';
+    if (!folders.length) return 'none';
+    return folders.some((f) => indexes[f.id]) ? 'ready' : 'reading';
+  }
+
+  /** Writes items Stello's copy holds but no folder has into the new-saves folder. */
+  function putBack(items) {
+    return serial(async () => {
+      const W = await lib();
+      let wrote = 0;
+      for (const item of items) {
+        if (!item || !item.id || holds(item.id)) continue;
+        try { if (await writeItem(item, W.fingerprint(item))) wrote++; } catch (e) { console.warn('[folders] put back failed', item.id, e); }
+      }
+      if (wrote) emit();
+      return wrote;
+    });
+  }
+
+  // Coming back to Stello re-reads the folders, so edits made meanwhile show up.
+  let lastFocusRead = 0;
+  function readOnReturn() {
+    if (document.visibilityState !== 'visible' || Date.now() - lastFocusRead < 20000) return;
+    lastFocusRead = Date.now();
+    for (const f of folders) if (f.status === 'granted') scan(f.id);
+  }
+  document.addEventListener('visibilitychange', readOnReturn);
+  window.addEventListener('focus', readOnReturn);
+
   /** Only the item's Stello files: the person's own files are never written or moved. */
   function copiesOf(itemId) {
     return foldersFor(itemId).filter((l) => !l.found);
@@ -875,5 +1008,6 @@
   root.StelloFolders = {
     supported, load, list, add, replace, remove, reconnect, rescan: scan, foldersFor, agoLabel,
     setSavesFolder, itemChanged, itemDeleted, syncLibrary, setLibrary, setIngest,
+    holds, state, putBack, heldVersion: () => heldVersion,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
