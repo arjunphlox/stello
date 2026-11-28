@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 /// Folder ingest (folder engine plan 4b, part 3; web twin: `ingestFolder` in folders.js).
 /// A folder added with "Also its other files" turns every link in its Markdown, text, CSV,
