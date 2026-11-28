@@ -15,14 +15,26 @@ final class ShareViewController: UIViewController {
 
     // MARK: - Embed helper
 
-    private func embed(phase: SharePhase) {
+    private func embed(phase: SharePhase, canvases: [SafariSaveInbox.CanvasEntry] = [], savedURL: String? = nil) {
+        let onDone: () -> Void = { [weak self] in self?.extensionContext?.completeRequest(returningItems: nil) }
+        let onCanvas: (SafariSaveInbox.CanvasEntry) -> Void = { [weak self] canvas in
+            guard let savedURL else { return }
+            // The app places it the next time it opens (or at once on the Mac).
+            SafariSaveInbox.enqueue(.init(id: UUID().uuidString.lowercased(), at: Date(), canvas: canvas.id,
+                                          newName: nil, groupName: nil,
+                                          entries: [.init(kind: "link", url: savedURL)], from: "share"))
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.8))
+                self?.extensionContext?.completeRequest(returningItems: nil)
+            }
+        }
         let onCancel: () -> Void = { [weak self] in
             self?.extensionContext?.cancelRequest(
                 withError: NSError(domain: "StelloShare", code: 0)
             )
         }
         if hostingController == nil {
-            let view = ShareView(phase: phase, onCancel: onCancel)
+            let view = ShareView(phase: phase, onCancel: onCancel, canvases: canvases, onCanvas: onCanvas, onDone: onDone)
             hostingController = UIHostingController(rootView: view)
             addChild(hostingController)
             self.view.addSubview(hostingController.view)
@@ -35,7 +47,7 @@ final class ShareViewController: UIViewController {
             ])
             hostingController.didMove(toParent: self)
         } else {
-            hostingController.rootView = ShareView(phase: phase, onCancel: onCancel)
+            hostingController.rootView = ShareView(phase: phase, onCancel: onCancel, canvases: canvases, onCanvas: onCanvas, onDone: onDone)
         }
     }
 
@@ -55,17 +67,22 @@ final class ShareViewController: UIViewController {
                 return
             }
             var savedTitle: String? = nil
+            var savedURL: String? = nil
             switch input {
             case .url(let url):
-                try await CaptureService.captureURL(url, context: context)
+                let item = try await CaptureService.captureURL(url, context: context)
                 savedTitle = CaptureService.domain(from: url) ?? url.host ?? url.absoluteString
+                savedURL = item.sourceURL ?? url.absoluteString
             case .text(let text):
                 try CaptureService.captureText(text, context: context)
                 savedTitle = String(text.prefix(60))
             case .image(let data):
                 try CaptureService.captureImage(data, context: context)
             }
-            embed(phase: .saved(title: savedTitle))
+            let canvases = savedURL == nil ? [] : SafariSaveInbox.canvases()
+            embed(phase: .saved(title: savedTitle), canvases: canvases, savedURL: savedURL)
+            // With canvases to pick from, wait for a tap or Done.
+            guard canvases.isEmpty else { return }
             try await Task.sleep(for: .seconds(1.2))
             extensionCtx.completeRequest(returningItems: nil)
         } catch {

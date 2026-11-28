@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Stello",
+  "description": "Save links and pictures to Stello, on their own or straight onto a canvas.",
+  "version": "0.2",
+  "icons": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "96": "icon-96.png", "128": "icon-128.png" },
+  "background": { "scripts": ["background.js"], "persistent": false },
+  "permissions": ["nativeMessaging", "contextMenus", "tabs", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["https://stello.arjunphlox.workers.dev/*", "http://localhost:8787/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["shelf.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Save to Stello",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png" }
+  }
+}
