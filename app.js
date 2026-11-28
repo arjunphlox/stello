@@ -32,6 +32,10 @@
     'stack': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="18" stroke-linejoin="round"><rect x="72" y="72" width="144" height="144" rx="16"/><path d="M184 40H56a16 16 0 0 0-16 16v128"/></svg>',
     'squares-four': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48v48Zm-96,32H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48v48Zm96-64H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48v48Z"/></svg>',
     'graph': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round"><circle cx="64" cy="76" r="28"/><circle cx="192" cy="100" r="28"/><circle cx="108" cy="192" r="28"/><path d="M92 81l72 14M170 118l-42 52M74 102l22 63"/></svg>',
+    'check-circle': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.2 12.4l2.6 2.6 5-5.4"/></svg>',
+    'tag': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1a1 1 0 0 1 .7.3l7.4 7.4a1 1 0 0 1 0 1.4l-8.1 8.1a1 1 0 0 1-1.4 0l-7.4-7.4a1 1 0 0 1-.3-.7z"/><circle cx="8.2" cy="8.2" r="1.3" fill="currentColor" stroke="none"/></svg>',
+    // Figma's mark, drawn as five stacked shapes (outline, to sit with the other icons).
+    'figma': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2.8H9a3.1 3.1 0 0 0 0 6.2h3zM12 2.8h3a3.1 3.1 0 0 1 0 6.2h-3zM12 9H9a3.1 3.1 0 0 0 0 6.2h3zM12 15.2H9a3.1 3.1 0 1 0 3 3.1z"/><circle cx="15" cy="12.1" r="3.1"/></svg>',
     'dots-three': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM48,116a12,12,0,1,0,12,12A12,12,0,0,0,48,116Zm160,0a12,12,0,1,0,12,12A12,12,0,0,0,208,116Z"/></svg>',
   };
   function icon(name) { return ICONS[name] || ''; }
@@ -347,6 +351,7 @@
       });
     }
     CardMenu.init();
+    GridSelect.init();
     DropManager.init();
     ProfileManager.init();
     OfflineUI.init();
@@ -358,7 +363,8 @@
       colorHex: (name) => COLOR_MAP[name] || COLOR_MAP[String(name).replace(/[-_\s]/g, '_')] || '#888888',
       item: (slug) => itemsBySlug[slug] || null,
       openItem: (slug) => PanelManager.open(slug),
-      openCardMenu: (slug, x, y, more) => CardMenu.openAt(slug, x, y, more),
+      // A touch hold on a grid card (canvas.js): while selecting, the selection's menu.
+      openCardMenu: (slug, x, y, more) => (!more && GridSelect.isOn() ? GridSelect.holdAt(slug, x, y) : CardMenu.openAt(slug, x, y, more)),
       closeCardMenu: () => CardMenu.close(),
       thumbHTML: canvasThumbHTML,
       glyphSVG: (item) => {
@@ -1633,7 +1639,7 @@
       ? `<span class="card-review-badge" style="--pill-bg:${pillBg}" title="Awaiting review" aria-label="Awaiting review">${icon('eye')}<span class="card-review-label">Review</span></span>`
       : '';
 
-    const cardClass = hasImage ? ' card-visual' : ' card-glyph-card';
+    const cardClass = (hasImage ? ' card-visual' : ' card-glyph-card') + (GridSelect.has(item.slug) ? ' is-selected' : '');
 
     // Off-screen cards skip layout and paint (content-visibility in
     // style.css); this is the size they hold until first drawn.
@@ -2042,7 +2048,8 @@
     }
   }
 
-  async function deleteItem(slug) {
+  async function deleteItem(slug, opts) {
+    const quiet = opts && opts.quiet;
     try {
       const res = await apiFetch('/api/item-delete', {
         method: 'POST',
@@ -2059,9 +2066,12 @@
       delete itemsBySlug[slug];
       if (gone && window.StelloFolders && window.StelloFolders.supported) window.StelloFolders.itemDeleted(gone.id);
       renderStats();
-      showToast('Deleted');
+      GridSelect.forget(slug);
+      if (!quiet) showToast('Deleted');
+      return true;
     } catch (err) {
-      showToast('Delete failed: ' + (err.message || 'unknown'));
+      if (!quiet) showToast('Delete failed: ' + (err.message || 'unknown'));
+      return false;
     }
   }
 
@@ -2299,13 +2309,18 @@
     const ICON_FOR = {
       open: 'arrow-up-right', enrich: 'sparkle', share: 'share', 'copy-link': 'link',
       copy: 'copy', download: 'download', delete: 'trash', offline: 'cloud-arrow-down', canvas: 'graph',
+      select: 'check-circle', 'open-links': 'arrow-up-right', tags: 'tag', reviewed: 'eye', figma: 'figma',
+      'copy-links': 'link', 'copy-md': 'copy',
     };
+    // Bulk mode: the menu acts on the grid selection (GridSelect), not one card.
+    let bulk = false;
 
     function entries(item) {
       const hasURL = !!item.source_url;
       const hasImage = !!item.image_path;
       const list = [
         { id: 'open', label: 'Open' },
+        ...(extra ? [] : [{ id: 'select', label: 'Select' }]),
         ...(extra ? extra.top || [] : window.StelloCanvas ? [{ id: 'canvas', label: window.StelloCanvas.has(item.slug) ? 'Show on Canvas' : 'Add to Canvas' }] : []),
         { id: 'enrich', label: 'Enrich' },
       ];
@@ -2344,7 +2359,33 @@
     }
 
     function close() {
-      if ($menu) { $menu.remove(); $menu = null; slug = null; extra = null; }
+      if ($menu) { $menu.remove(); $menu = null; slug = null; extra = null; bulk = false; }
+    }
+
+    function place(x, y, opts) {
+      document.body.appendChild($menu);
+      const r = $menu.getBoundingClientRect();
+      if (opts && opts.alignRight) x -= r.width;
+      if (opts && opts.above) y -= r.height;
+      const left = Math.min(x, window.innerWidth - r.width - 8);
+      const top = Math.min(y, window.innerHeight - r.height - 8);
+      $menu.style.left = Math.max(8, left) + 'px';
+      $menu.style.top = Math.max(8, top) + 'px';
+      if (left + r.width * 2 > window.innerWidth) $menu.classList.add('subs-left');
+      $menu.querySelector('.card-menu-item')?.focus();
+      $menu.addEventListener('click', onClick);
+    }
+
+    // The selection's menu: right-click a selected card, or the bar's ⋯ button.
+    function openBulk(x, y, opts) {
+      if (!GridSelect.isOn()) return;
+      close();
+      bulk = true;
+      $menu = document.createElement('div');
+      $menu.className = 'card-menu card-menu-bulk';
+      $menu.setAttribute('role', 'menu');
+      $menu.innerHTML = `<div class="card-menu-head">${GridSelect.count()} selected</div>` + GridSelect.entries().map(itemHTML).join('');
+      place(x, y, opts);
     }
 
     function openAt(cardSlug, x, y, more) {
@@ -2357,20 +2398,13 @@
       $menu.className = 'card-menu';
       $menu.setAttribute('role', 'menu');
       $menu.innerHTML = entries(item).map(itemHTML).join('');
-      document.body.appendChild($menu);
-      const r = $menu.getBoundingClientRect();
-      const left = Math.min(x, window.innerWidth - r.width - 8);
-      const top = Math.min(y, window.innerHeight - r.height - 8);
-      $menu.style.left = Math.max(8, left) + 'px';
-      $menu.style.top = Math.max(8, top) + 'px';
-      if (left + r.width * 2 > window.innerWidth) $menu.classList.add('subs-left');
-      $menu.querySelector('.card-menu-item')?.focus();
-      $menu.addEventListener('click', onClick);
+      place(x, y);
     }
 
     async function onClick(e) {
       const btn = e.target.closest('.card-menu-item');
       if (!btn || btn.classList.contains('has-sub')) return;
+      if (bulk) { const a = btn.dataset.action; close(); GridSelect.run(a); return; }
       const item = itemsBySlug[slug];
       const action = btn.dataset.action;
       const ext = extra;
@@ -2379,6 +2413,7 @@
       if (ext && ext.onAction && ext.onAction(action, item.slug)) return;
       switch (action) {
         case 'open': PanelManager.open(item.slug); break;
+        case 'select': GridSelect.toggle(item.slug); break;
         case 'canvas': window.StelloCanvas && window.StelloCanvas.addAuto(item.slug); break;
         case 'enrich': enrichItem(item.slug); break;
         case 'share': navigator.share({ title: item.title || '', url: item.source_url }).catch(() => {}); break;
@@ -2400,6 +2435,9 @@
         const card = e.target.closest && e.target.closest('.card[data-slug]');
         if (!card) { close(); return; }
         e.preventDefault();
+        // Touch: a long press selects the card (GridSelect), it doesn't open a menu.
+        if (GridSelect.touchHold()) return;
+        if (GridSelect.has(card.dataset.slug)) { openBulk(e.clientX, e.clientY); return; }
         openAt(card.dataset.slug, e.clientX, e.clientY);
       });
       // Keyboard: the Menu key or Shift+F10 on a focused card.
@@ -2410,17 +2448,621 @@
           if (!card) return;
           e.preventDefault();
           const r = card.getBoundingClientRect();
+          if (GridSelect.has(card.dataset.slug)) { openBulk(r.left + 16, r.top + 16); return; }
           openAt(card.dataset.slug, r.left + 16, r.top + 16);
         }
       }, true);
-      document.addEventListener('mousedown', (e) => { if ($menu && !$menu.contains(e.target)) close(); });
+      document.addEventListener('pointerdown', (e) => { if ($menu && !$menu.contains(e.target)) close(); });
       window.addEventListener('scroll', close, true);
       window.addEventListener('resize', close);
       window.addEventListener('blur', close);
     }
 
-    return { init, close, openAt };
+    return { init, close, openAt, openBulk };
   })();
+
+  // ---- Grid selection + bulk actions ----
+  // Drag across the grid (or ⌘/Ctrl-click, Shift-click, ⌘A) to select items;
+  // right-click a selected card, or use the bar at the bottom, for actions on
+  // all of them. Touch: press and hold a card, let go, then tap more.
+  // Selection is a Set of slugs; only cards on screen are touched, so the cost
+  // follows what's visible, never the library size.
+  const GridSelect = (function () {
+    const selected = new Set();
+    let anchor = null;            // last clicked slug, for Shift-click ranges
+    let lastPointer = 'mouse';
+    let $bar = null;
+    // The click that ends a drag or a hold isn't a tap: eat that one click.
+    function eatNextClick() {
+      const eat = (ev) => { ev.preventDefault(); ev.stopImmediatePropagation(); done(); };
+      const done = () => { window.removeEventListener('click', eat, true); clearTimeout(t); };
+      const t = setTimeout(done, 400);
+      window.addEventListener('click', eat, true);
+    }
+    const html = document.documentElement;
+
+    const has = (slug) => selected.has(slug);
+    const count = () => selected.size;
+    const isOn = () => selected.size > 0;
+    const gridVisible = () => !html.classList.contains('view-canvas');
+    const isSplit = () => html.classList.contains('view-split');
+    const cardEl = (slug) => $grid.querySelector(`.card[data-slug="${cssSelectorEscape(slug)}"]`);
+    const items = () => [...selected].map(s => itemsBySlug[s]).filter(Boolean);
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
+
+    function paint(slug, on) {
+      const el = cardEl(slug);
+      if (el) el.classList.toggle('is-selected', on);
+    }
+
+    function changed() {
+      const on = isOn();
+      html.classList.toggle('is-selecting', on);
+      if (!$bar) return;
+      $bar.parentElement.classList.toggle('is-selecting', on);
+      $bar.querySelector('.select-count').textContent = on ? `${selected.size} selected` : '';
+      const all = on && selected.size >= filteredCache.length && filteredCache.every(i => selected.has(i.slug));
+      const btn = $bar.querySelector('.select-all');
+      btn.textContent = all ? 'Select None' : 'Select All';
+      btn.dataset.all = all ? '1' : '';
+    }
+
+    // Big changes (select all) walk the rendered cards once instead of
+    // looking each card up.
+    function repaintAll() {
+      $grid.querySelectorAll('.card[data-slug]').forEach(el => el.classList.toggle('is-selected', selected.has(el.dataset.slug)));
+    }
+    function set(slugs) {
+      const next = slugs instanceof Set ? slugs : new Set(slugs);
+      const added = [], removed = [];
+      selected.forEach(s => { if (!next.has(s)) removed.push(s); });
+      next.forEach(s => { if (!selected.has(s)) added.push(s); });
+      if (!added.length && !removed.length) return;
+      removed.forEach(s => selected.delete(s));
+      added.forEach(s => selected.add(s));
+      if (added.length + removed.length > 48) repaintAll();
+      else { removed.forEach(s => paint(s, false)); added.forEach(s => paint(s, true)); }
+      changed();
+    }
+    function toggle(slug) {
+      if (selected.has(slug)) { selected.delete(slug); paint(slug, false); }
+      else { selected.add(slug); paint(slug, true); }
+      anchor = slug;
+      changed();
+    }
+    function clear() {
+      if (!isOn()) return;
+      selected.clear();
+      $grid.querySelectorAll('.card.is-selected').forEach(el => el.classList.remove('is-selected'));
+      anchor = null;
+      changed();
+      document.dispatchEvent(new CustomEvent('stello:selection-cleared'));
+    }
+    function selectAll() { set(filteredCache.map(i => i.slug)); }
+    // Shift-click: everything between the last clicked card and this one, in grid order.
+    function range(slug) {
+      const order = filteredCache.map(i => i.slug);
+      const a = anchor ? order.indexOf(anchor) : -1, b = order.indexOf(slug);
+      if (a < 0 || b < 0) { toggle(slug); return; }
+      const [lo, hi] = a < b ? [a, b] : [b, a];
+      const next = new Set(selected);
+      for (let i = lo; i <= hi; i++) next.add(order[i]);
+      set(next);
+    }
+    // Drop what the grid no longer shows (filters, search, deletes).
+    function prune() {
+      if (!isOn()) return;
+      const shown = new Set(filteredCache.map(i => i.slug));
+      let drop = false;
+      selected.forEach(s => { if (!shown.has(s)) { selected.delete(s); drop = true; } });
+      if (drop) changed();
+    }
+    // Touch hold while selecting: the held card joins the selection, then its menu.
+    function holdAt(slug, x, y) {
+      if (!selected.has(slug)) toggle(slug);
+      CardMenu.openBulk(x, y);
+    }
+    function forget(slug) { if (selected.delete(slug)) changed(); }
+
+    // ---- Drag a box across the grid (mouse and pen) ----
+    function bindMarquee() {
+      const mc = document.querySelector('.main-content');
+      const container = document.querySelector('.grid-container');
+      if (!mc || !container) return;
+      mc.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'touch' || e.button !== 0 || !e.isPrimary || !gridVisible()) return;
+        if (!container.contains(e.target) || e.target.closest('.timeline, button, a, input, textarea, .bottom-bar')) return;
+        const startCard = e.target.closest('.card[data-slug]');
+        // Split view: dragging a card carries it to the canvas, so a box starts only between cards.
+        if (startCard && isSplit()) return;
+        // No text selection or image drag from a press on the grid.
+        e.preventDefault();
+        const keep = e.shiftKey || e.metaKey || e.ctrlKey;
+        const base = keep ? new Set(selected) : new Set();
+        const cRect0 = container.getBoundingClientRect();
+        const sx = e.clientX - cRect0.left, sy = e.clientY - cRect0.top;
+        const id = e.pointerId;
+        let box = null, rects = null, rectsFor = -1, rectsAt = 0, lastEv = e, raf = 0;
+        // Card boxes in grid coordinates, read once and again only when more
+        // cards have streamed in (at most every 300 ms while auto-scrolling).
+        const measure = () => {
+          const cr = container.getBoundingClientRect();
+          rects = [];
+          $grid.querySelectorAll('.card[data-slug]').forEach(el => {
+            const r = el.getBoundingClientRect();
+            rects.push({ slug: el.dataset.slug, l: r.left - cr.left, t: r.top - cr.top, r: r.right - cr.left, b: r.bottom - cr.top });
+          });
+          rectsFor = renderedCount; rectsAt = performance.now();
+        };
+        const update = () => {
+          const cr = container.getBoundingClientRect();
+          const x = lastEv.clientX - cr.left, y = lastEv.clientY - cr.top;
+          const l = Math.min(sx, x), t = Math.min(sy, y), r = Math.max(sx, x), b = Math.max(sy, y);
+          box.style.transform = `translate(${l}px,${t}px)`;
+          box.style.width = (r - l) + 'px';
+          box.style.height = (b - t) + 'px';
+          if (!rects || (rectsFor !== renderedCount && performance.now() - rectsAt > 300)) measure();
+          const next = new Set(base);
+          for (const c of rects) {
+            if (c.r < l || c.l > r || c.b < t || c.t > b) continue;
+            if (e.metaKey || e.ctrlKey) { if (base.has(c.slug)) next.delete(c.slug); else next.add(c.slug); }
+            else next.add(c.slug);
+          }
+          set(next);
+        };
+        // Near the top or bottom edge, the grid scrolls on its own.
+        const autoScroll = () => {
+          raf = 0;
+          if (!box) return;
+          const mr = mc.getBoundingClientRect(), E = 64;
+          let dy = 0;
+          if (lastEv.clientY < mr.top + E) dy = -Math.ceil((mr.top + E - lastEv.clientY) / 4);
+          else if (lastEv.clientY > mr.bottom - E) dy = Math.ceil((lastEv.clientY - (mr.bottom - E)) / 4);
+          if (dy) { mc.scrollTop += Math.max(-24, Math.min(24, dy)); update(); }
+          raf = requestAnimationFrame(autoScroll);
+        };
+        const move = (ev) => {
+          if (ev.pointerId !== id) return;
+          lastEv = ev;
+          if (!box) {
+            if (Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 6) return;
+            CardMenu.close();
+            box = document.createElement('div');
+            box.className = 'select-marquee';
+            container.appendChild(box);
+            try { mc.setPointerCapture(id); } catch (_) {}
+          }
+          ev.preventDefault();
+          update();
+          if (!raf) raf = requestAnimationFrame(autoScroll);
+        };
+        const up = (ev) => {
+          if (ev.pointerId !== id) return;
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          window.removeEventListener('pointercancel', up);
+          if (raf) cancelAnimationFrame(raf);
+          if (!box) return;
+          box.remove(); box = null;
+          eatNextClick();
+          const last = rects && [...selected].pop();
+          if (last) anchor = last;
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+      });
+      // No browser image drag or text selection while a box could start.
+      mc.addEventListener('dragstart', (e) => { if (!isSplit() && e.target.closest && e.target.closest('.grid-container .card')) e.preventDefault(); });
+    }
+
+    // ---- Touch: press and hold a card, let go to select it ----
+    function bindTouchHold() {
+      const mc = document.querySelector('.main-content');
+      if (!mc) return;
+      let t = 0, start = null, held = false;
+      mc.addEventListener('pointerdown', (e) => {
+        lastPointer = e.pointerType;
+        if (e.pointerType === 'mouse' || !gridVisible()) return;
+        const card = e.target.closest('.grid-container .card[data-slug]');
+        if (!card) return;
+        start = { x: e.clientX, y: e.clientY, slug: card.dataset.slug, id: e.pointerId };
+        held = false;
+        clearTimeout(t);
+        t = setTimeout(() => { held = true; }, 450);
+      });
+      mc.addEventListener('pointermove', (e) => {
+        if (start && e.pointerId === start.id && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) { clearTimeout(t); start = null; }
+      });
+      const end = (e) => {
+        clearTimeout(t);
+        if (!start || e.pointerId !== start.id) { start = null; return; }
+        const s = start; start = null;
+        // A hold that didn't travel. Where the canvas owns the hold (phone grid,
+        // split view) it opens the menu itself, through StelloApp.openCardMenu.
+        if (!held || e.type === 'pointercancel' || !gridVisible()) return;
+        held = false;
+        if (window.StelloCanvas && window.StelloCanvas.ownsTouchHold && window.StelloCanvas.ownsTouchHold()) return;
+        eatNextClick();
+        if (navigator.vibrate) navigator.vibrate(8);
+        if (isOn()) holdAt(s.slug, e.clientX, e.clientY);
+        else CardMenu.openAt(s.slug, e.clientX, e.clientY);
+      };
+      mc.addEventListener('pointerup', end);
+      mc.addEventListener('pointercancel', end);
+    }
+
+    // ---- Clicks: modifiers, or a plain tap while selecting ----
+    function bindClicks() {
+      $grid.addEventListener('click', (e) => {
+        const card = e.target.closest('.card[data-slug]');
+        if (!card) return;
+        const slug = card.dataset.slug;
+        if (e.shiftKey && (isOn() || anchor)) { e.preventDefault(); e.stopImmediatePropagation(); range(slug); anchor = slug; return; }
+        if (e.metaKey || e.ctrlKey) { e.preventDefault(); e.stopImmediatePropagation(); toggle(slug); return; }
+        if (isOn()) { e.preventDefault(); e.stopImmediatePropagation(); toggle(slug); }
+        else anchor = slug;
+      }, true);
+      // A click on empty grid space ends the selection.
+      document.querySelector('.grid-container')?.addEventListener('click', (e) => {
+        if (!isOn()) return;
+        if (e.target.closest('.card, .timeline, button, a, input')) return;
+        clear();
+      });
+    }
+
+    function bindKeys() {
+      document.addEventListener('keydown', (e) => {
+        const typing = e.target && e.target.matches && e.target.matches('input, textarea, [contenteditable], [contenteditable] *');
+        if (typing || document.querySelector('.card-menu, .bulk-dialog')) return;
+        if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'a' && gridVisible()) {
+          if (document.querySelector('.main-layout .panel:focus-within')) return;
+          e.preventDefault(); selectAll(); return;
+        }
+        if (!isOn()) return;
+        if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); clear(); return; }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !e.metaKey) { e.preventDefault(); run('delete'); }
+      }, true);
+    }
+
+    // ---- The bar that stands in for the bottom bar while selecting ----
+    function buildBar() {
+      const host = document.querySelector('.bottom-bar');
+      if (!host) return;
+      $bar = document.createElement('div');
+      $bar.className = 'select-bar';
+      $bar.setAttribute('role', 'toolbar');
+      $bar.setAttribute('aria-label', 'Selected items');
+      $bar.innerHTML = `<button type="button" class="bar-btn select-done" title="Done (Esc)" aria-label="Done">${icon('x')}</button>
+        <div class="bar-search select-pill"><span class="select-count" aria-live="polite"></span><button type="button" class="select-all">Select All</button></div>
+        <button type="button" class="bar-btn select-more" title="Actions" aria-label="Actions" aria-haspopup="menu">${icon('dots-three')}</button>
+        <button type="button" class="bar-btn select-delete" title="Delete" aria-label="Delete selected items">${icon('trash')}</button>`;
+      host.appendChild($bar);
+      $bar.querySelector('.select-done').addEventListener('click', clear);
+      $bar.querySelector('.select-all').addEventListener('click', (e) => { if (e.currentTarget.dataset.all) clear(); else selectAll(); });
+      $bar.querySelector('.select-delete').addEventListener('click', () => run('delete'));
+      $bar.querySelector('.select-more').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const r = e.currentTarget.getBoundingClientRect();
+        CardMenu.openBulk(r.right, r.top - 8, { above: true, alignRight: true });
+      });
+    }
+
+    // ---- Menu entries (shared by right-click and the ⋯ button) ----
+    function entries() {
+      const list = items();
+      const n = list.length;
+      const links = list.filter(i => i.source_url);
+      const out = [];
+      if (links.length) out.push({ id: 'open-links', label: links.length === 1 ? 'Open Link' : `Open ${links.length} Links` });
+      if (window.StelloCanvas) out.push({ id: 'canvas', label: 'Add to Canvas' });
+      out.push({ id: 'tags', label: 'Edit Tags…' });
+      if (list.some(isAwaitingReview)) out.push({ id: 'reviewed', label: 'Mark Reviewed' });
+      out.push({ divider: true });
+      out.push({ id: 'figma', label: 'Copy to Figma' });
+      if (links.length) out.push({ id: 'copy-links', label: links.length === 1 ? 'Copy Link' : 'Copy Links' });
+      out.push({ id: 'copy-md', label: 'Copy Details (Markdown)' });
+      if (links.length && navigator.share) out.push({ id: 'share', label: 'Share Links' });
+      out.push({ divider: true });
+      out.push({ id: 'delete', label: n === 1 ? 'Delete 1 Item' : `Delete ${n} Items`, danger: true });
+      return out;
+    }
+
+    // Up to `limit` at a time, for the per-item API calls.
+    async function pool(list, limit, fn) {
+      let i = 0, ok = 0;
+      const worker = async () => { while (i < list.length) { const x = list[i++]; if (await fn(x)) ok++; } };
+      await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
+      return ok;
+    }
+
+    function refreshCard(slug) {
+      const el = cardEl(slug), item = itemsBySlug[slug];
+      if (el && item && el.dataset.renderSig !== cardRenderSig(item)) el.outerHTML = renderCard(item, 0);
+    }
+
+    async function run(action) {
+      const list = items();
+      if (!list.length) return;
+      const n = list.length;
+      switch (action) {
+        case 'open-links': return openLinks(list.filter(i => i.source_url));
+        case 'canvas':
+          if (window.StelloCanvas && window.StelloCanvas.addMany) window.StelloCanvas.addMany(list.map(i => i.slug));
+          return;
+        case 'tags': return TagEditor.open();
+        case 'reviewed': {
+          const due = list.filter(isAwaitingReview);
+          const ok = await pool(due, 6, async (i) => !!(await postItemUpdate(i.slug, { mark_reviewed: true })));
+          due.forEach(i => refreshCard(i.slug));
+          showToast(ok === due.length ? `Marked ${plural(ok, 'item')} reviewed` : `Marked ${ok} of ${due.length} reviewed`);
+          return;
+        }
+        case 'figma': return copyForFigma(list);
+        case 'copy-links': return copyText(list.filter(i => i.source_url).map(i => i.source_url).join('\n'), n === 1 ? 'Link' : 'Links');
+        case 'copy-md': return copyText(list.map(itemMarkdown).join('\n\n---\n\n'), 'Details');
+        case 'share': {
+          const urls = list.filter(i => i.source_url).map(i => i.source_url);
+          navigator.share({ text: urls.join('\n') }).catch(() => {});
+          return;
+        }
+        case 'delete': {
+          const folders = window.StelloFolders && window.StelloFolders.supported && window.StelloFolders.list().length > 0;
+          const yes = await confirmDialog({
+            title: n === 1 ? 'Delete 1 item?' : `Delete ${n} items?`,
+            body: folders ? 'Their files move to the .trash folder inside your Stello folder.' : 'You can’t undo this.',
+            ok: 'Delete', danger: true,
+          });
+          if (!yes) return;
+          const slugs = list.map(i => i.slug);
+          const ok = await pool(slugs, 6, (s) => deleteItem(s, { quiet: true }));
+          showToast(ok === n ? `Deleted ${plural(n, 'item')}` : `Deleted ${ok} of ${n}. Try the rest again.`);
+          return;
+        }
+        default: return;
+      }
+    }
+
+    function openLinks(list) {
+      const go = () => {
+        let blocked = 0;
+        list.forEach(i => {
+          const w = window.open(i.source_url, '_blank');
+          if (w) { try { w.opener = null; } catch (_) {} } else blocked++;
+        });
+        if (blocked) showToast(`Your browser stopped ${plural(blocked, 'tab')}. Allow pop-ups for Stello, then try again.`);
+      };
+      if (list.length <= 12) return go();
+      confirmDialog({ title: `Open ${list.length} links?`, body: 'Each one opens in a new tab.', ok: 'Open' }).then(yes => { if (yes) go(); });
+    }
+
+    // ---- Copy to Figma: one SVG with every image laid out as a moodboard.
+    // Figma turns pasted SVG into layers; each item is a group named after it.
+    const FIGMA_MAX = 60, FIG_W = 360, FIG_GAP = 24;
+    function blobToDataURL(blob) {
+      return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
+    }
+    function figmaSrc(path) {
+      if (!path) return '';
+      if (path.startsWith('/img/')) return path + (path.includes('?') ? '&' : '?') + 'format=figma';
+      return path;
+    }
+    function xmlEsc(s) { return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+    async function figmaSVG(list) {
+      const cols = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(list.length))));
+      const colY = new Array(cols).fill(0);
+      const imgs = new Array(list.length);
+      await pool(list.map((it, k) => ({ it, k })), 6, async ({ it, k }) => {
+        if (!it.has_image || !it.image_path) return false;
+        try {
+          const res = await fetch(figmaSrc(it.image_path), { credentials: 'same-origin' });
+          if (!res.ok) throw new Error('img');
+          imgs[k] = await blobToDataURL(await res.blob());
+          return true;
+        } catch { return false; }
+      });
+      const parts = list.map((it, k) => {
+        let c = 0;
+        for (let i = 1; i < cols; i++) if (colY[i] < colY[c]) c = i;
+        const x = c * (FIG_W + FIG_GAP), y = colY[c];
+        const name = xmlEsc((it.title || it.domain || it.slug).slice(0, 120));
+        let h, inner;
+        if (imgs[k]) {
+          h = Math.round(FIG_W * ((it.image_height && it.image_width) ? it.image_height / it.image_width : 0.625));
+          inner = `<image x="${x}" y="${y}" width="${FIG_W}" height="${h}" preserveAspectRatio="xMidYMid slice" href="${imgs[k]}"/>`;
+        } else {
+          h = 200;
+          const lines = wrapWords(it.title || it.domain || '', 30).slice(0, 4);
+          inner = `<rect x="${x}" y="${y}" width="${FIG_W}" height="${h}" rx="4" fill="#1F1F1C"/>` +
+            `<text x="${x + 20}" y="${y + 40}" fill="#F2F2EE" font-family="Karst, Inter, sans-serif" font-size="20">` +
+            lines.map((l, i) => `<tspan x="${x + 20}" dy="${i ? 26 : 0}">${xmlEsc(l)}</tspan>`).join('') + '</text>' +
+            (it.domain ? `<text x="${x + 20}" y="${y + h - 20}" fill="#8F8F8A" font-family="Karst, Inter, sans-serif" font-size="14">${xmlEsc(it.domain)}</text>` : '');
+        }
+        colY[c] = y + h + FIG_GAP;
+        return `<g id="${name}">${inner}</g>`;
+      });
+      const w = cols * FIG_W + (cols - 1) * FIG_GAP, h = Math.max(...colY) - FIG_GAP;
+      return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${parts.join('')}</svg>`;
+    }
+    function wrapWords(text, max) {
+      const out = []; let line = '';
+      String(text).split(/\s+/).forEach(word => {
+        if ((line + ' ' + word).trim().length > max && line) { out.push(line); line = word; }
+        else line = (line + ' ' + word).trim();
+      });
+      if (line) out.push(line);
+      return out;
+    }
+    async function copyForFigma(all) {
+      const list = all.slice(0, FIGMA_MAX);
+      showToast(`Preparing ${plural(list.length, 'item')} for Figma…`);
+      const svgP = figmaSVG(list);
+      const done = () => showToast(all.length > FIGMA_MAX
+        ? `Copied the first ${FIGMA_MAX}. Paste in Figma.`
+        : `Copied ${plural(list.length, 'item')}. Paste in Figma.`);
+      try {
+        // A promised clipboard item keeps Safari's click permission while the images load.
+        if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+          await navigator.clipboard.write([new ClipboardItem({ 'text/plain': svgP.then(s => new Blob([s], { type: 'text/plain' })) })]);
+        } else {
+          await navigator.clipboard.writeText(await svgP);
+        }
+        done();
+      } catch {
+        try { await navigator.clipboard.writeText(await svgP); done(); }
+        catch { showToast('Copy failed'); }
+      }
+    }
+
+    function init() {
+      buildBar();
+      bindMarquee();
+      bindTouchHold();
+      bindClicks();
+      bindKeys();
+      document.addEventListener('stello:results', prune);
+      changed();
+    }
+
+    return { init, has, count, isOn, toggle, clear, selectAll, entries, run, forget, items, holdAt, touchHold: () => lastPointer === 'touch' };
+  })();
+
+  // ---- Edit Tags (for the grid selection): add a tag to all, or remove one from all ----
+  const TagEditor = (function () {
+    let $el = null, showAll = false;
+    function close() { if ($el) { $el.remove(); $el = null; } }
+    function union(list) {
+      const map = new Map();
+      list.forEach(it => (it.tags || []).forEach(t => {
+        if (!t || !t.tag || t.category === 'collection') return;
+        const key = `${t.category}:${t.tag}`;
+        const e = map.get(key) || { tag: t.tag, category: t.category, n: 0 };
+        e.n++; map.set(key, e);
+      }));
+      return [...map.values()].sort((a, b) => b.n - a.n || a.tag.localeCompare(b.tag));
+    }
+    function suggestions(q, list) {
+      const lower = q.toLowerCase();
+      const have = new Set(union(list).filter(t => t.n === list.length).map(t => t.tag.toLowerCase()));
+      const out = [];
+      const all = collectTags();
+      Object.entries(all).forEach(([cat, tags]) => Object.entries(tags).forEach(([tag, n]) => {
+        if (cat === 'color' || have.has(tag.toLowerCase())) return;
+        if (!lower || tag.toLowerCase().includes(lower)) out.push({ tag, category: cat, n });
+      }));
+      out.sort((a, b) => (b.tag.toLowerCase().startsWith(lower) - a.tag.toLowerCase().startsWith(lower)) || b.n - a.n);
+      return out.slice(0, 6);
+    }
+    function render() {
+      const list = GridSelect.items();
+      if (!$el || !list.length) { close(); return; }
+      const tags = union(list);
+      const q = $el.querySelector('.tag-editor-input').value.trim();
+      const sug = suggestions(q, list);
+      const exact = q && sug.some(s => s.tag.toLowerCase() === q.toLowerCase());
+      $el.querySelector('.tag-editor-title').textContent = `Tags on ${list.length === 1 ? '1 item' : list.length + ' items'}`;
+      $el.querySelector('.tag-editor-sug').innerHTML =
+        (q && !exact ? `<button type="button" class="tag-editor-opt" data-tag="${escAttr(q)}" data-category="subject"><span>Add “${escHtml(q)}”</span><span class="tag-editor-cat">New tag</span></button>` : '') +
+        sug.map(s => `<button type="button" class="tag-editor-opt" data-tag="${escAttr(s.tag)}" data-category="${escAttr(s.category)}"><span>${escHtml(s.tag)}</span><span class="tag-editor-cat">${escHtml(CATEGORY_LABELS[s.category] || s.category)}</span></button>`).join('');
+      const shown = showAll ? tags : tags.slice(0, 16);
+      $el.querySelector('.tag-editor-label').hidden = !tags.length;
+      const more = $el.querySelector('.tag-editor-more');
+      more.hidden = showAll || tags.length <= 16;
+      more.textContent = `Show all ${tags.length}`;
+      $el.querySelector('.tag-editor-list').innerHTML = tags.length
+        ? shown.map(t => `<span class="tag-editor-chip" title="${escAttr(CATEGORY_LABELS[t.category] || t.category)}">${escHtml(t.tag)}${t.n < list.length ? `<span class="tag-editor-n">${t.n}</span>` : ''}<button type="button" data-tag="${escAttr(t.tag)}" data-category="${escAttr(t.category)}" aria-label="Remove ${escAttr(t.tag)} from these items">${icon('x')}</button></span>`).join('')
+        : '<p class="tag-editor-empty">No tags yet.</p>';
+    }
+    async function apply(tag, category, add) {
+      const list = GridSelect.items();
+      const key = tag.toLowerCase();
+      const todo = list.filter(it => {
+        const hasIt = (it.tags || []).some(t => (add ? String(t.tag).toLowerCase() === key : (t.tag === tag && t.category === category)));
+        return add ? !hasIt : hasIt;
+      });
+      if (!todo.length) return;
+      $el && $el.classList.add('is-busy');
+      let i = 0, ok = 0;
+      const worker = async () => {
+        while (i < todo.length) {
+          const it = todo[i++];
+          const res = await postItemUpdate(it.slug, add ? { add_tags: [{ tag, category }] } : { removed_tags: [{ tag, category }] });
+          if (res) ok++;
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(6, todo.length) }, worker));
+      $el && $el.classList.remove('is-busy');
+      showToast(add ? `Added “${tag}” to ${ok === 1 ? '1 item' : ok + ' items'}` : `Removed “${tag}” from ${ok === 1 ? '1 item' : ok + ' items'}`);
+      render();
+      if (activeTags.length) renderGrid({ minCount: renderedCount, stagger: false });
+    }
+    function open() {
+      close();
+      showAll = false;
+      $el = document.createElement('div');
+      $el.className = 'tag-editor bulk-dialog';
+      $el.setAttribute('role', 'dialog');
+      $el.setAttribute('aria-label', 'Edit tags');
+      $el.innerHTML = `<div class="tag-editor-head"><span class="tag-editor-title"></span><button type="button" class="tag-editor-close" aria-label="Close">${icon('x')}</button></div>
+        <input type="text" class="tag-editor-input" placeholder="Add a tag" aria-label="Add a tag" autocomplete="off" maxlength="80">
+        <div class="tag-editor-sug"></div>
+        <p class="tag-editor-label">On these items</p>
+        <div class="tag-editor-list"></div>
+        <button type="button" class="tag-editor-more" hidden></button>`;
+      document.body.appendChild($el);
+      const input = $el.querySelector('.tag-editor-input');
+      input.addEventListener('input', render);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); close(); }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const first = $el.querySelector('.tag-editor-opt');
+          if (first) first.click();
+        }
+      });
+      $el.addEventListener('click', (e) => {
+        if (e.target.closest('.tag-editor-close')) { close(); return; }
+        if (e.target.closest('.tag-editor-more')) { showAll = true; render(); return; }
+        const opt = e.target.closest('.tag-editor-opt');
+        if (opt) { input.value = ''; apply(opt.dataset.tag, opt.dataset.category, true); return; }
+        const rm = e.target.closest('.tag-editor-chip button');
+        if (rm) apply(rm.dataset.tag, rm.dataset.category, false);
+      });
+      $el.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+      render();
+      input.focus();
+    }
+    document.addEventListener('pointerdown', (e) => { if ($el && !$el.contains(e.target) && !e.target.closest('.select-bar, .card-menu')) close(); });
+    document.addEventListener('stello:selection-cleared', close);
+    return { open, close };
+  })();
+
+  // A small in-app confirm (browser dialogs block the page). Resolves true/false.
+  function confirmDialog({ title, body, ok, danger }) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'bulk-confirm-overlay';
+      wrap.innerHTML = `<div class="bulk-confirm bulk-dialog" role="alertdialog" aria-modal="true" aria-labelledby="bulk-confirm-title">
+        <h2 id="bulk-confirm-title">${escHtml(title)}</h2>
+        ${body ? `<p>${escHtml(body)}</p>` : ''}
+        <div class="bulk-confirm-actions">
+          <button type="button" class="bulk-confirm-cancel">Cancel</button>
+          <button type="button" class="bulk-confirm-ok${danger ? ' is-danger' : ''}">${escHtml(ok || 'OK')}</button>
+        </div></div>`;
+      document.body.appendChild(wrap);
+      const done = (v) => { wrap.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); done(false); }
+        else if (e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); done(true); }
+      };
+      document.addEventListener('keydown', onKey, true);
+      wrap.addEventListener('click', (e) => {
+        if (e.target === wrap || e.target.closest('.bulk-confirm-cancel')) done(false);
+        else if (e.target.closest('.bulk-confirm-ok')) done(true);
+      });
+      wrap.querySelector(danger ? '.bulk-confirm-cancel' : '.bulk-confirm-ok').focus();
+    });
+  }
 
   // ---- Capture queue (sequential panel curation) ----
   // Slugs of freshly captured items that deserve a curation panel. We

@@ -304,6 +304,35 @@ final class CanvasStore {
         showOnCanvas(slug)
     }
 
+    /// Grid selection "Add to Canvas": a block of up to four columns right of what's
+    /// already there, in one undo step (web `addMany`). The grid stays; a visible
+    /// canvas (Split) frames the first one.
+    @discardableResult
+    func addMany(_ slugs: [String], height: (String) -> CGFloat) -> [String] {
+        let fresh = slugs.reduce(into: [String]()) { out, s in
+            if !doc.contains(s) && !out.contains(s) { out.append(s) }
+        }
+        guard !fresh.isEmpty else { return [] }
+        let w = CanvasMetrics.cardWidth, gap = CanvasMetrics.cardGap
+        let box = bounds(height: height)
+        let x0 = box.map { ($0.maxX + 120).rounded() } ?? 0
+        let y0 = box.map { $0.minY.rounded() } ?? 80
+        let columns = max(1, min(4, Int(Double(fresh.count).squareRoot().rounded(.up))))
+        var tops = [CGFloat](repeating: y0, count: columns)
+        change { d in
+            for slug in fresh {
+                let h = height(slug)
+                var c = 0
+                for i in 1..<columns where tops[i] < tops[c] { c = i }
+                let spot = Self.freeSpot(in: d, x: x0 + CGFloat(c) * (w + gap), y: tops[c], h: h, height: height)
+                d.cards.append(.init(slug: slug, x: Double(spot.x), y: Double(spot.y)))
+                tops[c] = spot.y + h + gap
+            }
+        }
+        focusSlug = fresh.first
+        return fresh
+    }
+
     /// Card menu "Show on Canvas": switch to the canvas (Split keeps the grid)
     /// and frame the card.
     func showOnCanvas(_ slug: String) {

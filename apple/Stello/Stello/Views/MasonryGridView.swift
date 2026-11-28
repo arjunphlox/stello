@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+#if os(macOS)
+import AppKit
+#endif
 
 // MARK: - Scroll offset tracking
 
@@ -126,6 +129,13 @@ struct MasonryGridView: View {
     @State private var filterCacheToken: UInt = 0
     /// Frames for every card in `displayItems`. Only cards near the viewport are built.
     @State private var gridModel = VirtualMasonryModel()
+    /// Grid selection for bulk actions (Mac drag box, ⌘/⇧-click; touch: Select in the menu).
+    @State private var selection = GridSelection.shared
+    #if os(macOS)
+    @State private var marquee: MarqueeDrag?
+    #endif
+    /// A drag box just ended: the click that ends it isn't a tap on a card.
+    @State private var ignoreTapsUntil: Date = .distantPast
     @State private var gridModelVersion: UInt = 0
     /// The grid's top edge in the scroll view's coordinate space.
     @State private var gridViewportTop: CGFloat = 0
@@ -189,6 +199,7 @@ struct MasonryGridView: View {
 
         cachedDisplayWeekKeys = cachedDisplayItems.map { WeekGroup.isoWeekKey(for: $0.addedAt) }
         filterCacheToken &+= 1
+        selection.gridChanged(cachedDisplayItems)
         rebuildGridModel()
     }
 
@@ -374,6 +385,25 @@ struct MasonryGridView: View {
         .onChange(of: weekBottomYs) { _, _ in
             cacheContentWeekRangesIfNeeded()
         }
+        .sheet(isPresented: tagEditorBinding) {
+            BulkTagEditor(selection: selection)
+                .environment(\.appTheme, theme)
+                .preferredColorScheme(theme.colorScheme)
+                #if os(iOS)
+                .presentationDetents([.medium, .large])
+                #endif
+        }
+        .confirmationDialog(deleteTitle, isPresented: deleteBinding, titleVisibility: .visible) {
+            Button(selection.count == 1 ? "Delete 1 Item" : "Delete \(selection.count) Items", role: .destructive) {
+                let n = BulkActions.delete(selection.items, context: context)
+                selection.clear()
+                selection.say(n == 1 ? "Deleted 1 item" : "Deleted \(n) items")
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(deleteMessage)
+        }
+        .onAppear { selection.loadAll = { [weak window = libraryWindow] in window?.loadAll() } }
         .sheet(isPresented: $showCapture) {
             CaptureSheet()
                 .environment(\.appTheme, theme)
@@ -489,7 +519,27 @@ struct MasonryGridView: View {
         // One gap per edge: max(gutter, safe area), never summed (web --gap-bottom).
         let bottomPadding = StelloLayout.bottomEdgeGap(proxySafeBottom: safeBottom)
 
-        return GridBottomControlBar(
+        return Group {
+            if selection.isActive {
+                GridSelectionBar(selection: selection, compactPhone: isCompactPhone)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+            } else {
+                bottomBar(screenshotHoverFilters: screenshotHoverFilters)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.smooth(duration: 0.2), value: selection.isActive)
+        // Embed: leading pad compensates the gutter now included in the grid column
+        // (see gridScrollContent); trailing sits flush with the column. iPhone: the
+        // grid's own 12pt gutter on both sides, so the bar lines up with the cards.
+        .padding(.leading, StelloLayout.windowInset)
+        .padding(.trailing, embedInPanelLayout ? 0 : StelloLayout.windowInset)
+        .padding(.bottom, bottomPadding)
+        .frame(maxWidth: .infinity, alignment: .bottom)
+    }
+
+    private func bottomBar(screenshotHoverFilters: Bool) -> some View {
+        GridBottomControlBar(
             searchText: $searchText,
             hasActiveFilters: !selectedTagNames.isEmpty || selectedWeekKey != nil || needsReviewOnly,
             isFilterPanelOpen: panelContent == .filters,
@@ -501,13 +551,6 @@ struct MasonryGridView: View {
             onFilter: { onFilters?() ?? (showFilterSheet = true) },
             onSettings: { onSettings?() ?? (showSettings = true) }
         )
-        // Embed: leading pad compensates the gutter now included in the grid column
-        // (see gridScrollContent); trailing sits flush with the column. iPhone: the
-        // grid's own 12pt gutter on both sides, so the bar lines up with the cards.
-        .padding(.leading, StelloLayout.windowInset)
-        .padding(.trailing, embedInPanelLayout ? 0 : StelloLayout.windowInset)
-        .padding(.bottom, bottomPadding)
-        .frame(maxWidth: .infinity, alignment: .bottom)
     }
 
     private func gridScrollContent(topInset: CGFloat, viewportHeight: CGFloat) -> some View {
@@ -525,13 +568,19 @@ struct MasonryGridView: View {
                     viewportHeight: viewportHeight,
                     modelVersion: gridModelVersion,
                     filterVersion: filterCacheToken,
-                    selectedItem: panelContent == .itemDetail ? selectedItem?.persistentModelID : nil
+                    selectedItem: panelContent == .itemDetail ? selectedItem?.persistentModelID : nil,
+                    selectionVersion: selection.version
                 ),
                 card: { card(for: $0) }
             )
             .equatable()
             .frame(height: gridModel.contentHeight, alignment: .topLeading)
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            #if os(macOS)
+            .overlay(alignment: .topLeading) { marqueeBox }
+            .contentShape(Rectangle())
+            .simultaneousGesture(marqueeGesture)
+            #endif
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.frame(in: .named("stelloScroll")).minY
             } action: { top in
@@ -647,7 +696,7 @@ struct MasonryGridView: View {
     private func card(for item: Item) -> some View {
         if let onCardTap {
             Button {
-                onCardTap(item)
+                handleTap(item, open: onCardTap)
             } label: {
                 ItemCardView(
                     item: item,
@@ -657,6 +706,7 @@ struct MasonryGridView: View {
                     columnWidth: cardColumnWidth,
                     onOpen: { onCardTap(item) }
                 )
+                .overlay { GridSelectionMark(isSelected: selection.contains(item)) }
                 .overlay(alignment: .topLeading) {
                     // Split view: a dot on cards already on the canvas (web `.on-canvas`).
                     if CanvasStore.shared.viewMode == .split, CanvasStore.shared.doc.contains(item.slug) {
@@ -670,13 +720,11 @@ struct MasonryGridView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityAddTraits(selection.contains(item) ? .isSelected : [])
             // Mac / iPad: drag a card onto the canvas (Split view). Its own type, so
-            // the window's file/text drop import ignores it.
-            .draggable(CanvasDragItem(slug: item.slug)) {
-                ItemCardView(item: item, resolvedColumns: 6)
-                    .frame(width: 180)
-                    .environment(\.appTheme, theme)
-            }
+            // the window's file/text drop import ignores it. With no canvas showing, a
+            // drag on the Mac draws a selection box instead.
+            .modifier(CanvasCardDrag(item: item, enabled: canvasDragEnabled, theme: theme))
         } else {
             NavigationLink(value: item) {
                 ItemCardView(
@@ -688,6 +736,103 @@ struct MasonryGridView: View {
             .buttonStyle(.plain)
         }
     }
+
+    // MARK: - Selection
+
+    private var canvasDragEnabled: Bool {
+        #if os(macOS)
+        CanvasStore.shared.viewMode == .split
+        #else
+        true
+        #endif
+    }
+
+    /// A tap or click on a card: ⌘ adds or removes it, ⇧ selects a run of cards; while
+    /// selecting, a plain tap adds or removes too. Otherwise it opens the item.
+    private func handleTap(_ item: Item, open: (Item) -> Void) {
+        #if os(macOS)
+        if marquee != nil { return }
+        #endif
+        if Date() < ignoreTapsUntil { return }
+        #if os(macOS)
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.shift), selection.isActive { selection.extend(to: item); return }
+        if flags.contains(.command) || flags.contains(.shift) { selection.toggle(item); return }
+        #endif
+        if selection.isActive {
+            selection.toggle(item)
+            return
+        }
+        open(item)
+    }
+
+    private var tagEditorBinding: Binding<Bool> {
+        Binding(get: { selection.showTagEditor }, set: { selection.showTagEditor = $0 })
+    }
+
+    private var deleteBinding: Binding<Bool> {
+        Binding(get: { selection.confirmDelete }, set: { selection.confirmDelete = $0 })
+    }
+
+    private var deleteTitle: String {
+        selection.count == 1 ? "Delete 1 item?" : "Delete \(selection.count) items?"
+    }
+
+    private var deleteMessage: String {
+        FolderSources.shared.folders.isEmpty
+            ? "You can’t undo this."
+            : "Their files move to the .trash folder inside your Stello folder."
+    }
+
+    #if os(macOS)
+    /// Drag on the grid draws a box; every card it touches is selected. ⇧ or ⌘ held at
+    /// the start adds to what's selected (⌘ flips cards already in it).
+    private var marqueeGesture: some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .local)
+            .onChanged { value in
+                let start = value.startLocation
+                if marquee == nil {
+                    let flags = NSEvent.modifierFlags
+                    let onCard = gridModel.visibleIndices(minY: start.y, maxY: start.y)
+                        .contains { gridModel.frames[$0].contains(start) }
+                    // Split view: dragging a card carries it to the canvas.
+                    let ignore = canvasDragEnabled && onCard
+                    let keep = flags.contains(.shift) || flags.contains(.command)
+                    marquee = MarqueeDrag(
+                        base: keep ? selection.ids : [], flips: flags.contains(.command),
+                        ignored: ignore, rect: .zero)
+                }
+                guard var drag = marquee, !drag.ignored else { return }
+                let loc = value.location
+                drag.rect = CGRect(
+                    x: min(start.x, loc.x), y: min(start.y, loc.y),
+                    width: abs(loc.x - start.x), height: abs(loc.y - start.y))
+                marquee = drag
+                var next = drag.base
+                for index in gridModel.visibleIndices(minY: drag.rect.minY, maxY: drag.rect.maxY)
+                where index < displayItems.count && gridModel.frames[index].intersects(drag.rect) {
+                    let id = displayItems[index].id
+                    if drag.flips && drag.base.contains(id) { next.remove(id) } else { next.insert(id) }
+                }
+                selection.set(next)
+            }
+            .onEnded { _ in
+                if marquee?.ignored == false { ignoreTapsUntil = Date().addingTimeInterval(0.3) }
+                marquee = nil
+            }
+    }
+
+    @ViewBuilder private var marqueeBox: some View {
+        if let drag = marquee, !drag.ignored, drag.rect.width > 0 || drag.rect.height > 0 {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(theme.accentColor.opacity(0.14))
+                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).stroke(theme.accentColor, lineWidth: 1))
+                .frame(width: drag.rect.width, height: drag.rect.height)
+                .offset(x: drag.rect.minX, y: drag.rect.minY)
+                .allowsHitTesting(false)
+        }
+    }
+    #endif
 
     private func updateActiveWeekKey() {
         let threshold = TimelineMetrics.scrollSpyThreshold
@@ -932,6 +1077,7 @@ private struct VirtualMasonryCards<Card: View>: View, Equatable {
         var modelVersion: UInt
         var filterVersion: UInt
         var selectedItem: PersistentIdentifier?
+        var selectionVersion: UInt = 0
     }
 
     let placed: [PlacedCard]
@@ -980,5 +1126,34 @@ private struct LibraryChangeWatcher: View, Equatable {
             cover.combine(item.coverAspect)
         }
         return (review.finalize(), cover.finalize())
+    }
+}
+
+#if os(macOS)
+/// An in-progress drag box on the grid, in the card stack's coordinates.
+private struct MarqueeDrag {
+    var base: Set<UUID>
+    var flips: Bool
+    var ignored: Bool
+    var rect: CGRect
+}
+#endif
+
+/// The grid card's drag onto the canvas, only where a drag has that meaning.
+private struct CanvasCardDrag: ViewModifier {
+    let item: Item
+    let enabled: Bool
+    let theme: AppTheme
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if enabled {
+            content.draggable(CanvasDragItem(slug: item.slug)) {
+                ItemCardView(item: item, resolvedColumns: 6)
+                    .frame(width: 180)
+                    .environment(\.appTheme, theme)
+            }
+        } else {
+            content
+        }
     }
 }

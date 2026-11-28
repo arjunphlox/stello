@@ -138,6 +138,41 @@ async function main() {
   scroll.seconds = ((Date.now() - scrollStart) / 1000).toFixed(1);
   scroll.heapMB = await heap();
 
+  // Grid selection: select all, then drag a box across the screen (with the
+  // edge auto-scroll), timing main-thread stalls.
+  await page.evaluate(() => { window.__perf.longTasks = []; });
+  const sel0 = Date.now();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.waitForTimeout(300);
+  const selectAll = await page.evaluate(() => ({
+    selected: (document.querySelector('.select-count') || {}).textContent || '',
+    longTasks: window.__perf.longTasks.map(t => Math.round(t.dur)).sort((a, b) => b - a).slice(0, 5),
+  }));
+  selectAll.ms = Date.now() - sel0;
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { window.__perf.longTasks = []; });
+  // From the top of a long-scrolled grid (thousands of cards in the page).
+  await page.evaluate(() => { document.querySelector('.main-content').scrollTop = 0; });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { window.__perf.longTasks = []; });
+  await page.mouse.move(320, 300);
+  for (let i = 1; i <= 30; i++) { await page.mouse.move(320 + i * 30, 300 + i * 15); await page.waitForTimeout(16); }
+  await page.waitForTimeout(800);
+  const hoverOnly = await page.evaluate(() => window.__perf.longTasks.map(t => Math.round(t.dur)).sort((a, b) => b - a).slice(0, 5));
+  await page.evaluate(() => { window.__perf.longTasks = []; });
+  await page.mouse.move(320, 300);
+  await page.mouse.down();
+  for (let i = 1; i <= 30; i++) { await page.mouse.move(320 + i * 30, 300 + i * 15); await page.waitForTimeout(16); }
+  await page.waitForTimeout(800);   // the bottom edge auto-scrolls the grid
+  await page.mouse.up();
+  const marquee = await page.evaluate(() => ({
+    selected: (document.querySelector('.select-count') || {}).textContent || '',
+    over50: window.__perf.longTasks.filter(t => t.dur > 50).length,
+    longTasks: window.__perf.longTasks.map(t => Math.round(t.dur)).sort((a, b) => b - a).slice(0, 5),
+  }));
+  marquee.hoverOnlyLongTasks = hoverOnly;
+  await page.keyboard.press('Escape');
+
   // Search keystroke + filter
   await page.evaluate(() => { window.__perf.longTasks = []; });
   const search = await page.$('#search-input, input[type="search"]');
@@ -150,7 +185,7 @@ async function main() {
     searchRes.ms = Date.now() - s0;
   }
 
-  console.log(JSON.stringify({ N, apiMB: +(apiBytes / 1048576).toFixed(1), launch, scroll, search: searchRes }, null, 2));
+  console.log(JSON.stringify({ N, apiMB: +(apiBytes / 1048576).toFixed(1), launch, scroll, selectAll, marquee, search: searchRes }, null, 2));
   await browser.close();
 }
 main().catch(e => { console.error(e); process.exit(1); });
