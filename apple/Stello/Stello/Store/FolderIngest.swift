@@ -678,7 +678,7 @@ extension FolderIngest {
         "sources", "meta", "snippets", "images", "name"]
     private static let noteTagKeys: Set<String> = ["tags", "tag", "keywords"]
     private static let noteDateKeys: Set<String> = ["created", "date", "created_at", "creation date"]
-    private static let tagSplit = re("[,\\s]+")
+    private static let noteTagSplit = re("[,\\s]+")
 
     /// A written note's item: `extra` is the note's own details kept in its header,
     /// `text` its text exactly as written (`body` the item's notes, trailing space trimmed).
@@ -718,7 +718,7 @@ extension FolderIngest {
             if noteTagKeys.contains(low) {
                 let names: [String]
                 if case .array(let a) = v { names = a.map { $0 == .null ? "" : plain($0) } }
-                else { names = splitOn(v == .null ? "" : plain(v), tagSplit) }
+                else { names = splitOn(v == .null ? "" : plain(v), noteTagSplit) }
                 addTags(&tags, names.map { $0.hasPrefix("#") ? String($0.dropFirst()) : $0 })
                 continue
             }
