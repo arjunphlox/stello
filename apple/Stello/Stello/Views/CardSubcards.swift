@@ -748,7 +748,8 @@ struct CardSubcards: View {
         guard var content = FactsSubCardContent(rows: layout.facts, links: layout.factLinks) else { return nil }
         let sources = folderSources
         let rows: [(label: String, value: String, url: URL?, action: (() -> Void)?)] =
-            sources.locations(for: item.id).map { loc in
+            // Spreadsheets and bookmark exports an item came from aren't shown (Arjun, Nov 28).
+            sources.copies(for: item.id).map { loc in
                 (label: "Folder", value: loc.name, url: nil, action: { sources.reveal(loc) })
             }
         if !rows.isEmpty { content.rows.insert(contentsOf: rows, at: max(0, content.rows.count - 1)) }

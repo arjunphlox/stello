@@ -74,7 +74,7 @@ extension FolderSources {
     /// The item's main copy: the oldest-added writable folder holding it, else the file
     /// Stello last wrote for it (the index may not list a file written seconds ago).
     private func mainCopy(_ itemID: UUID) -> Location? {
-        if let loc = locations(for: itemID).first(where: { isWritable($0.folderID) }) { return loc }
+        if let loc = copies(for: itemID).first(where: { isWritable($0.folderID) }) { return loc }
         guard let w = written[itemID.uuidString.lowercased()], isWritable(w.folderID), let root = roots[w.folderID],
               let folder = folders.first(where: { $0.id == w.folderID }) else { return nil }
         let url = root.appendingPathComponent(w.path)
@@ -85,7 +85,7 @@ extension FolderSources {
     private func finishWrites(_ folderIDs: Set<UUID>) {
         for id in folderIDs {
             guard let i = folders.firstIndex(where: { $0.id == id }), let files = indexes[id] else { continue }
-            folders[i].count = Self.countItems(files)
+            folders[i].count = Self.countItems(files, found[id])
             Self.saveIndex(id, files)
         }
         persist()
@@ -97,7 +97,8 @@ extension FolderSources {
     @discardableResult
     func write(_ item: Item) -> String? {
         let main = mainCopy(item.id)
-        guard let folderID = main?.folderID ?? savesFolderID.flatMap({ isWritable($0) ? $0 : nil }) ?? folders.first(where: { isWritable($0.id) })?.id,
+        let from = origin[item.id.uuidString.lowercased()].flatMap { isWritable($0) ? $0 : nil }
+        guard let folderID = main?.folderID ?? from ?? savesFolderID.flatMap({ isWritable($0) ? $0 : nil }) ?? folders.first(where: { isWritable($0.id) })?.id,
               let root = roots[folderID] else { return nil }
         let itemID = item.id.uuidString.lowercased()
         var (entities, paths) = context(folderID)
@@ -151,6 +152,39 @@ extension FolderSources {
         }
     }
 
+    /// Adds Stello's details at the top of a written note, keeping its text and its own
+    /// details (web twin: writeNote in folders.js). Skipped when the file changed since it
+    /// was read: the next read tries again.
+    func writeNote(_ item: Item, folderID: UUID, path: String, extra: FolderWriter.Obj, text: String,
+                   modified: Double, size: Int) -> Bool {
+        guard isWritable(folderID), let root = roots[folderID] else { return false }
+        let scoped = root.startAccessingSecurityScopedResource()
+        defer { if scoped { root.stopAccessingSecurityScopedResource() } }
+        let url = root.appendingPathComponent(path)
+        guard let now = FolderFiles.stat(url), now.modified == modified, now.size == size else { return false }
+        let itemID = item.id.uuidString.lowercased()
+        var (entities, paths) = context(folderID)
+        let (wire, localExts) = Self.wire(item)
+        let out = FolderWriter.itemFile(wire, entities: entities, paths: &paths,
+                                        existing: (path, FolderWriter.Copy(header: extra, body: text, modified: modified)), localExts: localExts)
+        do {
+            let stat = try FolderFiles.write(Data(out.text.utf8), to: url)
+            noteIndexed(folderID, path, id: itemID, stat)
+            written[itemID] = Written(folderID: folderID, path: path, modified: stat.modified, size: stat.size, extra: nil)
+            if var seen = found[folderID], seen[path] != nil {
+                seen[path]?.modified = stat.modified
+                seen[path]?.size = stat.size
+                found[folderID] = seen
+            }
+            finishWrites([folderID])
+            folderLog.info("added details to note \(path, privacy: .public)")
+            return true
+        } catch {
+            folderLog.error("could not add details to note \(path, privacy: .public): \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
     /// Copies an item's images into media/: bytes this device holds, else the web copy.
     private func copyMedia(_ item: Item, _ media: [FolderWriter.MediaCopy], root: URL) {
         guard !media.isEmpty else { return }
@@ -176,7 +210,7 @@ extension FolderSources {
     func trash(itemID: UUID) {
         let id = itemID.uuidString.lowercased()
         var touched = Set<UUID>()
-        var locs = locations(for: itemID).filter { isWritable($0.folderID) }
+        var locs = copies(for: itemID).filter { isWritable($0.folderID) }
         if locs.isEmpty, let main = mainCopy(itemID) { locs = [main] }
         if locs.isEmpty { folderLog.info("delete \(id, privacy: .public): no copy in a writable folder") }
         for loc in locs {
@@ -204,7 +238,7 @@ extension FolderSources {
     func mergeCopies(_ ids: Set<String>, changedIn: UUID) {
         var jobs: [(id: String, mainFolder: UUID, files: [URL], mainRel: String)] = []
         for id in ids {
-            let locs = (lookup[id] ?? []).filter { isWritable($0.folderID) }
+            let locs = (lookup[id] ?? []).filter { !$0.found && isWritable($0.folderID) }
             guard locs.count > 1, locs[0].folderID != changedIn, locs.contains(where: { $0.folderID == changedIn }),
                   let mainRoot = roots[locs[0].folderID], let rel = relativePath(locs[0], root: mainRoot) else { continue }
             jobs.append((id, locs[0].folderID, locs.map(\.fileURL), rel))

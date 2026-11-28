@@ -68,3 +68,24 @@ test('savesFolder: the marked folder, else the oldest added', () => {
   assert.strictEqual(F.savesFolder([{ id: 'b', addedAt: 2, takesSaves: true }, { id: 'a', addedAt: 1 }]).id, 'b');
   assert.strictEqual(F.savesFolder([]), null);
 });
+
+test('part 3: a spreadsheet or export an item came from is tracked but never shown or counted', () => {
+  const folders = [{ id: 'f1', name: 'Notes', addedAt: 10 }];
+  const indexes = { f1: {
+    files: { 'items/2026/11/a.md': { id: 'A' } },
+    found: { 'Raindrop export.csv': { links: [{ key: 'k1', id: 'A' }, { key: 'k2', id: 'B' }] } },
+  } };
+  const m = F.buildLookup(folders, indexes);
+  assert.deepStrictEqual(m.get('A'), [
+    { folderId: 'f1', name: 'Notes', path: 'items/2026/11/a.md' },
+    { folderId: 'f1', name: 'Notes', path: 'Raindrop export.csv', found: true },
+  ]);
+  const ids = ['11111111-2222-4333-8444-555555555555'];
+  assert.strictEqual(F.countItems({ 'a.md': { id: ids[0] } }), 1);
+  for (const n of ['links.md', 'export.csv', 'Bookmarks.html', 'x.webloc', 'y.url', 'z.txt']) assert.ok(F.ingestFile(n), n);
+  for (const n of ['.x.md', 'photo.jpg', 'doc.pdf', 'stello.json']) assert.ok(!F.ingestFile(n), n);
+  const item = { slug: 's', title: 'T', added_at: '2026-11-20T00:00:00Z' };
+  const rows = P.layout(item, { folders: m.get('A') }).cards[0].rows;
+  assert.deepStrictEqual(rows.filter((r) => r.label === 'Folder').map((r) => r.folder.path), ['items/2026/11/a.md']);
+  assert.ok(!P.layout(item, { folders: m.get('B') }).cards[0].rows.some((r) => r.label === 'Folder'));
+});

@@ -358,6 +358,52 @@
       }
     },
     {
+      "name": "a written note keeps its own details and text where it is",
+      "type": "item",
+      "item": {
+        "id": "573ea3bf-aef7-878f-98b6-f8551431c1ef",
+        "slug": "kyoto-spring-573ea3",
+        "title": "Kyoto, spring",
+        "kind": null,
+        "status": "active",
+        "added_at": "2024-03-02T00:00:00.000Z",
+        "enrichment_status": "text_done",
+        "body_markdown": "# Day one\n\nWe walked to the river.\n\nMap: https://maps.example/kyoto",
+        "tags": [
+          {
+            "tag": "note",
+            "category": "format",
+            "weight": 0.9
+          },
+          {
+            "tag": "travel",
+            "category": "subject",
+            "weight": 0.9
+          }
+        ]
+      },
+      "entities": [],
+      "paths": [],
+      "existing": {
+        "path": "Journal/Trip to Kyoto.md",
+        "header": {
+          "aliases": [
+            "Kyoto trip"
+          ],
+          "created": "2024-03-02",
+          "cssclass": "wide"
+        },
+        "body": "# Day one\n\nWe walked to the river.\n\nMap: https://maps.example/kyoto\n"
+      },
+      "expect": {
+        "path": "Journal/Trip to Kyoto.md",
+        "text": "---\nid: \"573ea3bf-aef7-878f-98b6-f8551431c1ef\"\ntitle: \"Kyoto, spring\"\nstatus: \"active\"\nadded: \"2024-03-02T00:00:00.000Z\"\nenrichment: \"text_done\"\ntags:\n  format: {\"note\":0.9}\n  subject: {\"travel\":0.9}\naliases: [\"Kyoto trip\"]\ncreated: \"2024-03-02\"\ncssclass: \"wide\"\n---\n# Day one\n\nWe walked to the river.\n\nMap: https://maps.example/kyoto\n",
+        "entities": [],
+        "media": [],
+        "fingerprint": "1ikz0v56z6etre2"
+      }
+    },
+    {
       "name": "undated, no slug",
       "type": "item",
       "item": {

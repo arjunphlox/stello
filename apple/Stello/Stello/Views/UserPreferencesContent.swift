@@ -156,6 +156,12 @@ private struct FolderSourcesSection: View {
     /// nil = adding a folder, else the folder being replaced.
     @State private var replacing: UUID?
     @State private var message: String?
+    /// A folder just picked to add: asked once what to read from it (part 3).
+    @State private var pendingAdd: URL?
+    /// Web twin: OTHER_FILES in app.js.
+    private static let otherFiles = "Markdown, text, CSV, bookmark and link files"
+    /// Web twin: TIDY in app.js.
+    private static let tidy = "Stello may tidy this folder and add Markdown files and folders to it. Nothing already in it is lost or removed."
 
     var body: some View {
         Section("Folders") {
@@ -178,6 +184,18 @@ private struct FolderSourcesSection: View {
                                 .font(.karst(.caption))
                                 .foregroundStyle(theme.accentColor)
                         }
+                        // Part 3: Stello items only, or also the folder's own files.
+                        Text(folder.ingest == true ? "Stello items and other files" : "Stello items only")
+                            .font(.karst(.caption))
+                            .foregroundStyle(theme.textSecondary)
+                        Button(folder.ingest == true ? "Only read Stello items" : "Also read other files") {
+                            let on = folder.ingest != true
+                            sources.setIngest(folder.id, on)
+                            message = on ? "Reading its other files: their links become items." : "Stello items only. Items already made stay."
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.karst(.caption))
+                        .foregroundStyle(theme.accentColor)
                     }
                     Spacer(minLength: 8)
                     if folder.writable != true {
@@ -203,20 +221,42 @@ private struct FolderSourcesSection: View {
             }
             Text(sources.folders.isEmpty
                  ? "Add the folders your Stello items live in, such as iCloud Drive/Stello."
-                 : "New saves and edits are written to these folders. Removing a folder only hides it here; its files stay as they are.")
+                 : "\(Self.tidy) Removing a folder only hides it here; its files stay as they are.")
                 .font(.karst(.caption))
                 .foregroundStyle(theme.textSecondary)
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.folder]) { result in
             guard case .success(let url) = result else { return }
-            let outcome = replacing.map { sources.replace($0, with: url) } ?? sources.add(url: url)
-            switch outcome {
-            case .added: message = nil
-            case .duplicate(let name): message = "\(name) is already added."
-            case .covered(let name): message = "Already covered by \(name)."
-            case .covers(let name): message = "That folder holds \(name), which is already added."
-            case .failed: message = "Couldn’t open that folder."
-            }
+            if let id = replacing { show(sources.replace(id, with: url)); return }
+            if let clash = sources.check(url: url) { show(clash); return }
+            pendingAdd = url
+        }
+        .confirmationDialog(
+            "What should Stello read from \(pendingAdd?.lastPathComponent ?? "this folder")?",
+            isPresented: Binding(get: { pendingAdd != nil }, set: { if !$0 { pendingAdd = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Stello items only") { addPending(ingest: false) }
+            Button("Also its other files") { addPending(ingest: true) }
+            Button("Cancel", role: .cancel) { pendingAdd = nil }
+        } message: {
+            Text("Other files are its \(Self.otherFiles): each web address in them becomes an item, saved as a Markdown file in this folder. \(Self.tidy)")
+        }
+    }
+
+    private func addPending(ingest: Bool) {
+        guard let url = pendingAdd else { return }
+        pendingAdd = nil
+        show(sources.add(url: url, ingest: ingest))
+    }
+
+    private func show(_ outcome: FolderSources.AddResult) {
+        switch outcome {
+        case .added: message = nil
+        case .duplicate(let name): message = "\(name) is already added."
+        case .covered(let name): message = "Already covered by \(name)."
+        case .covers(let name): message = "That folder holds \(name), which is already added."
+        case .failed: message = "Couldn’t open that folder."
         }
     }
 

@@ -748,7 +748,8 @@
   /**
    * The de-duplicated panel for `item`.
    * `opts.resolveSlug(slug)` → true when a ref's slug opens an item in the library.
-   * `opts.folders` → [{ folderId, name, path }] folders holding the item's file (Summary "Folder" rows).
+   * `opts.folders` → [{ folderId, name, path, found? }] folders holding the item's file (Summary "Folder" rows);
+   *   `found` entries (a spreadsheet or export the item came from) are left out.
    * Returns { kind, header, cards: [...], tagShown, snippetTexts, topRoles, isTyped }.
    * Card shapes: facts {rows}, chips {chips, caption}, refs {refs}, text {text},
    * gallery {roles}, faqs {items}, chipsFacts {chips, rows}, tracklist {tracks},
@@ -927,7 +928,8 @@
     // plan 4b). One row per folder, oldest-added first, just above Added.
     const summary = factRows(facts, factLinks);
     const folderRows = arr(opts && opts.folders)
-      .filter((f) => f && nb(f.name))
+      // Spreadsheets and bookmark exports an item came from aren't shown (Arjun, Nov 28).
+      .filter((f) => f && nb(f.name) && !f.found)
       .map((f) => ({ label: 'Folder', value: nb(f.name), url: null, folder: { folderId: f.folderId || null, path: nb(f.path) } }));
     if (folderRows.length) summary.splice(Math.max(0, summary.length - 1), 0, ...folderRows);
     cards.push({ type: 'facts', title: 'Summary', rows: summary });

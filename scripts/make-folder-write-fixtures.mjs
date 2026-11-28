@@ -48,6 +48,17 @@ addItem('edit of an existing file keeps path, sources and copied images', { ...b
     body: 'Old note',
   },
 });
+addItem('a written note keeps its own details and text where it is', {
+  id: '573ea3bf-aef7-878f-98b6-f8551431c1ef', slug: 'kyoto-spring-573ea3', title: 'Kyoto, spring', kind: null, status: 'active',
+  added_at: '2024-03-02T00:00:00.000Z', enrichment_status: 'text_done', body_markdown: '# Day one\n\nWe walked to the river.\n\nMap: https://maps.example/kyoto',
+  tags: [{ tag: 'note', category: 'format', weight: 0.9 }, { tag: 'travel', category: 'subject', weight: 0.9 }],
+}, {
+  existing: {
+    path: 'Journal/Trip to Kyoto.md',
+    header: { aliases: ['Kyoto trip'], created: '2024-03-02', cssclass: 'wide' },
+    body: '# Day one\n\nWe walked to the river.\n\nMap: https://maps.example/kyoto\n',
+  },
+});
 addItem('undated, no slug', { id: '99999999-2222-4333-8444-555555555555', title: 'A note', kind: 'link', body_markdown: 'Just text' });
 
 const merges = [];
