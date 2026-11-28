@@ -736,17 +736,23 @@ struct CardSubcards: View {
     /// Author, Source (tappable) and Added.
     @ViewBuilder
     private func summaryCard(_ layout: PanelLayout) -> some View {
-        if var content = FactsSubCardContent(rows: layout.facts, links: layout.factLinks) {
-            // Folder: one row per folder holding the item's file, just above Added
-            // (folder engine plan 4b; web twin: panel-layout.js). A tap shows the file
-            // in Finder, or the Files app on iPad and iPhone.
-            let rows = folderSources.locations(for: item.id).map { loc in
-                (label: "Folder", value: loc.name, url: URL?.none,
-                 action: Optional({ [folderSources] in folderSources.reveal(loc) }))
-            }
-            if !rows.isEmpty { content.rows.insert(contentsOf: rows, at: max(0, content.rows.count - 1)) }
+        if let content = summaryContent(layout) {
             SubCard(title: "Summary") { FactsSubCardBody(content: content) }
         }
+    }
+
+    /// Summary rows plus Folder: one row per folder holding the item's file, just above
+    /// Added (folder engine plan 4b; web twin: panel-layout.js). A tap shows the file in
+    /// Finder, or the Files app on iPad and iPhone.
+    private func summaryContent(_ layout: PanelLayout) -> FactsSubCardContent? {
+        guard var content = FactsSubCardContent(rows: layout.facts, links: layout.factLinks) else { return nil }
+        let sources = folderSources
+        let rows: [(label: String, value: String, url: URL?, action: (() -> Void)?)] =
+            sources.locations(for: item.id).map { loc in
+                (label: "Folder", value: loc.name, url: nil, action: { sources.reveal(loc) })
+            }
+        if !rows.isEmpty { content.rows.insert(contentsOf: rows, at: max(0, content.rows.count - 1)) }
+        return content
     }
 
     /// Places other than the saved / canonical page; hidden when empty.
