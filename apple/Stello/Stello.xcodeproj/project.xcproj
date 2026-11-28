@@ -186,6 +186,7 @@
           "path": "Store",
           "children": [
             { "path": "AwaitingReviewFilter.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "FolderSources.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "ItemFilter.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "ItemSearchBlob.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "OptacosImporter.swift", "target-membership": [ "Stello/compile-sources" ] },
@@ -265,6 +266,7 @@
         { "path": "CourseKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "DropImportTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "EnrichmentTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "FolderSourcesTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ItemBundleExportTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ItemTagTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "MasonryLayoutTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },

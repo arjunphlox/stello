@@ -338,6 +338,14 @@
     bindEvents();
     startGridColsObserver();   // sizes the columns, then renders the grid
     PanelManager.init();
+    // Folder sources: load the saved list + index, then keep the open panel's Folder rows current.
+    if (window.StelloFolders && window.StelloFolders.supported) {
+      window.StelloFolders.load();
+      document.addEventListener('stello:folderschange', () => {
+        const slug = PanelManager.getOpenSlug();
+        if (slug) PanelManager.refreshItem(slug);
+      });
+    }
     CardMenu.init();
     DropManager.init();
     ProfileManager.init();
@@ -1658,7 +1666,8 @@
   const panelPreview = { slug: null, path: null };
 
   function panelLayoutFor(item) {
-    return window.StelloPanel.layout(item, { resolveSlug: (s) => !!itemsBySlug[s] });
+    const folders = window.StelloFolders ? window.StelloFolders.foldersFor(item.id) : [];
+    return window.StelloPanel.layout(item, { resolveSlug: (s) => !!itemsBySlug[s], folders });
   }
 
   function subCardHTML(title, inner, extraClass) {
@@ -1671,7 +1680,9 @@
   function factsBodyHTML(rows) {
     return `<dl class="sub-facts">${rows.map(r => `<div class="sub-fact">
       <dt>${escHtml(r.label)}</dt>
-      <dd>${r.url
+      <dd>${r.folder
+        ? `<button type="button" class="sub-fact-link js-folder-path" data-path="${escAttr(r.value + (r.folder.path ? '/' + r.folder.path : ''))}" title="${escAttr(r.value + (r.folder.path ? '/' + r.folder.path : ''))}">${escHtml(r.value)}</button>`
+        : r.url
         ? `<a href="${escAttr(r.url)}" target="_blank" rel="noopener" title="${escAttr(r.url)}">${escHtml(r.value)}</a>`
         : escHtml(r.value)}</dd>
     </div>`).join('')}</dl>`;
@@ -1902,6 +1913,14 @@
       if (preview) {
         panelPreview.slug = slug; panelPreview.path = preview.dataset.path;
         rerenderPanelBody(bodyEl, item);
+        return;
+      }
+      // Folder row: the browser can't open Finder, so it copies the file's path
+      // inside the folder (Arjun's pick, Nov 28 2026).
+      const folderPath = t.closest('.js-folder-path');
+      if (folderPath) {
+        try { await navigator.clipboard.writeText(folderPath.dataset.path); showToast('Path copied'); }
+        catch { showToast(folderPath.dataset.path); }
         return;
       }
       const setCover = t.closest('.js-set-cover');
@@ -3300,6 +3319,73 @@
         $link.addEventListener('click', () => Stello.signInWithApple({ link: true }));
       }
     })();
+
+    // Folders (folder engine plan 4b): the folders Stello reads, with add /
+    // replace / remove. Read-only for now: the grid still comes from D1.
+    const $folders = $panel.querySelector('.settings-folders');
+    if ($folders) {
+      const F = window.StelloFolders;
+      const $list = $folders.querySelector('.settings-folders-list');
+      const $add = $folders.querySelector('.settings-folder-add');
+      const $hint = $folders.querySelector('.settings-folders-hint');
+      const paint = () => {
+        if (!$folders.isConnected) { document.removeEventListener('stello:folderschange', paint); return; }
+        if (!F || !F.supported) {
+          $list.innerHTML = '';
+          $add.hidden = true;
+          $hint.textContent = 'Folders open in Chrome, Edge or Arc on a computer. Google Drive and Dropbox come next.';
+          return;
+        }
+        const rows = F.list();
+        $list.innerHTML = rows.map(f => {
+          const state = f.reading ? 'Reading…'
+            : f.status === 'needs-access' ? 'Not reachable: allow access again'
+            : f.status === 'error' ? (f.error || 'Couldn’t read this folder')
+            : `${(f.count || 0).toLocaleString()} item${f.count === 1 ? '' : 's'} · read ${F.agoLabel(f.scannedAt)}`;
+          return `<div class="settings-theme-row settings-folder" data-folder="${escAttr(f.id)}">
+            <div class="settings-folder-text">
+              <span class="settings-folder-name">${escHtml(f.name)}</span>
+              <span class="settings-folder-meta">${escHtml(state)}</span>
+            </div>
+            <div class="settings-folder-actions">
+              ${f.status === 'needs-access' ? '<button type="button" class="settings-folder-action" data-act="reconnect">Allow</button>' : ''}
+              <button type="button" class="settings-folder-action" data-act="replace">Replace</button>
+              <button type="button" class="settings-folder-action" data-act="remove">Remove</button>
+            </div>
+          </div>`;
+        }).join('');
+        $hint.textContent = rows.length
+          ? 'Removing a folder only hides it here. Its files stay as they are.'
+          : 'Add the folders your Stello items live in, such as iCloud Drive/Stello.';
+      };
+      const folderClashToast = (r) => {
+        if (r.duplicate) showToast(`${r.duplicate.name} is already added`);
+        else if (r.covered) showToast(`Already covered by ${r.covered.name}`);
+        else if (r.covers) showToast(`That folder holds ${r.covers.name}, which is already added`);
+      };
+      document.addEventListener('stello:folderschange', paint);
+      if (F && F.supported) F.load().then(paint); else paint();
+      $add.addEventListener('click', async () => {
+        try {
+          const r = await F.add();
+          if (r) folderClashToast(r);
+        } catch { showToast('Couldn’t open that folder'); }
+      });
+      $list.addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-act]');
+        const row = b && b.closest('[data-folder]');
+        if (!row) return;
+        const id = row.dataset.folder;
+        try {
+          if (b.dataset.act === 'reconnect') await F.reconnect(id);
+          if (b.dataset.act === 'replace') {
+            const r = await F.replace(id);
+            if (r) folderClashToast(r);
+          }
+          if (b.dataset.act === 'remove') { await F.remove(id); showToast('Folder removed. Its files are untouched.'); }
+        } catch { showToast('Couldn’t change that folder'); }
+      });
+    }
 
     // Bookmarklet (the web's Share Extension): opens save.html in a small window with
     // the page's link and title. Dragged to the bookmarks bar; a click here does nothing.

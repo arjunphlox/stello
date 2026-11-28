@@ -110,6 +110,15 @@
         <span class="settings-status settings-account-status"></span>
       </div>
     </div>
+    <fieldset class="settings-theme settings-folders">
+      <legend>Folders</legend>
+      <!-- Filled by app.js from folders.js: one row per folder Stello reads. -->
+      <div class="settings-folders-list"></div>
+      <div class="settings-actions">
+        <button class="settings-save settings-folder-add" type="button">Add folder</button>
+      </div>
+      <p class="settings-hint settings-folders-hint"></p>
+    </fieldset>
     <div class="settings-field settings-bookmarklet">
       <label>Save from any page</label>
       <div class="settings-actions">
@@ -179,9 +188,10 @@
 
 <script src="auth-client.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-<script src="panel-layout.js?v=2"></script>
+<script src="panel-layout.js?v=3"></script>
+<script src="folders.js?v=1"></script>
 <script src="offline.js?v=2"></script>
-<script src="app.js?v=68"></script>
+<script src="app.js?v=69"></script>
 <script src="canvas.js?v=10"></script>
 <script src="canvas-export.js?v=2" defer></script>
 </body>

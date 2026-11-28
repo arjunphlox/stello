@@ -2454,6 +2454,10 @@ body.just-logged-in #masonry-grid .masonry-section .card {
 }
 .sub-fact dd a { color: var(--accent); text-decoration: none; }
 .sub-fact dd a:hover { text-decoration: underline; }
+/* Folder row (folder engine 4b): looks like the row's links; a click copies the path. */
+.sub-fact dd .sub-fact-link { all: unset; color: var(--accent); cursor: pointer; overflow-wrap: anywhere; }
+.sub-fact dd .sub-fact-link:hover { text-decoration: underline; }
+.sub-fact dd .sub-fact-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .sub-fact-copy { flex-direction: row; align-items: flex-start; gap: 8px; }
 .sub-fact-copy > div { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .sub-icon-btn {
@@ -3503,3 +3507,24 @@ html.is-carrying .header { visibility: hidden; }
   border-top: 1px solid var(--border);
   padding-top: 12px;
 }
+
+/* === SETTINGS: FOLDERS (folder engine plan 4b, Nov 28 2026) ===
+   One row per folder Stello reads: name + item count, then Allow / Replace / Remove. */
+.panel-tool[data-tool="settings"] .settings-folders { gap: 10px; }
+.settings-folders-list:empty { display: none; }
+.settings-folder { min-width: 0; }
+.panel-tool[data-tool="settings"] .settings-folders-list .settings-folder + .settings-folder {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.settings-folder-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.settings-folder-name { font-size: 0.78rem; color: var(--text); overflow-wrap: anywhere; }
+.settings-folder-meta { font-size: 0.7rem; color: var(--text-dim); }
+.settings-folder-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.settings-folder-action {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: 0.7rem; color: var(--accent);
+}
+.settings-folder-action:hover { text-decoration: underline; }
+.settings-folder-action[data-act="remove"] { color: var(--text-dim); }
