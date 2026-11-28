@@ -67,6 +67,11 @@ enum SafariBridge {
 
     static func handle(_ data: Data) -> Data {
         let request = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        // Saves from Safari: the extension left a request in the inbox; take it now.
+        if request["cmd"] as? String == "inbox" {
+            SafariInbox.shared.processSoon()
+            return Data(#"{"ok":true}"#.utf8)
+        }
         let reply = SafariBridgeFiles.answer(request) { id in
             let sources = FolderSources.shared
             let folders = sources.folders.compactMap { f -> SafariBridgeFiles.Root? in

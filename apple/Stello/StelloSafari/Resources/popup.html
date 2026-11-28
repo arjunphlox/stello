@@ -1,7 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<style>body { font: 15px -apple-system, system-ui, sans-serif; margin: 16px; width: 220px; } button { font: inherit; padding: 8px 12px; width: 100%; }</style>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="popup.css">
 </head>
-<body><button id="open">Open the folder test</button><script src="popup.js"></script></body>
+<body>
+  <header>
+    <span class="logo" aria-hidden="true"></span>
+    <div class="switch" role="tablist" hidden>
+      <button role="tab" data-scope="page" aria-selected="true">This page</button>
+      <button role="tab" data-scope="tabs" aria-selected="false">All tabs</button>
+    </div>
+  </header>
+  <section class="what">
+    <div class="title"></div>
+    <div class="sub"></div>
+  </section>
+  <ul class="targets" aria-label="Where to save"></ul>
+  <form class="name" hidden>
+    <input type="text" aria-label="Canvas name" maxlength="80" autocomplete="off">
+    <button type="submit">Add</button>
+  </form>
+  <div class="result" role="status" aria-live="polite" hidden><span class="mark"></span><span class="text"></span></div>
+  <footer><button class="test" type="button">Folder test</button></footer>
+  <script src="popup.js"></script>
+</body>
 </html>

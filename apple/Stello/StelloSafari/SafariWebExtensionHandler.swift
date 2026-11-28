@@ -16,8 +16,14 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         let message = item?.userInfo?[SFExtensionMessageKey] as? [String: Any] ?? [:]
         let route = message["route"] as? String ?? "relay"
         let started = Date()
-        var reply = route == "direct" ? Self.direct(message) : Self.relay(message)
-        reply["route"] = route
+        var reply: [String: Any]
+        switch message["cmd"] as? String {
+        case "canvases", "save", "status":
+            reply = SafariSaves.answer(message)
+        default:
+            reply = route == "direct" ? Self.direct(message) : Self.relay(message)
+            reply["route"] = route
+        }
         reply["totalMs"] = Int(Date().timeIntervalSince(started) * 1000)
 
         let response = NSExtensionItem()

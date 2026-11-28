@@ -191,6 +191,7 @@
             { "path": "FolderWriteObserver.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "FolderWriter.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "SafariBridge.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "SafariInbox.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "ItemFilter.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "ItemSearchBlob.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "OptacosImporter.swift", "target-membership": [ "Stello/compile-sources" ] },
@@ -264,6 +265,15 @@
       "path": "StelloSafari",
       "children": [
         { "path": "SafariWebExtensionHandler.swift", "target-membership": [ "StelloSafari/compile-sources" ] },
+        { "path": "SafariSaves.swift", "target-membership": [ "StelloSafari/compile-sources" ] },
+        {
+          "path": "SafariSaveInbox.swift",
+          "target-membership": [
+            "Stello/compile-sources",
+            "StelloSafari/compile-sources",
+            "StelloShare/compile-sources",
+          ],
+        },
         {
           "path": "SafariBridgeFiles.swift",
           "target-membership": [
@@ -284,6 +294,13 @@
             { "path": "test.js", "target-membership": [ "StelloSafari/resources" ] },
             { "path": "popup.html", "target-membership": [ "StelloSafari/resources" ] },
             { "path": "popup.js", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "shelf.js", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "popup.css", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "icon-16.png", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "icon-32.png", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "icon-48.png", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "icon-96.png", "target-membership": [ "StelloSafari/resources" ] },
+            { "path": "icon-128.png", "target-membership": [ "StelloSafari/resources" ] },
           ],
         },
       ],
@@ -299,6 +316,7 @@
         { "path": "DropImportTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "EnrichmentTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "FolderSourcesTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "SafariSaveTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "FolderWriteFixtures.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "FolderWriterTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "ItemBundleExportTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },

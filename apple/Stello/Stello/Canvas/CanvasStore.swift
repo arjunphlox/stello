@@ -431,6 +431,112 @@ final class CanvasStore {
             list.insert(.init(id: currentID, name: doc.name), at: 0)
         }
         canvases = list
+        publishForSafari()
+    }
+
+    /// Safari's menu, drop shelf and popup (and the share sheet) offer these canvases:
+    /// the open one first, then the rest in list order. Screenshot runs share nothing.
+    func publishForSafari() {
+        guard !isShot else { return }
+        var list = canvases.filter { !$0.id.hasPrefix("local-screenshot") }
+        if let i = list.firstIndex(where: { $0.id == currentID }) { list.insert(list.remove(at: i), at: 0) }
+        SafariSaveInbox.publishCanvases(list.map { .init(id: $0.id, name: $0.name.isEmpty ? "Untitled canvas" : $0.name) })
+    }
+
+    // MARK: - Saves from Safari
+
+    /// Put saved items on a canvas without opening it: `id` is a canvas id, or "new" to
+    /// make one called `newName`. They land together, to the right of what's there, in up
+    /// to four columns, and two or more become one group named `groupName`. Items already
+    /// on that canvas stay where they are. Returns the canvas id and name, or nil if it failed.
+    func place(_ slugs: [String], in id: String, newName: String?, groupName: String?,
+               height: @escaping (String) -> CGFloat) async -> (id: String, name: String)? {
+        var target = id
+        if id == "new" {
+            var fresh = CanvasDoc(name: Self.cleanName(newName) ?? "Untitled canvas")
+            fresh.v = CanvasDoc.version
+            var newID = "local-" + CanvasDoc.newID()
+            var newRev = 0
+            if !isShot, let api = CanvasAPI.current, let project = try? await api.create(fresh) {
+                newID = project.id
+                newRev = project.rev
+            }
+            if let data = try? JSONEncoder().encode(Local(rev: newRev, doc: fresh)) {
+                try? data.write(to: Self.localURL(for: newID), options: .atomic)
+            }
+            remember(newID, fresh.name)
+            target = newID
+        }
+        if target == currentID {
+            change { Self.lay(slugs, in: &$0, groupName: groupName, height: height) }
+            await refreshList()
+            return (target, doc.name)
+        }
+        // Another canvas: edit its local copy and the server copy, leave the open one alone.
+        let url = Self.localURL(for: target)
+        var local = (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Local.self, from: $0) }
+        if !target.hasPrefix("local-"), let api = CanvasAPI.current {
+            for _ in 0..<2 {
+                var base = local ?? Local(rev: 0, doc: CanvasDoc(name: Self.cleanName(newName) ?? "Untitled canvas"))
+                if let server = try? await api.get(target), server.rev >= base.rev, let d = server.doc {
+                    base = Local(rev: server.rev, doc: d)
+                }
+                Self.lay(slugs, in: &base.doc, groupName: groupName, height: height)
+                base.doc.v = CanvasDoc.version
+                guard let result = try? await api.save(target, doc: base.doc, rev: base.rev) else {
+                    local = base  // offline: keep it here; the next open pushes it
+                    break
+                }
+                if case .saved(let project) = result {
+                    base.rev = project.rev
+                    local = base
+                    break
+                }
+                // Changed elsewhere meanwhile: start again from that copy.
+                if case .conflict(let project) = result { local = Local(rev: project.rev, doc: project.doc ?? CanvasDoc()) }
+            }
+        } else {
+            var base = local ?? Local(rev: 0, doc: CanvasDoc(name: "Untitled canvas"))
+            Self.lay(slugs, in: &base.doc, groupName: groupName, height: height)
+            local = base
+        }
+        guard let local, let data = try? JSONEncoder().encode(local) else { return nil }
+        try? data.write(to: url, options: .atomic)
+        remember(target, local.doc.name)
+        await refreshList()
+        return (target, local.doc.name)
+    }
+
+    private static func cleanName(_ name: String?) -> String? {
+        let n = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? nil : String(n.prefix(80))
+    }
+
+    /// The layout for a batch from Safari: shortest-column masonry, right of the canvas.
+    static func lay(_ slugs: [String], in d: inout CanvasDoc, groupName: String?,
+                    height: (String) -> CGFloat) {
+        let fresh = slugs.reduce(into: [String]()) { out, s in
+            if !d.contains(s) && !out.contains(s) { out.append(s) }
+        }
+        guard !fresh.isEmpty else { return }
+        let w = CanvasMetrics.cardWidth, gap = CanvasMetrics.cardGap
+        var left: CGFloat = 0, top: CGFloat = 0
+        if !d.cards.isEmpty {
+            left = CGFloat(d.cards.map { $0.x }.max() ?? 0) + w + 160
+            top = CGFloat(d.cards.map { $0.y }.min() ?? 0)
+        }
+        let columns = min(4, fresh.count)
+        var bottoms = [CGFloat](repeating: top, count: columns)
+        for slug in fresh {
+            let col = bottoms.indices.min { bottoms[$0] < bottoms[$1] } ?? 0
+            let x = (left + CGFloat(col) * (w + gap)).rounded()
+            d.cards.append(.init(slug: slug, x: Double(x), y: Double(bottoms[col].rounded())))
+            bottoms[col] += height(slug) + gap
+        }
+        if fresh.count >= 2 {
+            let name = cleanName(groupName) ?? "From Safari"
+            d.groups.append(.init(id: CanvasDoc.newID(), name: String(name.prefix(40)), slugs: fresh))
+        }
     }
 
     /// Open another canvas. Pending edits to this one are saved first.
@@ -452,6 +558,7 @@ final class CanvasStore {
         // The server copy brought the cards: frame them once.
         if !hadCards && !doc.cards.isEmpty && !cameraMoved { cameraPlaced = false }
         if let i = canvases.firstIndex(where: { $0.id == id }) { canvases[i].name = doc.name }
+        publishForSafari()
     }
 
     /// A new empty canvas, or a copy of this one ("Save as a new canvas").
@@ -481,6 +588,7 @@ final class CanvasStore {
         change { $0.name = n }
         remember(currentID, n)
         if let i = canvases.firstIndex(where: { $0.id == currentID }) { canvases[i].name = n }
+        publishForSafari()
     }
 
     /// Delete this canvas (never the library one) and go back to the library canvas.
