@@ -131,6 +131,10 @@ $(".test").addEventListener("click", async () => {
   }
   describe();
   renderTargets([]);
+  // The drop shelf and the note need Stello allowed on every site.
+  try {
+    if (browser.permissions && !(await browser.permissions.contains({ origins: ["<all_urls>"] }))) $(".allow").hidden = false;
+  } catch {}
   let canvases = [];
   try { canvases = ((await send({ stelloSave: "canvases" })) || {}).canvases || []; } catch {}
   renderTargets(canvases);

@@ -60,10 +60,19 @@ function buildMenus() {
   }).catch(() => {});
 }
 
+// A message to the page script. On a site Safari hasn't allowed yet the page script isn't
+// there, and Safari may never answer: give up after a moment and carry on without it.
+function askPage(tabId, msg, ms = 400) {
+  return Promise.race([
+    browser.tabs.sendMessage(tabId, msg),
+    new Promise((_, no) => setTimeout(() => no(new Error("no page script")), ms)),
+  ]);
+}
+
 // What the click was on: a picture, a link, links in a selection, or the page.
 async function entriesFor(info, tab) {
   let ctx = {};
-  try { ctx = (await browser.tabs.sendMessage(tab.id, { stello: "context" })) || {}; } catch {}
+  try { ctx = (await askPage(tab.id, { stello: "context" })) || {}; } catch {}
   const page = info.pageUrl || tab.url;
   const title = ctx.pageTitle || tab.title || "";
   if (info.mediaType === "image" && info.srcUrl) {
@@ -76,8 +85,42 @@ async function entriesFor(info, tab) {
   return [{ kind: "link", url: page, title }];
 }
 
+// The note shows in the page when Stello may run there. On a site where Safari hasn't
+// allowed Stello yet, the save still happens: the toolbar button says how it went instead.
 async function toast(tab, msg) {
-  try { await browser.tabs.sendMessage(tab.id, { stello: "toast", ...msg }); } catch {}
+  try {
+    await askPage(tab.id, { stello: "toast", ...msg });
+    return true;
+  } catch {
+    badge(tab, msg);
+    return false;
+  }
+}
+const action = browser.action || browser.browserAction;
+let badgeTimer = 0, badgePoll = 0;
+function badge(tab, { busy, done, error, id, text }) {
+  if (!action) return;
+  clearTimeout(badgeTimer); clearTimeout(badgePoll);
+  const set = (t, title) => {
+    try { action.setBadgeText({ text: t, tabId: tab.id }); } catch {}
+    try { action.setTitle({ title: title || "Save to Stello", tabId: tab.id }); } catch {}
+  };
+  if (error) set("!", text);
+  else if (done) set("✓", text);
+  else set("…", text);
+  if (id) {
+    const started = Date.now();
+    const poll = async () => {
+      let r = null;
+      try { r = await native({ cmd: "status", id }); } catch {}
+      if (r && r.done) { useCanvas(r.canvas); loadCanvases(); return badge(tab, { done: !/^Couldn/.test(r.text), error: /^Couldn/.test(r.text), text: r.text }); }
+      if (Date.now() - started > 20000) return badge(tab, { done: true, text: "Saved. Stello is still adding it." });
+      badgePoll = setTimeout(poll, 700);
+    };
+    badgePoll = setTimeout(poll, 700);
+  } else if (!busy) {
+    badgeTimer = setTimeout(() => set("", ""), 4000);
+  }
 }
 
 if (MENU) {
