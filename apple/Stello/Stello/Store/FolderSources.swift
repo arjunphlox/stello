@@ -55,7 +55,7 @@ final class FolderSources {
         let fileURL: URL
     }
 
-    private(set) var folders: [Folder] = []
+    var folders: [Folder] = []
     private(set) var status: [UUID: Status] = [:]
     /// Item id (lowercased UUID string) → locations, oldest-added folder first.
     private(set) var lookup: [String: [Location]] = [:]

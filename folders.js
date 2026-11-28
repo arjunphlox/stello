@@ -344,7 +344,8 @@
 
   // ---------------------------------------------------------- writing
 
-  const writable = (f) => f && f.status === 'granted' && f.handle;
+  // 'reading' is a granted folder being re-read: writes go ahead meanwhile.
+  const writable = (f) => f && (f.status === 'granted' || f.status === 'reading') && f.handle;
   let writeChain = Promise.resolve();
   /** One write at a time, so two edits to one item never race. */
   const serial = (fn) => (writeChain = writeChain.then(fn, fn));

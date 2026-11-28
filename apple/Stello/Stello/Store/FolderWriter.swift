@@ -8,7 +8,7 @@ import Foundation
 /// Header values are JSON written the way JavaScript's `JSON.stringify` writes them, with
 /// object keys in their original order, so a file written on the Mac and one written on
 /// the web for the same item are the same bytes.
-enum FolderWriter {
+nonisolated enum FolderWriter {
     static let trashDir = ".trash"
     static let trashDays = 30.0
 

@@ -74,4 +74,14 @@ The library is every folder the person adds, merged into one grid. Settings list
 
 - Web: `folders.js` (File System Access, Chromium desktop) keeps folder handles + an id → path index in IndexedDB and re-reads only changed files; Settings › Folders and the Summary Folder row (`panel-layout.js` `opts.folders`). Tests: `test/folders.test.js`.
 - Apple: `Store/FolderSources.swift` (security-scoped bookmarks, index in Application Support, re-read on launch/activate), Settings › Folders in `UserPreferencesContent.swift`, Folder row in `CardSubcards.swift`. Tests: `StelloTests/FolderSourcesTests.swift`.
-- Not yet: writes (saves, delete to `.trash/`, merge), the per-folder ingest choice, the shared Apple folder list, Drive/Dropbox on web.
+
+### Built (phase 2, part 2: writes)
+
+- Folder access is read-write: the web asks the browser again (`mode: 'readwrite'`); on the Mac a folder added in part 1 has a read-only bookmark and shows "Allow writing" (pick it once more). Until then nothing is written to it.
+- One folder takes new saves ("New saves go here", the first added by default; "Use for new saves" moves it). Removing it passes the mark to the next folder.
+- A save or edit writes the item's v2 file to its main copy (oldest-added folder holding it), else to the new-saves folder: `src/lib/folder-write.js` (web, served as `/lib/folder-write.js`) and `Store/FolderWriter.swift` (Mac), checked against the same expected files (`test/fixtures/folder-write.json`, regenerate with `node scripts/make-folder-write-fixtures.mjs`). People and places are matched to the folder's own files or created; images are copied into `media/`. Opening an item never writes.
+- Turning writes on never rewrites the folder: the web records each item's fingerprint the first time (a baseline), the Mac notes the time and follows SwiftData history from then on (`Store/FolderWriteObserver.swift`, so edits pulled from the web or another device are written too).
+- A file changed outside Stello since Stello last wrote it is merged, never overwritten (tags and links combine, the newer value wins, both notes kept); notes a merge brought in are kept on later writes. A copy that changes in a non-main folder merges into the main copy; a change to the main copy pulls nothing in, so an older copy never undoes a Stello edit.
+- Delete moves every copy (and its `media/` files) to its own folder's `.trash/<YYYY-MM-DD>/`; day folders older than 30 days are cleared on the next read.
+- Folder item counts leave out people and places that exist only as files (ids `person-…`/`place-…`).
+- Not yet: the per-folder ingest choice (Markdown, CSV, PDF, bookmarks, images as items), the shared Apple folder list, Drive/Dropbox on web, deletes made on the web while the web has no folder access are only moved by a device that has one.

@@ -3359,7 +3359,8 @@
             : f.status === 'needs-access' ? 'Not reachable: allow access again'
             : f.status === 'error' ? (f.error || 'Couldn’t read this folder')
             : `${(f.count || 0).toLocaleString()} item${f.count === 1 ? '' : 's'} · read ${F.agoLabel(f.scannedAt)}`;
-          const saves = f.takesSaves ? '<span class="settings-folder-saves">New saves go here</span>' : '';
+          const saves = f.takesSaves ? '<span class="settings-folder-saves">New saves go here</span>'
+            : rows.length > 1 ? '<button type="button" class="settings-folder-action settings-folder-saves-btn" data-act="saves">Use for new saves</button>' : '';
           return `<div class="settings-theme-row settings-folder" data-folder="${escAttr(f.id)}">
             <div class="settings-folder-text">
               <span class="settings-folder-name">${escHtml(f.name)}</span>
@@ -3368,7 +3369,6 @@
             </div>
             <div class="settings-folder-actions">
               ${f.status === 'needs-access' ? '<button type="button" class="settings-folder-action" data-act="reconnect">Allow</button>' : ''}
-              ${!f.takesSaves && rows.length > 1 ? '<button type="button" class="settings-folder-action" data-act="saves">Use for new saves</button>' : ''}
               <button type="button" class="settings-folder-action" data-act="replace">Replace</button>
               <button type="button" class="settings-folder-action" data-act="remove">Remove</button>
             </div>

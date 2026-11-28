@@ -275,7 +275,7 @@ extension FolderSources {
 }
 
 /// File operations for folder writes, safe off the main thread.
-enum FolderFiles {
+nonisolated enum FolderFiles {
     struct Stat: Sendable { var modified: Double; var size: Int }
     struct Read: Sendable { var text: String; var modified: Double; var size: Int }
 

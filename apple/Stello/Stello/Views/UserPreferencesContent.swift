@@ -172,17 +172,17 @@ private struct FolderSourcesSection: View {
                             Text("New saves go here")
                                 .font(.karst(.caption))
                                 .foregroundStyle(theme.accentColor)
+                        } else if sources.folders.count > 1 {
+                            Button("Use for new saves") { sources.setSavesFolder(folder.id) }
+                                .buttonStyle(.borderless)
+                                .font(.karst(.caption))
+                                .foregroundStyle(theme.accentColor)
                         }
                     }
                     Spacer(minLength: 8)
                     if folder.writable != true {
                         // Added before writes: the bookmark is read-only, so pick the folder once more.
                         Button("Allow writing") { replacing = folder.id; picking = true }
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(theme.accentColor)
-                    }
-                    if sources.savesFolderID != folder.id, sources.folders.count > 1 {
-                        Button("Use for new saves") { sources.setSavesFolder(folder.id) }
                             .buttonStyle(.borderless)
                             .foregroundStyle(theme.accentColor)
                     }
