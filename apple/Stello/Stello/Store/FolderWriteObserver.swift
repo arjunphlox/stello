@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 /// Finds saves, edits and deletes in SwiftData history and hands them to `FolderSources`
 /// (folder engine plan 4b, part 2). Its own history position means it sees every change:
