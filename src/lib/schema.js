@@ -5,6 +5,7 @@
  */
 import INIT_SQL from '../../migrations/0001_init.sql';
 import PROJECTS_SQL from '../../migrations/0002_projects.sql';
+import SHARING_SQL from '../../migrations/0003_sharing.sql';
 
 let ready = null;
 
@@ -14,6 +15,7 @@ export const ADDED_COLUMNS = {
   items: [
     ['last_opened_at', 'TEXT'],              // revisit tracking (Apple: Item.lastOpenedAt)
     ['open_count', 'INTEGER NOT NULL DEFAULT 0'],
+    ['audiences', "TEXT NOT NULL DEFAULT '[]'"],  // audience ids (Apple: Item.audiencesJSON)
   ],
 };
 
@@ -41,7 +43,7 @@ export function splitSql(sql) {
 export function ensureSchema(env) {
   if (!env.DB) throw new Error('D1 binding DB is missing (bindings: ' + Object.keys(env).join(',') + ')');
   if (!ready) {
-    ready = env.DB.batch(splitSql(INIT_SQL + '\n' + PROJECTS_SQL).map(s => env.DB.prepare(s)))
+    ready = env.DB.batch(splitSql(INIT_SQL + '\n' + PROJECTS_SQL + '\n' + SHARING_SQL).map(s => env.DB.prepare(s)))
       .then(() => addMissingColumns(env.DB))
       .catch(err => { ready = null; throw err; });
   }

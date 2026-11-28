@@ -108,6 +108,75 @@ nonisolated struct SyncAPI: Sendable {
         return url.url!
     }
 
+    // MARK: Audience sharing (src/routes/sharing.js)
+
+    /// Sends the whole local copy with its clocks; the reply is the merged result.
+    func putSharing(_ settings: SharingSettings) async throws -> SharingSettings {
+        var request = URLRequest(url: Self.baseURL.appending(path: "api/me/sharing"))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(settings)
+        return try await send(request)
+    }
+
+    nonisolated struct ShareLink: Decodable, Identifiable, Sendable {
+        nonisolated struct Filter: Codable, Equatable, Sendable {
+            var kinds: [String]?
+            var tags: [String]?
+            var collection: String?
+            var project: String?
+            var from: String?
+            var to: String?
+        }
+        let id: String
+        let audience_id: String
+        let label: String
+        let filter: Filter
+        let url: String
+        let expires_at: Int?
+        let revoked_at: Int?
+        let active: Bool
+        let view_count: Int
+        let last_viewed_at: Int?
+        let created_at: Int
+    }
+
+    private struct ShareLinkList: Decodable { let links: [ShareLink] }
+
+    /// Links live only on the web, so this needs a connection.
+    func shareLinks() async throws -> [ShareLink] {
+        let list: ShareLinkList = try await send(URLRequest(url: Self.baseURL.appending(path: "api/share-links")))
+        return list.links
+    }
+
+    func createShareLink(audienceID: String, label: String? = nil, filter: ShareLink.Filter? = nil, expiresAt: Int? = nil) async throws -> ShareLink {
+        var body: [String: Any] = ["audience_id": audienceID]
+        if let label { body["label"] = label }
+        if let filter, let data = try? JSONEncoder().encode(filter), let json = try? JSONSerialization.jsonObject(with: data) { body["filter"] = json }
+        if let expiresAt { body["expires_at"] = expiresAt }
+        return try await sendJSON("api/share-links", method: "POST", body: body)
+    }
+
+    /// `changes` uses the web's names: label, filter, expires_at (NSNull = never),
+    /// rotate (true = new URL), revoked (true/false).
+    func updateShareLink(_ id: String, _ changes: [String: Any]) async throws -> ShareLink {
+        try await sendJSON("api/share-links/\(id)", method: "PATCH", body: changes)
+    }
+
+    func revokeShareLink(_ id: String) async throws -> ShareLink {
+        var request = URLRequest(url: Self.baseURL.appending(path: "api/share-links/\(id)"))
+        request.httpMethod = "DELETE"
+        return try await send(request)
+    }
+
+    private func sendJSON<T: Decodable>(_ path: String, method: String, body: [String: Any]) async throws -> T {
+        var request = URLRequest(url: Self.baseURL.appending(path: path))
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await send(request)
+    }
+
     /// Bytes behind a `/img/<key>` path (or any absolute URL).
     func downloadImage(path: String) async throws -> Data {
         let url = path.hasPrefix("http") ? URL(string: path)! : Self.baseURL.appending(path: String(path.dropFirst()))

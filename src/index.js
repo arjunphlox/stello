@@ -41,6 +41,7 @@ import mountProjects from './routes/projects.js';
 import mountLibrary from './routes/library.js';
 import mountPair from './routes/pair.js';
 import mountMcp from './routes/mcp.js';
+import mountSharing from './routes/sharing.js';
 
 const app = new Hono();
 
@@ -75,6 +76,10 @@ mountProjects(app, { requireUser: auth.requireUser });
 mountLibrary(app, { requireUser: auth.requireUser });
 mountPair(app);
 mountMcp(app);
+
+// Audience sharing: audiences + item audiences (synced), share links (server only).
+// docs/plans/audience-sharing.md
+mountSharing(app, { requireUser: auth.requireUser });
 
 // Apple app <-> web copy sync (docs/plans/apple-web-sync.md).
 app.post('/api/auth/apple/native', appleNative);

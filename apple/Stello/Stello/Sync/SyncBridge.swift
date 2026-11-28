@@ -121,6 +121,10 @@ final class SyncBridge {
                 do { try await ProfileSync.sync(api: api) }
                 catch SyncAPI.Failure.unauthorized { throw SyncAPI.Failure.unauthorized }
                 catch { print("⚠️ Profile sync failed: \(error)") }
+                // Audiences ride along the same way (which items each one gets syncs with the items).
+                do { try await AudienceSync.sync(api: api) }
+                catch SyncAPI.Failure.unauthorized { throw SyncAPI.Failure.unauthorized }
+                catch { print("⚠️ Audience sync failed: \(error)") }
                 lastSyncAt = .now
                 lastError = nil
             } catch SyncAPI.Failure.unauthorized {

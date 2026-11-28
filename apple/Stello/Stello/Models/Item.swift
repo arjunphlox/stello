@@ -38,6 +38,10 @@ final class Item {
     /// Width over height of the cover the card shows, or 0 for no cover. Kept here so the
     /// grid can place every card without reading image rows or bytes.
     var coverAspect: Double = 0
+    /// JSON-encoded `[String]` of audience ids this item is shared with (Family, a trip
+    /// list, …); nil or empty = private. Read and write through `audiences`. Synced to
+    /// the web as `audiences` (docs/plans/audience-sharing.md).
+    var audiencesJSON: String?
     /// Bumped on save when any of the item's images or snippets change, so SwiftData's
     /// change history names the item and the web sync bridge sends the new list.
     /// Set by `SyncChildTracking`; never set it by hand.
@@ -95,6 +99,22 @@ final class Item {
         self.kind = kind
         self.metadataJSON = metadataJSON
         self.whySavedSuggestionsJSON = whySavedSuggestionsJSON
+    }
+}
+
+extension Item {
+    /// Audience ids, sorted and without repeats (the web stores them the same way).
+    var audiences: [String] {
+        get {
+            guard let json = audiencesJSON,
+                  let list = try? JSONDecoder().decode([String].self, from: Data(json.utf8)) else { return [] }
+            return list
+        }
+        set {
+            let clean = Array(Set(newValue.map { $0.lowercased() })).sorted()
+            let json = clean.isEmpty ? nil : (try? JSONEncoder().encode(clean)).map { String(decoding: $0, as: UTF8.self) }
+            if json != audiencesJSON { audiencesJSON = json }
+        }
     }
 }
 

@@ -87,6 +87,8 @@ CREATE TABLE IF NOT EXISTS items (
   -- revisit tracking (live tables get these from src/lib/schema.js ADDED_COLUMNS)
   last_opened_at        TEXT,
   open_count            INTEGER NOT NULL DEFAULT 0,
+  -- audience sharing: JSON list of audience ids, [] = private (0003_sharing.sql)
+  audiences             TEXT NOT NULL DEFAULT '[]',
   -- sync
   seq                   INTEGER NOT NULL DEFAULT 0,
   field_clock           TEXT NOT NULL DEFAULT '{}',  -- {"title": epoch_ms, …}

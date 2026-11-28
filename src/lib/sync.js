@@ -41,6 +41,7 @@ export const FIELDS = {
   tags: 'json',
   images: 'json',
   snippets: 'json',
+  audiences: 'ids', // audience ids the item is shared with, [] = private (src/lib/sharing.js)
   deleted_at: 'int',
 };
 
@@ -68,6 +69,7 @@ export function stableStringify(value) {
 export function toDb(field, value) {
   if (value === null || value === undefined) {
     if (field === 'open_count') return 0;
+    if (field === 'audiences') return '[]';
     return field === 'title' || field === 'slug' ? '' : null;
   }
   switch (FIELDS[field]) {
@@ -77,15 +79,29 @@ export function toDb(field, value) {
     case 'int': return Number.isFinite(value) ? Math.round(value) : undefined;
     case 'real': return Number.isFinite(value) ? value : undefined;
     case 'json': return typeof value === 'object' ? stableStringify(value) : undefined;
+    case 'ids': return idList(value);
     default: return undefined;
   }
 }
 
+const ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+export const MAX_ITEM_AUDIENCES = 16;
+
+/** A list of ids, stored sorted and de-duplicated so equal sets compare equal.
+ *  Anything that isn't a short list of plain ids is rejected (undefined). */
+export function idList(value) {
+  if (!Array.isArray(value) || value.length > MAX_ITEM_AUDIENCES) return undefined;
+  if (!value.every((v) => typeof v === 'string' && ID_RE.test(v))) return undefined;
+  return JSON.stringify([...new Set(value.map((v) => v.toLowerCase()))].sort());
+}
+
 /** D1 value → API value. */
 export function fromDb(field, value) {
-  if (value === null || value === undefined) return FIELDS[field] === 'json' ? defaultJson(field) : null;
+  if (value === null || value === undefined) return FIELDS[field] === 'json' || FIELDS[field] === 'ids' ? defaultJson(field) : null;
   switch (FIELDS[field]) {
     case 'bool': return !!value;
+    case 'ids':
+      try { const v = JSON.parse(value); return Array.isArray(v) ? v : []; } catch { return []; }
     case 'json':
       try { return JSON.parse(value); } catch { return defaultJson(field); }
     default: return value;
@@ -166,6 +182,9 @@ function sameValue(field, a, b) {
   if ((a ?? null) === (b ?? null)) return true;
   if (FIELDS[field] === 'json' && a != null && b != null) {
     try { return stableStringify(JSON.parse(a)) === b; } catch { return false; }
+  }
+  if (FIELDS[field] === 'ids' && a != null && b != null) {
+    try { return idList(JSON.parse(a)) === b; } catch { return false; }
   }
   return false;
 }
@@ -313,7 +332,7 @@ export async function purgeExpired(db, now = Date.now()) {
     db
       .prepare(
         `UPDATE ${T.items} SET title = '', summary = NULL, body_markdown = NULL, author = NULL,
-         metadata = NULL, tags = '[]', images = '[]', snippets = '[]', purged_at = ? WHERE id = ?`,
+         metadata = NULL, tags = '[]', images = '[]', snippets = '[]', audiences = '[]', purged_at = ? WHERE id = ?`,
       )
       .bind(now, r.id),
   );
