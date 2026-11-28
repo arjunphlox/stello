@@ -69,24 +69,23 @@ test('savesFolder: the marked folder, else the oldest added', () => {
   assert.strictEqual(F.savesFolder([]), null);
 });
 
-test('part 3: a file of the person\'s own that lists a link shows as Found in, after the item\'s copies', () => {
+test('part 3: a spreadsheet or export an item came from is tracked but never shown or counted', () => {
   const folders = [{ id: 'f1', name: 'Notes', addedAt: 10 }];
   const indexes = { f1: {
     files: { 'items/2026/11/a.md': { id: 'A' } },
-    found: { 'Reading/links.md': { links: [{ key: 'k1', id: 'A' }, { key: 'k2', id: 'B' }] } },
+    found: { 'Raindrop export.csv': { links: [{ key: 'k1', id: 'A' }, { key: 'k2', id: 'B' }] } },
   } };
   const m = F.buildLookup(folders, indexes);
   assert.deepStrictEqual(m.get('A'), [
     { folderId: 'f1', name: 'Notes', path: 'items/2026/11/a.md' },
-    { folderId: 'f1', name: 'Notes', path: 'Reading/links.md', found: true },
+    { folderId: 'f1', name: 'Notes', path: 'Raindrop export.csv', found: true },
   ]);
-  assert.deepStrictEqual(m.get('B'), [{ folderId: 'f1', name: 'Notes', path: 'Reading/links.md', found: true }]);
-  const ids = ['11111111-2222-4333-8444-555555555555', '11111111-2222-4333-8444-666666666666'];
-  assert.strictEqual(F.countItems({ 'a.md': { id: ids[0] } }, { 'l.md': { links: [{ id: ids[0] }, { id: ids[1] }] } }), 2);
+  const ids = ['11111111-2222-4333-8444-555555555555'];
+  assert.strictEqual(F.countItems({ 'a.md': { id: ids[0] } }), 1);
   for (const n of ['links.md', 'export.csv', 'Bookmarks.html', 'x.webloc', 'y.url', 'z.txt']) assert.ok(F.ingestFile(n), n);
   for (const n of ['.x.md', 'photo.jpg', 'doc.pdf', 'stello.json']) assert.ok(!F.ingestFile(n), n);
-  const layout = P.layout({ slug: 's', title: 'T', added_at: '2026-11-20T00:00:00Z' }, { folders: m.get('B') });
-  const row = layout.cards[0].rows.find((r) => r.label === 'Found in');
-  assert.strictEqual(row.value, 'links.md');
-  assert.strictEqual(row.folder.name, 'Notes');
+  const item = { slug: 's', title: 'T', added_at: '2026-11-20T00:00:00Z' };
+  const rows = P.layout(item, { folders: m.get('A') }).cards[0].rows;
+  assert.deepStrictEqual(rows.filter((r) => r.label === 'Folder').map((r) => r.folder.path), ['items/2026/11/a.md']);
+  assert.ok(!P.layout(item, { folders: m.get('B') }).cards[0].rows.some((r) => r.label === 'Folder'));
 });

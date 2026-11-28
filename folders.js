@@ -18,8 +18,9 @@
  *     each item looks like (a baseline), so turning writes on never rewrites the folder.
  *   - Part 3: per folder, asked on Add, Stello also reads the person's own Markdown, text,
  *     CSV, bookmark and link files (src/lib/folder-ingest.js). Each new link becomes a plain
- *     link item, the same id on every device; a link already saved gains a "Found in" row.
- *     Those files are never written, moved or trashed (`copiesOf` leaves them out).
+ *     link item, the same id on every device, saved as a Markdown file in that folder. A
+ *     link already saved isn't added twice. The source files stay in the folder but don't
+ *     show in Stello, and are never written, moved or trashed (`copiesOf` leaves them out).
  *
  * Folders open through File System Access, so this works in Chrome, Edge and
  * Arc on a computer. Google Drive and Dropbox come in phase 3. Folder handles
@@ -76,12 +77,12 @@
 
   /**
    * Library items a folder holds: people and places files that aren't saves don't count.
-   * `found` = the person's own files read for links ({ path: { links: [{ key, id }] } }).
+   * Spreadsheets and exports don't show, so an item made from one counts once its own
+   * Markdown file is written.
    */
-  function countItems(files, found) {
+  function countItems(files) {
     const ids = new Set();
     for (const e of Object.values(files || {})) if (e && isLibraryId(e.id)) ids.add(e.id.toLowerCase());
-    for (const rec of Object.values(found || {})) for (const l of (rec && rec.links) || []) if (isLibraryId(l.id)) ids.add(l.id.toLowerCase());
     return ids.size;
   }
 
@@ -211,7 +212,7 @@
           indexes = Object.fromEntries((ix || []).map((x) => [x.id, x]));
           for (const folder of folders) {
             folder.status = await permission(folder, false);
-            if (indexes[folder.id]) folder.count = countItems(indexes[folder.id].files, indexes[folder.id].found);
+            if (indexes[folder.id]) folder.count = countItems(indexes[folder.id].files);
           }
         } catch (e) {
           console.warn('[folders] could not open the folder list', e);
@@ -361,7 +362,7 @@
       // Writes and .trash moves Stello made while the read ran win over what it saw.
       for (const [path, entry] of duringScan.get(folderId) || []) { if (entry) files[path] = entry; else delete files[path]; }
       indexes[folderId] = { id: folderId, files, found };
-      folder.count = countItems(files, found);
+      folder.count = countItems(files);
       folder.scannedAt = Date.now();
       folder.status = 'granted';
       await put('indexes', indexes[folderId]);
@@ -388,6 +389,8 @@
   let host = null;
   const ingesting = new Set();
   const ingestAgain = new Set();
+  // Item id → the folder whose spreadsheet or export it came from: its Markdown file goes there.
+  const origin = new Map();
 
   /** The library is in memory: read the files of folders that turn them into items. */
   function setLibrary(h) {
@@ -450,6 +453,7 @@
           if (!res || !Array.isArray(res.results)) throw new Error('push failed');
           const applied = new Set(res.results.filter((x) => x.status === 'applied').map((x) => x.id));
           const rows = batch.filter((c) => applied.has(c.id)).map((c) => ({ id: c.id, ...c.fields }));
+          for (const r of rows) origin.set(r.id, folderId);
           if (rows.length) { made += rows.length; host.added(rows); }
         }
       } catch (e) {
@@ -457,7 +461,7 @@
         for (const [path, rec] of undo) ix.found[path] = rec;
         throw e;
       }
-      folder.count = countItems(ix.files, ix.found);
+      folder.count = countItems(ix.files);
       await put('indexes', ix);
       await saveFolder(folder);
       emit();
@@ -536,7 +540,8 @@
   async function writeItem(item, fp) {
     const W = await lib();
     const where = copiesOf(item.id).find((l) => writable(folders.find((f) => f.id === l.folderId)));
-    const target = where ? folders.find((f) => f.id === where.folderId) : savesFolder(folders.filter(writable));
+    const from = origin.get(item.id) && folders.find((f) => f.id === origin.get(item.id));
+    const target = where ? folders.find((f) => f.id === where.folderId) : writable(from) ? from : savesFolder(folders.filter(writable));
     if (!target || !writable(target)) return null;
     const root = target.handle;
     const ctx = folderContext(target.id);
@@ -580,7 +585,7 @@
     noteIndexed(target.id, out.path, item.id, stat);
     await put('written', { id: item.id, fp, folderId: target.id, path: out.path, mtime: stat.mtime, size: stat.size, extra });
     await put('indexes', indexes[target.id]);
-    target.count = countItems(indexes[target.id].files, indexes[target.id].found);
+    target.count = countItems(indexes[target.id].files);
     return { folderId: target.id, path: out.path };
   }
 
@@ -589,7 +594,8 @@
     if (!item || !item.id || !folders.some(writable)) return Promise.resolve(null);
     return serial(async () => {
       const W = await lib();
-      if (!(await get('meta', 'baseline'))) return null; // turned on by syncLibrary first
+      // Turned on by syncLibrary first; items just made from a folder's files are written anyway.
+      if (!(await get('meta', 'baseline')) && !origin.has(item.id)) return null;
       const fp = W.fingerprint(item);
       const last = await get('written', item.id);
       if (last && last.fp === fp) return null;
@@ -694,7 +700,7 @@
           for (const m of media) { try { await moveFile(folder.handle, m, W.trashPath(m)); } catch { /* already gone */ } }
           delete indexes[folder.id].files[l.path];
           if (duringScan.has(folder.id)) duringScan.get(folder.id).set(l.path, null);
-          folder.count = countItems(indexes[folder.id].files, indexes[folder.id].found);
+          folder.count = countItems(indexes[folder.id].files);
           await put('indexes', indexes[folder.id]);
           moved++;
         } catch (e) {

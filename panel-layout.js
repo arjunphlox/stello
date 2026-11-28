@@ -749,7 +749,7 @@
    * The de-duplicated panel for `item`.
    * `opts.resolveSlug(slug)` → true when a ref's slug opens an item in the library.
    * `opts.folders` → [{ folderId, name, path, found? }] folders holding the item's file (Summary "Folder" rows);
-   *   `found` = one of the person's own files lists the item's link ("Found in" row).
+   *   `found` entries (a spreadsheet or export the item came from) are left out.
    * Returns { kind, header, cards: [...], tagShown, snippetTexts, topRoles, isTyped }.
    * Card shapes: facts {rows}, chips {chips, caption}, refs {refs}, text {text},
    * gallery {roles}, faqs {items}, chipsFacts {chips, rows}, tracklist {tracks},
@@ -928,11 +928,9 @@
     // plan 4b). One row per folder, oldest-added first, just above Added.
     const summary = factRows(facts, factLinks);
     const folderRows = arr(opts && opts.folders)
-      .filter((f) => f && nb(f.name))
-      // A file of the person's own that lists the item's link (part 3): "Found in", its file name.
-      .map((f) => (f.found
-        ? { label: 'Found in', value: nb(String(f.path || '').split('/').pop()) || nb(f.name), url: null, folder: { folderId: f.folderId || null, path: nb(f.path), name: nb(f.name), found: true } }
-        : { label: 'Folder', value: nb(f.name), url: null, folder: { folderId: f.folderId || null, path: nb(f.path) } }));
+      // Spreadsheets and bookmark exports an item came from aren't shown (Arjun, Nov 28).
+      .filter((f) => f && nb(f.name) && !f.found)
+      .map((f) => ({ label: 'Folder', value: nb(f.name), url: null, folder: { folderId: f.folderId || null, path: nb(f.path) } }));
     if (folderRows.length) summary.splice(Math.max(0, summary.length - 1), 0, ...folderRows);
     cards.push({ type: 'facts', title: 'Summary', rows: summary });
 

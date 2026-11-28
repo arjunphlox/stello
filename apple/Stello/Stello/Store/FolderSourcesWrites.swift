@@ -97,7 +97,8 @@ extension FolderSources {
     @discardableResult
     func write(_ item: Item) -> String? {
         let main = mainCopy(item.id)
-        guard let folderID = main?.folderID ?? savesFolderID.flatMap({ isWritable($0) ? $0 : nil }) ?? folders.first(where: { isWritable($0.id) })?.id,
+        let from = origin[item.id.uuidString.lowercased()].flatMap { isWritable($0) ? $0 : nil }
+        guard let folderID = main?.folderID ?? from ?? savesFolderID.flatMap({ isWritable($0) ? $0 : nil }) ?? folders.first(where: { isWritable($0.id) })?.id,
               let root = roots[folderID] else { return nil }
         let itemID = item.id.uuidString.lowercased()
         var (entities, paths) = context(folderID)

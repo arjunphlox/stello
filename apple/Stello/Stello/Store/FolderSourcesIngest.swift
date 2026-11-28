@@ -5,13 +5,14 @@ import os
 /// Folder ingest (folder engine plan 4b, part 3; web twin: `ingestFolder` in folders.js).
 /// A folder added with "Also its other files" turns every link in its Markdown, text, CSV,
 /// bookmark and link files into an item, kept up to date as the files change:
-/// - A link the library already holds just gains the file in its panel ("Found in").
+/// - A link the library already holds isn't added twice. The source files stay in the
+///   folder but don't show in Stello.
 /// - A new link becomes a plain link (no AI, no page read on this path) with the same id
 ///   on every device, so the web and the Mac never make it twice. The background pass sorts it.
-/// - A link that leaves a file keeps its item (Arjun's pick); only the "Found in" row goes.
+/// - A link that leaves a file keeps its item: nothing is lost.
 /// - A link the file listed before whose item was deleted in Stello stays deleted.
 /// Stello never writes or moves the person's own files; new items are written as Stello
-/// files by `FolderWriteObserver`, like any save.
+/// files by `FolderWriteObserver` into the folder they came from (`origin`), with their pictures.
 extension FolderSources {
     /// One changed file, read and parsed off the main thread.
     nonisolated struct IngestRead: Sendable {
@@ -101,6 +102,7 @@ extension FolderSources {
                     itemID = key
                     if !ids.contains(key), !before.contains(link.key), !fresh.contains(key) {
                         fresh.insert(key)
+                        origin[key] = id
                         insert(FolderIngest.newItem(link, id: uuid, now: now), into: context)
                         made += 1
                     }

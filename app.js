@@ -712,6 +712,7 @@
     buildRelatedIndex();
     renderStats();
     renderGrid({ stagger: false });
+    // Saved as Markdown files in the folder they came from (folders.js picks it).
     fresh.forEach(folderWrite);
     showToast(`Added ${fresh.length.toLocaleString()} item${fresh.length === 1 ? '' : 's'} from folder files`);
   }
@@ -1719,8 +1720,7 @@
     return `<dl class="sub-facts">${rows.map(r => `<div class="sub-fact">
       <dt>${escHtml(r.label)}</dt>
       <dd>${r.folder
-        ? (() => { const full = (r.folder.found ? r.folder.name : r.value) + (r.folder.path ? '/' + r.folder.path : '');
-            return `<button type="button" class="sub-fact-link js-folder-path" data-path="${escAttr(full)}" title="${escAttr(full)}">${escHtml(r.value)}</button>`; })()
+        ? `<button type="button" class="sub-fact-link js-folder-path" data-path="${escAttr(r.value + (r.folder.path ? '/' + r.folder.path : ''))}" title="${escAttr(r.value + (r.folder.path ? '/' + r.folder.path : ''))}">${escHtml(r.value)}</button>`
         : r.url
         ? `<a href="${escAttr(r.url)}" target="_blank" rel="noopener" title="${escAttr(r.url)}">${escHtml(r.value)}</a>`
         : escHtml(r.value)}</dd>
@@ -3372,6 +3372,7 @@
       const $list = $folders.querySelector('.settings-folders-list');
       const $add = $folders.querySelector('.settings-folder-add');
       const $hint = $folders.querySelector('.settings-folders-hint');
+      const TIDY = 'Stello may tidy this folder and add Markdown files and folders to it. Nothing already in it is lost or removed.';
       const paint = () => {
         if (!$folders.isConnected) { document.removeEventListener('stello:folderschange', paint); return; }
         if (!F || !F.supported) {
@@ -3406,7 +3407,7 @@
           </div>`;
         }).join('');
         $hint.textContent = rows.length
-          ? 'New saves and edits are written to these folders. Removing a folder only hides it here; its files stay as they are.'
+          ? `${TIDY} Removing a folder only hides it here; its files stay as they are.`
           : 'Add the folders your Stello items live in, such as iCloud Drive/Stello.';
       };
       const folderClashToast = (r) => {
@@ -3427,7 +3428,7 @@
             <button type="button" class="settings-save" data-reads="all">Also its other files</button>
             <button type="button" class="settings-folder-action" data-reads="cancel">Cancel</button>
           </div>
-          <p class="settings-hint">Other files are its ${OTHER_FILES}: every link in them becomes an item, kept up to date as the files change. Stello never edits or moves them.</p>`;
+          <p class="settings-hint">Other files are its ${OTHER_FILES}: each web address in them becomes an item, saved as a Markdown file in this folder. ${TIDY}</p>`;
         $list.after($ask);
         $add.hidden = true;
         $ask.addEventListener('click', (e) => {

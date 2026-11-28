@@ -160,6 +160,8 @@ private struct FolderSourcesSection: View {
     @State private var pendingAdd: URL?
     /// Web twin: OTHER_FILES in app.js.
     private static let otherFiles = "Markdown, text, CSV, bookmark and link files"
+    /// Web twin: TIDY in app.js.
+    private static let tidy = "Stello may tidy this folder and add Markdown files and folders to it. Nothing already in it is lost or removed."
 
     var body: some View {
         Section("Folders") {
@@ -219,7 +221,7 @@ private struct FolderSourcesSection: View {
             }
             Text(sources.folders.isEmpty
                  ? "Add the folders your Stello items live in, such as iCloud Drive/Stello."
-                 : "New saves and edits are written to these folders. Removing a folder only hides it here; its files stay as they are.")
+                 : "\(Self.tidy) Removing a folder only hides it here; its files stay as they are.")
                 .font(.karst(.caption))
                 .foregroundStyle(theme.textSecondary)
         }
@@ -238,7 +240,7 @@ private struct FolderSourcesSection: View {
             Button("Also its other files") { addPending(ingest: true) }
             Button("Cancel", role: .cancel) { pendingAdd = nil }
         } message: {
-            Text("Other files are its \(Self.otherFiles): every link in them becomes an item, kept up to date as the files change. Stello never edits or moves them.")
+            Text("Other files are its \(Self.otherFiles): each web address in them becomes an item, saved as a Markdown file in this folder. \(Self.tidy)")
         }
     }
 

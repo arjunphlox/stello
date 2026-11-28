@@ -75,6 +75,9 @@ final class FolderSources {
     /// Folders whose files are being turned into items right now, and ones to read again after.
     var ingesting = Set<UUID>()
     var ingestAgain = Set<UUID>()
+    /// Item id (lowercased) → the folder whose spreadsheet or export it came from: its
+    /// Markdown file is written there.
+    var origin: [String: UUID] = [:]
     /// Set at launch (FolderWriteObserver.start): where items made from files are saved.
     @ObservationIgnored var modelContainer: ModelContainer?
     private(set) var roots: [UUID: URL] = [:]
@@ -249,11 +252,10 @@ final class FolderSources {
     }
 
     /// Library items a folder holds: people and places that are only files don't count.
-    /// `found`: links the person's own files list (part 3).
+    /// Spreadsheets and exports don't show, so an item made from one counts once its own
+    /// Markdown file is written. (`found` is accepted and ignored, for the callers.)
     nonisolated static func countItems(_ files: [String: FolderIndexEntry], _ found: [String: FoundEntry]? = nil) -> Int {
-        var ids = Set(files.values.map(\.id).filter(FolderWriter.isLibraryID))
-        for entry in (found ?? [:]).values { for l in entry.links where FolderWriter.isLibraryID(l.id) { ids.insert(l.id) } }
-        return ids.count
+        Set(files.values.map(\.id).filter(FolderWriter.isLibraryID)).count
     }
 
     func rebuildLookup() {
