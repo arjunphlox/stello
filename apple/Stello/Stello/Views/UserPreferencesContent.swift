@@ -270,6 +270,9 @@ private struct FolderSourcesSection: View {
         case .ready:
             let items = "\(folder.count.formatted()) item\(folder.count == 1 ? "" : "s")"
             let place = folder.displayPath.isEmpty ? "" : " · \(folder.displayPath)"
+            if let n = sources.downloading[folder.id] {
+                return items + " · downloading \(n.formatted()) file\(n == 1 ? "" : "s") from iCloud"
+            }
             return items + place
         }
     }

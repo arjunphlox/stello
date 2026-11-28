@@ -23,8 +23,23 @@ extension FolderSources {
     func readChanged(_ id: UUID) {
         guard modelContainer != nil, let root = roots[id], let list = unread[id], !list.isEmpty else { return }
         if reading.contains(id) { readAgain.insert(id); return }
+        // Only files that can change something are opened: edits to take, or items this
+        // device doesn't have yet. On a folder's first read that skips almost every file.
+        let have = haveIDs()
+        var skip: [String] = []
+        let paths = list.compactMap { path, takeEdits -> String? in
+            guard let entry = indexes[id]?[path] else { skip.append(path); return nil }
+            if !takeEdits, have.contains(entry.id.lowercased()) { skip.append(path); return nil }
+            return path
+        }
+        if !skip.isEmpty {
+            var left = list
+            for p in skip { left[p] = nil }
+            unread[id] = left
+            Self.saveUnread(id, left)
+        }
+        guard !paths.isEmpty else { return }
         reading.insert(id)
-        let paths = Array(list.keys)
         Task.detached(priority: .utility) {
             let scoped = root.startAccessingSecurityScopedResource()
             defer { if scoped { root.stopAccessingSecurityScopedResource() } }
@@ -99,6 +114,14 @@ extension FolderSources {
         }
         unread[id] = list
         Self.saveUnread(id, list)
+    }
+
+    /// Ids (lowercased) of every item this device holds.
+    private func haveIDs() -> Set<String> {
+        guard let container = modelContainer else { return [] }
+        var d = FetchDescriptor<Item>()
+        d.propertiesToFetch = [\.id]
+        return Set(((try? ModelContext(container).fetch(d)) ?? []).map { $0.id.uuidString.lowercased() })
     }
 
     /// Pictures of an item new to this Mac: the bytes already copied into the folder's media/.

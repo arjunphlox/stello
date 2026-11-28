@@ -70,6 +70,9 @@ final class FolderSources {
     /// Per folder: Stello files that changed since the last read, still to read in full
     /// (`readChanged`). true: take edits; false (a folder's first read): only new items.
     var unread: [UUID: [String: Bool]] = [:]
+    /// Per folder: Stello files iCloud hasn't downloaded to this device yet. Stello asks for
+    /// them and reads the folder again; until then they keep their last known entry.
+    private(set) var downloading: [UUID: Int] = [:]
 
     /// Per folder: relative path → (id, modified, size). Persisted in Application Support.
     var indexes: [UUID: [String: FolderIndexEntry]] = [:]
@@ -230,8 +233,18 @@ final class FolderSources {
         let ingest = folder.ingest == true
         let previousFound = found[id] ?? [:]
         Task.detached(priority: .utility) {
-            let (result, seen) = FolderScanner.scan(root: root, previous: previous, previousFound: previousFound, ingest: ingest)
-            await MainActor.run { self.finishScan(id, result, found: seen) }
+            let (result, seen, waiting) = FolderScanner.scanCounting(root: root, previous: previous, previousFound: previousFound, ingest: ingest)
+            await MainActor.run {
+                self.downloading[id] = waiting > 0 ? waiting : nil
+                self.finishScan(id, result, found: seen)
+                // Files iCloud is still downloading: read the folder again once some have arrived.
+                if waiting > 0 {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(20))
+                        self.rescan(id)
+                    }
+                }
+            }
         }
     }
 
@@ -537,16 +550,28 @@ nonisolated enum FolderScanner {
     /// `FolderSources.ingest` to read in full.
     static func scan(root: URL, previous: [String: FolderIndexEntry], previousFound: [String: FoundEntry],
                      ingest: Bool) -> (Result, [String: FoundEntry]) {
+        let (result, found, _) = scanCounting(root: root, previous: previous, previousFound: previousFound, ingest: ingest)
+        return (result, found)
+    }
+
+    /// `scan`, plus how many Stello files iCloud hasn't downloaded yet. Those are never opened
+    /// here (opening one waits for its download, which on an iPhone with thousands of files
+    /// kept "Reading…" up for many minutes): Stello asks iCloud for them and keeps their last
+    /// known entry meanwhile; a file it has never seen joins on a later read.
+    static func scanCounting(root: URL, previous: [String: FolderIndexEntry], previousFound: [String: FoundEntry],
+                             ingest: Bool) -> (Result, [String: FoundEntry], Int) {
         let scoped = root.startAccessingSecurityScopedResource()
         defer { if scoped { root.stopAccessingSecurityScopedResource() } }
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else {
-            return (.failure("Not reachable. It may have moved: use Replace."), [:])
+            return (.failure("Not reachable. It may have moved: use Replace."), [:], 0)
         }
-        let keys: [URLResourceKey] = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey]
+        let keys: [URLResourceKey] = [.isDirectoryKey, .contentModificationDateKey, .fileSizeKey,
+                                      .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
+        var waiting = 0
         guard let walker = fm.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsPackageDescendants]) else {
-            return (.failure("Not reachable right now."), [:])
+            return (.failure("Not reachable right now."), [:], 0)
         }
         let base = root.standardizedFileURL.path
         var out: [String: FolderIndexEntry] = [:]
@@ -559,10 +584,22 @@ nonisolated enum FolderScanner {
                                      note: previousFound[path]?.note)
         }
         for case let url as URL in walker {
-            let name = url.lastPathComponent
+            var name = url.lastPathComponent
             let values = try? url.resourceValues(forKeys: Set(keys))
             if values?.isDirectory == true {
                 if skipsDirectory(name) { walker.skipDescendants() }
+                continue
+            }
+            // An iCloud stand-in (".name.md.icloud"): the real file isn't on this device yet.
+            if name.hasPrefix("."), name.hasSuffix(".md.icloud") {
+                name = String(name.dropFirst().dropLast(7))
+                let real = url.deletingLastPathComponent().appendingPathComponent(name)
+                let full = real.standardizedFileURL.path
+                guard full.hasPrefix(base + "/") else { continue }
+                let path = String(full.dropFirst(base.count + 1))
+                if let old = previous[path] { out[path] = old }
+                try? fm.startDownloadingUbiquitousItem(at: real)
+                waiting += 1
                 continue
             }
             let isMD = name.hasSuffix(".md") && !name.hasPrefix(".")
@@ -585,6 +622,13 @@ nonisolated enum FolderScanner {
                 found[path] = kept
                 continue
             }
+            // In iCloud but not downloaded: ask for it, keep the last known entry, read it next time.
+            if values?.isUbiquitousItem == true, let state = values?.ubiquitousItemDownloadingStatus, state != .current {
+                if let old = previous[path] { out[path] = old }
+                try? fm.startDownloadingUbiquitousItem(at: url)
+                waiting += 1
+                continue
+            }
             guard let handle = try? FileHandle(forReadingFrom: url) else { continue }
             let head = (try? handle.read(upToCount: 4096)) ?? Data()
             try? handle.close()
@@ -599,6 +643,6 @@ nonisolated enum FolderScanner {
                 maybeFound(path, modified, size)
             }
         }
-        return (.success(out, changed), found)
+        return (.success(out, changed), found, waiting)
     }
 }
