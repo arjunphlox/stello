@@ -348,7 +348,7 @@ struct FolderIndexEntry: Codable, Equatable, Sendable {
 
 /// Walks a folder for Stello .md files off the main thread, reading only the start of
 /// files that changed since the last read. Pure apart from file reads (tests use a temp dir).
-enum FolderScanner {
+nonisolated enum FolderScanner {
     /// success: the index, plus the ids whose files changed since the previous read.
     enum Result: Sendable { case success([String: FolderIndexEntry], Set<String>), failure(String) }
 

@@ -200,9 +200,10 @@ extension FolderSources {
                 if let stat = try? FolderFiles.write(Data(text.utf8), to: job.files[0]) { results.append((job.mainFolder, job.mainRel, job.id, stat)) }
             }
             guard !results.isEmpty else { return }
+            let done = results
             await MainActor.run {
-                for (folder, rel, id, stat) in results { self.noteIndexed(folder, rel, id: id, stat) }
-                self.finishWrites(Set(results.map(\.0)))
+                for (folder, rel, id, stat) in done { self.noteIndexed(folder, rel, id: id, stat) }
+                self.finishWrites(Set(done.map(\.0)))
             }
         }
     }

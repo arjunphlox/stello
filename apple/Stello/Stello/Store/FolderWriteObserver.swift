@@ -14,7 +14,7 @@ final class FolderWriteObserver {
     private static let tokenKey = "stello.folderWrites.token"
     private static let sinceKey = "stello.folderWrites.since"
     /// Fields whose change alone is not an edit.
-    private static let notEdits: Set<String> = ["last_opened_at", "open_count"]
+    nonisolated private static let notEdits: Set<String> = ["last_opened_at", "open_count"]
 
     private var container: ModelContainer?
     private var debounce: Task<Void, Never>?
@@ -74,7 +74,7 @@ final class FolderWriteObserver {
         } while again
     }
 
-    enum Change: Sendable { case changed, deleted }
+    nonisolated enum Change: Sendable, Equatable { case changed, deleted }
 
     /// Item changes after `tokenData` (latest wins per item) and the newest history token.
     nonisolated private static func scan(container: ModelContainer, after tokenData: Data?, since: Date) throws -> ([(UUID, Change)], Data?) {
