@@ -124,6 +124,7 @@ final class FolderSources {
         folders.append(folder)
         roots[folder.id] = resolve(folder) ?? url
         persist()
+        SafariBridge.publishBookmarks()  // the Safari extension reads the same folders
         rescan(folder.id)
         return .added
     }
@@ -140,6 +141,7 @@ final class FolderSources {
         folders[i].writable = true
         roots[id] = resolve(folders[i]) ?? url
         persist()
+        SafariBridge.publishBookmarks()  // the Safari extension reads the same folders
         rescan(id)
         return .added
     }
@@ -157,6 +159,7 @@ final class FolderSources {
         status[id] = nil
         try? FileManager.default.removeItem(at: Self.indexURL(id))
         persist()
+        SafariBridge.publishBookmarks()  // the Safari extension reads the same folders
         rebuildLookup()
     }
 
