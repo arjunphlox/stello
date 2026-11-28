@@ -123,6 +123,7 @@ struct CardSubcards: View {
     @Environment(\.enrichmentCoordinator) private var enrichmentCoordinator
     /// Items that ref chips open, looked up one slug at a time and remembered.
     @State private var refItems = RefItemCache()
+    @State private var folderSources = FolderSources.shared
     @State private var gridWidth: CGFloat = 300
 
     private static let twoColumnThreshold: CGFloat = 520
@@ -735,7 +736,17 @@ struct CardSubcards: View {
     /// Author, Source (tappable) and Added.
     @ViewBuilder
     private func summaryCard(_ layout: PanelLayout) -> some View {
-        factsCard(title: "Summary", rows: layout.facts, links: layout.factLinks)
+        if var content = FactsSubCardContent(rows: layout.facts, links: layout.factLinks) {
+            // Folder: one row per folder holding the item's file, just above Added
+            // (folder engine plan 4b; web twin: panel-layout.js). A tap shows the file
+            // in Finder, or the Files app on iPad and iPhone.
+            let rows = folderSources.locations(for: item.id).map { loc in
+                (label: "Folder", value: loc.name, url: URL?.none,
+                 action: Optional({ [folderSources] in folderSources.reveal(loc) }))
+            }
+            if !rows.isEmpty { content.rows.insert(contentsOf: rows, at: max(0, content.rows.count - 1)) }
+            SubCard(title: "Summary") { FactsSubCardBody(content: content) }
+        }
     }
 
     /// Places other than the saved / canonical page; hidden when empty.
@@ -1706,14 +1717,15 @@ struct SubCard<Content: View>: View {
 // MARK: - Facts
 
 struct FactsSubCardContent {
-    let rows: [(label: String, value: String, url: URL?)]
+    /// `action` (the Folder row) runs on tap instead of opening a URL.
+    var rows: [(label: String, value: String, url: URL?, action: (() -> Void)?)]
 
     /// Empty values are dropped (nil when nothing is left). A row opens `links[label]` when
     /// given, else its own value when that is an http(s) URL.
     init?(rows: [(String, String?)], links: [String: String] = [:]) {
-        let filled = rows.compactMap { label, value -> (String, String, URL?)? in
+        let filled = rows.compactMap { label, value -> (String, String, URL?, (() -> Void)?)? in
             guard let v = value?.nilIfEmpty else { return nil }
-            return (label, v, Self.webURL(links[label] ?? v))
+            return (label, v, Self.webURL(links[label] ?? v), nil)
         }
         guard !filled.isEmpty else { return nil }
         self.rows = filled
@@ -1740,7 +1752,15 @@ struct FactsSubCardBody: View {
                     Text(row.label)
                         .font(.karst(.caption2, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
-                    if let url = row.url {
+                    if let action = row.action {
+                        Button(action: action) {
+                            Text(row.value)
+                                .font(.karst(.callout))
+                                .foregroundStyle(theme.accentColor)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .buttonStyle(.plain)
+                    } else if let url = row.url {
                         Link(destination: url) {
                             Text(row.value)
                                 .font(.karst(.callout))

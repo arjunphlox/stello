@@ -65,6 +65,8 @@ struct UserPreferencesContent: View {
                 }
             }
 
+            FolderSourcesSection()
+
             // The old web library import is gone (parity pass, Nov 22 2026): the
             // library is already in, and running it again could add duplicates.
             WebSyncSection()
@@ -138,6 +140,77 @@ private struct WebLibraryImportSection: View {
                     await WebLibraryImporter.classifyPending(context: context, coordinator: coordinator)
                 }
             }
+        }
+    }
+}
+
+// MARK: - Folders
+
+/// The folders Stello reads (folder engine plan 4b; web twin: Settings › Folders in
+/// app.js). Add, Replace, Remove; read-only for now, the library still comes from SwiftData.
+private struct FolderSourcesSection: View {
+    @Environment(\.appTheme) private var theme
+    @State private var sources = FolderSources.shared
+    @State private var picking = false
+    /// nil = adding a folder, else the folder being replaced.
+    @State private var replacing: UUID?
+    @State private var message: String?
+
+    var body: some View {
+        Section("Folders") {
+            ForEach(sources.folders) { folder in
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(folder.name)
+                            .font(.karst(.body))
+                            .foregroundStyle(theme.textPrimary)
+                        Text(detail(folder))
+                            .font(.karst(.caption))
+                            .foregroundStyle(theme.textSecondary)
+                    }
+                    Spacer(minLength: 8)
+                    Button("Replace") { replacing = folder.id; picking = true }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(theme.accentColor)
+                    Button("Remove") {
+                        sources.remove(folder.id)
+                        message = "Folder removed. Its files are untouched."
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(theme.textSecondary)
+                }
+            }
+            Button("Add folder") { replacing = nil; picking = true }
+            if let message {
+                Text(message).font(.karst(.caption)).foregroundStyle(theme.textSecondary)
+            }
+            Text(sources.folders.isEmpty
+                 ? "Add the folders your Stello items live in, such as iCloud Drive/Stello."
+                 : "Removing a folder only hides it here. Its files stay as they are.")
+                .font(.karst(.caption))
+                .foregroundStyle(theme.textSecondary)
+        }
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.folder]) { result in
+            guard case .success(let url) = result else { return }
+            let outcome = replacing.map { sources.replace($0, with: url) } ?? sources.add(url: url)
+            switch outcome {
+            case .added: message = nil
+            case .duplicate(let name): message = "\(name) is already added."
+            case .covered(let name): message = "Already covered by \(name)."
+            case .covers(let name): message = "That folder holds \(name), which is already added."
+            case .failed: message = "Couldn’t open that folder."
+            }
+        }
+    }
+
+    private func detail(_ folder: FolderSources.Folder) -> String {
+        switch sources.status[folder.id] ?? .ready {
+        case .reading: return "Reading…"
+        case .unreachable(let why): return why
+        case .ready:
+            let items = "\(folder.count.formatted()) item\(folder.count == 1 ? "" : "s")"
+            let place = folder.displayPath.isEmpty ? "" : " · \(folder.displayPath)"
+            return items + place
         }
     }
 }
