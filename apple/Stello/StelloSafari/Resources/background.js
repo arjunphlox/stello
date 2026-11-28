@@ -8,7 +8,3 @@ browser.runtime.onMessage.addListener((msg, _sender, reply) => {
   send(request).then(reply, (e) => reply({ error: String(e && e.message || e) }));
   return true;
 });
-
-browser.action.onClicked.addListener(() => {
-  browser.tabs.create({ url: browser.runtime.getURL("test.html") });
-});

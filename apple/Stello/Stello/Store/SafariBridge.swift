@@ -1,13 +1,12 @@
 import Foundation
 
-#if os(macOS)
 /// Safari test (Nov 28 2026): lets the Stello Safari extension read the added folders.
 ///
 /// Safari can't open a folder itself (WebKit opposes the folder-picking API), so the
 /// extension asks this app. Two ways are tried, and the test page reports which works:
 /// 1. Direct: the extension resolves a plain bookmark of each folder that the app leaves
 ///    in the shared App Group defaults. Likely blocked by the extension's sandbox.
-/// 2. Relay: the extension sends the request to this app over a local message port
+/// 2. Relay (Mac only): the extension sends the request to this app over a local message port
 ///    (name prefixed with the App Group, as the sandbox requires). The app must be running.
 ///
 /// Read-only: list, read a text file, read a picture. Paths stay inside the folder.
@@ -16,10 +15,13 @@ enum SafariBridge {
     static let groupID = "group.com.arjunphlox.Stello"
     static let portName = groupID + ".safari-bridge"
     static let bookmarksKey = "stello.safariBridge.bookmarks"
+    #if os(macOS)
     private static var port: CFMessagePort?
+    #endif
 
     static func start() {
         publishBookmarks()
+        #if os(macOS)
         guard port == nil else { return }
         var context = CFMessagePortContext(version: 0, info: nil, retain: nil, release: nil, copyDescription: nil)
         var shouldFree: DarwinBoolean = false
@@ -34,6 +36,7 @@ enum SafariBridge {
         port = local
         let source = CFMessagePortCreateRunLoopSource(nil, local, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        #endif
     }
 
     /// Plain (not security-scoped) bookmarks for the direct test.
@@ -41,6 +44,8 @@ enum SafariBridge {
         let sources = FolderSources.shared
         var out: [[String: Any]] = []
         for folder in sources.folders {
+            // iPhone/iPad bookmarks carry the folder permission with them; the extension
+            // (same App Group) resolves them and asks for access itself.
             guard let root = sources.roots[folder.id],
                   let data = try? root.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
             else { continue }
@@ -62,4 +67,3 @@ enum SafariBridge {
         return (try? JSONSerialization.data(withJSONObject: reply)) ?? Data("{}".utf8)
     }
 }
-#endif

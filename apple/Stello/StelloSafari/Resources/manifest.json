@@ -13,5 +13,5 @@
       "run_at": "document_start"
     }
   ],
-  "action": { "default_title": "Stello folder test" }
+  "action": { "default_title": "Stello folder test", "default_popup": "popup.html" }
 }

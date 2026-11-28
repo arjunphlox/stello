@@ -50,6 +50,9 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     }
 
     static func relay(_ message: [String: Any]) -> [String: Any] {
+        #if !os(macOS)
+        return ["error": "Asking the app is Mac only; iPhone and iPad use the first way"]
+        #else
         guard let remote = CFMessagePortCreateRemote(nil, portName as CFString) else {
             return ["error": "Stello app is not running, or its port is blocked"]
         }
@@ -63,5 +66,6 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             return ["error": "Relay failed (status \(status))"]
         }
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? ["error": "Bad reply"]
+        #endif
     }
 }
