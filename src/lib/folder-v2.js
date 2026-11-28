@@ -32,13 +32,13 @@ export const LAYOUT_V2 = {
 /** Item kinds that are people or organisations, so they become people/ files. */
 export const PEOPLE_KINDS = new Set(['individual', 'studio', 'foundry']);
 
-const ITEM_FIELDS = [
+export const ITEM_FIELDS = [
   'id', 'title', 'url', 'kind', 'site', 'summary', 'status',
   'added', 'analyzed', 'opened', 'open_count', 'cover', 'cover_aspect',
   'review', 'enrichment', 'people', 'places', 'sources',
   'tags', 'meta', 'snippets', 'images',
 ];
-const ENTITY_FIELDS = [
+export const ENTITY_FIELDS = [
   'id', 'name', 'kind', 'aliases', 'url', 'summary', 'status', 'added', 'analyzed', 'opened',
   'open_count', 'cover', 'cover_aspect', 'review', 'enrichment', 'places',
   'tags', 'meta', 'snippets', 'images',
@@ -88,9 +88,9 @@ export function coreKey(name) {
   const k = nameKey(name).replace(ORG_WORDS, ' ').replace(/\s+/g, ' ').trim();
   return k.length >= 3 ? k : nameKey(name);
 }
-const fileName = (name, fallback) => safeName(nameKey(name).replace(/ /g, '-'), fallback);
+export const fileName = (name, fallback) => safeName(nameKey(name).replace(/ /g, '-'), fallback);
 
-const entityId = (type, name) => `${type}-${safeName(nameKey(name).replace(/ /g, '-'), 'x')}`;
+export const entityId = (type, name) => `${type}-${safeName(nameKey(name).replace(/ /g, '-'), 'x')}`;
 
 /** items/<YYYY>/<MM>/<name>.md from the item's added date. */
 export function itemPathV2(added, name) {

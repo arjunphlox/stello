@@ -146,8 +146,9 @@ private struct WebLibraryImportSection: View {
 
 // MARK: - Folders
 
-/// The folders Stello reads (folder engine plan 4b; web twin: Settings › Folders in
-/// app.js). Add, Replace, Remove; read-only for now, the library still comes from SwiftData.
+/// The folders Stello reads and writes (folder engine plan 4b; web twin: Settings › Folders
+/// in app.js). Add, Replace, Remove, and the one that takes new saves. The library still
+/// comes from SwiftData; saves and edits are written to the folders beside it.
 private struct FolderSourcesSection: View {
     @Environment(\.appTheme) private var theme
     @State private var sources = FolderSources.shared
@@ -167,8 +168,24 @@ private struct FolderSourcesSection: View {
                         Text(detail(folder))
                             .font(.karst(.caption))
                             .foregroundStyle(theme.textSecondary)
+                        if sources.savesFolderID == folder.id {
+                            Text("New saves go here")
+                                .font(.karst(.caption))
+                                .foregroundStyle(theme.accentColor)
+                        } else if sources.folders.count > 1 {
+                            Button("Use for new saves") { sources.setSavesFolder(folder.id) }
+                                .buttonStyle(.borderless)
+                                .font(.karst(.caption))
+                                .foregroundStyle(theme.accentColor)
+                        }
                     }
                     Spacer(minLength: 8)
+                    if folder.writable != true {
+                        // Added before writes: the bookmark is read-only, so pick the folder once more.
+                        Button("Allow writing") { replacing = folder.id; picking = true }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(theme.accentColor)
+                    }
                     Button("Replace") { replacing = folder.id; picking = true }
                         .buttonStyle(.borderless)
                         .foregroundStyle(theme.accentColor)
@@ -186,7 +203,7 @@ private struct FolderSourcesSection: View {
             }
             Text(sources.folders.isEmpty
                  ? "Add the folders your Stello items live in, such as iCloud Drive/Stello."
-                 : "Removing a folder only hides it here. Its files stay as they are.")
+                 : "New saves and edits are written to these folders. Removing a folder only hides it here; its files stay as they are.")
                 .font(.karst(.caption))
                 .foregroundStyle(theme.textSecondary)
         }

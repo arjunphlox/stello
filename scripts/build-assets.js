@@ -37,6 +37,8 @@ const FILES = [
   'manifest.webmanifest',
 ];
 const DIRS = ['fonts', 'icons'];
+// Pure folder-format modules the browser imports (folders.js → /lib/folder-write.js).
+const LIB = ['folder-write.js', 'folder-v2.js', 'folder-format.js', 'collection-map.js', 'cosmos.js'];
 
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(DIST, { recursive: true });
@@ -51,5 +53,8 @@ for (const d of DIRS) {
   const src = path.join(ROOT, d);
   if (fs.existsSync(src)) { fs.cpSync(src, path.join(DIST, d), { recursive: true }); copied++; }
 }
+
+fs.mkdirSync(path.join(DIST, 'lib'), { recursive: true });
+for (const f of LIB) { fs.copyFileSync(path.join(ROOT, 'src', 'lib', f), path.join(DIST, 'lib', f)); copied++; }
 
 console.log(`[build-assets] dist/ ready — ${copied} entries copied`);

@@ -121,11 +121,14 @@ private struct RootView: View {
             }
             // Keep the web copy (Stello account) in step with this library.
             .task { SyncBridge.shared.start(container: container) }
+            // Write saves, edits and deletes to the folders in Settings › Folders.
+            .task { FolderWriteObserver.shared.start(container: container) }
             // Re-read the folders in Settings › Folders (changed files only).
             .task { FolderSources.shared.refreshAll() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     FolderSources.shared.refreshAll()
+                    FolderWriteObserver.shared.poke()
                     Task { await WebInboxProcessor.shared.processPending() }
                     Task { await SyncBridge.shared.sync() }
                 }

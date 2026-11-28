@@ -381,6 +381,11 @@
     // the offline images (idle, after first paint).
     const afterFullLoad = () => {
       libraryComplete = true;
+      // Folder sources: write edits made elsewhere (or record the baseline the first time).
+      if (window.StelloFolders && window.StelloFolders.supported) {
+        window.StelloFolders.load().then(() => window.StelloFolders.syncLibrary(allItems))
+          .catch(err => console.warn('[folders] library write failed', err));
+      }
       if (!Offline) return;
       const run = () => {
         Offline.saveLibrary(userId, allItems).catch(err => console.warn('[offline] save failed', err));
@@ -500,6 +505,7 @@
           const idx = allItems.findIndex(i => i.slug === item.slug);
           if (idx >= 0) allItems[idx] = refreshed;
           itemsBySlug[item.slug] = refreshed;
+          folderWrite(refreshed);
 
           const cardEl = $grid.querySelector(`.card[data-slug="${item.slug}"]:not(.card-question)`);
           if (cardEl && cardEl.dataset.renderSig !== cardRenderSig(refreshed)) {
@@ -682,6 +688,12 @@
       image_width,
       image_height,
     };
+  }
+
+  /** A save or edit: write the item's file in its folder (folders.js decides if anything changed). */
+  function folderWrite(item) {
+    if (!item || !window.StelloFolders || !window.StelloFolders.supported) return;
+    window.StelloFolders.itemChanged(item).catch(err => console.warn('[folders] write failed', err));
   }
 
   function parseJsonField(v, fallback) {
@@ -1986,6 +1998,7 @@
       itemsBySlug[slug] = next;
       const i = allItems.findIndex(x => x.slug === slug);
       if (i >= 0) allItems[i] = next;
+      folderWrite(next);
       const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
       const thumb = card && card.querySelector('.card-thumb');
       if (thumb && next.image_path) thumb.src = next.image_path;
@@ -2041,8 +2054,10 @@
       const card = document.querySelector(`.card[data-slug="${CSS.escape(slug)}"]`);
       if (card) card.remove();
       const idx = allItems.findIndex(i => i.slug === slug);
+      const gone = idx >= 0 ? allItems[idx] : itemsBySlug[slug];
       if (idx >= 0) allItems.splice(idx, 1);
       delete itemsBySlug[slug];
+      if (gone && window.StelloFolders && window.StelloFolders.supported) window.StelloFolders.itemDeleted(gone.id);
       renderStats();
       showToast('Deleted');
     } catch (err) {
@@ -2732,6 +2747,7 @@
     // Keep both the array and the lookup in sync
     allItems.unshift(item);
     itemsBySlug[item.slug] = item;
+    folderWrite(item);
     renderStats();
   }
 
@@ -2928,6 +2944,7 @@
         const idx = allItems.findIndex(i => i.slug === slug);
         if (idx >= 0) allItems[idx] = item;
         itemsBySlug[slug] = item;
+        folderWrite(item);
 
         // Only mutate the DOM when the card's visible state actually changed.
         const sig = cardRenderSig(item);
@@ -3320,8 +3337,8 @@
       }
     })();
 
-    // Folders (folder engine plan 4b): the folders Stello reads, with add /
-    // replace / remove. Read-only for now: the grid still comes from D1.
+    // Folders (folder engine plan 4b): the folders Stello reads and writes, with add /
+    // replace / remove and the one that takes new saves. The grid still comes from D1.
     const $folders = $panel.querySelector('.settings-folders');
     if ($folders) {
       const F = window.StelloFolders;
@@ -3342,10 +3359,13 @@
             : f.status === 'needs-access' ? 'Not reachable: allow access again'
             : f.status === 'error' ? (f.error || 'Couldn’t read this folder')
             : `${(f.count || 0).toLocaleString()} item${f.count === 1 ? '' : 's'} · read ${F.agoLabel(f.scannedAt)}`;
+          const saves = f.takesSaves ? '<span class="settings-folder-saves">New saves go here</span>'
+            : rows.length > 1 ? '<button type="button" class="settings-folder-action settings-folder-saves-btn" data-act="saves">Use for new saves</button>' : '';
           return `<div class="settings-theme-row settings-folder" data-folder="${escAttr(f.id)}">
             <div class="settings-folder-text">
               <span class="settings-folder-name">${escHtml(f.name)}</span>
               <span class="settings-folder-meta">${escHtml(state)}</span>
+              ${saves}
             </div>
             <div class="settings-folder-actions">
               ${f.status === 'needs-access' ? '<button type="button" class="settings-folder-action" data-act="reconnect">Allow</button>' : ''}
@@ -3355,7 +3375,7 @@
           </div>`;
         }).join('');
         $hint.textContent = rows.length
-          ? 'Removing a folder only hides it here. Its files stay as they are.'
+          ? 'New saves and edits are written to these folders. Removing a folder only hides it here; its files stay as they are.'
           : 'Add the folders your Stello items live in, such as iCloud Drive/Stello.';
       };
       const folderClashToast = (r) => {
@@ -3378,6 +3398,7 @@
         const id = row.dataset.folder;
         try {
           if (b.dataset.act === 'reconnect') await F.reconnect(id);
+          if (b.dataset.act === 'saves') await F.setSavesFolder(id);
           if (b.dataset.act === 'replace') {
             const r = await F.replace(id);
             if (r) folderClashToast(r);

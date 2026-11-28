@@ -46,3 +46,25 @@ test('panel shows one Folder row per folder, just above Added', () => {
   assert.deepStrictEqual(row.folder, { folderId: 'f1', path: 'items/2026/11/x.md' });
   assert.strictEqual(row.url, null);
 });
+
+test('countItems leaves out people and places that are only files', () => {
+  const files = {
+    'items/a.md': { id: '4c9f1824-45ad-4265-98a6-95b71f16338b' },
+    'items/b.md': { id: '4C9F1824-45AD-4265-98A6-95B71F16338B' },
+    'people/jane.md': { id: 'person-jane' },
+    'people/studio.md': { id: '11111111-2222-4333-8444-555555555555' },
+    'places/berlin.md': { id: 'place-berlin' },
+  };
+  assert.strictEqual(F.countItems(files), 2);
+});
+
+test('headerEntity reads a people/places header', () => {
+  const e = F.headerEntity('---\nid: "person-kometa"\nname: "Kometa"\nkind: "foundry"\naliases: ["Kometa Type"]\n---\n');
+  assert.deepStrictEqual(e, { id: 'person-kometa', name: 'Kometa', kind: 'foundry', aliases: ['Kometa Type'] });
+});
+
+test('savesFolder: the marked folder, else the oldest added', () => {
+  assert.strictEqual(F.savesFolder([{ id: 'b', addedAt: 2 }, { id: 'a', addedAt: 1 }]).id, 'a');
+  assert.strictEqual(F.savesFolder([{ id: 'b', addedAt: 2, takesSaves: true }, { id: 'a', addedAt: 1 }]).id, 'b');
+  assert.strictEqual(F.savesFolder([]), null);
+});

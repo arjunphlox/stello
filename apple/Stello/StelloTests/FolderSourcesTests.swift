@@ -29,13 +29,13 @@ final class FolderSourcesTests: XCTestCase {
         try "---\nid: \"old\"\n---\n".write(to: root.appendingPathComponent(".stello-v1/o.md"), atomically: true, encoding: .utf8)
         try "plain note".write(to: root.appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
 
-        guard case .success(let first) = FolderScanner.scan(root: root, previous: [:]) else { return XCTFail("scan failed") }
+        guard case .success(let first, _) = FolderScanner.scan(root: root, previous: [:]) else { return XCTFail("scan failed") }
         XCTAssertEqual(first.mapValues(\.id), ["items/2026/11/a.md": "a"])
 
         // An unchanged file keeps its old entry (not re-read).
         var seeded = first
         seeded["items/2026/11/a.md"]?.id = "cached"
-        guard case .success(let second) = FolderScanner.scan(root: root, previous: seeded) else { return XCTFail("rescan failed") }
+        guard case .success(let second, _) = FolderScanner.scan(root: root, previous: seeded) else { return XCTFail("rescan failed") }
         XCTAssertEqual(second["items/2026/11/a.md"]?.id, "cached")
 
         let missing = FolderScanner.scan(root: root.appendingPathComponent("gone"), previous: [:])
