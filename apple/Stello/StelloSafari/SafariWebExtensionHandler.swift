@@ -30,7 +30,13 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             return ["error": "No App Group defaults"]
         }
         let saved = defaults.array(forKey: bookmarksKey) as? [[String: Any]] ?? []
-        if saved.isEmpty { return ["error": "The Stello app has not shared any folders yet (open it once)"] }
+        if saved.isEmpty {
+            let count = defaults.object(forKey: bookmarksKey + ".folderCount") as? Int
+            let problems = defaults.stringArray(forKey: bookmarksKey + ".problems") ?? []
+            let why = count == nil ? "the app hasn't shared anything yet (open it once)"
+                : "the app has \(count!) folder(s) but shared none" + (problems.isEmpty ? "" : ": " + problems.joined(separator: "; "))
+            return ["error": "No folders: " + why]
+        }
         var resolveErrors: [String] = []
         let roots: [SafariBridgeFiles.Root] = saved.compactMap { entry in
             guard let id = entry["id"] as? String, let name = entry["name"] as? String,

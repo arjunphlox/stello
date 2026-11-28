@@ -43,15 +43,26 @@ enum SafariBridge {
     static func publishBookmarks() {
         let sources = FolderSources.shared
         var out: [[String: Any]] = []
+        var problems: [String] = []
         for folder in sources.folders {
+            guard let root = sources.roots[folder.id] else {
+                problems.append("\(folder.name): not reachable"); continue
+            }
             // iPhone/iPad bookmarks carry the folder permission with them; the extension
             // (same App Group) resolves them and asks for access itself.
-            guard let root = sources.roots[folder.id],
-                  let data = try? root.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
-            else { continue }
-            out.append(["id": folder.id.uuidString, "name": folder.name, "path": root.path, "bookmark": data])
+            let scoped = root.startAccessingSecurityScopedResource()
+            defer { if scoped { root.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try root.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
+                out.append(["id": folder.id.uuidString, "name": folder.name, "path": root.path, "bookmark": data])
+            } catch {
+                problems.append("\(folder.name): \(error.localizedDescription)")
+            }
         }
-        UserDefaults(suiteName: groupID)?.set(out, forKey: bookmarksKey)
+        let defaults = UserDefaults(suiteName: groupID)
+        defaults?.set(out, forKey: bookmarksKey)
+        defaults?.set(problems, forKey: bookmarksKey + ".problems")
+        defaults?.set(sources.folders.count, forKey: bookmarksKey + ".folderCount")
     }
 
     static func handle(_ data: Data) -> Data {
