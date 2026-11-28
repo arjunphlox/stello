@@ -72,17 +72,19 @@ enum SafariBridgeFiles {
                     notDownloaded += 1
                     let real = String(name.dropFirst().dropLast(".icloud".count))
                     rel = (rel as NSString).deletingLastPathComponent + "/" + real
-                    if imageTypes[(real as NSString).pathExtension.lowercased()] != nil, images.count < 20 {
+                    if imageTypes[(real as NSString).pathExtension.lowercased()] != nil, (images.count < 20 || rel.hasPrefix("media/") && images.count < 40) {
                         images.append(rel)
                     }
                     continue
                 }
                 let ext = file.pathExtension.lowercased()
                 if ext == "md", rel.hasPrefix("items/") { items.append(rel) }
-                else if imageTypes[ext] != nil, images.count < 20 { images.append(rel) }
+                else if imageTypes[ext] != nil, (images.count < 20 || rel.hasPrefix("media/") && images.count < 40) { images.append(rel) }
             }
         }
         items.sort(by: >)
+        // Stello's own pictures (media/) first, so the test reads one of those.
+        images.sort { ($0.hasPrefix("media/") ? 0 : 1) < ($1.hasPrefix("media/") ? 0 : 1) }
         var out: [String: Any] = ["id": root.id, "name": root.name, "itemCount": items.count,
                                   "firstItems": Array(items.prefix(5)), "firstImages": Array(images.prefix(5)),
                                   "notDownloaded": notDownloaded]
