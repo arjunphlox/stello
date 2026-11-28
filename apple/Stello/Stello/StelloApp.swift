@@ -128,6 +128,7 @@ private struct RootView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     FolderSources.shared.refreshAll()
+                    FolderWriteObserver.shared.poke()
                     Task { await WebInboxProcessor.shared.processPending() }
                     Task { await SyncBridge.shared.sync() }
                 }

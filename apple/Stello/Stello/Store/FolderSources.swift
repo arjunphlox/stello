@@ -62,6 +62,8 @@ final class FolderSources {
 
     /// Per folder: relative path → (id, modified, size). Persisted in Application Support.
     var indexes: [UUID: [String: FolderIndexEntry]] = [:]
+    /// While a folder is being read: paths Stello wrote (entry) or moved away (nil) meanwhile.
+    var changedDuringScan: [UUID: [String: FolderIndexEntry?]] = [:]
     private(set) var roots: [UUID: URL] = [:]
     private static let defaultsKey = "stello.folderSources"
 
@@ -184,6 +186,7 @@ final class FolderSources {
         }
         roots[id] = root
         status[id] = .reading
+        changedDuringScan[id] = [:]
         let previous = indexes[id] ?? [:]
         Task.detached(priority: .utility) {
             let result = FolderScanner.scan(root: root, previous: previous)
@@ -196,7 +199,10 @@ final class FolderSources {
         switch result {
         case .failure(let message):
             status[id] = .unreachable(message)
-        case .success(let files, let changed):
+        case .success(var files, let changed):
+            // Writes and .trash moves Stello made while the read ran win over what it saw.
+            for (path, entry) in changedDuringScan[id] ?? [:] { files[path] = entry }
+            changedDuringScan[id] = nil
             indexes[id] = files
             folders[i].count = Self.countItems(files)
             folders[i].scannedAt = Date()

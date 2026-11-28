@@ -18,6 +18,7 @@ final class FolderWriteObserver {
 
     private var container: ModelContainer?
     private var debounce: Task<Void, Never>?
+    private var timer: Task<Void, Never>?
     private var running = false
     private var again = false
 
@@ -27,8 +28,18 @@ final class FolderWriteObserver {
         NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { FolderWriteObserver.shared.scheduleSoon() }
         }
+        // didSave doesn't fire for every save path (autosave can lag), so also look every 20 s.
+        timer = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                await self?.run()
+            }
+        }
         scheduleSoon()
     }
+
+    /// App came to the front: look now.
+    func poke() { scheduleSoon() }
 
     private func scheduleSoon() {
         debounce?.cancel()
@@ -52,9 +63,19 @@ final class FolderWriteObserver {
                 UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: Self.sinceKey)
                 return
             }
-            guard let (changes, last) = try? await Task.detached(priority: .utility, operation: {
-                try Self.scan(container: container, after: tokenData, since: Date(timeIntervalSince1970: since))
-            }).value else { return }
+            let scanned: ([(UUID, Change)], Data?)
+            do {
+                scanned = try await Task.detached(priority: .utility, operation: {
+                    try Self.scan(container: container, after: tokenData, since: Date(timeIntervalSince1970: since))
+                }).value
+            } catch {
+                folderLog.error("history read failed: \(String(describing: error), privacy: .public)")
+                return
+            }
+            let (changes, last) = scanned
+            if !changes.isEmpty {
+                folderLog.info("history: \(changes.count) item change(s), can write: \(FolderSources.shared.canWrite)")
+            }
             if let last { UserDefaults.standard.set(last, forKey: Self.tokenKey) }
             // Nothing to write to: just move the history position on.
             guard FolderSources.shared.canWrite, !changes.isEmpty else { continue }

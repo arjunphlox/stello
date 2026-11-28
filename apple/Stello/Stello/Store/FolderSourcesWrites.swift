@@ -1,5 +1,8 @@
 import Foundation
 import SwiftData
+import os
+
+let folderLog = Logger(subsystem: "com.arjunphlox.Stello", category: "folders")
 
 /// Folder writes (folder engine plan 4b, part 2; web twin: the writing half of `folders.js`).
 /// Saves and edits write the item's v2 file, deletes move copies to `.trash/<day>/`, and
@@ -60,6 +63,23 @@ extension FolderSources {
         entry.ent = ent ?? files[path]?.ent
         files[path] = entry
         indexes[folderID] = files
+        if changedDuringScan[folderID] != nil { changedDuringScan[folderID]?[path] = .some(entry) }
+    }
+
+    private func noteRemoved(_ folderID: UUID, _ path: String) {
+        indexes[folderID]?[path] = nil
+        if changedDuringScan[folderID] != nil { changedDuringScan[folderID]?[path] = .some(nil) }
+    }
+
+    /// The item's main copy: the oldest-added writable folder holding it, else the file
+    /// Stello last wrote for it (the index may not list a file written seconds ago).
+    private func mainCopy(_ itemID: UUID) -> Location? {
+        if let loc = locations(for: itemID).first(where: { isWritable($0.folderID) }) { return loc }
+        guard let w = written[itemID.uuidString.lowercased()], isWritable(w.folderID), let root = roots[w.folderID],
+              let folder = folders.first(where: { $0.id == w.folderID }) else { return nil }
+        let url = root.appendingPathComponent(w.path)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return Location(folderID: w.folderID, name: folder.name, fileURL: url)
     }
 
     private func finishWrites(_ folderIDs: Set<UUID>) {
@@ -76,7 +96,7 @@ extension FolderSources {
     /// Returns the folder-relative path written (or already up to date), nil when nothing could be.
     @discardableResult
     func write(_ item: Item) -> String? {
-        let main = locations(for: item.id).first { isWritable($0.folderID) }
+        let main = mainCopy(item.id)
         guard let folderID = main?.folderID ?? savesFolderID.flatMap({ isWritable($0) ? $0 : nil }) ?? folders.first(where: { isWritable($0.id) })?.id,
               let root = roots[folderID] else { return nil }
         let itemID = item.id.uuidString.lowercased()
@@ -123,9 +143,10 @@ extension FolderSources {
             noteIndexed(folderID, out.path, id: itemID, stat)
             written[itemID] = Written(folderID: folderID, path: out.path, modified: stat.modified, size: stat.size, extra: extra)
             finishWrites([folderID])
+            folderLog.info("wrote \(out.path, privacy: .public) (\(existing == nil ? "new" : "update", privacy: .public))")
             return out.path
         } catch {
-            print("⚠️ Folder write failed for \(itemID): \(error)")
+            folderLog.error("write failed \(itemID, privacy: .public): \(String(describing: error), privacy: .public)")
             return nil
         }
     }
@@ -155,17 +176,22 @@ extension FolderSources {
     func trash(itemID: UUID) {
         let id = itemID.uuidString.lowercased()
         var touched = Set<UUID>()
-        for loc in locations(for: itemID) where isWritable(loc.folderID) {
+        var locs = locations(for: itemID).filter { isWritable($0.folderID) }
+        if locs.isEmpty, let main = mainCopy(itemID) { locs = [main] }
+        if locs.isEmpty { folderLog.info("delete \(id, privacy: .public): no copy in a writable folder") }
+        for loc in locs {
             guard let root = roots[loc.folderID], let rel = relativePath(loc, root: root) else { continue }
             let file = root.appendingPathComponent(rel)
             let media = FolderFiles.read(file).flatMap { FolderWriter.readCopy($0.text) }.map { Self.mediaFiles(of: $0, at: rel) } ?? []
             do {
                 try FolderFiles.move(file, to: root.appendingPathComponent(FolderWriter.trashPath(rel)))
                 for m in media { try? FolderFiles.move(root.appendingPathComponent(m), to: root.appendingPathComponent(FolderWriter.trashPath(m))) }
-                indexes[loc.folderID]?[rel] = nil
+                noteRemoved(loc.folderID, rel)
+                for m in media { noteRemoved(loc.folderID, m) }
                 touched.insert(loc.folderID)
+                folderLog.info("moved \(rel, privacy: .public) to .trash")
             } catch {
-                print("⚠️ Move to .trash failed for \(rel): \(error)")
+                folderLog.error("move to .trash failed \(rel, privacy: .public): \(String(describing: error), privacy: .public)")
             }
         }
         var w = written; w[id] = nil; written = w

@@ -171,6 +171,8 @@
   let lookup = new Map();
   let ready = null;
   const scanning = new Set();
+  // While a folder is being read: paths Stello wrote (entry) or moved away (null) meanwhile.
+  const duringScan = new Map();
 
   function emit() {
     lookup = buildLookup(folders, indexes);
@@ -274,6 +276,7 @@
     const folder = folders.find((f) => f.id === folderId);
     if (!folder || scanning.has(folderId)) return;
     scanning.add(folderId);
+    duringScan.set(folderId, new Map());
     folder.status = 'reading';
     folder.error = null;
     emit();
@@ -312,6 +315,8 @@
     try {
       await walk(folder.handle, '');
       await flush();
+      // Writes and .trash moves Stello made while the read ran win over what it saw.
+      for (const [path, entry] of duringScan.get(folderId) || []) { if (entry) files[path] = entry; else delete files[path]; }
       indexes[folderId] = { id: folderId, files };
       folder.count = countItems(files);
       folder.scannedAt = Date.now();
@@ -324,6 +329,7 @@
       folder.error = e && e.name === 'NotFoundError' ? 'Not reachable. It may have moved: use Replace.' : 'Not reachable right now.';
     } finally {
       scanning.delete(folderId);
+      duringScan.delete(folderId);
       emit();
     }
     if (folder.status === 'granted') {
@@ -365,6 +371,7 @@
   function noteIndexed(folderId, path, id, stat) {
     const ix = indexes[folderId] || (indexes[folderId] = { id: folderId, files: {} });
     ix.files[path] = { ...(ix.files[path] || {}), id, mtime: stat.mtime, size: stat.size };
+    if (duringScan.has(folderId)) duringScan.get(folderId).set(path, ix.files[path]);
   }
 
   /** Copies an item's images into media/ (skipping ones already there). */
@@ -544,6 +551,7 @@
           await moveFile(folder.handle, l.path, W.trashPath(l.path));
           for (const m of media) { try { await moveFile(folder.handle, m, W.trashPath(m)); } catch { /* already gone */ } }
           delete indexes[folder.id].files[l.path];
+          if (duringScan.has(folder.id)) duringScan.get(folder.id).set(l.path, null);
           folder.count = countItems(indexes[folder.id].files);
           await put('indexes', indexes[folder.id]);
           moved++;
