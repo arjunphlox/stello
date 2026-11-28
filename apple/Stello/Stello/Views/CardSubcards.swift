@@ -749,7 +749,10 @@ struct CardSubcards: View {
         let sources = folderSources
         let rows: [(label: String, value: String, url: URL?, action: (() -> Void)?)] =
             sources.locations(for: item.id).map { loc in
-                (label: "Folder", value: loc.name, url: nil, action: { sources.reveal(loc) })
+                // A file of the person's own that lists the item's link (part 3): "Found in", its file name.
+                loc.found
+                    ? (label: "Found in", value: loc.fileURL.lastPathComponent, url: nil, action: { sources.reveal(loc) })
+                    : (label: "Folder", value: loc.name, url: nil, action: { sources.reveal(loc) })
             }
         if !rows.isEmpty { content.rows.insert(contentsOf: rows, at: max(0, content.rows.count - 1)) }
         return content

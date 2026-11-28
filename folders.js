@@ -16,6 +16,10 @@
  *     than 30 days are cleared on the next read.
  *   - The first time writes are possible on this browser, Stello only records what
  *     each item looks like (a baseline), so turning writes on never rewrites the folder.
+ *   - Part 3: per folder, asked on Add, Stello also reads the person's own Markdown, text,
+ *     CSV, bookmark and link files (src/lib/folder-ingest.js). Each new link becomes a plain
+ *     link item, the same id on every device; a link already saved gains a "Found in" row.
+ *     Those files are never written, moved or trashed (`copiesOf` leaves them out).
  *
  * Folders open through File System Access, so this works in Chrome, Edge and
  * Arc on a computer. Google Drive and Dropbox come in phase 3. Folder handles
@@ -70,11 +74,20 @@
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
   }
 
-  /** Library items a folder holds: people and places files that aren't saves don't count. */
-  function countItems(files) {
+  /**
+   * Library items a folder holds: people and places files that aren't saves don't count.
+   * `found` = the person's own files read for links ({ path: { links: [{ key, id }] } }).
+   */
+  function countItems(files, found) {
     const ids = new Set();
     for (const e of Object.values(files || {})) if (e && isLibraryId(e.id)) ids.add(e.id.toLowerCase());
+    for (const rec of Object.values(found || {})) for (const l of (rec && rec.links) || []) if (isLibraryId(l.id)) ids.add(l.id.toLowerCase());
     return ids.size;
+  }
+
+  /** The person's own files a folder reads links from (part 3), when it reads them. */
+  function ingestFile(name) {
+    return !!name && !name.startsWith('.') && /\.(md|markdown|txt|webloc|url|csv|html?)$/i.test(name);
   }
 
   /** The folder that takes new saves: the one marked, else the oldest-added. */
@@ -90,18 +103,28 @@
 
   /**
    * Item id → folders that hold it, in the order the folders were added.
-   * `folders` = [{ id, name, addedAt }], `indexes` = { folderId: { path: { id } } }.
+   * `folders` = [{ id, name, addedAt }], `indexes` = { folderId: { files: { path: { id } }, found? } }.
+   * A Stello file is a copy ({ folderId, name, path }); a file of the person's own that
+   * lists the item's link is marked `found: true` (Stello never writes or moves those).
    */
   function buildLookup(folders, indexes) {
     const byItem = new Map();
     const ordered = folders.slice().sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+    const note = (id, loc) => {
+      let list = byItem.get(id);
+      if (!list) byItem.set(id, (list = []));
+      if (!list.some((x) => x.folderId === loc.folderId && !!x.found === !!loc.found)) list.push(loc);
+    };
     for (const f of ordered) {
       const files = (indexes[f.id] && indexes[f.id].files) || {};
       for (const [path, entry] of Object.entries(files)) {
-        if (!entry || !entry.id) continue;
-        let list = byItem.get(entry.id);
-        if (!list) byItem.set(entry.id, (list = []));
-        if (!list.some((x) => x.folderId === f.id)) list.push({ folderId: f.id, name: f.name, path });
+        if (entry && entry.id) note(entry.id, { folderId: f.id, name: f.name, path });
+      }
+    }
+    for (const f of ordered) {
+      const found = (indexes[f.id] && indexes[f.id].found) || {};
+      for (const [path, rec] of Object.entries(found)) {
+        for (const l of (rec && rec.links) || []) if (l && l.id) note(l.id, { folderId: f.id, name: f.name, path, found: true });
       }
     }
     return byItem;
@@ -120,7 +143,7 @@
     return `${d} day${d === 1 ? '' : 's'} ago`;
   }
 
-  const pure = { headerId, headerEntity, isLibraryId, countItems, savesFolder, skipDir, buildLookup, agoLabel };
+  const pure = { headerId, headerEntity, isLibraryId, countItems, ingestFile, savesFolder, skipDir, buildLookup, agoLabel };
   if (typeof window === 'undefined') {
     if (typeof module !== 'undefined') module.exports = pure;
     return;
@@ -188,7 +211,7 @@
           indexes = Object.fromEntries((ix || []).map((x) => [x.id, x]));
           for (const folder of folders) {
             folder.status = await permission(folder, false);
-            if (indexes[folder.id]) folder.count = countItems(indexes[folder.id].files);
+            if (indexes[folder.id]) folder.count = countItems(indexes[folder.id].files, indexes[folder.id].found);
           }
         } catch (e) {
           console.warn('[folders] could not open the folder list', e);
@@ -268,6 +291,12 @@
     if (!writer) writer = import(new URL('lib/folder-write.js', document.baseURI).href);
     return writer;
   }
+  let ingester = null;
+  /** The shared reader of the person's own files (src/lib/folder-ingest.js). */
+  function ingestLib() {
+    if (!ingester) ingester = import(new URL('lib/folder-ingest.js', document.baseURI).href);
+    return ingester;
+  }
 
   // ---------------------------------------------------------- scanning
 
@@ -281,20 +310,34 @@
     folder.error = null;
     emit();
     const prev = (indexes[folderId] && indexes[folderId].files) || {};
+    const prevFound = (indexes[folderId] && indexes[folderId].found) || {};
+    const ingest = !!folder.ingest;
     const files = {};
+    // The person's own files (part 3, when the folder reads them): unchanged ones keep
+    // their links; changed ones are marked stale and read in full by ingestFolder.
+    const found = {};
     const changed = new Set();
     let pending = [];
+    const maybeFound = (path, file) => {
+      if (!ingest || file.size > 20 * 1024 * 1024) return;
+      const old = prevFound[path];
+      if (old && old.mtime === file.lastModified && old.size === file.size && !old.stale) { found[path] = old; return; }
+      found[path] = { mtime: file.lastModified, size: file.size, links: (old && old.links) || [], stale: true };
+    };
     const flush = async () => {
       const batch = pending; pending = [];
       await Promise.all(batch.map(async ({ path, handle }) => {
         try {
           const file = await handle.getFile();
+          if (!path.endsWith('.md')) { maybeFound(path, file); return; }
           const old = prev[path];
           const isEntity = /^(people|places)\//.test(path);
           if (old && old.mtime === file.lastModified && old.size === file.size && !(isEntity && !old.ent)) { files[path] = old; return; }
+          const kept = prevFound[path];
+          if (kept && kept.mtime === file.lastModified && kept.size === file.size && !kept.stale) { if (ingest) found[path] = kept; return; }
           const head = await file.slice(0, 4096).text();
           const id = headerId(head);
-          if (!id) return;
+          if (!id) { maybeFound(path, file); return; }
           const entry = { id, mtime: file.lastModified, size: file.size };
           if (isEntity) entry.ent = headerEntity(head);
           files[path] = entry;
@@ -306,7 +349,7 @@
       for await (const [name, handle] of dir.entries()) {
         if (handle.kind === 'directory') {
           if (!skipDir(name)) await walk(handle, `${prefix}${name}/`);
-        } else if (name.endsWith('.md') && !name.startsWith('.')) {
+        } else if ((name.endsWith('.md') && !name.startsWith('.')) || (ingest && ingestFile(name))) {
           pending.push({ path: `${prefix}${name}`, handle });
           if (pending.length >= 48) await flush();
         }
@@ -317,8 +360,8 @@
       await flush();
       // Writes and .trash moves Stello made while the read ran win over what it saw.
       for (const [path, entry] of duringScan.get(folderId) || []) { if (entry) files[path] = entry; else delete files[path]; }
-      indexes[folderId] = { id: folderId, files };
-      folder.count = countItems(files);
+      indexes[folderId] = { id: folderId, files, found };
+      folder.count = countItems(files, found);
       folder.scannedAt = Date.now();
       folder.status = 'granted';
       await put('indexes', indexes[folderId]);
@@ -335,7 +378,106 @@
     if (folder.status === 'granted') {
       clearTrash(folder).catch((e) => console.warn('[folders] trash clear-out failed', e));
       if (changed.size) mergeCopies(changed, folderId).catch((e) => console.warn('[folders] merge failed', e));
+      if (folder.ingest) ingestFolder(folderId).catch((e) => console.warn('[folders] reading files failed', e));
     }
+  }
+
+  // ---------------------------------------------------------- the person's own files (part 3)
+
+  // The app hands over the library once it is fully in memory: { items(), push(changes), added(rows) }.
+  let host = null;
+  const ingesting = new Set();
+  const ingestAgain = new Set();
+
+  /** The library is in memory: read the files of folders that turn them into items. */
+  function setLibrary(h) {
+    host = h;
+    for (const f of folders) if (f.ingest && indexes[f.id]) ingestFolder(f.id).catch((e) => console.warn('[folders] reading files failed', e));
+  }
+
+  /**
+   * Reads the changed files of a folder that turns its other files into items, and adds
+   * an item for every link the library doesn't hold yet (no AI, no page reads: plain links
+   * the Mac sorts later). A link already saved just gains this file in its Folder row.
+   * A link that leaves a file keeps its item (Arjun's pick); only the Folder row goes.
+   */
+  async function ingestFolder(folderId) {
+    const folder = folders.find((f) => f.id === folderId);
+    const ix = indexes[folderId];
+    if (!host || !folder || !folder.ingest || !ix || !ix.found || !folder.handle) return 0;
+    if (ingesting.has(folderId)) { ingestAgain.add(folderId); return 0; }
+    const stale = Object.entries(ix.found).filter(([, r]) => r.stale);
+    if (!stale.length) return 0;
+    ingesting.add(folderId);
+    let made = 0;
+    try {
+      const I = await ingestLib();
+      const byKey = new Map();
+      const ids = new Set();
+      for (const it of host.items()) {
+        if (!it || !it.id) continue;
+        ids.add(String(it.id).toLowerCase());
+        if (it.source_url) byKey.set(I.normaliseUrl(it.source_url), it.id);
+      }
+      const now = new Date().toISOString();
+      const fresh = new Map();
+      const undo = [];
+      for (const [path, rec] of stale) {
+        const r = await readText(folder.handle, path);
+        if (!r) continue;
+        const before = new Set((rec.links || []).map((l) => l.key));
+        const links = I.readLinks(path, r.text, { modified: r.mtime });
+        const out = [];
+        for (const l of links) {
+          let id = byKey.get(l.key);
+          if (!id) {
+            id = await I.linkItemId(l.key);
+            // A link this file listed before whose item was deleted in Stello stays deleted.
+            if (!ids.has(id) && !before.has(l.key) && !fresh.has(id)) fresh.set(id, I.linkChange(l, { id, now }));
+          }
+          out.push({ key: l.key, id });
+        }
+        undo.push([path, rec]);
+        ix.found[path] = { mtime: r.mtime, size: r.size, links: out };
+      }
+      // New items go up 100 at a time. Their clock is the oldest possible, so a link another
+      // device already made into an item (and maybe sorted) is never overwritten.
+      const changes = [...fresh.values()].map((c) => ({ ...c, clock: 1 }));
+      try {
+        for (let i = 0; i < changes.length; i += 100) {
+          const batch = changes.slice(i, i + 100);
+          const res = await host.push(batch);
+          if (!res || !Array.isArray(res.results)) throw new Error('push failed');
+          const applied = new Set(res.results.filter((x) => x.status === 'applied').map((x) => x.id));
+          const rows = batch.filter((c) => applied.has(c.id)).map((c) => ({ id: c.id, ...c.fields }));
+          if (rows.length) { made += rows.length; host.added(rows); }
+        }
+      } catch (e) {
+        // Offline or signed out: the files stay to read next time (a re-sent link is a no-op).
+        for (const [path, rec] of undo) ix.found[path] = rec;
+        throw e;
+      }
+      folder.count = countItems(ix.files, ix.found);
+      await put('indexes', ix);
+      await saveFolder(folder);
+      emit();
+    } finally {
+      ingesting.delete(folderId);
+    }
+    if (ingestAgain.delete(folderId)) made += await ingestFolder(folderId);
+    return made;
+  }
+
+  /** Turn reading the folder's other files on or off. Off keeps the items already made. */
+  async function setIngest(folderId, on) {
+    await load();
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder || !!folder.ingest === !!on) return;
+    folder.ingest = !!on;
+    if (!on && indexes[folderId]) { delete indexes[folderId].found; await put('indexes', indexes[folderId]); }
+    await saveFolder(folder);
+    emit();
+    if (on && folder.status === 'granted') scan(folderId);
   }
 
   /** Removes .trash/<day> folders older than 30 days. */
@@ -393,7 +535,7 @@
    */
   async function writeItem(item, fp) {
     const W = await lib();
-    const where = foldersFor(item.id).find((l) => writable(folders.find((f) => f.id === l.folderId)));
+    const where = copiesOf(item.id).find((l) => writable(folders.find((f) => f.id === l.folderId)));
     const target = where ? folders.find((f) => f.id === where.folderId) : savesFolder(folders.filter(writable));
     if (!target || !writable(target)) return null;
     const root = target.handle;
@@ -438,7 +580,7 @@
     noteIndexed(target.id, out.path, item.id, stat);
     await put('written', { id: item.id, fp, folderId: target.id, path: out.path, mtime: stat.mtime, size: stat.size, extra });
     await put('indexes', indexes[target.id]);
-    target.count = countItems(indexes[target.id].files);
+    target.count = countItems(indexes[target.id].files, indexes[target.id].found);
     return { folderId: target.id, path: out.path };
   }
 
@@ -504,7 +646,7 @@
       const W = await lib();
       let merged = 0;
       for (const id of ids) {
-        const locs = foldersFor(id).filter((l) => writable(folders.find((f) => f.id === l.folderId)));
+        const locs = copiesOf(id).filter((l) => writable(folders.find((f) => f.id === l.folderId)));
         if (locs.length < 2 || locs[0].folderId === changedFolderId || !locs.some((l) => l.folderId === changedFolderId)) continue;
         const main = folders.find((f) => f.id === locs[0].folderId);
         const first = await readText(main.handle, locs[0].path);
@@ -529,7 +671,7 @@
 
   /** Deleted in Stello: every copy goes to its own folder's .trash/<day>/, with its images. */
   function itemDeleted(itemId) {
-    const locs = foldersFor(itemId);
+    const locs = copiesOf(itemId);
     if (!locs.length) return Promise.resolve(0);
     return serial(async () => {
       const W = await lib();
@@ -552,7 +694,7 @@
           for (const m of media) { try { await moveFile(folder.handle, m, W.trashPath(m)); } catch { /* already gone */ } }
           delete indexes[folder.id].files[l.path];
           if (duringScan.has(folder.id)) duringScan.get(folder.id).set(l.path, null);
-          folder.count = countItems(indexes[folder.id].files);
+          folder.count = countItems(indexes[folder.id].files, indexes[folder.id].found);
           await put('indexes', indexes[folder.id]);
           moved++;
         } catch (e) {
@@ -587,16 +729,23 @@
     return null;
   }
 
-  /** Add a folder: pick, remember, read. Returns the folder, or null when cancelled. */
-  async function add() {
+  /**
+   * Add a folder: pick, then `choose(name)` asks what to read from it (resolves true for
+   * "also its other files", false for Stello items only, null to cancel), remember, read.
+   * Returns the folder, a clash, or null when cancelled.
+   */
+  async function add(choose) {
     await load();
     const handle = await pick();
     if (!handle) return null;
     const clash = await sameAsExisting(handle);
     if (clash) return clash;
+    const ingest = typeof choose === 'function' ? await choose(handle.name) : false;
+    if (ingest == null) return null;
     const folder = {
       id: (crypto.randomUUID && crypto.randomUUID()) || `f-${Date.now()}`,
       name: handle.name, handle, addedAt: Date.now(), takesSaves: !folders.length, count: 0, scannedAt: 0, status: 'granted',
+      ingest: !!ingest,
     };
     folders.push(folder);
     await saveFolder(folder);
@@ -659,16 +808,21 @@
     return folders
       .slice()
       .sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0))
-      .map(({ handle, ...f }) => ({ ...f, takesSaves: !!saves && saves.id === f.id, reading: scanning.has(f.id) }));
+      .map(({ handle, ...f }) => ({ ...f, ingest: !!f.ingest, takesSaves: !!saves && saves.id === f.id, reading: scanning.has(f.id) || ingesting.has(f.id) }));
   }
 
-  /** Folders holding an item: [{ folderId, name, path }], oldest-added folder first. */
+  /** Folders holding an item: [{ folderId, name, path, found? }], oldest-added folder first. */
   function foldersFor(itemId) {
     return (itemId && lookup.get(itemId)) || [];
   }
 
+  /** Only the item's Stello files: the person's own files are never written or moved. */
+  function copiesOf(itemId) {
+    return foldersFor(itemId).filter((l) => !l.found);
+  }
+
   root.StelloFolders = {
     supported, load, list, add, replace, remove, reconnect, rescan: scan, foldersFor, agoLabel,
-    setSavesFolder, itemChanged, itemDeleted, syncLibrary,
+    setSavesFolder, itemChanged, itemDeleted, syncLibrary, setLibrary, setIngest,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

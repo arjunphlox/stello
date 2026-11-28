@@ -3530,3 +3530,6 @@ html.is-carrying .header { visibility: hidden; }
 }
 .settings-folder-action:hover { text-decoration: underline; }
 .settings-folder-action[data-act="remove"] { color: var(--text-dim); }
+/* Part 3: asked once per folder on Add (Stello items only, or also its other files). */
+.settings-folder-ask { display: flex; flex-direction: column; gap: 8px; }
+.settings-folder-ask .settings-hint { margin: 0; }

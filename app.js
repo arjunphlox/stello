@@ -385,6 +385,8 @@
       if (window.StelloFolders && window.StelloFolders.supported) {
         window.StelloFolders.load().then(() => window.StelloFolders.syncLibrary(allItems))
           .catch(err => console.warn('[folders] library write failed', err));
+        // Part 3: folders that turn their other files into items read them now.
+        window.StelloFolders.setLibrary({ items: () => allItems, push: pushNewItems, added: addFolderItems });
       }
       if (!Offline) return;
       const run = () => {
@@ -688,6 +690,30 @@
       image_width,
       image_height,
     };
+  }
+
+  /** New items from a folder's own files (folders.js), sent like an Apple sync push. */
+  async function pushNewItems(changes) {
+    const res = await apiFetch('/api/sync/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ changes }),
+    });
+    if (!res.ok) throw new Error(`push ${res.status}`);
+    return res.json();
+  }
+
+  /** Items made from a folder's own files: into the grid at their dates, then written like any save. */
+  function addFolderItems(rows) {
+    const fresh = rows.map(normalizeItem).filter(item => !itemsBySlug[item.slug]);
+    if (!fresh.length) return;
+    for (const item of fresh) { allItems.push(item); itemsBySlug[item.slug] = item; }
+    sortItemsByAddedAt(allItems);
+    buildRelatedIndex();
+    renderStats();
+    renderGrid({ stagger: false });
+    fresh.forEach(folderWrite);
+    showToast(`Added ${fresh.length.toLocaleString()} item${fresh.length === 1 ? '' : 's'} from folder files`);
   }
 
   /** A save or edit: write the item's file in its folder (folders.js decides if anything changed). */
@@ -1693,7 +1719,8 @@
     return `<dl class="sub-facts">${rows.map(r => `<div class="sub-fact">
       <dt>${escHtml(r.label)}</dt>
       <dd>${r.folder
-        ? `<button type="button" class="sub-fact-link js-folder-path" data-path="${escAttr(r.value + (r.folder.path ? '/' + r.folder.path : ''))}" title="${escAttr(r.value + (r.folder.path ? '/' + r.folder.path : ''))}">${escHtml(r.value)}</button>`
+        ? (() => { const full = (r.folder.found ? r.folder.name : r.value) + (r.folder.path ? '/' + r.folder.path : '');
+            return `<button type="button" class="sub-fact-link js-folder-path" data-path="${escAttr(full)}" title="${escAttr(full)}">${escHtml(r.value)}</button>`; })()
         : r.url
         ? `<a href="${escAttr(r.url)}" target="_blank" rel="noopener" title="${escAttr(r.url)}">${escHtml(r.value)}</a>`
         : escHtml(r.value)}</dd>
@@ -3361,11 +3388,15 @@
             : `${(f.count || 0).toLocaleString()} item${f.count === 1 ? '' : 's'} · read ${F.agoLabel(f.scannedAt)}`;
           const saves = f.takesSaves ? '<span class="settings-folder-saves">New saves go here</span>'
             : rows.length > 1 ? '<button type="button" class="settings-folder-action settings-folder-saves-btn" data-act="saves">Use for new saves</button>' : '';
+          // Part 3: per folder, Stello items only or also the person's own files.
+          const reads = `<span class="settings-folder-meta">${f.ingest ? 'Stello items and other files' : 'Stello items only'}</span>
+              <button type="button" class="settings-folder-action settings-folder-saves-btn" data-act="ingest">${f.ingest ? 'Only read Stello items' : 'Also read other files'}</button>`;
           return `<div class="settings-theme-row settings-folder" data-folder="${escAttr(f.id)}">
             <div class="settings-folder-text">
               <span class="settings-folder-name">${escHtml(f.name)}</span>
               <span class="settings-folder-meta">${escHtml(state)}</span>
               ${saves}
+              ${reads}
             </div>
             <div class="settings-folder-actions">
               ${f.status === 'needs-access' ? '<button type="button" class="settings-folder-action" data-act="reconnect">Allow</button>' : ''}
@@ -3385,9 +3416,31 @@
       };
       document.addEventListener('stello:folderschange', paint);
       if (F && F.supported) F.load().then(paint); else paint();
+      // Asked once per folder, right after picking it: Stello items only, or also its other files.
+      const OTHER_FILES = 'Markdown, text, CSV, bookmark and link files';
+      const chooseReads = (name) => new Promise((resolve) => {
+        const $ask = document.createElement('div');
+        $ask.className = 'settings-folder-ask';
+        $ask.innerHTML = `<span class="settings-folder-name">What should Stello read from ${escHtml(name)}?</span>
+          <div class="settings-actions">
+            <button type="button" class="settings-save" data-reads="items">Stello items only</button>
+            <button type="button" class="settings-save" data-reads="all">Also its other files</button>
+            <button type="button" class="settings-folder-action" data-reads="cancel">Cancel</button>
+          </div>
+          <p class="settings-hint">Other files are its ${OTHER_FILES}: every link in them becomes an item, kept up to date as the files change. Stello never edits or moves them.</p>`;
+        $list.after($ask);
+        $add.hidden = true;
+        $ask.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-reads]');
+          if (!b) return;
+          $ask.remove();
+          $add.hidden = false;
+          resolve(b.dataset.reads === 'cancel' ? null : b.dataset.reads === 'all');
+        });
+      });
       $add.addEventListener('click', async () => {
         try {
-          const r = await F.add();
+          const r = await F.add(chooseReads);
           if (r) folderClashToast(r);
         } catch { showToast('Couldn’t open that folder'); }
       });
@@ -3399,6 +3452,11 @@
         try {
           if (b.dataset.act === 'reconnect') await F.reconnect(id);
           if (b.dataset.act === 'saves') await F.setSavesFolder(id);
+          if (b.dataset.act === 'ingest') {
+            const on = !F.list().find(f => f.id === id)?.ingest;
+            await F.setIngest(id, on);
+            showToast(on ? 'Reading its other files: their links become items' : 'Stello items only. Items already made stay.');
+          }
           if (b.dataset.act === 'replace') {
             const r = await F.replace(id);
             if (r) folderClashToast(r);

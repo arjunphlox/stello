@@ -186,7 +186,9 @@
           "path": "Store",
           "children": [
             { "path": "AwaitingReviewFilter.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "FolderIngest.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "FolderSources.swift", "target-membership": [ "Stello/compile-sources" ] },
+            { "path": "FolderSourcesIngest.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "FolderSourcesWrites.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "FolderWriteObserver.swift", "target-membership": [ "Stello/compile-sources" ] },
             { "path": "FolderWriter.swift", "target-membership": [ "Stello/compile-sources" ] },
@@ -269,6 +271,8 @@
         { "path": "CourseKindTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "DropImportTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "EnrichmentTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "FolderIngestFixtures.swift", "target-membership": [ "StelloTests/compile-sources" ] },
+        { "path": "FolderIngestTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "FolderSourcesTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "FolderWriteFixtures.swift", "target-membership": [ "StelloTests/compile-sources" ] },
         { "path": "FolderWriterTests.swift", "target-membership": [ "StelloTests/compile-sources" ] },

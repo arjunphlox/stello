@@ -26,6 +26,9 @@ final class FolderWriteObserver {
     func start(container: ModelContainer) {
         guard self.container == nil else { return }
         self.container = container
+        // Part 3: items made from a folder's own files are saved here; read any waiting now.
+        FolderSources.shared.modelContainer = container
+        FolderSources.shared.ingestAll()
         NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { FolderWriteObserver.shared.scheduleSoon() }
         }

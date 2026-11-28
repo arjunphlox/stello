@@ -1,0 +1,871 @@
+{
+ "cases": [
+  {
+   "path": "Reading notes/links.md",
+   "text": "---\ntitle: Front matter is skipped\nurl: https://skip.example/front\n---\n# Reading list\n## Type & Lettering\n- [Atlas of Type](https://atlasoftype.com/?utm_source=tw) — great index of foundries\n- https://kometa.xyz/fonts. Lovely futuristic ones\n* [ ] Check <https://example.org/a_(b)> later\n![a picture](https://img.example/x.png)\n```\nhttps://code.example/skip\n```\n## Tools\n1. Use (https://linear.app) for planning\n2. [Atlas again](https://www.atlasoftype.com/) dupes merge\nTwo on a line: https://a.example/one and https://b.example/two",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "markdown",
+    "links": [
+     {
+      "url": "https://atlasoftype.com/?utm_source=tw",
+      "key": "https://atlasoftype.com",
+      "title": "Atlas of Type",
+      "note": "great index of foundries",
+      "summary": null,
+      "tags": [
+       "reading-list",
+       "type-lettering",
+       "tools"
+      ],
+      "added": "2025-11-28T08:00:00.000Z"
+     },
+     {
+      "url": "https://kometa.xyz/fonts",
+      "key": "https://kometa.xyz/fonts",
+      "title": null,
+      "note": "Lovely futuristic ones",
+      "summary": null,
+      "tags": [
+       "reading-list",
+       "type-lettering"
+      ],
+      "added": "2025-11-28T08:00:00.000Z"
+     },
+     {
+      "url": "https://example.org/a_(b)",
+      "key": "https://example.org/a_(b)",
+      "title": null,
+      "note": "Check later",
+      "summary": null,
+      "tags": [
+       "reading-list",
+       "type-lettering"
+      ],
+      "added": "2025-11-28T08:00:00.000Z"
+     },
+     {
+      "url": "https://linear.app",
+      "key": "https://linear.app",
+      "title": null,
+      "note": "Use for planning",
+      "summary": null,
+      "tags": [
+       "reading-list",
+       "tools"
+      ],
+      "added": "2025-11-28T08:00:00.000Z"
+     },
+     {
+      "url": "https://a.example/one",
+      "key": "https://a.example/one",
+      "title": null,
+      "note": null,
+      "summary": null,
+      "tags": [
+       "reading-list",
+       "tools"
+      ],
+      "added": "2025-11-28T08:00:00.000Z"
+     },
+     {
+      "url": "https://b.example/two",
+      "key": "https://b.example/two",
+      "title": null,
+      "note": null,
+      "summary": null,
+      "tags": [
+       "reading-list",
+       "tools"
+      ],
+      "added": "2025-11-28T08:00:00.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "859a095f-dbaf-8c4b-a019-01a0e2747389",
+      "change": {
+       "id": "859a095f-dbaf-8c4b-a019-01a0e2747389",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "atlas-of-type-859a09",
+        "title": "Atlas of Type",
+        "source_url": "https://atlasoftype.com/?utm_source=tw",
+        "domain": "atlasoftype.com",
+        "summary": null,
+        "body_markdown": "great index of foundries",
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [
+         {
+          "tag": "reading-list",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "type-lettering",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "tools",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     },
+     {
+      "id": "ebcde594-2541-8812-a2f8-82eab732c2ad",
+      "change": {
+       "id": "ebcde594-2541-8812-a2f8-82eab732c2ad",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "kometa-xyz-ebcde5",
+        "title": "kometa.xyz",
+        "source_url": "https://kometa.xyz/fonts",
+        "domain": "kometa.xyz",
+        "summary": null,
+        "body_markdown": "Lovely futuristic ones",
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [
+         {
+          "tag": "reading-list",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "type-lettering",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     },
+     {
+      "id": "deed498e-1db2-83df-9fb0-fae8db12c4eb",
+      "change": {
+       "id": "deed498e-1db2-83df-9fb0-fae8db12c4eb",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "example-org-deed49",
+        "title": "example.org",
+        "source_url": "https://example.org/a_(b)",
+        "domain": "example.org",
+        "summary": null,
+        "body_markdown": "Check later",
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [
+         {
+          "tag": "reading-list",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "type-lettering",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     },
+     {
+      "id": "69f7d348-1799-8673-a990-6ff558195587",
+      "change": {
+       "id": "69f7d348-1799-8673-a990-6ff558195587",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "linear-app-69f7d3",
+        "title": "linear.app",
+        "source_url": "https://linear.app",
+        "domain": "linear.app",
+        "summary": null,
+        "body_markdown": "Use for planning",
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [
+         {
+          "tag": "reading-list",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "tools",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     },
+     {
+      "id": "88bf699a-b7a3-85d6-a4d4-7088b5b6b77d",
+      "change": {
+       "id": "88bf699a-b7a3-85d6-a4d4-7088b5b6b77d",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "a-example-88bf69",
+        "title": "a.example",
+        "source_url": "https://a.example/one",
+        "domain": "a.example",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [
+         {
+          "tag": "reading-list",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "tools",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     },
+     {
+      "id": "031e23cd-860b-8eeb-8416-533a18d321fb",
+      "change": {
+       "id": "031e23cd-860b-8eeb-8416-533a18d321fb",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "b-example-031e23",
+        "title": "b.example",
+        "source_url": "https://b.example/two",
+        "domain": "b.example",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [
+         {
+          "tag": "reading-list",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "tools",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "plain.txt",
+   "text": "Café notes\nhttps://cafe.example/menu?ref=nav great coffee!\n",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "markdown",
+    "links": [
+     {
+      "url": "https://cafe.example/menu?ref=nav",
+      "key": "https://cafe.example/menu",
+      "title": null,
+      "note": "great coffee!",
+      "summary": null,
+      "tags": [],
+      "added": "2025-11-28T08:00:00.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "96791633-02d6-849b-a770-b8997394019c",
+      "change": {
+       "id": "96791633-02d6-849b-a770-b8997394019c",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "cafe-example-967916",
+        "title": "cafe.example",
+        "source_url": "https://cafe.example/menu?ref=nav",
+        "domain": "cafe.example",
+        "summary": null,
+        "body_markdown": "great coffee!",
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "Raindrop export.csv",
+   "text": "﻿title,note,excerpt,url,folder,tags,created\n\"Hello, world\",\"my \"\"note\"\"\",A description,https://a.com/x,Design/Type,\"serif, display\",2025-03-01T10:00:00Z\nB,,,https://b.com,Unsorted,,1700000000\nNo link,,,,,,\n",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "csv",
+    "links": [
+     {
+      "url": "https://a.com/x",
+      "key": "https://a.com/x",
+      "title": "Hello, world",
+      "note": "my \"note\"",
+      "summary": "A description",
+      "tags": [
+       "design",
+       "type",
+       "serif",
+       "display"
+      ],
+      "added": "2025-03-01T10:00:00.000Z"
+     },
+     {
+      "url": "https://b.com",
+      "key": "https://b.com",
+      "title": "B",
+      "note": null,
+      "summary": null,
+      "tags": [],
+      "added": "2023-11-14T22:13:20.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "34de1c80-6aff-8f26-b268-3ca7c131ac03",
+      "change": {
+       "id": "34de1c80-6aff-8f26-b268-3ca7c131ac03",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "hello-world-34de1c",
+        "title": "Hello, world",
+        "source_url": "https://a.com/x",
+        "domain": "a.com",
+        "summary": "A description",
+        "body_markdown": "my \"note\"",
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-03-01T10:00:00.000Z",
+        "tags": [
+         {
+          "tag": "design",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "type",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "serif",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "display",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     },
+     {
+      "id": "48fb125d-2938-8894-9e98-97a270b4ef7b",
+      "change": {
+       "id": "48fb125d-2938-8894-9e98-97a270b4ef7b",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "b-48fb12",
+        "title": "B",
+        "source_url": "https://b.com",
+        "domain": "b.com",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2023-11-14T22:13:20.000Z",
+        "tags": [],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "pocket.csv",
+   "text": "title;url;time_added;tags;status\nArticle;https://pocket.example/a;1600000000;read|later;unread\n",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "csv",
+    "links": [
+     {
+      "url": "https://pocket.example/a",
+      "key": "https://pocket.example/a",
+      "title": "Article",
+      "note": null,
+      "summary": null,
+      "tags": [
+       "read",
+       "later"
+      ],
+      "added": "2020-09-13T12:26:40.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "ed4e0afb-4733-8cc2-829a-d5185260d40c",
+      "change": {
+       "id": "ed4e0afb-4733-8cc2-829a-d5185260d40c",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "article-ed4e0a",
+        "title": "Article",
+        "source_url": "https://pocket.example/a",
+        "domain": "pocket.example",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2020-09-13T12:26:40.000Z",
+        "tags": [
+         {
+          "tag": "read",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "later",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "sheet.csv",
+   "text": "Name,Where\nShop,https://shop.example\nSite,https://site.example/\n",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "csv",
+    "links": [
+     {
+      "url": "https://shop.example",
+      "key": "https://shop.example",
+      "title": "Shop",
+      "note": null,
+      "summary": null,
+      "tags": [],
+      "added": "2025-11-28T08:00:00.000Z"
+     },
+     {
+      "url": "https://site.example/",
+      "key": "https://site.example",
+      "title": "Site",
+      "note": null,
+      "summary": null,
+      "tags": [],
+      "added": "2025-11-28T08:00:00.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "692b1e3b-5888-8c71-bd94-0964f935a9d5",
+      "change": {
+       "id": "692b1e3b-5888-8c71-bd94-0964f935a9d5",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "shop-692b1e",
+        "title": "Shop",
+        "source_url": "https://shop.example",
+        "domain": "shop.example",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     },
+     {
+      "id": "9657c91d-d9f3-81c9-a78d-6c8949193fa3",
+      "change": {
+       "id": "9657c91d-d9f3-81c9-a78d-6c8949193fa3",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "site-9657c9",
+        "title": "Site",
+        "source_url": "https://site.example/",
+        "domain": "site.example",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "bookmarks.html",
+   "text": "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<TITLE>Bookmarks</TITLE><H1>Bookmarks</H1>\n<DL><p>\n<DT><H3 ADD_DATE=\"1\">Bookmarks bar</H3>\n<DL><p>\n<DT><H3>Design &amp; Type</H3>\n<DL><p>\n<DT><A HREF=\"https://fonts.google.com/\" ADD_DATE=\"1600000000\" TAGS=\"fonts,free\">Google Fonts</A>\n<DD>Free fonts &amp; more\n</DL><p>\n<DT><A HREF=\"https://x.com/\">X</A>\n</DL><p>\n</DL><p>",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "bookmarks",
+    "links": [
+     {
+      "url": "https://fonts.google.com/",
+      "key": "https://fonts.google.com",
+      "title": "Google Fonts",
+      "note": "Free fonts & more",
+      "summary": null,
+      "tags": [
+       "design-type",
+       "fonts",
+       "free"
+      ],
+      "added": "2020-09-13T12:26:40.000Z"
+     },
+     {
+      "url": "https://x.com/",
+      "key": "https://x.com",
+      "title": "X",
+      "note": null,
+      "summary": null,
+      "tags": [],
+      "added": "2025-11-28T08:00:00.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "5e13a657-9339-8899-928c-fc375fbc160e",
+      "change": {
+       "id": "5e13a657-9339-8899-928c-fc375fbc160e",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "google-fonts-5e13a6",
+        "title": "Google Fonts",
+        "source_url": "https://fonts.google.com/",
+        "domain": "fonts.google.com",
+        "summary": null,
+        "body_markdown": "Free fonts & more",
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2020-09-13T12:26:40.000Z",
+        "tags": [
+         {
+          "tag": "design-type",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "fonts",
+          "category": "subject",
+          "weight": 0.6
+         },
+         {
+          "tag": "free",
+          "category": "subject",
+          "weight": 0.6
+         }
+        ],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     },
+     {
+      "id": "afd5ef65-e126-8b7a-bc7d-0b8ef5cedea8",
+      "change": {
+       "id": "afd5ef65-e126-8b7a-bc7d-0b8ef5cedea8",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "x-afd5ef",
+        "title": "X",
+        "source_url": "https://x.com/",
+        "domain": "x.com",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "page.html",
+   "text": "<html><body><a href=\"https://not-bookmarks.example\">x</a></body></html>",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "bookmarks",
+    "links": [],
+    "items": []
+   }
+  },
+  {
+   "path": "Atlas of type.webloc",
+   "text": "<?xml version=\"1.0\"?><plist><dict><key>URL</key><string>https://atlasoftype.com/?a=1&amp;b=2</string></dict></plist>",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "webloc",
+    "links": [
+     {
+      "url": "https://atlasoftype.com/?a=1&b=2",
+      "key": "https://atlasoftype.com?a=1&b=2",
+      "title": "Atlas of type",
+      "note": null,
+      "summary": null,
+      "tags": [],
+      "added": "2025-11-28T08:00:00.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "333bbb23-0728-897f-b41e-cc073967e77a",
+      "change": {
+       "id": "333bbb23-0728-897f-b41e-cc073967e77a",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "atlas-of-type-333bbb",
+        "title": "Atlas of type",
+        "source_url": "https://atlasoftype.com/?a=1&b=2",
+        "domain": "atlasoftype.com",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "Binary.webloc",
+   "text": "bplist00Ñ\u0001\u0002SURL_\u0010\u0018https://binary.example/p\b\u000b",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "webloc",
+    "links": [
+     {
+      "url": "https://binary.example/p",
+      "key": "https://binary.example/p",
+      "title": "Binary",
+      "note": null,
+      "summary": null,
+      "tags": [],
+      "added": "2025-11-28T08:00:00.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "11f38c4e-1b5e-82c8-af03-46a7ab8de920",
+      "change": {
+       "id": "11f38c4e-1b5e-82c8-af03-46a7ab8de920",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "binary-11f38c",
+        "title": "Binary",
+        "source_url": "https://binary.example/p",
+        "domain": "binary.example",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "Shortcut.url",
+   "text": "[InternetShortcut]\r\nURL=https://foo.com/bar\r\n",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": "url",
+    "links": [
+     {
+      "url": "https://foo.com/bar",
+      "key": "https://foo.com/bar",
+      "title": "Shortcut",
+      "note": null,
+      "summary": null,
+      "tags": [],
+      "added": "2025-11-28T08:00:00.000Z"
+     }
+    ],
+    "items": [
+     {
+      "id": "29d70ef4-665b-879e-9ba9-a8328563a778",
+      "change": {
+       "id": "29d70ef4-665b-879e-9ba9-a8328563a778",
+       "full": true,
+       "clock": 1795856400000,
+       "fields": {
+        "slug": "shortcut-29d70e",
+        "title": "Shortcut",
+        "source_url": "https://foo.com/bar",
+        "domain": "foo.com",
+        "summary": null,
+        "body_markdown": null,
+        "status": "active",
+        "needs_review": false,
+        "kind": "link",
+        "enrichment_status": "awaiting_classify",
+        "added_at": "2025-11-28T08:00:00.000Z",
+        "tags": [],
+        "images": [],
+        "snippets": [],
+        "metadata": null
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "path": "image.png",
+   "text": "",
+   "modified": 1764316800000,
+   "now": "2026-11-28T09:00:00.000Z",
+   "expect": {
+    "type": null,
+    "links": [],
+    "items": []
+   }
+  }
+ ]
+}
